@@ -20,3 +20,6 @@ Thumbs.db
 
 # Secrets (local overrides)
 *.local.json
+app/android/key.properties
+app/secrets/
+app/secrets/**

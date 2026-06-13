@@ -1,0 +1,179 @@
+name: Push Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: push-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.38.10"
+  RUST_VERSION: "1.84.1"
+  APK_BUILD_DIR: "/tmp/build"
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      build_number: ${{ steps.get_version.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get version from pubspec.yaml
+        id: get_version
+        run: |
+          VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
+          PUBSPEC_BUILD=$(sed -n 's/^version: [0-9.]*+\([0-9]*\).*/\1/p' app/pubspec.yaml)
+          # pubspec build-number + workflow run counter → monotonic versionCode per CI build
+          BUILD_NUMBER=$((PUBSPEC_BUILD + ${{ github.run_number }}))
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "Android build-number: $BUILD_NUMBER (pubspec +$PUBSPEC_BUILD, run #${{ github.run_number }})"
+
+  build_android:
+    needs: version
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Remove proprietary dependencies
+        run: sh scripts/remove_proprietary_dependencies.sh
+
+      - name: Copy files to build directory
+        run: |
+          mkdir -p $APK_BUILD_DIR
+          cp -r . $APK_BUILD_DIR
+
+      - name: Decode key.properties file
+        working-directory: ${{ env.APK_BUILD_DIR }}
+        env:
+          ENCODED_STRING: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+        run: echo $ENCODED_STRING | base64 -di > app/android/key.properties
+
+      - name: Decode android-keystore.jks file
+        working-directory: ${{ env.APK_BUILD_DIR }}
+        env:
+          ENCODED_STRING: ${{ secrets.ANDROID_KEY_STORE }}
+        run: mkdir -p app/secrets && echo $ENCODED_STRING | base64 -di > app/secrets/android-keystore.jks
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: ${{ env.RUST_VERSION }}
+
+      - name: Dependencies
+        working-directory: ${{ env.APK_BUILD_DIR }}/app
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: ${{ env.APK_BUILD_DIR }}/app
+        run: flutter build apk --target-platform android-arm64 --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: apk-result
+          path: ${{ env.APK_BUILD_DIR }}/app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+  build_windows:
+    needs: version
+    runs-on: windows-2022
+
+    steps:
+      - name: Fix long file paths
+        run: git config --system core.longpaths true
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Build MSIX helper package
+        run: .\scripts\compile_windows_msix_helper.ps1
+
+      - name: Compile for Windows
+        working-directory: app
+        run: flutter build windows
+
+      - name: Create empty settings.json
+        working-directory: app
+        run: echo {} > build/windows/x64/runner/Release/settings.json
+
+      - name: Add DLL files
+        working-directory: app
+        run: |
+          Copy-Item ../scripts/windows/x64/msvcp140.dll build/windows/x64/runner/Release/
+          Copy-Item ../scripts/windows/x64/vcruntime140.dll build/windows/x64/runner/Release/
+          Copy-Item ../scripts/windows/x64/vcruntime140_1.dll build/windows/x64/runner/Release/
+
+      # Upload the Release folder directly (not a zip). GitHub Actions already
+      # wraps artifacts in an archive when downloading from the Artifacts UI.
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-release
+          path: app/build/windows/x64/runner/Release/
+          retention-days: 30
+
+  upload_release:
+    needs: [version, build_android, build_windows]
+    if: ${{ needs.build_android.result == 'success' && needs.build_windows.result == 'success' }}
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: apk-result
+          path: apk-result
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: windows-release
+          path: windows-release
+
+      - name: Zip Windows build for release
+        run: |
+          cd windows-release
+          zip -r ../Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip .
+
+      - name: Upload to GitHub Release
+        uses: ./.github/actions/publish-release-asset
+        with:
+          tag: v${{ needs.version.outputs.version }}
+          draft: "true"
+          assets: |
+            apk-result/app-release.apk#Kanban-${{ needs.version.outputs.version }}-android-arm64v8.apk
+            Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip#Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip

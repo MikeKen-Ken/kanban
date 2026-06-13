@@ -1,0 +1,63 @@
+name: Publish release asset
+description: Create a GitHub release if needed and upload assets (--clobber replaces same-named files only)
+
+inputs:
+  tag:
+    description: Release tag, e.g. v1.17.0
+    required: true
+  assets:
+    description: Multiline list of local_path#release_asset_name entries (omit to only ensure the release exists)
+    required: false
+    default: ""
+  draft:
+    description: Create as draft when the release does not exist yet
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Ensure GitHub release exists
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ inputs.tag }}
+        DRAFT: ${{ inputs.draft }}
+      run: |
+        set -euo pipefail
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          echo "Release $TAG already exists"
+          exit 0
+        fi
+
+        TITLE="${TAG#v}"
+        ARGS=(release create "$TAG" --title "$TITLE" --generate-notes)
+        if [ "$DRAFT" = "true" ]; then
+          ARGS+=(--draft)
+        fi
+
+        if ! gh "${ARGS[@]}"; then
+          gh release view "$TAG" >/dev/null 2>&1 || {
+            echo "Failed to create or find release $TAG"
+            exit 1
+          }
+        fi
+
+    - name: Upload release assets
+      if: ${{ inputs.assets != '' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ inputs.tag }}
+        ASSETS: ${{ inputs.assets }}
+      run: |
+        set -euo pipefail
+        while IFS= read -r spec; do
+          [ -z "$spec" ] && continue
+          local_path="${spec%%#*}"
+          if [ ! -f "$local_path" ]; then
+            echo "Asset not found: $local_path"
+            exit 1
+          fi
+          echo "Uploading: $spec"
+          gh release upload "$TAG" "$spec" --clobber
+        done <<< "$ASSETS"
