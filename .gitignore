@@ -1,0 +1,22 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (local overrides)
+*.local.json
