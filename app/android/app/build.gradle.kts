@@ -37,7 +37,8 @@ android {
             }
             keyAlias = keystoreProperties["keyAlias"] as String?
             keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+            // key.properties 位于 android/，storeFile 相对 android/ 目录解析
+            storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it as String) }
             storePassword = keystoreProperties["storePassword"] as String?
         }
     }
