@@ -18,8 +18,5 @@ build/
 .DS_Store
 Thumbs.db
 
-# Secrets (local overrides)
+# Local overrides
 *.local.json
-app/android/key.properties
-app/secrets/
-app/secrets/**
