@@ -11,10 +11,12 @@ class KanbanColumnWidget extends StatelessWidget {
   const KanbanColumnWidget({
     super.key,
     required this.column,
+    required this.columnIndex,
     this.searchQuery = '',
   });
 
   final KanbanColumn column;
+  final int columnIndex;
   final String searchQuery;
 
   List<KanbanCard> _displayCards(BoardController controller) {
@@ -233,6 +235,24 @@ class KanbanColumnWidget extends StatelessWidget {
                         ? '${cards.length}'
                         : '$visibleCount/${cards.length}',
                     style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+                ReorderableDragStartListener(
+                  index: columnIndex,
+                  child: Tooltip(
+                    message: '拖动调整列顺序',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.grab,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.drag_indicator,
+                          size: 20,
+                          color: colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 PopupMenuButton<String>(

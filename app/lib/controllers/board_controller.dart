@@ -499,6 +499,28 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
   }
 
+  Future<void> reorderColumn(int oldIndex, int newIndex) async {
+    if (board == null) return;
+    final columns = [...board!.columns];
+    if (oldIndex < 0 ||
+        oldIndex >= columns.length ||
+        newIndex < 0 ||
+        newIndex > columns.length) {
+      return;
+    }
+
+    var targetIndex = newIndex;
+    if (targetIndex > oldIndex) targetIndex -= 1;
+    if (targetIndex == oldIndex) return;
+
+    final moved = columns.removeAt(oldIndex);
+    columns.insert(targetIndex, moved);
+    final reordered = [
+      for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
+    ];
+    await _persistAndSync(_bump(board!.copyWith(columns: reordered)));
+  }
+
   Future<void> updateColumnColor(String columnId, int? colorValue) async {
     if (board == null) return;
     final columns = board!.columns.map((col) {

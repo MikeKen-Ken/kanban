@@ -134,6 +134,19 @@ class WebDavSyncService {
     TrashBin trash,
   ) async {
     final projectBase = KanbanPaths.remoteProjectDir(base, projectId);
+    // note: 先写列文件、再写 board 元数据，避免其他端拉取时元数据已列出列 id 但列文件尚未上传
+    for (final column in board.columns) {
+      await _writeJson(
+        client,
+        KanbanPaths.remoteProjectColumnPath(base, projectId, column.id),
+        column.toJson(),
+      );
+    }
+    await _cleanupRemoteColumns(
+      client,
+      KanbanPaths.remoteProjectColumnsDir(base, projectId),
+      board.columns.map((c) => c.id).toSet(),
+    );
     await _writeJson(
       client,
       KanbanPaths.remoteProjectBoardPath(base, projectId),
@@ -148,18 +161,6 @@ class WebDavSyncService {
       client,
       KanbanPaths.remoteProjectTrashPath(base, projectId),
       trash.toJson(),
-    );
-    for (final column in board.columns) {
-      await _writeJson(
-        client,
-        KanbanPaths.remoteProjectColumnPath(base, projectId, column.id),
-        column.toJson(),
-      );
-    }
-    await _cleanupRemoteColumns(
-      client,
-      KanbanPaths.remoteProjectColumnsDir(base, projectId),
-      board.columns.map((c) => c.id).toSet(),
     );
     // note: 确保项目目录存在（某些 WebDAV 需要）
     try {

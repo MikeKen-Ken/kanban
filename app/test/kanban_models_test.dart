@@ -13,4 +13,84 @@ void main() {
     final remote = KanbanBoard.empty(id: '1').copyWith(revision: 2, updatedAt: 200);
     expect(local.mergeWith(remote).updatedAt, 200);
   });
+
+  test('merge keeps columns that only exist on the older side', () {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final local = KanbanBoard.empty(id: '1').copyWith(
+      revision: 5,
+      updatedAt: now,
+    );
+    final remote = KanbanBoard(
+      id: '1',
+      title: '我的看板',
+      updatedAt: now + 1000,
+      revision: 6,
+      columns: [
+        KanbanColumn(
+          id: 'todo',
+          title: '待办',
+          order: 0,
+          cards: [],
+        ),
+        KanbanColumn(
+          id: 'doing',
+          title: '进行中',
+          order: 1,
+          cards: [],
+        ),
+      ],
+    );
+
+    final merged = local.mergeWith(remote);
+    expect(merged.columns.map((c) => c.id), contains('done'));
+    expect(merged.columns.length, 3);
+  });
+
+  test('merge keeps newer card when the same card exists on both sides', () {
+    final local = KanbanBoard(
+      id: '1',
+      title: '我的看板',
+      updatedAt: 100,
+      revision: 2,
+      columns: [
+        KanbanColumn(
+          id: 'todo',
+          title: '待办',
+          order: 0,
+          cards: [
+            KanbanCard(
+              id: 'card-1',
+              title: '本地标题',
+              order: 0,
+              createdAt: 1,
+              updatedAt: 100,
+            ),
+          ],
+        ),
+      ],
+    );
+    final remote = local.copyWith(
+      updatedAt: 200,
+      revision: 3,
+      columns: [
+        KanbanColumn(
+          id: 'todo',
+          title: '待办',
+          order: 0,
+          cards: [
+            KanbanCard(
+              id: 'card-1',
+              title: '远端标题',
+              order: 0,
+              createdAt: 1,
+              updatedAt: 200,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final merged = local.mergeWith(remote);
+    expect(merged.columns.first.cards.single.title, '远端标题');
+  });
 }

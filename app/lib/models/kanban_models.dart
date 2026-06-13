@@ -128,11 +128,63 @@ class KanbanBoard {
     return KanbanBoard.fromJson(jsonDecode(source) as Map<String, dynamic>);
   }
 
-  /// note: 合并策略 — 修订号更高者优先；相同则时间戳更新者优先
+  /// note: 合并策略 — 板级元数据以修订号/时间戳较新者为准；列与卡片按 id 并集合并，单卡取 updatedAt 较新者
   KanbanBoard mergeWith(KanbanBoard remote) {
-    if (remote.revision > revision) return remote;
-    if (remote.revision < revision) return this;
-    return remote.updatedAt >= updatedAt ? remote : this;
+    final bool remoteWins;
+    if (remote.revision > revision) {
+      remoteWins = true;
+    } else if (remote.revision < revision) {
+      remoteWins = false;
+    } else {
+      remoteWins = remote.updatedAt >= updatedAt;
+    }
+
+    final winner = remoteWins ? remote : this;
+    final loser = remoteWins ? this : remote;
+    final winnerCols = {for (final c in winner.columns) c.id: c};
+    final loserCols = {for (final c in loser.columns) c.id: c};
+    final columnIds = <String>{
+      ...winnerCols.keys,
+      ...loserCols.keys,
+    };
+
+    final cardPlacement = <String, ({KanbanCard card, String columnId})>{};
+    for (final col in [...winner.columns, ...loser.columns]) {
+      for (final card in col.cards) {
+        final prev = cardPlacement[card.id];
+        if (prev == null || card.updatedAt > prev.card.updatedAt) {
+          cardPlacement[card.id] = (card: card, columnId: col.id);
+        }
+      }
+    }
+
+    final mergedColumns = <KanbanColumn>[];
+    for (final id in columnIds) {
+      final primary = winnerCols[id];
+      final secondary = loserCols[id];
+      final template = primary ?? secondary!;
+      final cards = cardPlacement.values
+          .where((entry) => entry.columnId == id)
+          .map((entry) => entry.card)
+          .toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
+
+      mergedColumns.add(
+        template.copyWith(
+          title: primary?.title ?? secondary!.title,
+          order: primary?.order ?? secondary!.order,
+          colorValue: primary?.colorValue ?? secondary?.colorValue,
+          cards: cards,
+        ),
+      );
+    }
+    mergedColumns.sort((a, b) => a.order.compareTo(b.order));
+
+    return winner.copyWith(
+      updatedAt: updatedAt > remote.updatedAt ? updatedAt : remote.updatedAt,
+      revision: revision > remote.revision ? revision : remote.revision,
+      columns: mergedColumns,
+    );
   }
 }
 

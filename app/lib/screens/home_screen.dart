@@ -191,16 +191,41 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
           }
 
           return Scrollbar(
-            child: ListView.separated(
+            child: ReorderableListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.all(16),
+              buildDefaultDragHandles: false,
+              proxyDecorator: (child, index, animation) {
+                return AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, child) {
+                    final t = Curves.easeInOut.transform(animation.value);
+                    return Material(
+                      elevation: 8 * t,
+                      borderRadius: BorderRadius.circular(12),
+                      clipBehavior: Clip.antiAlias,
+                      child: child,
+                    );
+                  },
+                  child: child,
+                );
+              },
               itemCount: board.columns.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              onReorder: (oldIndex, newIndex) {
+                controller.reorderColumn(oldIndex, newIndex);
+              },
               itemBuilder: (context, index) {
                 final column = board.columns[index];
-                return KanbanColumnWidget(
-                  column: column,
-                  searchQuery: _searchQuery,
+                return Padding(
+                  key: ValueKey(column.id),
+                  padding: EdgeInsets.only(
+                    right: index < board.columns.length - 1 ? 12 : 0,
+                  ),
+                  child: KanbanColumnWidget(
+                    column: column,
+                    columnIndex: index,
+                    searchQuery: _searchQuery,
+                  ),
                 );
               },
             ),
