@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
+import '../features/project/project_switcher.dart';
 import '../main.dart';
 import '../webdav_sync/webdav_sync_service.dart';
 import 'settings_screen.dart';
@@ -15,6 +16,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _showSearch = false;
+
   @override
   void initState() {
     super.initState();
@@ -23,6 +28,13 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() {});
     });
   }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
 
   Future<void> _addColumn(BuildContext context) async {
     final controller = context.read<BoardController>();
@@ -73,15 +85,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(board.title),
+            title: const ProjectSwitcher(),
             actions: [
+              IconButton(
+                tooltip: _showSearch ? '关闭搜索' : '搜索卡片',
+                icon: Icon(
+                  _showSearch ? Icons.search_off : Icons.search,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _showSearch = !_showSearch;
+                    if (!_showSearch) {
+                      _searchController.clear();
+                      _searchQuery = '';
+                    }
+                  });
+                },
+              ),
               _SyncIndicator(
                 status: controller.syncStatus,
                 error: controller.syncError,
                 onTap: () => controller.syncNow(),
               ),
               IconButton(
-                tooltip: '同步设置',
+                tooltip: '设置',
                 icon: const Icon(Icons.settings_outlined),
                 onPressed: () {
                   Navigator.of(context).push(
@@ -92,6 +119,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
             ],
+            bottom: _showSearch
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(56),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: SearchBar(
+                        controller: _searchController,
+                        hintText: '搜索标题、备注、标签、子任务…',
+                        leading: const Icon(Icons.search, size: 20),
+                        trailing: _searchQuery.isNotEmpty
+                            ? [
+                                IconButton(
+                                  icon: const Icon(Icons.clear, size: 20),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                ),
+                              ]
+                            : null,
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                      ),
+                    ),
+                  )
+                : null,
           ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _addColumn(context),
@@ -108,7 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
                       final column = board.columns[index];
-                      return KanbanColumnWidget(column: column);
+                      return KanbanColumnWidget(
+                        column: column,
+                        searchQuery: _searchQuery,
+                      );
                     },
                   ),
                 ),

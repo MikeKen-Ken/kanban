@@ -2,36 +2,41 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
+import '../features/kanban/kanban_column_list.dart';
 import '../models/kanban_models.dart';
+import '../settings/column_color_picker.dart';
 
 class KanbanColumnWidget extends StatelessWidget {
-  const KanbanColumnWidget({super.key, required this.column});
+  const KanbanColumnWidget({
+    super.key,
+    required this.column,
+    this.searchQuery = '',
+  });
 
   final KanbanColumn column;
+  final String searchQuery;
+
+  List<KanbanCard> get _sortedCards {
+    final cards = [...column.cards]..sort((a, b) => a.order.compareTo(b.order));
+    return cards;
+  }
 
   Future<void> _addCard(BuildContext context) async {
     final controller = context.read<BoardController>();
     final titleController = TextEditingController();
-    final descController = TextEditingController();
 
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('在「${column.title}」添加卡片'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '标题'),
-            ),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(labelText: '备注（可选）'),
-              maxLines: 3,
-            ),
-          ],
+        content: TextField(
+          controller: titleController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '标题',
+            hintText: '输入后回车快速添加',
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, true),
         ),
         actions: [
           TextButton(
@@ -46,14 +51,10 @@ class KanbanColumnWidget extends StatelessWidget {
       ),
     );
 
-    if (result == true && titleController.text.trim().isNotEmpty) {
-      await controller.addCard(
-        column.id,
-        titleController.text.trim(),
-        description: descController.text.trim().isEmpty
-            ? null
-            : descController.text.trim(),
-      );
+    // note: 点击遮罩或返回键时 result 为 null；有内容时视为添加，仅「取消」为放弃
+    final title = titleController.text.trim();
+    if (title.isNotEmpty && result != false) {
+      await controller.addCard(column.id, title);
     }
   }
 
@@ -110,16 +111,38 @@ class KanbanColumnWidget extends StatelessWidget {
     }
   }
 
+  Future<void> _pickColumnColor(BuildContext context) async {
+    final controller = context.read<BoardController>();
+    final picked = await showColumnColorPicker(
+      context: context,
+      currentColorValue: column.colorValue,
+    );
+    if (picked == column.colorValue) return;
+    await controller.updateColumnColor(column.id, picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final columnColor =
+        column.colorValue != null ? Color(column.colorValue!) : null;
+    final cards = _sortedCards;
+    final allColumns =
+        context.watch<BoardController>().board?.columns ?? [];
+    final visibleCount =
+        cards.where((c) => c.matchesSearch(searchQuery)).length;
 
     return Container(
       width: 300,
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: columnColor != null
+            ? columnColor.withValues(alpha: 0.12)
+            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.outlineVariant),
+        border: Border.all(
+          color: columnColor ?? colorScheme.outlineVariant,
+          width: columnColor != null ? 1.5 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -129,14 +152,49 @@ class KanbanColumnWidget extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
+                  child: Row(
+                    children: [
+                      if (columnColor != null) ...[
+                        Container(
+                          width: 4,
+                          height: 20,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: columnColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ],
+                      Expanded(
+                        child: Text(
+                          column.title,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: columnColor,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Text(
-                    column.title,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    searchQuery.isEmpty
+                        ? '${cards.length}'
+                        : '$visibleCount/${cards.length}',
+                    style: Theme.of(context).textTheme.labelMedium,
                   ),
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     switch (value) {
+                      case 'color':
+                        _pickColumnColor(context);
                       case 'rename':
                         _renameColumn(context);
                       case 'delete':
@@ -144,6 +202,7 @@ class KanbanColumnWidget extends StatelessWidget {
                     }
                   },
                   itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'color', child: Text('设置颜色')),
                     PopupMenuItem(value: 'rename', child: Text('重命名')),
                     PopupMenuItem(value: 'delete', child: Text('删除列')),
                   ],
@@ -152,17 +211,11 @@ class KanbanColumnWidget extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              itemCount: column.cards.length,
-              itemBuilder: (context, index) {
-                final card = column.cards[index];
-                return _KanbanCardTile(
-                  columnId: column.id,
-                  card: card,
-                  allColumns: context.watch<BoardController>().board?.columns ?? [],
-                );
-              },
+            child: KanbanColumnList(
+              columnId: column.id,
+              cards: cards,
+              allColumns: allColumns,
+              searchQuery: searchQuery,
             ),
           ),
           Padding(
@@ -174,153 +227,6 @@ class KanbanColumnWidget extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _KanbanCardTile extends StatelessWidget {
-  const _KanbanCardTile({
-    required this.columnId,
-    required this.card,
-    required this.allColumns,
-  });
-
-  final String columnId;
-  final KanbanCard card;
-  final List<KanbanColumn> allColumns;
-
-  Future<void> _editCard(BuildContext context) async {
-    final controller = context.read<BoardController>();
-    final titleController = TextEditingController(text: card.title);
-    final descController = TextEditingController(text: card.description ?? '');
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('编辑卡片'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: '标题'),
-            ),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(labelText: '备注'),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-
-    if (ok == true) {
-      await controller.updateCard(
-        columnId,
-        card.id,
-        title: titleController.text.trim(),
-        description: descController.text.trim().isEmpty
-            ? null
-            : descController.text.trim(),
-      );
-    }
-  }
-
-  Future<void> _moveCard(BuildContext context) async {
-    final controller = context.read<BoardController>();
-    final targets = allColumns.where((c) => c.id != columnId).toList();
-    if (targets.isEmpty) return;
-
-    final targetId = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('移动到'),
-        children: targets
-            .map(
-              (col) => SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, col.id),
-                child: Text(col.title),
-              ),
-            )
-            .toList(),
-      ),
-    );
-
-    if (targetId != null) {
-      final target = targets.firstWhere((c) => c.id == targetId);
-      await controller.moveCard(
-        cardId: card.id,
-        fromColumnId: columnId,
-        toColumnId: targetId,
-        toIndex: target.cards.length,
-      );
-    }
-  }
-
-  Future<void> _deleteCard(BuildContext context) async {
-    final controller = context.read<BoardController>();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除卡片？'),
-        content: Text(card.title),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await controller.deleteCard(columnId, card.id);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(card.title),
-        subtitle: card.description == null || card.description!.isEmpty
-            ? null
-            : Text(
-                card.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-        onTap: () => _editCard(context),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            switch (value) {
-              case 'move':
-                _moveCard(context);
-              case 'delete':
-                _deleteCard(context);
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'move', child: Text('移动')),
-            PopupMenuItem(value: 'delete', child: Text('删除')),
-          ],
-        ),
       ),
     );
   }
