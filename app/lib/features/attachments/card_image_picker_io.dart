@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pasteboard/pasteboard.dart';
 
 import 'card_image_add_source.dart';
-import 'card_image_picker_stub.dart';
+import 'picked_image_bytes.dart';
 
 Future<List<PickedImageBytes>> pickImagesForSource(
   CardImageAddSource source,
