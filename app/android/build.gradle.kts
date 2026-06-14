@@ -17,15 +17,19 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
-subprojects {
-    project.evaluationDependsOn(":app")
-}
 
 // 旧版 Flutter 插件可能仍固定 compileSdk 34；与 lifecycle 等依赖的 API 36 要求对齐
+// 须在 evaluationDependsOn 之前注册，避免子项目已评估后无法再 afterEvaluate
 subprojects {
-    afterEvaluate {
-        extensions.findByType<LibraryExtension>()?.compileSdk = 36
+    pluginManager.withPlugin("com.android.library") {
+        extensions.configure<LibraryExtension>("android") {
+            compileSdk = 36
+        }
     }
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
