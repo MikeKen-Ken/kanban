@@ -9,6 +9,8 @@ import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import '../settings/app_settings.dart';
 import '../storage/board_storage.dart';
+import '../features/attachments/attachment_storage.dart';
+import '../features/attachments/attachment_store.dart';
 
 /// WebDAV 连接配置（密码仅存本地 SharedPreferences）
 class WebDavConfig {
@@ -101,6 +103,8 @@ class BoardRepository {
   static const _labelTrashKey = 'kanban_label_trash';
 
   BoardStorage get storage => _storage;
+
+  AttachmentStore? get attachmentStore => createAttachmentStore();
 
   Future<void> ensureInitialized() async {
     await _storage.migrateFromLegacyIfNeeded();

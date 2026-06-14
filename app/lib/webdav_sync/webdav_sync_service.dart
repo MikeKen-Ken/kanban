@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:webdav_client/webdav_client.dart';
 
+import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
 import '../features/trash/trash_models.dart';
@@ -37,19 +38,23 @@ class WebDavSyncService {
     required Future<ProjectWorkspaceSnapshot> Function() loadWorkspace,
     required Future<void> Function(ProjectWorkspaceSnapshot workspace)
         saveWorkspace,
+    AttachmentSyncAdapter? attachmentSync,
   })  : _loadConfig = loadConfig,
         _loadWorkspace = loadWorkspace,
-        _saveWorkspace = saveWorkspace;
+        _saveWorkspace = saveWorkspace,
+        _attachmentSync = attachmentSync ?? AttachmentSyncAdapter(null);
 
   final Future<WebDavConfig> Function() _loadConfig;
   final Future<ProjectWorkspaceSnapshot> Function() _loadWorkspace;
   final Future<void> Function(ProjectWorkspaceSnapshot workspace)
       _saveWorkspace;
+  final AttachmentSyncAdapter _attachmentSync;
 
   static const debounceDuration = Duration(milliseconds: 1500);
 
   SyncStatus status = SyncStatus.idle;
   String? lastError;
+  String? attachmentSyncWarning;
   DateTime? lastSyncedAt;
 
   Timer? _debounceTimer;
@@ -125,7 +130,147 @@ class WebDavSyncService {
     }
   }
 
-  Future<void> _pushProject(
+  Future<void> _writeBytes(Client client, String path, Uint8List bytes) async {
+    await _ensureParentDir(client, path);
+    await client.write(path, bytes);
+  }
+
+  Future<Uint8List?> _readBytes(Client client, String path) async {
+    try {
+      final data = await client.read(path);
+      return Uint8List.fromList(data);
+    } on Object catch (e) {
+      final message = e.toString().toLowerCase();
+      if (message.contains('404') || message.contains('not found')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<int> _pushProjectAttachments(
+    Client client,
+    String base,
+    String projectId,
+    KanbanBoard board,
+    TrashBin trash,
+  ) async {
+    if (!_attachmentSync.isAvailable) return 0;
+
+    var failed = 0;
+    final keepIds = _attachmentSync.referencedIds(board, trash);
+    for (final id in keepIds) {
+      for (final thumb in const [false, true]) {
+        if (!await _attachmentSync.exists(projectId, id, thumb: thumb)) {
+          continue;
+        }
+        final bytes = await _attachmentSync.readFile(
+          projectId,
+          id,
+          thumb: thumb,
+        );
+        if (bytes == null) {
+          if (!thumb) failed++;
+          continue;
+        }
+        try {
+          await _writeBytes(
+            client,
+            KanbanPaths.remoteProjectAttachmentPath(
+              base,
+              projectId,
+              id,
+              thumb: thumb,
+            ),
+            bytes,
+          );
+        } catch (_) {
+          if (!thumb) failed++;
+        }
+      }
+    }
+
+    try {
+      await _cleanupRemoteAttachments(
+        client,
+        KanbanPaths.remoteProjectAttachmentsDir(base, projectId),
+        keepIds,
+      );
+      await _attachmentSync.deleteOrphans(projectId, keepIds);
+    } catch (_) {
+      failed++;
+    }
+    return failed;
+  }
+
+  Future<int> _pullProjectAttachments(
+    Client client,
+    String base,
+    String projectId,
+    KanbanBoard board,
+    TrashBin trash,
+  ) async {
+    if (!_attachmentSync.isAvailable) return 0;
+
+    var failed = 0;
+    final keepIds = _attachmentSync.referencedIds(board, trash);
+    for (final id in keepIds) {
+      for (final thumb in const [false, true]) {
+        if (await _attachmentSync.exists(projectId, id, thumb: thumb)) {
+          continue;
+        }
+        try {
+          final bytes = await _readBytes(
+            client,
+            KanbanPaths.remoteProjectAttachmentPath(
+              base,
+              projectId,
+              id,
+              thumb: thumb,
+            ),
+          );
+          if (bytes == null) continue;
+          await _attachmentSync.writeFile(
+            projectId,
+            id,
+            bytes,
+            thumb: thumb,
+          );
+        } catch (_) {
+          // note: 失败计数在下方按主图是否落地统一统计
+        }
+      }
+      if (!await _attachmentSync.exists(projectId, id)) {
+        failed++;
+      }
+    }
+
+    try {
+      await _attachmentSync.deleteOrphans(projectId, keepIds);
+    } catch (_) {
+      failed++;
+    }
+    return failed;
+  }
+
+  Future<void> _cleanupRemoteAttachments(
+    Client client,
+    String attachmentsDir,
+    Set<String> keepIds,
+  ) async {
+    try {
+      final files = await client.readDir(attachmentsDir);
+      for (final file in files) {
+        final id = KanbanPaths.attachmentIdFromRemoteFile(file.path ?? '');
+        if (id == null || keepIds.contains(id)) continue;
+        await client.remove(file.path!);
+      }
+    } catch (_) {
+      // note: 远端 attachments 目录不存在时忽略
+    }
+  }
+
+  Future<int> _pushProject(
     Client client,
     String base,
     String projectId,
@@ -162,10 +307,26 @@ class WebDavSyncService {
       KanbanPaths.remoteProjectTrashPath(base, projectId),
       trash.toJson(),
     );
+    final attachmentFailures = await _pushProjectAttachments(
+      client,
+      base,
+      projectId,
+      board,
+      trash,
+    );
     // note: 确保项目目录存在（某些 WebDAV 需要）
     try {
       await client.mkdirAll(projectBase);
     } catch (_) {}
+    return attachmentFailures;
+  }
+
+  void _applyAttachmentSyncWarning(int failedCount) {
+    if (failedCount > 0) {
+      attachmentSyncWarning = '$failedCount 个图片附件同步失败，可点击同步图标重试';
+    } else {
+      attachmentSyncWarning = null;
+    }
   }
 
   Future<void> pushNow() async {
@@ -182,6 +343,7 @@ class WebDavSyncService {
     try {
       final workspace = await _loadWorkspace();
       final base = _remoteBase(config);
+      var attachmentFailures = 0;
 
       await _writeJson(
         client,
@@ -199,7 +361,14 @@ class WebDavSyncService {
         final settings = workspace.settings[entry.id];
         final trash = workspace.projectTrash[entry.id] ?? TrashBin.empty;
         if (board == null || settings == null) continue;
-        await _pushProject(client, base, entry.id, board, settings, trash);
+        attachmentFailures += await _pushProject(
+          client,
+          base,
+          entry.id,
+          board,
+          settings,
+          trash,
+        );
       }
 
       await _cleanupRemoteProjects(
@@ -208,6 +377,7 @@ class WebDavSyncService {
         workspace.manifest.projects.map((p) => p.id).toSet(),
       );
 
+      _applyAttachmentSyncWarning(attachmentFailures);
       _setStatus(SyncStatus.success);
     } catch (e) {
       _setStatus(SyncStatus.error, error: e.toString());
@@ -451,6 +621,27 @@ class WebDavSyncService {
       }
       final merged = _mergeWorkspaces(local, remote);
       await _saveWorkspace(merged);
+
+      final client = _client(config);
+      var attachmentFailures = 0;
+      if (client != null) {
+        final base = _remoteBase(config);
+        for (final entry in merged.manifest.projects) {
+          final board = merged.boards[entry.id];
+          if (board == null) continue;
+          final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
+          attachmentFailures += await _pullProjectAttachments(
+            client,
+            base,
+            entry.id,
+            board,
+            trash,
+          );
+        }
+      }
+
+      _applyAttachmentSyncWarning(attachmentFailures);
+
       if (_localIsNewer(local, remote)) {
         await pushNow();
       } else {

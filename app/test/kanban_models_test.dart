@@ -93,4 +93,42 @@ void main() {
     final merged = local.mergeWith(remote);
     expect(merged.columns.first.cards.single.title, '远端标题');
   });
+
+  test('CardAttachment serializes round trip', () {
+    final attachment = CardAttachment(
+      id: 'att-1',
+      fileName: 'photo.png',
+      mimeType: 'image/jpeg',
+      order: 0,
+      createdAt: 100,
+      width: 800,
+      height: 600,
+    );
+    final json = attachment.toJson();
+    final restored = CardAttachment.fromJson(json);
+    expect(restored.id, attachment.id);
+    expect(restored.fileName, attachment.fileName);
+    expect(restored.width, 800);
+  });
+
+  test('KanbanCard keeps attachments in json', () {
+    final card = KanbanCard(
+      id: 'card-1',
+      title: '带图卡片',
+      order: 0,
+      createdAt: 1,
+      attachments: [
+        CardAttachment(
+          id: 'att-1',
+          fileName: 'a.jpg',
+          mimeType: 'image/jpeg',
+          order: 0,
+          createdAt: 1,
+        ),
+      ],
+    );
+    final restored = KanbanCard.fromJson(card.toJson());
+    expect(restored.attachments, hasLength(1));
+    expect(restored.coverAttachment?.id, 'att-1');
+  });
 }

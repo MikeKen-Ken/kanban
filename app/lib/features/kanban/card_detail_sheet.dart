@@ -8,6 +8,10 @@ import '../../models/kanban_models.dart';
 import '../../settings/column_color_picker.dart';
 import '../../utils/ime_guard.dart';
 import '../../features/project/project_theme.dart';
+import '../attachments/card_attachment_reorder_grid.dart';
+import '../attachments/card_attachment_viewer.dart';
+import '../attachments/card_image_add_sheet.dart';
+import '../attachments/attachment_missing.dart';
 import 'kanban_labels.dart';
 
 /// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
@@ -43,6 +47,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late CardPriority _priority;
   late List<String> _labels;
   late List<ChecklistItem> _checklist;
+  late List<CardAttachment> _attachments;
   int? _colorValue;
   final _checklistInput = TextEditingController();
 
@@ -61,6 +66,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _priority = widget.card.priority;
     _labels = [...widget.card.labels];
     _checklist = [...widget.card.checklist];
+    _attachments = [...widget.card.sortedAttachments];
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
@@ -99,6 +105,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       priority: _priority,
       labels: _labels,
       checklist: _checklist,
+      attachments: _attachments,
       colorValue: _colorValue,
       clearColor: _colorValue == null,
     );
@@ -253,6 +260,106 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     });
   }
 
+  Future<void> _pickAttachments() async {
+    if (_attachments.length >= KanbanCard.maxAttachments) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('每张卡片最多 ${KanbanCard.maxAttachments} 张图片'),
+        ),
+      );
+      return;
+    }
+
+    final source = await showCardImageAddSourceSheet(context);
+    if (!mounted || source == null) return;
+
+    final controller = context.read<BoardController>();
+    final error = await controller.addCardAttachmentsFromSource(
+      widget.columnId,
+      widget.card.id,
+      source,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+      return;
+    }
+
+    _reloadAttachmentsFromBoard();
+  }
+
+  void _reloadAttachmentsFromBoard() {
+    final updated = context.read<BoardController>().board?.columns
+        .where((col) => col.id == widget.columnId)
+        .expand((col) => col.cards)
+        .where((card) => card.id == widget.card.id)
+        .firstOrNull;
+    if (updated != null) {
+      _safeSetState(() => _attachments = [...updated.sortedAttachments]);
+    }
+  }
+
+  Future<void> _removeAttachment(String attachmentId) async {
+    await context.read<BoardController>().removeCardAttachment(
+          widget.columnId,
+          widget.card.id,
+          attachmentId,
+        );
+    if (!mounted) return;
+    _safeSetState(() {
+      _attachments =
+          _attachments.where((item) => item.id != attachmentId).toList();
+    });
+  }
+
+  Future<void> _setCover(String attachmentId) async {
+    await context.read<BoardController>().setCardAttachmentCover(
+          widget.columnId,
+          widget.card.id,
+          attachmentId,
+        );
+    if (!mounted) return;
+    _safeSetState(() {
+      final selected = _attachments.firstWhere((a) => a.id == attachmentId);
+      final others = _attachments.where((a) => a.id != attachmentId).toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
+      _attachments = [
+        selected.copyWith(order: 0),
+        for (var i = 0; i < others.length; i++) others[i].copyWith(order: i + 1),
+      ];
+    });
+  }
+
+  Future<void> _reorderAttachments(int oldIndex, int newIndex) async {
+    if (oldIndex == newIndex) return;
+    final next = [..._attachments];
+    final item = next.removeAt(oldIndex);
+    next.insert(newIndex, item);
+    _safeSetState(() => _attachments = next);
+    await context.read<BoardController>().reorderCardAttachments(
+          widget.columnId,
+          widget.card.id,
+          next,
+        );
+  }
+
+  void _openAttachmentViewer(int index) {
+    showCardAttachmentViewer(
+      context: context,
+      attachments: _attachments,
+      initialIndex: index,
+      columnId: widget.columnId,
+      cardId: widget.card.id,
+      onAttachmentsChanged: (attachments) {
+        if (!mounted) return;
+        _safeSetState(() => _attachments = [...attachments]);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -261,6 +368,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final themeId = _boardController.projectSettings.themeId;
     final themePreset = projectThemeForId(themeId);
     final allLabels = allKanbanLabels(customLabels, themeId: themeId);
+    final missingCount = countMissingAttachmentsForCard(
+      widget.card.copyWith(attachments: _attachments),
+      _boardController.missingAttachmentIds,
+    );
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -360,6 +471,101 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                           ],
                         ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Text('图片', style: theme.textTheme.titleSmall),
+                          const Spacer(),
+                          Text(
+                            '${_attachments.length}/${KanbanCard.maxAttachments}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (missingCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: MaterialBanner(
+                            content: Text('有 $missingCount 张图片未下载到本机，请检查同步'),
+                            leading: Icon(
+                              Icons.cloud_off_outlined,
+                              color: theme.colorScheme.error,
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    context.read<BoardController>().syncNow(),
+                                child: const Text('立即同步'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (_attachments.isNotEmpty)
+                        CardAttachmentReorderGrid(
+                          attachments: _attachments,
+                          missingAttachmentIds:
+                              _boardController.missingAttachmentIds,
+                          onReorder: _reorderAttachments,
+                          onTap: _openAttachmentViewer,
+                          onLongPress: (index) async {
+                            final attachment = _attachments[index];
+                            final isCover = index == 0;
+                            final action = await showModalBottomSheet<String>(
+                              context: context,
+                              builder: (ctx) => SafeArea(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (!isCover)
+                                      ListTile(
+                                        leading: const Icon(Icons.photo),
+                                        title: const Text('设为封面'),
+                                        onTap: () =>
+                                            Navigator.pop(ctx, 'cover'),
+                                      ),
+                                    ListTile(
+                                      leading: Icon(
+                                        Icons.delete_outline,
+                                        color: theme.colorScheme.error,
+                                      ),
+                                      title: Text(
+                                        '删除图片',
+                                        style: TextStyle(
+                                          color: theme.colorScheme.error,
+                                        ),
+                                      ),
+                                      onTap: () =>
+                                          Navigator.pop(ctx, 'delete'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                            if (!mounted || action == null) return;
+                            if (action == 'cover') {
+                              await _setCover(attachment.id);
+                            } else if (action == 'delete') {
+                              await _removeAttachment(attachment.id);
+                            }
+                          },
+                        ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '长按拖动可调整顺序',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: _attachments.length >= KanbanCard.maxAttachments
+                            ? null
+                            : _pickAttachments,
+                        icon: const Icon(Icons.add_photo_alternate_outlined,
+                            size: 18),
+                        label: const Text('添加图片'),
                       ),
                       const SizedBox(height: 20),
                       Text('截止日期', style: theme.textTheme.titleSmall),

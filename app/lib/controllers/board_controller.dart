@@ -1,10 +1,17 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../features/attachments/attachment_missing.dart';
+import '../features/attachments/attachment_refs.dart';
+import '../features/attachments/attachment_store.dart';
+import '../features/attachments/attachment_sync_adapter.dart';
+import '../features/attachments/card_image_add_source.dart';
+import '../features/attachments/card_image_picker.dart';
 import '../features/project/project_list_preferences.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
@@ -36,11 +43,13 @@ class BoardController extends ChangeNotifier {
   TrashBin appTrash = TrashBin.empty;
   Map<String, TrashBin> projectTrashes = {};
   List<TrashItem> labelTrash = const [];
+  Set<String> missingAttachmentIds = {};
   bool isLoading = true;
   String? errorMessage;
 
   SyncStatus get syncStatus => _syncService.status;
   String? get syncError => _syncService.lastError;
+  String? get attachmentSyncWarning => _syncService.attachmentSyncWarning;
   DateTime? get lastSyncedAt => _syncService.lastSyncedAt;
   Stream<SyncStatus> get syncStatusStream => _syncService.statusStream;
 
@@ -81,6 +90,48 @@ class BoardController extends ChangeNotifier {
 
   int get trashItemCount => allTrashItems.length;
 
+  AttachmentStore? get attachmentStore => _repository.attachmentStore;
+
+  Future<Uint8List?> readAttachmentBytes(
+    String attachmentId, {
+    bool thumb = true,
+    String? projectId,
+  }) async {
+    final store = attachmentStore;
+    final pid = projectId ?? activeProjectId;
+    if (store == null || pid == null) return null;
+    return store.readBytes(
+      projectId: pid,
+      attachmentId: attachmentId,
+      thumb: thumb,
+    );
+  }
+
+  bool isAttachmentMissing(String attachmentId) =>
+      missingAttachmentIds.contains(attachmentId);
+
+  int missingAttachmentsForCard(KanbanCard card) =>
+      countMissingAttachmentsForCard(card, missingAttachmentIds);
+
+  Future<void> refreshMissingAttachments({String? projectId}) async {
+    final pid = projectId ?? activeProjectId;
+    final store = attachmentStore;
+    if (store == null || pid == null || board == null) {
+      missingAttachmentIds = {};
+      notifyListeners();
+      return;
+    }
+
+    final trash = projectTrashes[pid] ?? activeProjectTrash;
+    missingAttachmentIds = await findMissingAttachmentIds(
+      store: store,
+      projectId: pid,
+      board: board!,
+      trash: trash,
+    );
+    notifyListeners();
+  }
+
   ProjectEntry? get activeProject {
     if (activeProjectId == null || manifest == null) return null;
     return manifest!.findById(activeProjectId!);
@@ -89,12 +140,15 @@ class BoardController extends ChangeNotifier {
   static Future<BoardController> create() async {
     final prefs = await SharedPreferences.getInstance();
     final repository = BoardRepository(prefs);
+    final attachmentSync =
+        AttachmentSyncAdapter(repository.attachmentStore);
     late BoardController controller;
     final syncService = WebDavSyncService(
       loadConfig: () async => controller.webDavConfig,
       loadWorkspace: () async => controller._loadWorkspaceSnapshot(),
       saveWorkspace: (workspace) async =>
           controller._applyWorkspaceSnapshot(workspace),
+      attachmentSync: attachmentSync,
     );
     controller = BoardController._(
       repository: repository,
@@ -167,6 +221,7 @@ class BoardController extends ChangeNotifier {
       activeProjectTrash =
           workspace.projectTrash[first.id] ?? TrashBin.empty;
     }
+    await refreshMissingAttachments();
   }
 
   Future<void> _loadTrashState() async {
@@ -239,6 +294,13 @@ class BoardController extends ChangeNotifier {
       notifyListeners();
     }
 
+    _syncService.statusStream.listen((status) {
+      if (status == SyncStatus.success || status == SyncStatus.error) {
+        unawaited(refreshMissingAttachments());
+      }
+      notifyListeners();
+    });
+
     if (webDavConfig.enabled && webDavConfig.isConfigured) {
       _syncService.startPolling();
       unawaited(_syncInBackground());
@@ -255,6 +317,7 @@ class BoardController extends ChangeNotifier {
             await _repository.loadProjectSettings(activeProjectId!);
         await _loadTrashState();
       }
+      await refreshMissingAttachments();
       notifyListeners();
     } catch (e) {
       errorMessage = e.toString();
@@ -720,6 +783,7 @@ class BoardController extends ChangeNotifier {
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
+    List<CardAttachment>? attachments,
     int? colorValue,
     bool clearColor = false,
   }) async {
@@ -741,6 +805,7 @@ class BoardController extends ChangeNotifier {
           priority: priority ?? card.priority,
           labels: labels ?? card.labels,
           checklist: checklist ?? card.checklist,
+          attachments: attachments ?? card.attachments,
           colorValue: clearColor ? null : (colorValue ?? card.colorValue),
           updatedAt: now,
         );
@@ -750,6 +815,183 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(
       _bump(board!.copyWith(columns: _normalizeOrders(columns))),
     );
+  }
+
+  Future<String?> addCardAttachmentsFromSource(
+    String columnId,
+    String cardId,
+    CardImageAddSource source,
+  ) async {
+    final picked = await pickImagesForSource(source);
+    if (picked.isEmpty) {
+      return switch (source) {
+        CardImageAddSource.clipboard => '剪贴板中没有图片',
+        _ => null,
+      };
+    }
+    return addCardAttachments(
+      columnId,
+      cardId,
+      pickImages: () async => picked,
+    );
+  }
+
+  Future<String?> addCardAttachments(
+    String columnId,
+    String cardId, {
+    Future<List<PickedImageBytes>> Function()? pickImages,
+  }) async {
+    if (board == null || activeProjectId == null) return '看板未就绪';
+
+    KanbanCard? target;
+    for (final col in board!.columns) {
+      if (col.id != columnId) continue;
+      for (final card in col.cards) {
+        if (card.id == cardId) {
+          target = card;
+          break;
+        }
+      }
+    }
+    if (target == null) return '卡片不存在';
+
+    final store = attachmentStore;
+    if (store == null) return '当前平台不支持图片附件';
+
+    final remaining = KanbanCard.maxAttachments - target.attachments.length;
+    if (remaining <= 0) {
+      return '每张卡片最多 ${KanbanCard.maxAttachments} 张图片';
+    }
+
+    final picked = await (pickImages ?? pickCardImagesFromGallery)();
+    if (picked.isEmpty) return null;
+
+    final nextAttachments = [...target.attachments];
+    var nextOrder = nextAttachments.isEmpty
+        ? 0
+        : nextAttachments.map((a) => a.order).reduce((a, b) => a > b ? a : b) + 1;
+
+    try {
+      for (final image in picked) {
+        if (nextAttachments.length >= KanbanCard.maxAttachments) break;
+        final attachment = await store.saveImage(
+          projectId: activeProjectId!,
+          sourceBytes: image.bytes,
+          fileName: image.fileName,
+          order: nextOrder,
+        );
+        nextAttachments.add(attachment);
+        nextOrder++;
+      }
+    } catch (e) {
+      return '图片处理失败';
+    }
+
+    await updateCardFull(
+      columnId,
+      cardId,
+      attachments: nextAttachments,
+    );
+    await refreshMissingAttachments();
+    return null;
+  }
+
+  Future<void> reorderCardAttachments(
+    String columnId,
+    String cardId,
+    List<CardAttachment> ordered,
+  ) async {
+    await updateCardFull(
+      columnId,
+      cardId,
+      attachments: _reindexAttachments(ordered),
+    );
+  }
+
+  Future<void> removeCardAttachment(
+    String columnId,
+    String cardId,
+    String attachmentId,
+  ) async {
+    if (board == null || activeProjectId == null) return;
+
+    KanbanCard? target;
+    for (final col in board!.columns) {
+      if (col.id != columnId) continue;
+      for (final card in col.cards) {
+        if (card.id == cardId) {
+          target = card;
+          break;
+        }
+      }
+    }
+    if (target == null) return;
+
+    final nextAttachments = target.attachments
+        .where((attachment) => attachment.id != attachmentId)
+        .toList();
+    if (nextAttachments.length == target.attachments.length) return;
+
+    await updateCardFull(
+      columnId,
+      cardId,
+      attachments: _reindexAttachments(nextAttachments),
+    );
+    await attachmentStore?.deleteAttachment(
+      projectId: activeProjectId!,
+      attachmentId: attachmentId,
+    );
+    await refreshMissingAttachments();
+    _syncService.schedulePush();
+  }
+
+  Future<void> setCardAttachmentCover(
+    String columnId,
+    String cardId,
+    String attachmentId,
+  ) async {
+    if (board == null) return;
+
+    KanbanCard? target;
+    for (final col in board!.columns) {
+      if (col.id != columnId) continue;
+      for (final card in col.cards) {
+        if (card.id == cardId) {
+          target = card;
+          break;
+        }
+      }
+    }
+    if (target == null) return;
+
+    final selected = target.attachments
+        .where((attachment) => attachment.id == attachmentId)
+        .toList();
+    if (selected.isEmpty) return;
+
+    final others = target.attachments
+        .where((attachment) => attachment.id != attachmentId)
+        .toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+
+    final nextAttachments = [
+      selected.first.copyWith(order: 0),
+      for (var i = 0; i < others.length; i++)
+        others[i].copyWith(order: i + 1),
+    ];
+
+    await updateCardFull(
+      columnId,
+      cardId,
+      attachments: nextAttachments,
+    );
+  }
+
+  List<CardAttachment> _reindexAttachments(List<CardAttachment> attachments) {
+    final sorted = [...attachments]..sort((a, b) => a.order.compareTo(b.order));
+    return [
+      for (var i = 0; i < sorted.length; i++) sorted[i].copyWith(order: i),
+    ];
   }
 
   Future<void> toggleCardCompleted(String columnId, String cardId) async {
@@ -1005,6 +1247,14 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> permanentlyDeleteTrashItem(String trashItemId) async {
+    TrashItem? target;
+    for (final item in allTrashItems) {
+      if (item.id == trashItemId) {
+        target = item;
+        break;
+      }
+    }
+
     if (labelTrash.any((item) => item.id == trashItemId)) {
       labelTrash = labelTrash.where((item) => item.id != trashItemId).toList();
       await _persistLabelTrash();
@@ -1013,6 +1263,9 @@ class BoardController extends ChangeNotifier {
     }
 
     if (appTrash.items.any((item) => item.id == trashItemId)) {
+      if (target != null) {
+        await _deleteTrashItemAttachments(target);
+      }
       appTrash = appTrash.bump().copyWith(
             items: appTrash.items.where((item) => item.id != trashItemId).toList(),
           );
@@ -1022,6 +1275,9 @@ class BoardController extends ChangeNotifier {
 
     for (final entry in projectTrashes.entries.toList()) {
       if (!entry.value.items.any((item) => item.id == trashItemId)) continue;
+      if (target != null) {
+        await _deleteTrashItemAttachments(target);
+      }
       final next = entry.value.bump().copyWith(
             items: entry.value.items
                 .where((item) => item.id != trashItemId)
@@ -1039,6 +1295,10 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> emptyTrash() async {
+    for (final item in allTrashItems) {
+      await _deleteTrashItemAttachments(item);
+    }
+
     activeProjectTrash = TrashBin.empty.bump();
     appTrash = TrashBin.empty.bump();
     labelTrash = const [];
@@ -1207,6 +1467,43 @@ class BoardController extends ChangeNotifier {
     _syncService.schedulePush();
   }
 
+  Future<void> _deleteTrashItemAttachments(TrashItem item) async {
+    final store = attachmentStore;
+    final projectId = item.projectId;
+    if (store == null || projectId == null) return;
+
+    final card = item.cardPayload;
+    if (card != null) {
+      await store.deleteAttachments(
+        projectId: projectId,
+        attachments: card.attachments,
+      );
+      return;
+    }
+
+    final column = item.columnPayload;
+    if (column != null) {
+      for (final columnCard in column.cards) {
+        await store.deleteAttachments(
+          projectId: projectId,
+          attachments: columnCard.attachments,
+        );
+      }
+      return;
+    }
+
+    final project = item.projectPayload;
+    if (project != null) {
+      final ids = collectReferencedAttachmentIds(
+        project.board,
+        project.projectTrash,
+      );
+      for (final id in ids) {
+        await store.deleteAttachment(projectId: projectId, attachmentId: id);
+      }
+    }
+  }
+
   Future<void> _removeTrashItem(TrashItem item) async {
     final projectId = item.projectId;
     if (projectId == null) return;
@@ -1256,6 +1553,7 @@ class BoardController extends ChangeNotifier {
           await _repository.loadProjectSettings(activeProjectId!);
       await _loadTrashState();
     }
+    await refreshMissingAttachments();
     notifyListeners();
   }
 

@@ -62,6 +62,28 @@ class KanbanPathsIo {
         KanbanPaths.trashFileName,
       ));
 
+  static Directory projectAttachmentsDirectory(
+    Directory dataDir,
+    String projectId,
+  ) =>
+      Directory(p.join(
+        projectDirectory(dataDir, projectId).path,
+        KanbanPaths.attachmentsDirName,
+      ));
+
+  static File projectAttachmentFile(
+    Directory dataDir,
+    String projectId,
+    String attachmentId, {
+    bool thumb = false,
+  }) {
+    final name = thumb ? '${attachmentId}_thumb' : attachmentId;
+    return File(p.join(
+      projectAttachmentsDirectory(dataDir, projectId).path,
+      '$name.${KanbanPaths.attachmentFileExt}',
+    ));
+  }
+
   static File appTrashFile(Directory dataDir) =>
       File(p.join(dataDir.path, KanbanPaths.appTrashFileName));
 }

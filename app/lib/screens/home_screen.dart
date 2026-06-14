@@ -28,8 +28,20 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
   void initState() {
     super.initState();
     final controller = context.read<BoardController>();
-    controller.syncStatusStream.listen((_) {
-      if (mounted) deferRebuildIfComposing(_textControllers);
+    controller.syncStatusStream.listen((status) {
+      if (!mounted) return;
+      deferRebuildIfComposing(_textControllers);
+      final syncError = controller.syncError;
+      final attachmentWarning = controller.attachmentSyncWarning;
+      if (status == SyncStatus.error && syncError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('同步失败：$syncError')),
+        );
+      } else if (status == SyncStatus.success && attachmentWarning != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(attachmentWarning)),
+        );
+      }
     });
     bindImeGuard(_textControllers);
     _searchController.addListener(_onSearchChanged);

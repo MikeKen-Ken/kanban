@@ -246,6 +246,69 @@ class KanbanColumn {
   }
 }
 
+/// 卡片图片附件元数据（二进制存于 attachments/ 目录）
+class CardAttachment {
+  CardAttachment({
+    required this.id,
+    required this.fileName,
+    required this.mimeType,
+    required this.order,
+    required this.createdAt,
+    this.width,
+    this.height,
+  });
+
+  final String id;
+  final String fileName;
+  final String mimeType;
+  final int order;
+  final int createdAt;
+  final int? width;
+  final int? height;
+
+  CardAttachment copyWith({
+    String? id,
+    String? fileName,
+    String? mimeType,
+    int? order,
+    int? createdAt,
+    int? width,
+    int? height,
+  }) {
+    return CardAttachment(
+      id: id ?? this.id,
+      fileName: fileName ?? this.fileName,
+      mimeType: mimeType ?? this.mimeType,
+      order: order ?? this.order,
+      createdAt: createdAt ?? this.createdAt,
+      width: width ?? this.width,
+      height: height ?? this.height,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'order': order,
+        'createdAt': createdAt,
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+      };
+
+  factory CardAttachment.fromJson(Map<String, dynamic> json) {
+    return CardAttachment(
+      id: json['id'] as String,
+      fileName: json['fileName'] as String? ?? 'image.jpg',
+      mimeType: json['mimeType'] as String? ?? 'image/jpeg',
+      order: json['order'] as int? ?? 0,
+      createdAt: json['createdAt'] as int? ?? 0,
+      width: json['width'] as int?,
+      height: json['height'] as int?,
+    );
+  }
+}
+
 class ChecklistItem {
   ChecklistItem({
     required this.id,
@@ -298,6 +361,7 @@ class KanbanCard {
     this.priority = CardPriority.none,
     this.labels = const [],
     this.checklist = const [],
+    this.attachments = const [],
     this.colorValue,
   }) : updatedAt = updatedAt ?? createdAt;
 
@@ -313,14 +377,27 @@ class KanbanCard {
   final CardPriority priority;
   final List<String> labels;
   final List<ChecklistItem> checklist;
+  final List<CardAttachment> attachments;
 
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
+
+  static const maxAttachments = 9;
 
   int get checklistDone =>
       checklist.where((item) => item.completed).length;
 
   bool get hasChecklist => checklist.isNotEmpty;
+
+  bool get hasAttachments => attachments.isNotEmpty;
+
+  List<CardAttachment> get sortedAttachments {
+    final list = [...attachments]..sort((a, b) => a.order.compareTo(b.order));
+    return list;
+  }
+
+  CardAttachment? get coverAttachment =>
+      sortedAttachments.isEmpty ? null : sortedAttachments.first;
 
   KanbanCard copyWith({
     String? id,
@@ -335,6 +412,7 @@ class KanbanCard {
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
+    List<CardAttachment>? attachments,
     Object? colorValue = _sentinel,
   }) {
     return KanbanCard(
@@ -352,6 +430,7 @@ class KanbanCard {
       priority: priority ?? this.priority,
       labels: labels ?? this.labels,
       checklist: checklist ?? this.checklist,
+      attachments: attachments ?? this.attachments,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
     );
@@ -373,6 +452,8 @@ class KanbanCard {
         if (labels.isNotEmpty) 'labels': labels,
         if (checklist.isNotEmpty)
           'checklist': checklist.map((c) => c.toJson()).toList(),
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((a) => a.toJson()).toList(),
         if (colorValue != null) 'color': colorValue,
       };
 
@@ -393,6 +474,9 @@ class KanbanCard {
           .toList(),
       checklist: (json['checklist'] as List<dynamic>? ?? [])
           .map((e) => ChecklistItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      attachments: (json['attachments'] as List<dynamic>? ?? [])
+          .map((e) => CardAttachment.fromJson(e as Map<String, dynamic>))
           .toList(),
       colorValue: json['color'] as int?,
     );

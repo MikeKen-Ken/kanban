@@ -16,6 +16,11 @@ dependencies:
   uuid: ^4.5.1
   webdav_client: ^1.0.9
   intl: ^0.19.0
+  image_picker: ^1.1.2
+  file_picker: ^8.1.7
+  image: ^4.5.4
+  pasteboard: ^0.4.0
+  reorderables: ^0.6.0
 
 dev_dependencies:
   flutter_test:

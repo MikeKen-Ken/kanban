@@ -5,6 +5,8 @@ class KanbanPaths {
   static const storageVersion = 3;
   static const boardFileName = 'board.json';
   static const columnsDirName = 'columns';
+  static const attachmentsDirName = 'attachments';
+  static const attachmentFileExt = 'jpg';
   static const projectsFileName = 'projects.json';
   static const projectsDirName = 'projects';
   static const settingsFileName = 'settings.json';
@@ -63,6 +65,29 @@ class KanbanPaths {
 
   static String remoteProjectTrashPath(String baseDir, String projectId) =>
       '${remoteProjectDir(baseDir, projectId)}/$trashFileName';
+
+  static String remoteProjectAttachmentsDir(String baseDir, String projectId) =>
+      '${remoteProjectDir(baseDir, projectId)}/$attachmentsDirName';
+
+  static String remoteProjectAttachmentPath(
+    String baseDir,
+    String projectId,
+    String attachmentId, {
+    bool thumb = false,
+  }) {
+    final name = thumb ? '${attachmentId}_thumb' : attachmentId;
+    return '${remoteProjectAttachmentsDir(baseDir, projectId)}/$name.$attachmentFileExt';
+  }
+
+  static String? attachmentIdFromRemoteFile(String filePath) {
+    final name = filePath.split('/').last;
+    if (!name.endsWith('.$attachmentFileExt')) return null;
+    final base = name.substring(0, name.length - attachmentFileExt.length - 1);
+    if (base.endsWith('_thumb')) {
+      return base.substring(0, base.length - 6);
+    }
+    return base;
+  }
 
   static String remoteAppTrashPath(String baseDir) =>
       '$baseDir/$appTrashFileName';

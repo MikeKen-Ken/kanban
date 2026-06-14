@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/project/project_theme.dart';
 import '../../models/kanban_models.dart';
+import '../attachments/card_attachment_image.dart';
+import '../attachments/card_attachment_viewer.dart';
 import 'card_detail_sheet.dart';
 import 'kanban_labels.dart';
 
@@ -190,6 +192,9 @@ class _CardContent extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final themePreset = projectThemeForId(themeId);
     final dueInfo = _dueDateInfo(card.dueDate, colorScheme);
+    final cover = card.coverAttachment;
+    final extraImageCount =
+        card.attachments.length > 1 ? card.attachments.length - 1 : 0;
     final cardColor =
         card.colorValue != null ? Color(card.colorValue!) : null;
     // note: 用 alphaBlend 得到不透明底色，避免半透明 Material 与 M3 surfaceTint 叠层盖住文字
@@ -221,22 +226,72 @@ class _CardContent extends StatelessWidget {
                   columnId: columnId!,
                   card: card,
                 ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (columnId != null)
-                Checkbox(
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  value: card.completed,
-                  onChanged: (_) => context
-                      .read<BoardController>()
-                      .toggleCardCompleted(columnId!, card.id),
-                )
-              else
-                const SizedBox(width: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (cover != null)
+              GestureDetector(
+                onTap: dragging
+                    ? null
+                    : () => showCardAttachmentViewer(
+                          context: context,
+                          attachments: card.sortedAttachments,
+                          initialIndex: 0,
+                        ),
+                child: SizedBox(
+                  height: 132,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CardAttachmentImage(
+                        attachmentId: cover.id,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                      ),
+                      if (extraImageCount > 0)
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '+$extraImageCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (columnId != null)
+                    Checkbox(
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      value: card.completed,
+                      onChanged: (_) => context
+                          .read<BoardController>()
+                          .toggleCardCompleted(columnId!, card.id),
+                    )
+                  else
+                    const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,8 +454,10 @@ class _CardContent extends StatelessWidget {
                 )
               else if (dragHandle != null)
                 dragHandle!,
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
