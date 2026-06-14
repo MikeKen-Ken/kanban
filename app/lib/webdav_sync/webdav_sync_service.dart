@@ -60,6 +60,7 @@ class WebDavSyncService {
   Timer? _debounceTimer;
   Timer? _pollTimer;
   bool _pushInFlight = false;
+  bool _pushPending = false;
 
   final _statusController = StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get statusStream => _statusController.stream;
@@ -68,12 +69,55 @@ class WebDavSyncService {
     if (!config.isConfigured) return null;
     var url = config.serverUrl.trim();
     if (!url.endsWith('/')) url = '$url/';
-    return newClient(
+    final client = newClient(
       url,
       user: config.username.trim(),
       password: config.password,
       debug: false,
     );
+    // note: 图片附件可能较大，放宽传输超时避免拉取被误判为失败
+    client.setReceiveTimeout(120000);
+    client.setSendTimeout(120000);
+    return client;
+  }
+
+  bool _isRemoteNotFound(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('404') ||
+        message.contains('not found') ||
+        message.contains('no such file') ||
+        message.contains('不存在');
+  }
+
+  Iterable<String> _directoryPathCandidates(String dir) sync* {
+    yield dir;
+    if (!dir.endsWith('/')) yield '$dir/';
+  }
+
+  Future<List<File>> _readDirWithFallback(Client client, String dir) async {
+    for (final path in _directoryPathCandidates(dir)) {
+      try {
+        return await client.readDir(path);
+      } catch (_) {
+        continue;
+      }
+    }
+    return const [];
+  }
+
+  String _remoteFilePath(String parentDir, File file) {
+    final path = file.path?.trim();
+    if (path != null && path.isNotEmpty) {
+      if (path.startsWith('/')) return path;
+      final prefix = parentDir.endsWith('/') ? parentDir : '$parentDir/';
+      return '$prefix$path';
+    }
+    final name = file.name?.trim();
+    if (name != null && name.isNotEmpty) {
+      final prefix = parentDir.endsWith('/') ? parentDir : '$parentDir/';
+      return '$prefix$name';
+    }
+    return parentDir;
   }
 
   String _remoteBase(WebDavConfig config) =>
@@ -122,8 +166,7 @@ class WebDavSyncService {
       final data = await client.read(path);
       return jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
     } on Object catch (e) {
-      final message = e.toString().toLowerCase();
-      if (message.contains('404') || message.contains('not found')) {
+      if (_isRemoteNotFound(e)) {
         return null;
       }
       rethrow;
@@ -140,12 +183,71 @@ class WebDavSyncService {
       final data = await client.read(path);
       return Uint8List.fromList(data);
     } on Object catch (e) {
-      final message = e.toString().toLowerCase();
-      if (message.contains('404') || message.contains('not found')) {
+      if (_isRemoteNotFound(e)) {
         return null;
       }
       rethrow;
     }
+  }
+
+  Future<bool> _downloadRemoteAttachment(
+    Client client,
+    String attachmentsDir,
+    String base,
+    String projectId,
+    String attachmentId, {
+    bool thumb = false,
+  }) async {
+    if (await _attachmentSync.exists(projectId, attachmentId, thumb: thumb)) {
+      return true;
+    }
+
+    try {
+      var bytes = await _readBytes(
+        client,
+        KanbanPaths.remoteProjectAttachmentPath(
+          base,
+          projectId,
+          attachmentId,
+          thumb: thumb,
+        ),
+      );
+      if (bytes != null && bytes.isNotEmpty) {
+        await _attachmentSync.writeFile(
+          projectId,
+          attachmentId,
+          bytes,
+          thumb: thumb,
+        );
+        return await _attachmentSync.exists(projectId, attachmentId, thumb: thumb);
+      }
+
+      final expectedName = KanbanPaths.remoteProjectAttachmentFileName(
+        attachmentId,
+        thumb: thumb,
+      );
+      final files = await _readDirWithFallback(client, attachmentsDir);
+      for (final file in files) {
+        if (file.isDir == true) continue;
+        final name = file.name ?? file.path?.split('/').last ?? '';
+        if (name != expectedName) continue;
+        bytes = await _readBytes(client, _remoteFilePath(attachmentsDir, file));
+        if (bytes == null || bytes.isEmpty) continue;
+        await _attachmentSync.writeFile(
+          projectId,
+          attachmentId,
+          bytes,
+          thumb: thumb,
+        );
+        if (await _attachmentSync.exists(projectId, attachmentId, thumb: thumb)) {
+          return true;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return await _attachmentSync.exists(projectId, attachmentId, thumb: thumb);
   }
 
   Future<int> _pushProjectAttachments(
@@ -196,9 +298,13 @@ class WebDavSyncService {
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId),
         keepIds,
       );
+    } catch (_) {
+      // note: 远端孤儿清理失败不影响已上传附件
+    }
+    try {
       await _attachmentSync.deleteOrphans(projectId, keepIds);
     } catch (_) {
-      failed++;
+      // note: 本地孤儿清理失败不影响同步结果
     }
     return failed;
   }
@@ -214,31 +320,18 @@ class WebDavSyncService {
 
     var failed = 0;
     final keepIds = _attachmentSync.referencedIds(board, trash);
+    final attachmentsDir =
+        KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
     for (final id in keepIds) {
       for (final thumb in const [false, true]) {
-        if (await _attachmentSync.exists(projectId, id, thumb: thumb)) {
-          continue;
-        }
-        try {
-          final bytes = await _readBytes(
-            client,
-            KanbanPaths.remoteProjectAttachmentPath(
-              base,
-              projectId,
-              id,
-              thumb: thumb,
-            ),
-          );
-          if (bytes == null) continue;
-          await _attachmentSync.writeFile(
-            projectId,
-            id,
-            bytes,
-            thumb: thumb,
-          );
-        } catch (_) {
-          // note: 失败计数在下方按主图是否落地统一统计
-        }
+        await _downloadRemoteAttachment(
+          client,
+          attachmentsDir,
+          base,
+          projectId,
+          id,
+          thumb: thumb,
+        );
       }
       if (!await _attachmentSync.exists(projectId, id)) {
         failed++;
@@ -248,7 +341,7 @@ class WebDavSyncService {
     try {
       await _attachmentSync.deleteOrphans(projectId, keepIds);
     } catch (_) {
-      failed++;
+      // note: 本地孤儿清理失败不影响同步结果
     }
     return failed;
   }
@@ -258,15 +351,17 @@ class WebDavSyncService {
     String attachmentsDir,
     Set<String> keepIds,
   ) async {
-    try {
-      final files = await client.readDir(attachmentsDir);
-      for (final file in files) {
-        final id = KanbanPaths.attachmentIdFromRemoteFile(file.path ?? '');
-        if (id == null || keepIds.contains(id)) continue;
-        await client.remove(file.path!);
+    final files = await _readDirWithFallback(client, attachmentsDir);
+    for (final file in files) {
+      if (file.isDir == true) continue;
+      final name = file.name ?? file.path?.split('/').last ?? '';
+      final id = KanbanPaths.attachmentIdFromRemoteFileName(name);
+      if (id == null || keepIds.contains(id)) continue;
+      try {
+        await client.remove(_remoteFilePath(attachmentsDir, file));
+      } catch (_) {
+        // note: 单个远端孤儿删除失败时继续
       }
-    } catch (_) {
-      // note: 远端 attachments 目录不存在时忽略
     }
   }
 
@@ -279,6 +374,11 @@ class WebDavSyncService {
     TrashBin trash,
   ) async {
     final projectBase = KanbanPaths.remoteProjectDir(base, projectId);
+    try {
+      await client.mkdirAll(projectBase);
+    } catch (_) {
+      // note: 目录已存在时忽略
+    }
     // note: 先写列文件、再写 board 元数据，避免其他端拉取时元数据已列出列 id 但列文件尚未上传
     for (final column in board.columns) {
       await _writeJson(
@@ -314,10 +414,6 @@ class WebDavSyncService {
       board,
       trash,
     );
-    // note: 确保项目目录存在（某些 WebDAV 需要）
-    try {
-      await client.mkdirAll(projectBase);
-    } catch (_) {}
     return attachmentFailures;
   }
 
@@ -330,7 +426,10 @@ class WebDavSyncService {
   }
 
   Future<void> pushNow() async {
-    if (_pushInFlight) return;
+    if (_pushInFlight) {
+      _pushPending = true;
+      return;
+    }
     final config = await _loadConfig();
     if (!config.enabled || !config.autoSync || !config.isConfigured) return;
 
@@ -383,6 +482,10 @@ class WebDavSyncService {
       _setStatus(SyncStatus.error, error: e.toString());
     } finally {
       _pushInFlight = false;
+      if (_pushPending) {
+        _pushPending = false;
+        unawaited(pushNow());
+      }
     }
   }
 

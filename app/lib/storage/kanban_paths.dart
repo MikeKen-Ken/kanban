@@ -69,24 +69,36 @@ class KanbanPaths {
   static String remoteProjectAttachmentsDir(String baseDir, String projectId) =>
       '${remoteProjectDir(baseDir, projectId)}/$attachmentsDirName';
 
+  static String remoteProjectAttachmentFileName(
+    String attachmentId, {
+    bool thumb = false,
+  }) {
+    final stem = thumb ? '${attachmentId}_thumb' : attachmentId;
+    return '$stem.$attachmentFileExt';
+  }
+
   static String remoteProjectAttachmentPath(
     String baseDir,
     String projectId,
     String attachmentId, {
     bool thumb = false,
   }) {
-    final name = thumb ? '${attachmentId}_thumb' : attachmentId;
-    return '${remoteProjectAttachmentsDir(baseDir, projectId)}/$name.$attachmentFileExt';
+    return '${remoteProjectAttachmentsDir(baseDir, projectId)}/'
+        '${remoteProjectAttachmentFileName(attachmentId, thumb: thumb)}';
   }
 
-  static String? attachmentIdFromRemoteFile(String filePath) {
-    final name = filePath.split('/').last;
-    if (!name.endsWith('.$attachmentFileExt')) return null;
-    final base = name.substring(0, name.length - attachmentFileExt.length - 1);
+  static String? attachmentIdFromRemoteFileName(String fileName) {
+    if (!fileName.endsWith('.$attachmentFileExt')) return null;
+    final base = fileName.substring(0, fileName.length - attachmentFileExt.length - 1);
     if (base.endsWith('_thumb')) {
       return base.substring(0, base.length - 6);
     }
     return base;
+  }
+
+  static String? attachmentIdFromRemoteFile(String filePath) {
+    final name = filePath.split('/').last;
+    return attachmentIdFromRemoteFileName(name);
   }
 
   static String remoteAppTrashPath(String baseDir) =>

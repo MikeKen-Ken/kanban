@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/models/kanban_models.dart';
+import 'package:kanban/storage/kanban_paths.dart';
 
 void main() {
   test('merge prefers higher revision', () {
@@ -130,5 +131,19 @@ void main() {
     final restored = KanbanCard.fromJson(card.toJson());
     expect(restored.attachments, hasLength(1));
     expect(restored.coverAttachment?.id, 'att-1');
+  });
+
+  test('attachmentIdFromRemoteFileName parses main and thumb files', () {
+    expect(
+      KanbanPaths.attachmentIdFromRemoteFileName('550e8400-e29b-41d4-a716-446655440000.jpg'),
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    expect(
+      KanbanPaths.attachmentIdFromRemoteFileName(
+        '550e8400-e29b-41d4-a716-446655440000_thumb.jpg',
+      ),
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    expect(KanbanPaths.attachmentIdFromRemoteFileName('notes.txt'), isNull);
   });
 }
