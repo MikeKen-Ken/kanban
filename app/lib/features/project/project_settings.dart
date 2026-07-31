@@ -10,6 +10,7 @@ class ProjectSettings {
     this.columnPreferences = const {},
     this.updatedAt = 0,
     this.revision = 0,
+    this.conflictSide,
   });
 
   /// 已完成列的显示名称，也用于识别完成列
@@ -23,6 +24,11 @@ class ProjectSettings {
   final int updatedAt;
   final int revision;
 
+  /// 设置冲突时另一侧完整快照
+  final ProjectSettings? conflictSide;
+
+  bool get hasConflict => conflictSide != null;
+
   static const defaultDoneColumnName = '已完成';
 
   ProjectSettings copyWith({
@@ -31,6 +37,8 @@ class ProjectSettings {
     Map<String, ColumnCardPreferences>? columnPreferences,
     int? updatedAt,
     int? revision,
+    Object? conflictSide = _sentinel,
+    bool clearConflictSide = false,
   }) {
     return ProjectSettings(
       doneColumnName: doneColumnName ?? this.doneColumnName,
@@ -38,25 +46,39 @@ class ProjectSettings {
       columnPreferences: columnPreferences ?? this.columnPreferences,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
+      conflictSide: clearConflictSide
+          ? null
+          : (conflictSide == _sentinel
+              ? this.conflictSide
+              : conflictSide as ProjectSettings?),
     );
   }
+
+  static const _sentinel = Object();
 
   ColumnCardPreferences columnPreferencesFor(String columnId) =>
       columnPreferences[columnId] ?? const ColumnCardPreferences();
 
-  Map<String, dynamic> toJson() => {
-        'doneColumnName': doneColumnName,
-        if (themeId.isNotEmpty) 'themeId': themeId,
-        if (columnPreferences.isNotEmpty)
-          'columnPreferences': columnPreferences.map(
-            (key, value) => MapEntry(key, value.toJson()),
-          ),
-        'updatedAt': updatedAt,
-        'revision': revision,
-      };
+  Map<String, dynamic> toJson({bool includeConflict = true}) {
+    final map = <String, dynamic>{
+      'doneColumnName': doneColumnName,
+      if (themeId.isNotEmpty) 'themeId': themeId,
+      if (columnPreferences.isNotEmpty)
+        'columnPreferences': columnPreferences.map(
+          (key, value) => MapEntry(key, value.toJson()),
+        ),
+      'updatedAt': updatedAt,
+      'revision': revision,
+    };
+    if (includeConflict && conflictSide != null) {
+      map['conflictSide'] = conflictSide!.toJson(includeConflict: false);
+    }
+    return map;
+  }
 
   factory ProjectSettings.fromJson(Map<String, dynamic> json) {
     final prefsRaw = json['columnPreferences'] as Map<String, dynamic>?;
+    final sideRaw = json['conflictSide'] as Map<String, dynamic>?;
     return ProjectSettings(
       doneColumnName:
           json['doneColumnName'] as String? ?? defaultDoneColumnName,
@@ -73,6 +95,8 @@ class ProjectSettings {
             ),
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
+      conflictSide:
+          sideRaw == null ? null : ProjectSettings.fromJson(sideRaw),
     );
   }
 
@@ -84,7 +108,7 @@ class ProjectSettings {
     );
   }
 
-  /// note: 合并策略 — 修订号更高者优先；相同则时间戳更新者优先
+  /// note: 兼容旧调用；字段级合并请用 sync_conflict.mergeSettings
   ProjectSettings mergeWith(ProjectSettings remote) {
     if (remote.revision > revision) return remote;
     if (remote.revision < revision) return this;

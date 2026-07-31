@@ -15,6 +15,7 @@ import '../features/attachments/card_image_picker.dart';
 import '../features/project/project_list_preferences.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/sync_conflict/sync_conflict.dart';
 import '../models/kanban_models.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_labels.dart';
@@ -22,6 +23,8 @@ import '../features/trash/trash_models.dart';
 import '../settings/app_settings.dart';
 import '../webdav_sync/webdav_config.dart';
 import '../webdav_sync/webdav_sync_service.dart';
+
+enum CardConflictResolution { keepPrimary, keepOther }
 
 class BoardController extends ChangeNotifier {
   BoardController._({
@@ -137,6 +140,25 @@ class BoardController extends ChangeNotifier {
     return manifest!.findById(activeProjectId!);
   }
 
+  int get unresolvedConflictCount {
+    var n = 0;
+    if (board != null) {
+      for (final col in board!.columns) {
+        for (final card in col.cards) {
+          if (card.hasConflict) n++;
+        }
+      }
+      if (board!.conflictTitle != null) n++;
+    }
+    if (projectSettings.hasConflict) n++;
+    if (manifest != null) {
+      for (final p in manifest!.projects) {
+        if (p.hasConflict) n++;
+      }
+    }
+    return n;
+  }
+
   static Future<BoardController> create() async {
     final prefs = await SharedPreferences.getInstance();
     final repository = BoardRepository(prefs);
@@ -148,6 +170,7 @@ class BoardController extends ChangeNotifier {
       loadWorkspace: () async => controller._loadWorkspaceSnapshot(),
       saveWorkspace: (workspace) async =>
           controller._applyWorkspaceSnapshot(workspace),
+      syncBaseStore: SyncBaseStore(prefs),
       attachmentSync: attachmentSync,
     );
     controller = BoardController._(
@@ -1555,6 +1578,90 @@ class BoardController extends ChangeNotifier {
     }
     await refreshMissingAttachments();
     notifyListeners();
+  }
+
+  /// 解决单卡冲突：保留主副本或另一侧
+  Future<void> resolveCardConflict(
+    String columnId,
+    String cardId,
+    CardConflictResolution resolution,
+  ) async {
+    if (board == null) return;
+
+    KanbanCard? target;
+    String? targetColumnId;
+    for (final col in board!.columns) {
+      for (final card in col.cards) {
+        if (card.id == cardId) {
+          target = card;
+          targetColumnId = col.id;
+          break;
+        }
+      }
+      if (target != null) break;
+    }
+    if (target == null || !target.hasConflict) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    late KanbanCard resolved;
+    var resolvedColumnId = targetColumnId!;
+
+    if (resolution == CardConflictResolution.keepPrimary) {
+      if (target.conflictDeleted) {
+        // note: 主侧是「仍存在」版本，选择主侧即保留卡片并清除删除冲突
+        resolved = target.copyWith(clearConflict: true, updatedAt: now);
+      } else {
+        resolved = target.copyWith(clearConflict: true, updatedAt: now);
+      }
+    } else {
+      if (target.conflictDeleted) {
+        // note: 选择另一侧删除意图 → 删卡（由调用方或此处进回收站较重，第一期直接从板移除）
+        final columns = board!.columns.map((col) {
+          if (col.id != targetColumnId) return col;
+          return col.copyWith(
+            cards: col.cards.where((c) => c.id != cardId).toList(),
+          );
+        }).toList();
+        await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+        return;
+      }
+      final other = target.conflictSide;
+      if (other == null) return;
+      resolved = other.copyWith(clearConflict: true, updatedAt: now);
+      resolvedColumnId = target.conflictColumnId ?? targetColumnId;
+    }
+
+    var columns = board!.columns.map((col) {
+      return col.copyWith(
+        cards: col.cards.where((c) => c.id != cardId).toList(),
+      );
+    }).toList();
+
+    columns = columns.map((col) {
+      if (col.id != resolvedColumnId) return col;
+      final cards = [...col.cards, resolved]
+        ..sort((a, b) => a.order.compareTo(b.order));
+      return col.copyWith(cards: cards);
+    }).toList();
+
+    // 若目标列不存在，放回原列
+    if (!columns.any((c) => c.id == resolvedColumnId)) {
+      columns = columns.map((col) {
+        if (col.id != targetColumnId) return col;
+        return col.copyWith(cards: [...col.cards, resolved]);
+      }).toList();
+    }
+
+    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+  }
+
+  Future<void> resolveSettingsConflict({required bool keepPrimary}) async {
+    if (!projectSettings.hasConflict) return;
+    final next = keepPrimary
+        ? projectSettings.copyWith(clearConflictSide: true)
+        : (projectSettings.conflictSide ?? projectSettings)
+            .copyWith(clearConflictSide: true);
+    await _persistProjectSettings(next.bump());
   }
 
   @override

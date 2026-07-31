@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/sync_conflict/board_merge.dart';
 import 'package:kanban/models/kanban_models.dart';
 import 'package:kanban/storage/kanban_paths.dart';
 
@@ -93,6 +94,8 @@ void main() {
 
     final merged = local.mergeWith(remote);
     expect(merged.columns.first.cards.single.title, '远端标题');
+    expect(merged.columns.first.cards.single.hasConflict, isTrue);
+    expect(merged.columns.first.cards.single.conflictSide?.title, '本地标题');
   });
 
   test('CardAttachment serializes round trip', () {
@@ -131,6 +134,31 @@ void main() {
     final restored = KanbanCard.fromJson(card.toJson());
     expect(restored.attachments, hasLength(1));
     expect(restored.coverAttachment?.id, 'att-1');
+  });
+
+  test('KanbanCard conflictSide serializes without nesting', () {
+    final card = KanbanCard(
+      id: 'card-1',
+      title: '主标题',
+      order: 0,
+      createdAt: 1,
+      conflictSide: KanbanCard(
+        id: 'card-1',
+        title: '冲突标题',
+        order: 0,
+        createdAt: 1,
+      ),
+      conflictColumnId: 'doing',
+    );
+    final restored = KanbanCard.fromJson(card.toJson());
+    expect(restored.hasConflict, isTrue);
+    expect(restored.conflictSide?.title, '冲突标题');
+    expect(restored.conflictColumnId, 'doing');
+    expect(restored.toJson()['conflictSide'], isA<Map>());
+    expect(
+      (restored.toJson()['conflictSide'] as Map)['conflictSide'],
+      isNull,
+    );
   });
 
   test('attachmentIdFromRemoteFileName parses main and thumb files', () {

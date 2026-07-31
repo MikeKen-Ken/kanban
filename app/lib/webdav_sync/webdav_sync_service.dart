@@ -7,29 +7,16 @@ import 'package:webdav_client/webdav_client.dart';
 import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/sync_conflict/sync_conflict.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
+import '../storage/json_file_io.dart';
 import '../storage/kanban_paths.dart';
 import 'webdav_config.dart';
 
+export '../features/sync_conflict/workspace_snapshot.dart';
+
 enum SyncStatus { idle, syncing, success, error }
-
-/// 项目工作区快照，用于同步
-class ProjectWorkspaceSnapshot {
-  const ProjectWorkspaceSnapshot({
-    required this.manifest,
-    required this.boards,
-    required this.settings,
-    this.projectTrash = const {},
-    this.appTrash = TrashBin.empty,
-  });
-
-  final ProjectsManifest manifest;
-  final Map<String, KanbanBoard> boards;
-  final Map<String, ProjectSettings> settings;
-  final Map<String, TrashBin> projectTrash;
-  final TrashBin appTrash;
-}
 
 /// 自动 WebDAV 同步：本地变更后防抖上传，启动/轮询时拉取合并
 class WebDavSyncService {
@@ -38,16 +25,19 @@ class WebDavSyncService {
     required Future<ProjectWorkspaceSnapshot> Function() loadWorkspace,
     required Future<void> Function(ProjectWorkspaceSnapshot workspace)
         saveWorkspace,
+    required SyncBaseStore syncBaseStore,
     AttachmentSyncAdapter? attachmentSync,
   })  : _loadConfig = loadConfig,
         _loadWorkspace = loadWorkspace,
         _saveWorkspace = saveWorkspace,
+        _syncBaseStore = syncBaseStore,
         _attachmentSync = attachmentSync ?? AttachmentSyncAdapter(null);
 
   final Future<WebDavConfig> Function() _loadConfig;
   final Future<ProjectWorkspaceSnapshot> Function() _loadWorkspace;
   final Future<void> Function(ProjectWorkspaceSnapshot workspace)
       _saveWorkspace;
+  final SyncBaseStore _syncBaseStore;
   final AttachmentSyncAdapter _attachmentSync;
 
   static const debounceDuration = Duration(milliseconds: 1500);
@@ -61,6 +51,8 @@ class WebDavSyncService {
   Timer? _pollTimer;
   bool _pushInFlight = false;
   bool _pushPending = false;
+  bool _syncInFlight = false;
+  bool _pullPending = false;
 
   final _statusController = StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get statusStream => _statusController.stream;
@@ -164,9 +156,15 @@ class WebDavSyncService {
   ) async {
     try {
       final data = await client.read(path);
-      return jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
+      final json = tryDecodeJsonBytes(data, path: path);
+      if (json != null) return json;
+      // note: 远端个别文件损坏时不拖垮整次同步；由调用方处理 null
+      return null;
     } on Object catch (e) {
       if (_isRemoteNotFound(e)) {
+        return null;
+      }
+      if (e is FormatException) {
         return null;
       }
       rethrow;
@@ -425,13 +423,18 @@ class WebDavSyncService {
     }
   }
 
-  Future<void> pushNow() async {
+  Future<void> pushNow({bool force = false}) async {
+    if (_syncInFlight) {
+      _pushPending = true;
+      return;
+    }
     if (_pushInFlight) {
       _pushPending = true;
       return;
     }
     final config = await _loadConfig();
-    if (!config.enabled || !config.autoSync || !config.isConfigured) return;
+    if (!config.enabled || !config.isConfigured) return;
+    if (!force && !config.autoSync) return;
 
     final client = _client(config);
     if (client == null) return;
@@ -476,6 +479,7 @@ class WebDavSyncService {
         workspace.manifest.projects.map((p) => p.id).toSet(),
       );
 
+      await _syncBaseStore.save(workspace);
       _applyAttachmentSyncWarning(attachmentFailures);
       _setStatus(SyncStatus.success);
     } catch (e) {
@@ -484,7 +488,10 @@ class WebDavSyncService {
       _pushInFlight = false;
       if (_pushPending) {
         _pushPending = false;
-        unawaited(pushNow());
+        unawaited(pushNow(force: force));
+      } else if (_pullPending) {
+        _pullPending = false;
+        unawaited(pullAndMerge());
       }
     }
   }
@@ -661,69 +668,36 @@ class WebDavSyncService {
   ProjectWorkspaceSnapshot _mergeWorkspaces(
     ProjectWorkspaceSnapshot local,
     ProjectWorkspaceSnapshot remote,
+    ProjectWorkspaceSnapshot? base,
   ) {
-    final mergedManifest = local.manifest.mergeWith(remote.manifest);
-
-    final allIds = <String>{
-      ...local.boards.keys,
-      ...remote.boards.keys,
-      ...mergedManifest.projects.map((p) => p.id),
-    };
-
-    final mergedBoards = <String, KanbanBoard>{};
-    final mergedSettings = <String, ProjectSettings>{};
-    final mergedProjectTrash = <String, TrashBin>{};
-
-    for (final id in allIds) {
-      final localBoard = local.boards[id];
-      final remoteBoard = remote.boards[id];
-      if (localBoard != null && remoteBoard != null) {
-        mergedBoards[id] = localBoard.mergeWith(remoteBoard);
-      } else {
-        mergedBoards[id] = localBoard ?? remoteBoard!;
-      }
-
-      final localSettings = local.settings[id] ?? const ProjectSettings();
-      final remoteSettings = remote.settings[id] ?? const ProjectSettings();
-      mergedSettings[id] = localSettings.mergeWith(remoteSettings);
-
-      final localTrash = local.projectTrash[id] ?? TrashBin.empty;
-      final remoteTrash = remote.projectTrash[id] ?? TrashBin.empty;
-      mergedProjectTrash[id] = localTrash.mergeWith(remoteTrash);
-    }
-
-    return ProjectWorkspaceSnapshot(
-      manifest: mergedManifest,
-      boards: mergedBoards,
-      settings: mergedSettings,
-      projectTrash: mergedProjectTrash,
-      appTrash: local.appTrash.mergeWith(remote.appTrash),
-    );
-  }
-
-  bool _localIsNewer(
-    ProjectWorkspaceSnapshot local,
-    ProjectWorkspaceSnapshot remote,
-  ) {
-    if (local.manifest.revision > remote.manifest.revision) return true;
-    if (local.manifest.revision < remote.manifest.revision) return false;
-    return local.manifest.updatedAt > remote.manifest.updatedAt;
+    return mergeWorkspaces(local: local, remote: remote, base: base);
   }
 
   Future<void> pullAndMerge() async {
+    if (_syncInFlight || _pushInFlight) {
+      _pullPending = true;
+      return;
+    }
+
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return;
 
+    _syncInFlight = true;
     _setStatus(SyncStatus.syncing);
     try {
       final local = await _loadWorkspace();
       final remote = await pullRemote();
       if (remote == null) {
-        await pushNow();
+        // note: 远端为空时上传本地；先释放锁再 push
+        _syncInFlight = false;
+        await pushNow(force: true);
         return;
       }
-      final merged = _mergeWorkspaces(local, remote);
+
+      final syncBase = await _syncBaseStore.load();
+      final merged = _mergeWorkspaces(local, remote, syncBase);
       await _saveWorkspace(merged);
+      await _syncBaseStore.save(merged);
 
       final client = _client(config);
       var attachmentFailures = 0;
@@ -745,13 +719,20 @@ class WebDavSyncService {
 
       _applyAttachmentSyncWarning(attachmentFailures);
 
-      if (_localIsNewer(local, remote)) {
-        await pushNow();
-      } else {
-        _setStatus(SyncStatus.success);
-      }
+      // note: 合并后始终回推，避免本地并集结果只留本机
+      _syncInFlight = false;
+      await pushNow(force: true);
     } catch (e) {
       _setStatus(SyncStatus.error, error: e.toString());
+    } finally {
+      _syncInFlight = false;
+      if (_pullPending) {
+        _pullPending = false;
+        unawaited(pullAndMerge());
+      } else if (_pushPending) {
+        _pushPending = false;
+        unawaited(pushNow());
+      }
     }
   }
 

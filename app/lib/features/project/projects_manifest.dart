@@ -7,6 +7,7 @@ class ProjectEntry {
     required this.title,
     required this.updatedAt,
     required this.revision,
+    this.conflictTitle,
   });
 
   final String id;
@@ -14,25 +15,40 @@ class ProjectEntry {
   final int updatedAt;
   final int revision;
 
+  /// 项目标题冲突时的另一侧标题
+  final String? conflictTitle;
+
+  bool get hasConflict => conflictTitle != null;
+
   ProjectEntry copyWith({
     String? id,
     String? title,
     int? updatedAt,
     int? revision,
+    Object? conflictTitle = _sentinel,
+    bool clearConflictTitle = false,
   }) {
     return ProjectEntry(
       id: id ?? this.id,
       title: title ?? this.title,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
+      conflictTitle: clearConflictTitle
+          ? null
+          : (conflictTitle == _sentinel
+              ? this.conflictTitle
+              : conflictTitle as String?),
     );
   }
+
+  static const _sentinel = Object();
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
         'updatedAt': updatedAt,
         'revision': revision,
+        if (conflictTitle != null) 'conflictTitle': conflictTitle,
       };
 
   factory ProjectEntry.fromJson(Map<String, dynamic> json) {
@@ -41,6 +57,7 @@ class ProjectEntry {
       title: json['title'] as String? ?? '我的看板',
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
+      conflictTitle: json['conflictTitle'] as String?,
     );
   }
 }
@@ -94,6 +111,7 @@ class ProjectsManifest {
     );
   }
 
+  /// note: 兼容旧调用；完整并集请用 sync_conflict.mergeManifests
   ProjectsManifest mergeWith(ProjectsManifest remote) {
     if (remote.revision > revision) return remote;
     if (remote.revision < revision) return this;

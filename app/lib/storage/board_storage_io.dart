@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -10,6 +9,7 @@ import '../features/project/projects_manifest.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import 'board_storage.dart';
+import 'json_file_io.dart';
 import 'kanban_paths_io.dart';
 
 BoardStorage createBoardStorage({
@@ -44,17 +44,19 @@ class BoardStorageIo implements BoardStorage {
   Future<ProjectsManifest> loadManifest() async {
     final dir = await _dataDir();
     final file = KanbanPathsIo.manifestFile(dir);
-    if (!await file.exists()) {
-      throw StateError('projects.json 不存在');
+    final json = await readJsonFile(file);
+    if (json == null) {
+      throw StateError('projects.json 不存在或已损坏');
     }
-    return ProjectsManifest.fromJsonString(await file.readAsString());
+    return ProjectsManifest.fromJson(json);
   }
 
   @override
   Future<void> saveManifest(ProjectsManifest manifest) async {
     final dir = await _dataDir();
-    await KanbanPathsIo.manifestFile(dir).writeAsString(
-      const JsonEncoder.withIndent('  ').convert(manifest.toJson()),
+    await writeJsonFileAtomic(
+      KanbanPathsIo.manifestFile(dir),
+      manifest.toJson(),
     );
   }
 
@@ -68,12 +70,10 @@ class BoardStorageIo implements BoardStorage {
   Future<KanbanBoard> loadBoard(String projectId) async {
     final dir = await _dataDir();
     final file = KanbanPathsIo.projectBoardFile(dir, projectId);
-    if (!await file.exists()) {
-      throw StateError('项目 $projectId 的 board.json 不存在');
+    final meta = await readJsonFile(file);
+    if (meta == null) {
+      throw StateError('项目 $projectId 的 board.json 不存在或已损坏');
     }
-
-    final meta =
-        jsonDecode(await file.readAsString()) as Map<String, dynamic>;
 
     if (KanbanBoard.isLegacyMonolithic(meta)) {
       return KanbanBoard.fromJson(meta);
@@ -85,9 +85,19 @@ class BoardStorageIo implements BoardStorage {
     for (final ref in refs) {
       final id = ref['id'] as String;
       final colFile = KanbanPathsIo.projectColumnFile(dir, projectId, id);
-      if (!await colFile.exists()) continue;
-      final colJson =
-          jsonDecode(await colFile.readAsString()) as Map<String, dynamic>;
+      final colJson = await readJsonFile(colFile);
+      if (colJson == null) {
+        // note: 列文件损坏时用空列占位，避免整板无法加载/同步
+        columns.add(
+          KanbanColumn(
+            id: id,
+            title: id,
+            order: ref['order'] as int? ?? columns.length,
+            cards: const [],
+          ),
+        );
+        continue;
+      }
       columns.add(KanbanColumn.fromJson(colJson));
     }
 
@@ -121,14 +131,15 @@ class BoardStorageIo implements BoardStorage {
     }
 
     for (final column in board.columns) {
-      await KanbanPathsIo.projectColumnFile(dir, projectId, column.id)
-          .writeAsString(
-        const JsonEncoder.withIndent('  ').convert(column.toJson()),
+      await writeJsonFileAtomic(
+        KanbanPathsIo.projectColumnFile(dir, projectId, column.id),
+        column.toJson(),
       );
     }
 
-    await KanbanPathsIo.projectBoardFile(dir, projectId).writeAsString(
-      const JsonEncoder.withIndent('  ').convert(board.toMetadataJson()),
+    await writeJsonFileAtomic(
+      KanbanPathsIo.projectBoardFile(dir, projectId),
+      board.toMetadataJson(),
     );
   }
 
@@ -136,10 +147,9 @@ class BoardStorageIo implements BoardStorage {
   Future<ProjectSettings> loadProjectSettings(String projectId) async {
     final dir = await _dataDir();
     final file = KanbanPathsIo.projectSettingsFile(dir, projectId);
-    if (!await file.exists()) {
-      return const ProjectSettings();
-    }
-    return ProjectSettings.fromJsonString(await file.readAsString());
+    final json = await readJsonFile(file);
+    if (json == null) return const ProjectSettings();
+    return ProjectSettings.fromJson(json);
   }
 
   @override
@@ -152,8 +162,9 @@ class BoardStorageIo implements BoardStorage {
     if (!await projectDir.exists()) {
       await projectDir.create(recursive: true);
     }
-    await KanbanPathsIo.projectSettingsFile(dir, projectId).writeAsString(
-      const JsonEncoder.withIndent('  ').convert(settings.toJson()),
+    await writeJsonFileAtomic(
+      KanbanPathsIo.projectSettingsFile(dir, projectId),
+      settings.toJson(),
     );
   }
 
@@ -161,8 +172,9 @@ class BoardStorageIo implements BoardStorage {
   Future<TrashBin> loadProjectTrash(String projectId) async {
     final dir = await _dataDir();
     final file = KanbanPathsIo.projectTrashFile(dir, projectId);
-    if (!await file.exists()) return TrashBin.empty;
-    return TrashBin.fromJsonString(await file.readAsString());
+    final json = await readJsonFile(file);
+    if (json == null) return TrashBin.empty;
+    return TrashBin.fromJson(json);
   }
 
   @override
@@ -172,8 +184,9 @@ class BoardStorageIo implements BoardStorage {
     if (!await projectDir.exists()) {
       await projectDir.create(recursive: true);
     }
-    await KanbanPathsIo.projectTrashFile(dir, projectId).writeAsString(
-      const JsonEncoder.withIndent('  ').convert(trash.toJson()),
+    await writeJsonFileAtomic(
+      KanbanPathsIo.projectTrashFile(dir, projectId),
+      trash.toJson(),
     );
   }
 
@@ -181,8 +194,9 @@ class BoardStorageIo implements BoardStorage {
   Future<TrashBin> loadAppTrash() async {
     final dir = await _dataDir();
     final file = KanbanPathsIo.appTrashFile(dir);
-    if (!await file.exists()) return TrashBin.empty;
-    return TrashBin.fromJsonString(await file.readAsString());
+    final json = await readJsonFile(file);
+    if (json == null) return TrashBin.empty;
+    return TrashBin.fromJson(json);
   }
 
   @override
@@ -191,9 +205,7 @@ class BoardStorageIo implements BoardStorage {
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-    await KanbanPathsIo.appTrashFile(dir).writeAsString(
-      const JsonEncoder.withIndent('  ').convert(trash.toJson()),
-    );
+    await writeJsonFileAtomic(KanbanPathsIo.appTrashFile(dir), trash.toJson());
   }
 
   @override
@@ -204,8 +216,8 @@ class BoardStorageIo implements BoardStorage {
     final legacyBoard = KanbanPathsIo.boardFile(dir);
     if (!await legacyBoard.exists()) return false;
 
-    final meta =
-        jsonDecode(await legacyBoard.readAsString()) as Map<String, dynamic>;
+    final meta = await readJsonFile(legacyBoard);
+    if (meta == null) return false;
     KanbanBoard board;
 
     if (KanbanBoard.isLegacyMonolithic(meta)) {
@@ -217,9 +229,8 @@ class BoardStorageIo implements BoardStorage {
       for (final ref in refs) {
         final id = ref['id'] as String;
         final colFile = KanbanPathsIo.columnFile(dir, id);
-        if (!await colFile.exists()) continue;
-        final colJson =
-            jsonDecode(await colFile.readAsString()) as Map<String, dynamic>;
+        final colJson = await readJsonFile(colFile);
+        if (colJson == null) continue;
         columns.add(KanbanColumn.fromJson(colJson));
       }
       board = KanbanBoard.fromMetadataJson(meta, columns);

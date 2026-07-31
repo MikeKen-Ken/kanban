@@ -132,11 +132,13 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
               },
             ),
           ),
-          Selector<BoardController, (SyncStatus, String?)>(
-            selector: (_, c) => (c.syncStatus, c.syncError),
+          Selector<BoardController, (SyncStatus, String?, int)>(
+            selector: (_, c) =>
+                (c.syncStatus, c.syncError, c.unresolvedConflictCount),
             builder: (context, data, _) => _SyncIndicator(
               status: data.$1,
               error: data.$2,
+              conflictCount: data.$3,
               onTap: () => context.read<BoardController>().syncNow(),
             ),
           ),
@@ -253,28 +255,43 @@ class _SyncIndicator extends StatelessWidget {
     required this.status,
     required this.onTap,
     this.error,
+    this.conflictCount = 0,
   });
 
   final SyncStatus status;
   final String? error;
+  final int conflictCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (status) {
-      SyncStatus.error => Theme.of(context).colorScheme.error,
-      SyncStatus.success => Theme.of(context).colorScheme.tertiary,
-      SyncStatus.syncing => Theme.of(context).colorScheme.primary,
-      SyncStatus.idle => null,
-    };
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = conflictCount > 0
+        ? colorScheme.error
+        : switch (status) {
+            SyncStatus.error => colorScheme.error,
+            SyncStatus.success => colorScheme.tertiary,
+            SyncStatus.syncing => colorScheme.primary,
+            SyncStatus.idle => null,
+          };
+
+    final label = conflictCount > 0
+        ? '有 $conflictCount 处冲突'
+        : syncStatusLabel(status);
 
     return Tooltip(
-      message: error ?? '点击立即同步',
+      message: conflictCount > 0
+          ? '有未解决的同步冲突，打开卡片可择一保留'
+          : (error ?? '点击立即同步'),
       child: TextButton.icon(
         onPressed: onTap,
-        icon: Icon(syncStatusIcon(status), color: color, size: 20),
+        icon: Icon(
+          conflictCount > 0 ? Icons.warning_amber_outlined : syncStatusIcon(status),
+          color: color,
+          size: 20,
+        ),
         label: Text(
-          syncStatusLabel(status),
+          label,
           style: TextStyle(color: color, fontSize: 13),
         ),
       ),

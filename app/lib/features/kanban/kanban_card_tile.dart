@@ -205,6 +205,7 @@ class _CardContent extends StatelessWidget {
           )
         : null;
 
+    final hasConflict = card.hasConflict;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       color: cardBackground,
@@ -212,9 +213,11 @@ class _CardContent extends StatelessWidget {
       elevation: cardColor != null ? 0 : 1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: isPinned
-            ? BorderSide(color: colorScheme.primary.withValues(alpha: 0.55))
-            : BorderSide.none,
+        side: hasConflict
+            ? BorderSide(color: colorScheme.error, width: 1.5)
+            : isPinned
+                ? BorderSide(color: colorScheme.primary.withValues(alpha: 0.55))
+                : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -229,6 +232,19 @@ class _CardContent extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (hasConflict)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                color: colorScheme.errorContainer,
+                child: Text(
+                  '冲突',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             if (cover != null)
               GestureDetector(
                 onTap: dragging

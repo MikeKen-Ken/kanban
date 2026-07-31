@@ -420,6 +420,70 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                   ),
                 ),
                 const Divider(height: 1),
+                if (widget.card.hasConflict)
+                  Material(
+                    color: theme.colorScheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.card.conflictDeleted
+                                ? '同步冲突：另一侧删除了此卡片'
+                                : '同步冲突：存在另一份副本',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (widget.card.conflictSide != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              '另一份：${widget.card.conflictSide!.title}'
+                              '${widget.card.conflictSide!.description == null || widget.card.conflictSide!.description!.isEmpty ? '' : ' — ${widget.card.conflictSide!.description}'}',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onErrorContainer,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              FilledButton(
+                                onPressed: () async {
+                                  await _boardController.resolveCardConflict(
+                                    widget.columnId,
+                                    widget.card.id,
+                                    CardConflictResolution.keepPrimary,
+                                  );
+                                  if (context.mounted) Navigator.pop(context);
+                                },
+                                child: const Text('保留当前'),
+                              ),
+                              OutlinedButton(
+                                onPressed: () async {
+                                  await _boardController.resolveCardConflict(
+                                    widget.columnId,
+                                    widget.card.id,
+                                    CardConflictResolution.keepOther,
+                                  );
+                                  if (context.mounted) Navigator.pop(context);
+                                },
+                                child: Text(
+                                  widget.card.conflictDeleted ? '确认删除' : '保留另一份',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: ListView(
                     controller: scrollController,

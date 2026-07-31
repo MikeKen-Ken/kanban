@@ -9,6 +9,7 @@ class KanbanBoard {
     required this.columns,
     required this.updatedAt,
     required this.revision,
+    this.conflictTitle,
   });
 
   final String id;
@@ -17,12 +18,21 @@ class KanbanBoard {
   final int updatedAt;
   final int revision;
 
+  /// 板标题冲突时的另一侧标题
+  final String? conflictTitle;
+
+  bool get hasConflict =>
+      conflictTitle != null ||
+      columns.any((c) => c.cards.any((card) => card.hasConflict));
+
   KanbanBoard copyWith({
     String? id,
     String? title,
     List<KanbanColumn>? columns,
     int? updatedAt,
     int? revision,
+    Object? conflictTitle = _boardSentinel,
+    bool clearConflictTitle = false,
   }) {
     return KanbanBoard(
       id: id ?? this.id,
@@ -30,8 +40,15 @@ class KanbanBoard {
       columns: columns ?? this.columns,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
+      conflictTitle: clearConflictTitle
+          ? null
+          : (conflictTitle == _boardSentinel
+              ? this.conflictTitle
+              : conflictTitle as String?),
     );
   }
+
+  static const _boardSentinel = Object();
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -39,6 +56,7 @@ class KanbanBoard {
         'columns': columns.map((c) => c.toJson()).toList(),
         'updatedAt': updatedAt,
         'revision': revision,
+        if (conflictTitle != null) 'conflictTitle': conflictTitle,
       };
 
   /// 元数据 JSON（不含卡片），配合 columns/{id}.json 使用
@@ -51,6 +69,7 @@ class KanbanBoard {
         'columns': columns
             .map((c) => {'id': c.id, 'order': c.order})
             .toList(),
+        if (conflictTitle != null) 'conflictTitle': conflictTitle,
       };
 
   /// note: 旧版单文件格式，columns 内嵌完整卡片数据
@@ -71,6 +90,7 @@ class KanbanBoard {
       columns: (json['columns'] as List<dynamic>? ?? [])
           .map((e) => KanbanColumn.fromJson(e as Map<String, dynamic>))
           .toList(),
+      conflictTitle: json['conflictTitle'] as String?,
     );
   }
 
@@ -85,6 +105,7 @@ class KanbanBoard {
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
       columns: sorted,
+      conflictTitle: json['conflictTitle'] as String?,
     );
   }
 
@@ -126,65 +147,6 @@ class KanbanBoard {
 
   factory KanbanBoard.fromJsonString(String source) {
     return KanbanBoard.fromJson(jsonDecode(source) as Map<String, dynamic>);
-  }
-
-  /// note: 合并策略 — 板级元数据以修订号/时间戳较新者为准；列与卡片按 id 并集合并，单卡取 updatedAt 较新者
-  KanbanBoard mergeWith(KanbanBoard remote) {
-    final bool remoteWins;
-    if (remote.revision > revision) {
-      remoteWins = true;
-    } else if (remote.revision < revision) {
-      remoteWins = false;
-    } else {
-      remoteWins = remote.updatedAt >= updatedAt;
-    }
-
-    final winner = remoteWins ? remote : this;
-    final loser = remoteWins ? this : remote;
-    final winnerCols = {for (final c in winner.columns) c.id: c};
-    final loserCols = {for (final c in loser.columns) c.id: c};
-    final columnIds = <String>{
-      ...winnerCols.keys,
-      ...loserCols.keys,
-    };
-
-    final cardPlacement = <String, ({KanbanCard card, String columnId})>{};
-    for (final col in [...winner.columns, ...loser.columns]) {
-      for (final card in col.cards) {
-        final prev = cardPlacement[card.id];
-        if (prev == null || card.updatedAt > prev.card.updatedAt) {
-          cardPlacement[card.id] = (card: card, columnId: col.id);
-        }
-      }
-    }
-
-    final mergedColumns = <KanbanColumn>[];
-    for (final id in columnIds) {
-      final primary = winnerCols[id];
-      final secondary = loserCols[id];
-      final template = primary ?? secondary!;
-      final cards = cardPlacement.values
-          .where((entry) => entry.columnId == id)
-          .map((entry) => entry.card)
-          .toList()
-        ..sort((a, b) => a.order.compareTo(b.order));
-
-      mergedColumns.add(
-        template.copyWith(
-          title: primary?.title ?? secondary!.title,
-          order: primary?.order ?? secondary!.order,
-          colorValue: primary?.colorValue ?? secondary?.colorValue,
-          cards: cards,
-        ),
-      );
-    }
-    mergedColumns.sort((a, b) => a.order.compareTo(b.order));
-
-    return winner.copyWith(
-      updatedAt: updatedAt > remote.updatedAt ? updatedAt : remote.updatedAt,
-      revision: revision > remote.revision ? revision : remote.revision,
-      columns: mergedColumns,
-    );
   }
 }
 
@@ -363,6 +325,9 @@ class KanbanCard {
     this.checklist = const [],
     this.attachments = const [],
     this.colorValue,
+    this.conflictSide,
+    this.conflictColumnId,
+    this.conflictDeleted = false,
   }) : updatedAt = updatedAt ?? createdAt;
 
   final String id;
@@ -382,7 +347,18 @@ class KanbanCard {
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
 
+  /// 冲突时另一侧完整快照（不再嵌套 conflictSide）
+  final KanbanCard? conflictSide;
+
+  /// 冲突侧卡片所在列 id
+  final String? conflictColumnId;
+
+  /// 冲突侧表示「删除意图」
+  final bool conflictDeleted;
+
   static const maxAttachments = 9;
+
+  bool get hasConflict => conflictSide != null || conflictDeleted;
 
   int get checklistDone =>
       checklist.where((item) => item.completed).length;
@@ -414,6 +390,10 @@ class KanbanCard {
     List<ChecklistItem>? checklist,
     List<CardAttachment>? attachments,
     Object? colorValue = _sentinel,
+    Object? conflictSide = _sentinel,
+    Object? conflictColumnId = _sentinel,
+    bool? conflictDeleted,
+    bool clearConflict = false,
   }) {
     return KanbanCard(
       id: id ?? this.id,
@@ -433,31 +413,57 @@ class KanbanCard {
       attachments: attachments ?? this.attachments,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
+      conflictSide: clearConflict
+          ? null
+          : (conflictSide == _sentinel
+              ? this.conflictSide
+              : conflictSide as KanbanCard?),
+      conflictColumnId: clearConflict
+          ? null
+          : (conflictColumnId == _sentinel
+              ? this.conflictColumnId
+              : conflictColumnId as String?),
+      conflictDeleted:
+          clearConflict ? false : (conflictDeleted ?? this.conflictDeleted),
     );
   }
 
   static const _sentinel = Object();
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'description': description,
-        'order': order,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        'completed': completed,
-        if (completedAt != null) 'completedAt': completedAt,
-        if (dueDate != null) 'dueDate': dueDate,
-        if (priority != CardPriority.none) 'priority': priority.name,
-        if (labels.isNotEmpty) 'labels': labels,
-        if (checklist.isNotEmpty)
-          'checklist': checklist.map((c) => c.toJson()).toList(),
-        if (attachments.isNotEmpty)
-          'attachments': attachments.map((a) => a.toJson()).toList(),
-        if (colorValue != null) 'color': colorValue,
-      };
+  /// 序列化时去掉嵌套冲突，避免无限递归
+  Map<String, dynamic> toJson({bool includeConflict = true}) {
+    final map = <String, dynamic>{
+      'id': id,
+      'title': title,
+      'description': description,
+      'order': order,
+      'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'completed': completed,
+      if (completedAt != null) 'completedAt': completedAt,
+      if (dueDate != null) 'dueDate': dueDate,
+      if (priority != CardPriority.none) 'priority': priority.name,
+      if (labels.isNotEmpty) 'labels': labels,
+      if (checklist.isNotEmpty)
+        'checklist': checklist.map((c) => c.toJson()).toList(),
+      if (attachments.isNotEmpty)
+        'attachments': attachments.map((a) => a.toJson()).toList(),
+      if (colorValue != null) 'color': colorValue,
+    };
+    if (includeConflict) {
+      if (conflictSide != null) {
+        map['conflictSide'] = conflictSide!.toJson(includeConflict: false);
+      }
+      if (conflictColumnId != null) {
+        map['conflictColumnId'] = conflictColumnId;
+      }
+      if (conflictDeleted) map['conflictDeleted'] = true;
+    }
+    return map;
+  }
 
   factory KanbanCard.fromJson(Map<String, dynamic> json) {
+    final sideRaw = json['conflictSide'] as Map<String, dynamic>?;
     return KanbanCard(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -479,6 +485,10 @@ class KanbanCard {
           .map((e) => CardAttachment.fromJson(e as Map<String, dynamic>))
           .toList(),
       colorValue: json['color'] as int?,
+      conflictSide:
+          sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
+      conflictColumnId: json['conflictColumnId'] as String?,
+      conflictDeleted: json['conflictDeleted'] as bool? ?? false,
     );
   }
 
