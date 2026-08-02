@@ -128,27 +128,30 @@ class _CardContent extends StatelessWidget {
         card.attachments.length > 1 ? card.attachments.length - 1 : 0;
     final cardColor =
         card.colorValue != null ? Color(card.colorValue!) : null;
-    // note: 用 alphaBlend 得到不透明底色，避免半透明 Material 与 M3 surfaceTint 叠层盖住文字
+    // note: 用不透明 surface 底色 + 描边，避免与列内模块背景融在一起
     final cardBackground = cardColor != null
         ? Color.alphaBlend(
             cardColor.withValues(alpha: 0.18),
-            colorScheme.surfaceContainerLow,
+            colorScheme.surface,
           )
-        : null;
+        : colorScheme.surface;
 
     final hasConflict = card.hasConflict;
+    final BorderSide cardOutline = hasConflict
+        ? BorderSide(color: colorScheme.error, width: 1.5)
+        : isPinned
+            ? BorderSide(color: colorScheme.primary.withValues(alpha: 0.55))
+            : BorderSide(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.95),
+              );
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       color: cardBackground,
       surfaceTintColor: Colors.transparent,
-      elevation: cardColor != null ? 0 : 1,
+      elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: hasConflict
-            ? BorderSide(color: colorScheme.error, width: 1.5)
-            : isPinned
-                ? BorderSide(color: colorScheme.primary.withValues(alpha: 0.55))
-                : BorderSide.none,
+        side: cardOutline,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -226,7 +229,10 @@ class _CardContent extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                // note: 仅标题时与勾选框垂直居中；有标签/描述等时仍顶对齐
+                crossAxisAlignment: _isTitleOnlyContent(dueInfo)
+                    ? CrossAxisAlignment.center
+                    : CrossAxisAlignment.start,
                 children: [
                   if (columnId != null)
                     Checkbox(
@@ -242,6 +248,7 @@ class _CardContent extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (isPinned)
                       Padding(
@@ -297,6 +304,8 @@ class _CardContent extends StatelessWidget {
                     Text(
                       card.title,
                       style: theme.textTheme.titleSmall?.copyWith(
+                        height: 1.25,
+                        leadingDistribution: TextLeadingDistribution.even,
                         decoration: card.completed
                             ? TextDecoration.lineThrough
                             : null,
@@ -401,6 +410,18 @@ class _CardContent extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 仅标题（无置顶徽标/标签/描述/元信息）时，与勾选框垂直居中
+  bool _isTitleOnlyContent(Widget? dueInfo) {
+    final hasDescription =
+        card.description != null && card.description!.isNotEmpty;
+    return !isPinned &&
+        card.labels.isEmpty &&
+        !hasDescription &&
+        dueInfo == null &&
+        card.priority == CardPriority.none &&
+        !card.hasChecklist;
   }
 
   Widget? _dueDateInfo(int? dueMs, ColorScheme scheme) {

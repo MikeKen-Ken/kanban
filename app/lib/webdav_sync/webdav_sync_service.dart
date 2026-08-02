@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' as io;
 import 'dart:typed_data';
 
 import 'package:webdav_client/webdav_client.dart';
 
 import '../features/attachments/attachment_sync_adapter.dart';
+import '../features/attachments/attachment_sync_plan.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
 import '../features/sync_conflict/sync_conflict.dart';
@@ -44,6 +46,9 @@ class WebDavSyncService {
   String? lastError;
   String? attachmentSyncWarning;
   DateTime? lastSyncedAt;
+
+  /// 最近一次附件上传失败的原始错误（用于提示细节）
+  String? _lastAttachmentError;
 
   Timer? _debounceTimer;
   Timer? _pollTimer;
@@ -109,9 +114,8 @@ class WebDavSyncService {
   String _remoteFilePath(String parentDir, File file) {
     final path = file.path?.trim();
     if (path != null && path.isNotEmpty) {
-      if (path.startsWith('/')) return path;
-      final prefix = parentDir.endsWith('/') ? parentDir : '$parentDir/';
-      return '$prefix$path';
+      final normalized = _normalizeRemotePath(path, parentDir);
+      if (normalized != null) return normalized;
     }
     final name = file.name?.trim();
     if (name != null && name.isNotEmpty) {
@@ -119,6 +123,40 @@ class WebDavSyncService {
       return '$prefix$name';
     }
     return parentDir;
+  }
+
+  /// 将 PROPFIND 返回的绝对 href（如 /dav/Koofr/KanbanApp/...）收成客户端相对路径
+  String? _normalizeRemotePath(String path, String parentDir) {
+    if (path.startsWith(parentDir)) return path;
+    // note: Koofr 等会返回带挂载前缀的 href；截到与 parentDir 相同的后缀
+    final marker = parentDir.startsWith('/') ? parentDir : '/$parentDir';
+    final index = path.indexOf(marker);
+    if (index >= 0) {
+      return path.substring(index);
+    }
+    if (path.startsWith('/')) return path;
+    final prefix = parentDir.endsWith('/') ? parentDir : '$parentDir/';
+    return '$prefix$path';
+  }
+
+  Future<Set<String>> _listRemoteAttachmentNames(
+    Client client,
+    String attachmentsDir,
+  ) async {
+    final files = await _readDirWithFallback(client, attachmentsDir);
+    final names = <String>{};
+    for (final file in files) {
+      if (file.isDir == true) continue;
+      final name = file.name?.trim();
+      if (name != null && name.isNotEmpty) {
+        names.add(name);
+        continue;
+      }
+      final path = file.path?.trim();
+      if (path == null || path.isEmpty) continue;
+      names.add(path.split('/').last);
+    }
+    return names;
   }
 
   String _remoteBase(WebDavConfig config) =>
@@ -263,7 +301,35 @@ class WebDavSyncService {
 
   Future<void> _writeBytes(Client client, String path, Uint8List bytes) async {
     await _ensureParentDir(client, path);
-    await client.write(path, bytes);
+    // note: webdav_client.write() 会把字节拆成「每字节一个 chunk」的 Stream，
+    // 截图 JPEG 体积稍大时极易超时；改走临时文件 + writeFromFile（按块流式上传）。
+    final tmp = io.File(
+      '${io.Directory.systemTemp.path}${io.Platform.pathSeparator}'
+      'kanban_webdav_${DateTime.now().microsecondsSinceEpoch}.bin',
+    );
+    try {
+      await tmp.writeAsBytes(bytes, flush: true);
+      await client.writeFromFile(tmp.path, path);
+    } finally {
+      try {
+        if (await tmp.exists()) await tmp.delete();
+      } catch (_) {
+        // note: 临时文件清理失败可忽略
+      }
+    }
+  }
+
+  Future<void> _writeBytesWithRetry(
+    Client client,
+    String path,
+    Uint8List bytes,
+  ) async {
+    try {
+      await _writeBytes(client, path, bytes);
+    } catch (_) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await _writeBytes(client, path, bytes);
+    }
   }
 
   Future<Uint8List?> _readBytes(Client client, String path) async {
@@ -319,7 +385,8 @@ class WebDavSyncService {
         if (file.isDir == true) continue;
         final name = file.name ?? file.path?.split('/').last ?? '';
         if (name != expectedName) continue;
-        bytes = await _readBytes(client, _remoteFilePath(attachmentsDir, file));
+        final remotePath = _remoteFilePath(attachmentsDir, file);
+        bytes = await _readBytes(client, remotePath);
         if (bytes == null || bytes.isEmpty) continue;
         await _attachmentSync.writeFile(
           projectId,
@@ -343,15 +410,33 @@ class WebDavSyncService {
     String base,
     String projectId,
     KanbanBoard board,
-    TrashBin trash,
-  ) async {
+    TrashBin trash, {
+    bool cleanupOrphans = true,
+  }) async {
     if (!_attachmentSync.isAvailable) return 0;
 
     var failed = 0;
     final keepIds = _attachmentSync.referencedIds(board, trash);
+    final attachmentsDir =
+        KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
+    final remoteNames = await _listRemoteAttachmentNames(client, attachmentsDir);
+
     for (final id in keepIds) {
       for (final thumb in const [false, true]) {
-        if (!await _attachmentSync.exists(projectId, id, thumb: thumb)) {
+        final localExists = await _attachmentSync.exists(
+          projectId,
+          id,
+          thumb: thumb,
+        );
+        final remoteName = KanbanPaths.remoteProjectAttachmentFileName(
+          id,
+          thumb: thumb,
+        );
+        final remoteExists = remoteNames.contains(remoteName);
+        if (!shouldUploadAttachmentFile(
+          localExists: localExists,
+          remoteExists: remoteExists,
+        )) {
           continue;
         }
         final bytes = await _attachmentSync.readFile(
@@ -364,7 +449,7 @@ class WebDavSyncService {
           continue;
         }
         try {
-          await _writeBytes(
+          await _writeBytesWithRetry(
             client,
             KanbanPaths.remoteProjectAttachmentPath(
               base,
@@ -374,25 +459,29 @@ class WebDavSyncService {
             ),
             bytes,
           );
-        } catch (_) {
-          if (!thumb) failed++;
+          remoteNames.add(remoteName);
+        } catch (e) {
+          if (!thumb) {
+            failed++;
+            _lastAttachmentError ??= e.toString();
+            // ignore: avoid_print
+            print('附件上传失败 $projectId/$id: $e');
+          }
         }
       }
     }
 
-    try {
-      await _cleanupRemoteAttachments(
-        client,
-        KanbanPaths.remoteProjectAttachmentsDir(base, projectId),
-        keepIds,
-      );
-    } catch (_) {
-      // note: 远端孤儿清理失败不影响已上传附件
-    }
-    try {
-      await _attachmentSync.deleteOrphans(projectId, keepIds);
-    } catch (_) {
-      // note: 本地孤儿清理失败不影响同步结果
+    if (cleanupOrphans) {
+      try {
+        await _cleanupRemoteAttachments(client, attachmentsDir, keepIds);
+      } catch (_) {
+        // note: 远端孤儿清理失败不影响已上传附件
+      }
+      try {
+        await _attachmentSync.deleteOrphans(projectId, keepIds);
+      } catch (_) {
+        // note: 本地孤儿清理失败不影响同步结果
+      }
     }
     return failed;
   }
@@ -507,9 +596,13 @@ class WebDavSyncService {
 
   void _applyAttachmentSyncWarning(int failedCount) {
     if (failedCount > 0) {
-      attachmentSyncWarning = '$failedCount 个图片附件同步失败，可点击同步图标重试';
+      final detail = _lastAttachmentError;
+      attachmentSyncWarning = (detail == null || detail.isEmpty)
+          ? '$failedCount 个图片附件同步失败，可点击同步图标重试'
+          : '$failedCount 个图片附件同步失败：$detail';
     } else {
       attachmentSyncWarning = null;
+      _lastAttachmentError = null;
     }
   }
 
@@ -545,6 +638,7 @@ class WebDavSyncService {
     _pushInFlight = true;
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
+    _lastAttachmentError = null;
 
     try {
       final workspace = await _loadWorkspace();
@@ -795,6 +889,7 @@ class WebDavSyncService {
     _syncInFlight = true;
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
+    _lastAttachmentError = null;
     try {
       final local = await _loadWorkspace();
       final remote = await pullRemote();
@@ -830,8 +925,29 @@ class WebDavSyncService {
 
       _applyAttachmentSyncWarning(attachmentFailures);
 
-      // note: 合并结果与远端一致时跳过全量回推，减少无意义写入
+      // note: 合并结果与远端一致时跳过全量 JSON 回推，但仍需补传本地有、远端缺的附件
       if (_workspaceJsonEquals(merged, remote)) {
+        if (shouldReconcileAttachmentsWhenJsonEquals(
+              jsonEquals: true,
+              attachmentSyncAvailable: _attachmentSync.isAvailable,
+            ) &&
+            client != null) {
+          final base = _remoteBase(config);
+          for (final entry in merged.manifest.projects) {
+            final board = merged.boards[entry.id];
+            if (board == null) continue;
+            final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
+            attachmentFailures += await _pushProjectAttachments(
+              client,
+              base,
+              entry.id,
+              board,
+              trash,
+              cleanupOrphans: false,
+            );
+          }
+          _applyAttachmentSyncWarning(attachmentFailures);
+        }
         _noteSuccess();
         _setStatus(SyncStatus.success);
         return;
