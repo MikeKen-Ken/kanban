@@ -14,6 +14,14 @@ import '../features/attachments/attachment_store.dart';
 
 /// WebDAV 连接配置（密码仅存本地 SharedPreferences）
 class WebDavConfig {
+  static const minPollIntervalSeconds = 60;
+  static const maxPollIntervalSeconds = 600;
+  static const defaultPollIntervalSeconds = 120;
+
+  static const minPushDebounceSeconds = 5;
+  static const maxPushDebounceSeconds = 60;
+  static const defaultPushDebounceSeconds = 10;
+
   const WebDavConfig({
     required this.enabled,
     required this.serverUrl,
@@ -22,6 +30,7 @@ class WebDavConfig {
     required this.remotePath,
     required this.autoSync,
     required this.pollIntervalSeconds,
+    required this.pushDebounceSeconds,
   });
 
   final bool enabled;
@@ -31,6 +40,19 @@ class WebDavConfig {
   final String remotePath;
   final bool autoSync;
   final int pollIntervalSeconds;
+  final int pushDebounceSeconds;
+
+  /// 将拉取间隔限制在 [minPollIntervalSeconds, maxPollIntervalSeconds]
+  static int clampPollIntervalSeconds(int seconds) => seconds.clamp(
+        minPollIntervalSeconds,
+        maxPollIntervalSeconds,
+      );
+
+  /// 将变更后上传延迟限制在 [minPushDebounceSeconds, maxPushDebounceSeconds]
+  static int clampPushDebounceSeconds(int seconds) => seconds.clamp(
+        minPushDebounceSeconds,
+        maxPushDebounceSeconds,
+      );
 
   bool get isConfigured =>
       serverUrl.trim().isNotEmpty &&
@@ -45,6 +67,7 @@ class WebDavConfig {
     String? remotePath,
     bool? autoSync,
     int? pollIntervalSeconds,
+    int? pushDebounceSeconds,
   }) {
     return WebDavConfig(
       enabled: enabled ?? this.enabled,
@@ -53,7 +76,12 @@ class WebDavConfig {
       password: password ?? this.password,
       remotePath: remotePath ?? this.remotePath,
       autoSync: autoSync ?? this.autoSync,
-      pollIntervalSeconds: pollIntervalSeconds ?? this.pollIntervalSeconds,
+      pollIntervalSeconds: clampPollIntervalSeconds(
+        pollIntervalSeconds ?? this.pollIntervalSeconds,
+      ),
+      pushDebounceSeconds: clampPushDebounceSeconds(
+        pushDebounceSeconds ?? this.pushDebounceSeconds,
+      ),
     );
   }
 
@@ -65,6 +93,7 @@ class WebDavConfig {
         'remotePath': remotePath,
         'autoSync': autoSync,
         'pollIntervalSeconds': pollIntervalSeconds,
+        'pushDebounceSeconds': pushDebounceSeconds,
       };
 
   factory WebDavConfig.fromJson(Map<String, dynamic> json) {
@@ -75,7 +104,12 @@ class WebDavConfig {
       password: json['password'] as String? ?? '',
       remotePath: json['remotePath'] as String? ?? '/KanbanApp',
       autoSync: json['autoSync'] as bool? ?? true,
-      pollIntervalSeconds: json['pollIntervalSeconds'] as int? ?? 30,
+      pollIntervalSeconds: clampPollIntervalSeconds(
+        json['pollIntervalSeconds'] as int? ?? defaultPollIntervalSeconds,
+      ),
+      pushDebounceSeconds: clampPushDebounceSeconds(
+        json['pushDebounceSeconds'] as int? ?? defaultPushDebounceSeconds,
+      ),
     );
   }
 
@@ -86,7 +120,8 @@ class WebDavConfig {
     password: '',
     remotePath: '/KanbanApp',
     autoSync: true,
-    pollIntervalSeconds: 30,
+    pollIntervalSeconds: defaultPollIntervalSeconds,
+    pushDebounceSeconds: defaultPushDebounceSeconds,
   );
 }
 

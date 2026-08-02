@@ -24,7 +24,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _enabled = false;
   bool _autoSync = true;
-  int _pollSeconds = 30;
+  int _pollSeconds = WebDavConfig.defaultPollIntervalSeconds;
+  int _pushDebounceSeconds = WebDavConfig.defaultPushDebounceSeconds;
   int _dragLongPressMs = 500;
   bool _obscurePassword = true;
   bool _testing = false;
@@ -38,7 +39,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final config = controller.webDavConfig;
     _enabled = config.enabled;
     _autoSync = config.autoSync;
-    _pollSeconds = config.pollIntervalSeconds;
+    _pollSeconds =
+        WebDavConfig.clampPollIntervalSeconds(config.pollIntervalSeconds);
+    _pushDebounceSeconds =
+        WebDavConfig.clampPushDebounceSeconds(config.pushDebounceSeconds);
     _dragLongPressMs = controller.appSettings.dragLongPressMs;
     _urlController = TextEditingController(text: config.serverUrl);
     _userController = TextEditingController(text: config.username);
@@ -65,8 +69,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ? '/KanbanApp'
           : _pathController.text.trim(),
       autoSync: _autoSync,
-      pollIntervalSeconds: _pollSeconds,
+      pollIntervalSeconds:
+          WebDavConfig.clampPollIntervalSeconds(_pollSeconds),
+      pushDebounceSeconds:
+          WebDavConfig.clampPushDebounceSeconds(_pushDebounceSeconds),
     );
+  }
+
+  String _formatPollInterval(int seconds) {
+    final clamped = WebDavConfig.clampPollIntervalSeconds(seconds);
+    if (clamped % 60 == 0) {
+      return '${clamped ~/ 60} 分钟';
+    }
+    return '$clamped 秒';
+  }
+
+  String _formatPushDebounce(int seconds) {
+    return '${WebDavConfig.clampPushDebounceSeconds(seconds)} 秒';
   }
 
   Future<void> _testConnection() async {
@@ -129,9 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: '拖拽按压时长',
                   description: _dragLongPressMs <= 0
                       ? '按住卡片并移动即可拖动'
-                      : _dragLongPressMs <= 200
-                          ? '短按卡片 ${_dragLongPressMs}ms 后拖动'
-                          : '长按右侧手柄 ${_dragLongPressMs}ms 后拖动',
+                      : '按住卡片 ${_dragLongPressMs}ms 后再拖动',
                   value: _dragLongPressMs.toDouble(),
                   valueLabel: _dragDurationLabel,
                   min: 0,
@@ -183,18 +200,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       );
                     },
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SettingsSection(
-              icon: Icons.sync_outlined,
-              title: '同步范围',
-              subtitle: '了解哪些数据会上传到网盘',
-              children: const [
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: _SyncScopeInfo(),
                 ),
               ],
             ),
@@ -322,20 +327,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       SwitchListTile(
                         title: const Text('自动同步'),
-                        subtitle: const Text('本地变更后约 1.5 秒自动上传'),
+                        subtitle: Text(
+                          '本地变更后约 $_pushDebounceSeconds 秒自动上传',
+                        ),
                         value: _autoSync,
                         onChanged: (v) => setState(() => _autoSync = v),
                       ),
+                      if (_autoSync)
+                        SettingsSliderRow(
+                          title: '变更后上传延迟',
+                          description:
+                              '停止编辑后再上传；本地会立刻保存，仅延迟云端请求',
+                          value: _pushDebounceSeconds.toDouble(),
+                          valueLabel: _formatPushDebounce(_pushDebounceSeconds),
+                          min: WebDavConfig.minPushDebounceSeconds.toDouble(),
+                          max: WebDavConfig.maxPushDebounceSeconds.toDouble(),
+                          divisions: WebDavConfig.maxPushDebounceSeconds -
+                              WebDavConfig.minPushDebounceSeconds,
+                          onChanged: (v) => setState(
+                            () => _pushDebounceSeconds =
+                                WebDavConfig.clampPushDebounceSeconds(
+                              v.round(),
+                            ),
+                          ),
+                        ),
                       SettingsSliderRow(
                         title: '后台拉取间隔',
-                        description: '应用在后台时定期从网盘拉取更新',
+                        description: '定期从网盘拉取更新；范围 1–10 分钟，避免频繁请求触发限流',
                         value: _pollSeconds.toDouble(),
-                        valueLabel: '${_pollSeconds}s',
-                        min: 15,
-                        max: 120,
-                        divisions: 7,
-                        onChanged: (v) =>
-                            setState(() => _pollSeconds = v.round()),
+                        valueLabel: _formatPollInterval(_pollSeconds),
+                        min: WebDavConfig.minPollIntervalSeconds.toDouble(),
+                        max: WebDavConfig.maxPollIntervalSeconds.toDouble(),
+                        divisions: (WebDavConfig.maxPollIntervalSeconds -
+                                WebDavConfig.minPollIntervalSeconds) ~/
+                            60,
+                        onChanged: (v) => setState(
+                          () => _pollSeconds =
+                              WebDavConfig.clampPollIntervalSeconds(v.round()),
+                        ),
                       ),
                       if (_testResult != null)
                         Padding(
@@ -397,10 +426,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        child: _WebDavHelpBox(),
-                      ),
                     ],
                   ),
                 ),
@@ -408,166 +433,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SyncScopeInfo extends StatelessWidget {
-  const _SyncScopeInfo();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SyncScopeGroup(
-          icon: Icons.cloud_done_outlined,
-          iconColor: Colors.green.shade700,
-          title: '会同步到 WebDAV',
-          items: const [
-            '项目列表（projects.json）',
-            '各项目看板数据（列、卡片、列颜色）',
-            '各项目设置（已完成列名称）',
-            '各项目回收站（trash.json）',
-            '已删除项目（app_trash.json）',
-          ],
-        ),
-        const SizedBox(height: 12),
-        _SyncScopeGroup(
-          icon: Icons.smartphone_outlined,
-          iconColor: theme.colorScheme.onSurfaceVariant,
-          title: '仅本机，不同步',
-          items: const [
-            '当前选中的项目（每台设备可不同）',
-            '拖拽按压时长（交互偏好）',
-            'WebDAV 连接配置与密码',
-            '已删除的自定义标签',
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _SyncScopeGroup extends StatelessWidget {
-  const _SyncScopeGroup({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.items,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final List<String> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: iconColor),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '· ',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      item,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WebDavHelpBox extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 16,
-                color: theme.colorScheme.primary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '使用说明',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '坚果云：在账户设置中开启 WebDAV，使用应用密码\n'
-            '无需向任何机构申请 WebDAV 资质\n'
-            '多设备通过同一远端目录自动同步项目与看板数据',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.5,
-            ),
-          ),
-        ],
       ),
     );
   }

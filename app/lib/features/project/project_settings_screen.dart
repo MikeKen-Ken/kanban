@@ -50,10 +50,12 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     final themeId = _selectedThemeId == kDefaultProjectThemeId
         ? ''
         : _selectedThemeId;
+    // note: 主动保存视为采用当前编辑结果，一并清除未解决的设置冲突
     await controller.saveProjectSettings(
       controller.projectSettings.copyWith(
         doneColumnName: name,
         themeId: themeId,
+        clearConflictSide: true,
       ),
     );
     if (!mounted) return;
@@ -64,12 +66,61 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     Navigator.pop(context);
   }
 
+  Future<void> _resolveConflict({required bool keepPrimary}) async {
+    final controller = context.read<BoardController>();
+    await controller.resolveSettingsConflict(keepPrimary: keepPrimary);
+    if (!mounted) return;
+    final settings = controller.projectSettings;
+    setState(() {
+      _doneColumnController.text = settings.doneColumnName;
+      _selectedThemeId =
+          settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(keepPrimary ? '已保留当前项目设置' : '已改用另一侧项目设置'),
+      ),
+    );
+  }
+
+  String _themeLabel(String themeId) {
+    final id = themeId.isEmpty ? kDefaultProjectThemeId : themeId;
+    return projectThemeForId(id).name;
+  }
+
+  String _conflictSummary(ProjectSettings primary, ProjectSettings other) {
+    final parts = <String>[];
+    if (primary.doneColumnName != other.doneColumnName) {
+      parts.add('已完成列：「${other.doneColumnName}」');
+    }
+    if (primary.themeId != other.themeId) {
+      parts.add('主题：${_themeLabel(other.themeId)}');
+    }
+    final prefsDiffer = primary.columnPreferences.length !=
+            other.columnPreferences.length ||
+        primary.columnPreferences.keys.any((key) {
+          final a = primary.columnPreferences[key];
+          final b = other.columnPreferences[key];
+          if (a == null || b == null) return true;
+          return a.sortMode != b.sortMode ||
+              a.pinnedCardIds.join(',') != b.pinnedCardIds.join(',');
+        });
+    if (prefsDiffer) {
+      parts.add('列排序/置顶偏好不同');
+    }
+    if (parts.isEmpty) {
+      return '另一侧为较旧或空默认设置，通常保留当前即可';
+    }
+    return '另一侧：${parts.join('；')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final previewPreset = projectThemeForId(_selectedThemeId);
-    final projectTitle =
-        context.watch<BoardController>().activeProject?.title ?? '项目';
+    final controller = context.watch<BoardController>();
+    final projectTitle = controller.activeProject?.title ?? '项目';
+    final settings = controller.projectSettings;
 
     return Theme(
       data: buildKanbanTheme(
@@ -81,6 +132,52 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
+            if (settings.hasConflict && settings.conflictSide != null) ...[
+              Material(
+                color: theme.colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '同步冲突：项目设置存在另一份副本',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _conflictSummary(settings, settings.conflictSide!),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onErrorContainer,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton(
+                            onPressed: () =>
+                                _resolveConflict(keepPrimary: true),
+                            child: const Text('保留当前'),
+                          ),
+                          OutlinedButton(
+                            onPressed: () =>
+                                _resolveConflict(keepPrimary: false),
+                            child: const Text('保留另一份'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             SettingsSection(
               icon: Icons.palette_outlined,
               title: '主题',

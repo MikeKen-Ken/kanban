@@ -25,6 +25,136 @@ bool _prefsEq(
   return true;
 }
 
+/// 从未真正写入过的默认设置（远端缺文件时常被填成这个）
+bool _isUninitializedSettings(ProjectSettings s) =>
+    s.updatedAt == 0 && s.revision == 0;
+
+bool _settingsContentDiffers(ProjectSettings a, ProjectSettings b) =>
+    a.doneColumnName != b.doneColumnName ||
+    a.themeId != b.themeId ||
+    !_prefsEq(a.columnPreferences, b.columnPreferences);
+
+/// Settings：字段级合并；同字段冲突挂 conflictSide
+ProjectSettings mergeSettings({
+  required ProjectSettings local,
+  required ProjectSettings remote,
+  ProjectSettings? base,
+}) {
+  if (local.conflictSide != null || remote.conflictSide != null) {
+    final winner = local.updatedAt >= remote.updatedAt ? local : remote;
+    final other = winner.conflictSide;
+    if (other == null) return winner;
+    // note: 空默认桩或与主侧已无实质差异时，清掉陈旧冲突标记
+    if (_isUninitializedSettings(other) ||
+        !_settingsContentDiffers(winner, other)) {
+      return winner.copyWith(clearConflictSide: true);
+    }
+    return winner;
+  }
+
+  if (base == null) {
+    // note: 缺文件被填成默认桩时，直接采用已初始化一侧，避免幽灵冲突
+    if (_isUninitializedSettings(local) &&
+        !_isUninitializedSettings(remote)) {
+      return remote;
+    }
+    if (_isUninitializedSettings(remote) &&
+        !_isUninitializedSettings(local)) {
+      return local;
+    }
+    if (_isUninitializedSettings(local) &&
+        _isUninitializedSettings(remote)) {
+      return local;
+    }
+
+    final contentDiffers = _settingsContentDiffers(local, remote);
+    final localWins = local.revision > remote.revision ||
+        (local.revision == remote.revision &&
+            local.updatedAt >= remote.updatedAt);
+    final primary = localWins ? local : remote;
+    final other = localWins ? remote : local;
+    if (contentDiffers) {
+      return primary.copyWith(
+        conflictSide: other.copyWith(clearConflictSide: true),
+      );
+    }
+    return primary;
+  }
+
+  // note: 三路合并时，未初始化一侧视为「未改动」，不参与冲突判定
+  final effectiveLocal =
+      _isUninitializedSettings(local) && !_isUninitializedSettings(base)
+          ? base
+          : local;
+  final effectiveRemote =
+      _isUninitializedSettings(remote) && !_isUninitializedSettings(base)
+          ? base
+          : remote;
+
+  final doneLocalChanged =
+      effectiveLocal.doneColumnName != base.doneColumnName;
+  final doneRemoteChanged =
+      effectiveRemote.doneColumnName != base.doneColumnName;
+  final themeLocalChanged = effectiveLocal.themeId != base.themeId;
+  final themeRemoteChanged = effectiveRemote.themeId != base.themeId;
+  final prefsLocalChanged =
+      !_prefsEq(effectiveLocal.columnPreferences, base.columnPreferences);
+  final prefsRemoteChanged =
+      !_prefsEq(effectiveRemote.columnPreferences, base.columnPreferences);
+
+  final doneConflict = doneLocalChanged &&
+      doneRemoteChanged &&
+      effectiveLocal.doneColumnName != effectiveRemote.doneColumnName;
+  final themeConflict = themeLocalChanged &&
+      themeRemoteChanged &&
+      effectiveLocal.themeId != effectiveRemote.themeId;
+  final prefsConflict = prefsLocalChanged &&
+      prefsRemoteChanged &&
+      !_prefsEq(
+        effectiveLocal.columnPreferences,
+        effectiveRemote.columnPreferences,
+      );
+
+  if (doneConflict || themeConflict || prefsConflict) {
+    final localWins = effectiveLocal.updatedAt >= effectiveRemote.updatedAt;
+    final primary = localWins ? effectiveLocal : effectiveRemote;
+    final other = localWins ? effectiveRemote : effectiveLocal;
+    return primary.copyWith(
+      conflictSide: other.copyWith(clearConflictSide: true),
+      updatedAt: effectiveLocal.updatedAt >= effectiveRemote.updatedAt
+          ? effectiveLocal.updatedAt
+          : effectiveRemote.updatedAt,
+      revision: effectiveLocal.revision >= effectiveRemote.revision
+          ? effectiveLocal.revision
+          : effectiveRemote.revision,
+    );
+  }
+
+  return ProjectSettings(
+    doneColumnName: doneLocalChanged
+        ? effectiveLocal.doneColumnName
+        : doneRemoteChanged
+            ? effectiveRemote.doneColumnName
+            : base.doneColumnName,
+    themeId: themeLocalChanged
+        ? effectiveLocal.themeId
+        : themeRemoteChanged
+            ? effectiveRemote.themeId
+            : base.themeId,
+    columnPreferences: prefsLocalChanged
+        ? effectiveLocal.columnPreferences
+        : prefsRemoteChanged
+            ? effectiveRemote.columnPreferences
+            : base.columnPreferences,
+    updatedAt: effectiveLocal.updatedAt >= effectiveRemote.updatedAt
+        ? effectiveLocal.updatedAt
+        : effectiveRemote.updatedAt,
+    revision: effectiveLocal.revision >= effectiveRemote.revision
+        ? effectiveLocal.revision
+        : effectiveRemote.revision,
+  );
+}
+
 /// Manifest：按项目 id 并集；同 id 标题冲突时挂 conflictTitle
 ProjectsManifest mergeManifests({
   required ProjectsManifest local,
@@ -103,89 +233,6 @@ ProjectsManifest mergeManifests({
 
   return ProjectsManifest(
     projects: merged,
-    updatedAt:
-        local.updatedAt >= remote.updatedAt ? local.updatedAt : remote.updatedAt,
-    revision:
-        local.revision >= remote.revision ? local.revision : remote.revision,
-  );
-}
-
-/// Settings：字段级合并；同字段冲突挂 conflictSide
-ProjectSettings mergeSettings({
-  required ProjectSettings local,
-  required ProjectSettings remote,
-  ProjectSettings? base,
-}) {
-  if (local.conflictSide != null || remote.conflictSide != null) {
-    return local.updatedAt >= remote.updatedAt ? local : remote;
-  }
-
-  if (base == null) {
-    final contentDiffers = local.doneColumnName != remote.doneColumnName ||
-        local.themeId != remote.themeId ||
-        !_prefsEq(local.columnPreferences, remote.columnPreferences);
-    final localWins = local.revision > remote.revision ||
-        (local.revision == remote.revision &&
-            local.updatedAt >= remote.updatedAt);
-    final primary = localWins ? local : remote;
-    final other = localWins ? remote : local;
-    if (contentDiffers) {
-      return primary.copyWith(
-        conflictSide: other.copyWith(clearConflictSide: true),
-      );
-    }
-    return primary;
-  }
-
-  final doneLocalChanged = local.doneColumnName != base.doneColumnName;
-  final doneRemoteChanged = remote.doneColumnName != base.doneColumnName;
-  final themeLocalChanged = local.themeId != base.themeId;
-  final themeRemoteChanged = remote.themeId != base.themeId;
-  final prefsLocalChanged =
-      !_prefsEq(local.columnPreferences, base.columnPreferences);
-  final prefsRemoteChanged =
-      !_prefsEq(remote.columnPreferences, base.columnPreferences);
-
-  final doneConflict = doneLocalChanged &&
-      doneRemoteChanged &&
-      local.doneColumnName != remote.doneColumnName;
-  final themeConflict = themeLocalChanged &&
-      themeRemoteChanged &&
-      local.themeId != remote.themeId;
-  final prefsConflict = prefsLocalChanged &&
-      prefsRemoteChanged &&
-      !_prefsEq(local.columnPreferences, remote.columnPreferences);
-
-  if (doneConflict || themeConflict || prefsConflict) {
-    final localWins = local.updatedAt >= remote.updatedAt;
-    final primary = localWins ? local : remote;
-    final other = localWins ? remote : local;
-    return primary.copyWith(
-      conflictSide: other.copyWith(clearConflictSide: true),
-      updatedAt: local.updatedAt >= remote.updatedAt
-          ? local.updatedAt
-          : remote.updatedAt,
-      revision:
-          local.revision >= remote.revision ? local.revision : remote.revision,
-    );
-  }
-
-  return ProjectSettings(
-    doneColumnName: doneLocalChanged
-        ? local.doneColumnName
-        : doneRemoteChanged
-            ? remote.doneColumnName
-            : base.doneColumnName,
-    themeId: themeLocalChanged
-        ? local.themeId
-        : themeRemoteChanged
-            ? remote.themeId
-            : base.themeId,
-    columnPreferences: prefsLocalChanged
-        ? local.columnPreferences
-        : prefsRemoteChanged
-            ? remote.columnPreferences
-            : base.columnPreferences,
     updatedAt:
         local.updatedAt >= remote.updatedAt ? local.updatedAt : remote.updatedAt,
     revision:

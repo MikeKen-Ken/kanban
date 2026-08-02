@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
+import '../features/project/project_settings_screen.dart';
 import '../features/project/project_switcher.dart';
 import '../features/trash/trash_screen.dart';
 import '../main.dart';
@@ -62,6 +63,47 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     super.dispose();
   }
 
+  Future<void> _showConflictHint(
+    BuildContext context, {
+    required bool settingsConflict,
+  }) async {
+    final message = settingsConflict
+        ? '当前有未解决的项目设置冲突。卡片上看不到角标是正常的，请到「项目设置」中选择保留哪一侧。'
+        : '当前有未解决的同步冲突。请检查带「冲突」角标的卡片，或到「项目设置」查看是否有设置冲突。';
+
+    final goSettings = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('未解决的同步冲突'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('稍后'),
+          ),
+          if (settingsConflict)
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('打开项目设置'),
+            )
+          else
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx, false);
+                context.read<BoardController>().syncNow();
+              },
+              child: const Text('立即同步'),
+            ),
+        ],
+      ),
+    );
+    if (!context.mounted || goSettings != true) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const ProjectSettingsScreen(),
+      ),
+    );
+  }
 
   Future<void> _addColumn(BuildContext context) async {
     final controller = context.read<BoardController>();
@@ -132,14 +174,29 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
               },
             ),
           ),
-          Selector<BoardController, (SyncStatus, String?, int)>(
-            selector: (_, c) =>
-                (c.syncStatus, c.syncError, c.unresolvedConflictCount),
+          Selector<BoardController, (SyncStatus, String?, int, bool)>(
+            selector: (_, c) => (
+              c.syncStatus,
+              c.syncError,
+              c.unresolvedConflictCount,
+              c.projectSettings.hasConflict,
+            ),
             builder: (context, data, _) => _SyncIndicator(
               status: data.$1,
               error: data.$2,
               conflictCount: data.$3,
-              onTap: () => context.read<BoardController>().syncNow(),
+              settingsConflict: data.$4,
+              onTap: () {
+                final controller = context.read<BoardController>();
+                if (data.$3 <= 0) {
+                  controller.syncNow();
+                  return;
+                }
+                _showConflictHint(
+                  context,
+                  settingsConflict: data.$4,
+                );
+              },
             ),
           ),
           IconButton(
@@ -256,11 +313,13 @@ class _SyncIndicator extends StatelessWidget {
     required this.onTap,
     this.error,
     this.conflictCount = 0,
+    this.settingsConflict = false,
   });
 
   final SyncStatus status;
   final String? error;
   final int conflictCount;
+  final bool settingsConflict;
   final VoidCallback onTap;
 
   @override
@@ -279,9 +338,13 @@ class _SyncIndicator extends StatelessWidget {
         ? '有 $conflictCount 处冲突'
         : syncStatusLabel(status);
 
+    final conflictHint = settingsConflict
+        ? '有未解决的项目设置冲突，点击查看'
+        : '有未解决的同步冲突，打开冲突卡片或项目设置可择一保留';
+
     return Tooltip(
       message: conflictCount > 0
-          ? '有未解决的同步冲突，打开卡片可择一保留'
+          ? conflictHint
           : (error ?? '点击立即同步'),
       child: TextButton.icon(
         onPressed: onTap,

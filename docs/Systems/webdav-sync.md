@@ -2,9 +2,17 @@
 
 ## 触发
 
-- 本地改动后防抖推送（约 1.5s）
-- 启动 / 轮询 / 手动同步：先 `pullAndMerge`，再写回远端
-- 配置项：`WebDavConfig.enabled`、`autoSync`、`pollIntervalSeconds`
+- 本地改动后按 `pushDebounceSeconds` 防抖推送（默认 10s，范围 5–60s）；本地立刻落盘，仅延迟云端请求；若处于失败/限流冷却，再延后到冷却结束
+- 启动 / 手动同步：先 `pullAndMerge`，有变更时再写回远端；**手动同步不受**拉取间隔与失败冷却限制
+- 后台轮询：按 `pollIntervalSeconds` 单次定时续期（默认 120s，范围 60–600s）
+- 配置项：`WebDavConfig.enabled`、`autoSync`、`pollIntervalSeconds`、`pushDebounceSeconds`
+
+## 节流与退避
+
+- 用「上次尝试时间」节流，失败也会拉开间隔（不再只认成功时间）
+- 失败指数退避；识别 `429` / `toomanyrequests` 时从 60s 起跳，上限 10 分钟
+- 自动轮询与进行中的同步重叠时直接丢弃，不立刻连环重试
+- 合并结果与远端 JSON 一致时跳过全量 push，减少无意义写入
 
 ## 远端结构
 
@@ -28,7 +36,7 @@
 | Settings | 字段级合并；冲突挂 `conflictSide` |
 | Trash | 按条目 id 并集 |
 
-合并完成后 **始终 push** 合并结果，避免并集内容只留在本机。
+合并结果相对远端有变更时再 push，避免并集内容只留在本机。
 
 ## 冲突标记
 

@@ -40,8 +40,6 @@ class WebDavSyncService {
   final SyncBaseStore _syncBaseStore;
   final AttachmentSyncAdapter _attachmentSync;
 
-  static const debounceDuration = Duration(milliseconds: 1500);
-
   SyncStatus status = SyncStatus.idle;
   String? lastError;
   String? attachmentSyncWarning;
@@ -49,10 +47,21 @@ class WebDavSyncService {
 
   Timer? _debounceTimer;
   Timer? _pollTimer;
+  Timer? _cooldownRetryTimer;
+  int _pushScheduleGen = 0;
+  bool _pollingEnabled = false;
   bool _pushInFlight = false;
   bool _pushPending = false;
+  bool _pushPendingForce = false;
   bool _syncInFlight = false;
   bool _pullPending = false;
+  bool _pullPendingUserInitiated = false;
+
+  /// 上次开始同步尝试的时间（成功/失败都更新，用于节流）
+  DateTime? _lastAttemptAt;
+  /// 限流/失败后的冷却截止时间
+  DateTime? _cooldownUntil;
+  int _consecutiveFailures = 0;
 
   final _statusController = StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get statusStream => _statusController.stream;
@@ -135,9 +144,90 @@ class WebDavSyncService {
     _statusController.add(value);
   }
 
+  bool _isRateLimitedError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('429') ||
+        message.contains('toomanyrequests') ||
+        message.contains('too many requests') ||
+        message.contains('rate limit') ||
+        message.contains('ratelimit');
+  }
+
+  int _pollIntervalSeconds(WebDavConfig config) =>
+      WebDavConfig.clampPollIntervalSeconds(config.pollIntervalSeconds);
+
+  Duration? _remainingCooldown([DateTime? now]) {
+    final until = _cooldownUntil;
+    if (until == null) return null;
+    final remaining = until.difference(now ?? DateTime.now());
+    if (remaining <= Duration.zero) return null;
+    return remaining;
+  }
+
+  bool _canStartAutoSync(WebDavConfig config) {
+    final now = DateTime.now();
+    if (_remainingCooldown(now) != null) return false;
+    final last = _lastAttemptAt;
+    if (last == null) return true;
+    return now.difference(last).inSeconds >= _pollIntervalSeconds(config);
+  }
+
+  void _noteAttempt() {
+    _lastAttemptAt = DateTime.now();
+  }
+
+  void _noteSuccess() {
+    _consecutiveFailures = 0;
+    _cooldownUntil = null;
+  }
+
+  void _noteFailure(Object error) {
+    _consecutiveFailures++;
+    final rateLimited = _isRateLimitedError(error);
+    // 限流从 60s 起跳；普通失败从 30s 起跳；指数退避，上限 10 分钟
+    final baseSeconds = rateLimited ? 60 : 30;
+    final shift = (_consecutiveFailures - 1).clamp(0, 4);
+    final seconds = (baseSeconds * (1 << shift))
+        .clamp(baseSeconds, WebDavConfig.maxPollIntervalSeconds);
+    _cooldownUntil = DateTime.now().add(Duration(seconds: seconds));
+  }
+
+  bool _workspaceJsonEquals(
+    ProjectWorkspaceSnapshot a,
+    ProjectWorkspaceSnapshot b,
+  ) {
+    return jsonEncode(a.toJson()) == jsonEncode(b.toJson());
+  }
+
+  void _scheduleAfterCooldown(void Function() action) {
+    final wait = _remainingCooldown() ?? Duration.zero;
+    _cooldownRetryTimer?.cancel();
+    _cooldownRetryTimer = Timer(wait, action);
+  }
+
   void schedulePush() {
+    final gen = ++_pushScheduleGen;
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(debounceDuration, () {
+    unawaited(_armPushDebounce(gen));
+  }
+
+  Future<void> _armPushDebounce(int gen) async {
+    final config = await _loadConfig();
+    if (gen != _pushScheduleGen) return;
+
+    final seconds = WebDavConfig.clampPushDebounceSeconds(
+      config.pushDebounceSeconds,
+    );
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(Duration(seconds: seconds), () {
+      if (gen != _pushScheduleGen) return;
+      final wait = _remainingCooldown();
+      if (wait != null) {
+        _scheduleAfterCooldown(() {
+          unawaited(pushNow());
+        });
+        return;
+      }
       unawaited(pushNow());
     });
   }
@@ -426,20 +516,34 @@ class WebDavSyncService {
   Future<void> pushNow({bool force = false}) async {
     if (_syncInFlight) {
       _pushPending = true;
+      _pushPendingForce = force || _pushPendingForce;
       return;
     }
     if (_pushInFlight) {
       _pushPending = true;
+      _pushPendingForce = force || _pushPendingForce;
       return;
     }
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return;
     if (!force && !config.autoSync) return;
 
+    // 非强制推送在冷却期内延后，避免限流风暴
+    if (!force) {
+      final wait = _remainingCooldown();
+      if (wait != null) {
+        _scheduleAfterCooldown(() {
+          unawaited(pushNow(force: force));
+        });
+        return;
+      }
+    }
+
     final client = _client(config);
     if (client == null) return;
 
     _pushInFlight = true;
+    _noteAttempt();
     _setStatus(SyncStatus.syncing);
 
     try {
@@ -481,18 +585,14 @@ class WebDavSyncService {
 
       await _syncBaseStore.save(workspace);
       _applyAttachmentSyncWarning(attachmentFailures);
+      _noteSuccess();
       _setStatus(SyncStatus.success);
     } catch (e) {
+      _noteFailure(e);
       _setStatus(SyncStatus.error, error: e.toString());
     } finally {
       _pushInFlight = false;
-      if (_pushPending) {
-        _pushPending = false;
-        unawaited(pushNow(force: force));
-      } else if (_pullPending) {
-        _pullPending = false;
-        unawaited(pullAndMerge());
-      }
+      _drainPendingWork(forceFallback: force);
     }
   }
 
@@ -673,16 +773,27 @@ class WebDavSyncService {
     return mergeWorkspaces(local: local, remote: remote, base: base);
   }
 
-  Future<void> pullAndMerge() async {
+  Future<void> pullAndMerge({bool userInitiated = false}) async {
     if (_syncInFlight || _pushInFlight) {
-      _pullPending = true;
+      // 仅用户手动同步才排队；自动轮询重叠直接丢弃，避免失败后立即连环重试
+      if (userInitiated) {
+        _pullPending = true;
+        _pullPendingUserInitiated = true;
+      }
       return;
     }
 
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return;
 
+    if (!userInitiated && !_canStartAutoSync(config)) {
+      return;
+    }
+
+    // note: 手动同步不受自动节流/冷却限制，由用户主动触发
+
     _syncInFlight = true;
+    _noteAttempt();
     _setStatus(SyncStatus.syncing);
     try {
       final local = await _loadWorkspace();
@@ -719,21 +830,52 @@ class WebDavSyncService {
 
       _applyAttachmentSyncWarning(attachmentFailures);
 
-      // note: 合并后始终回推，避免本地并集结果只留本机
+      // note: 合并结果与远端一致时跳过全量回推，减少无意义写入
+      if (_workspaceJsonEquals(merged, remote)) {
+        _noteSuccess();
+        _setStatus(SyncStatus.success);
+        return;
+      }
+
+      // note: 合并后回推，避免本地并集结果只留本机
       _syncInFlight = false;
       await pushNow(force: true);
     } catch (e) {
+      _noteFailure(e);
       _setStatus(SyncStatus.error, error: e.toString());
     } finally {
       _syncInFlight = false;
-      if (_pullPending) {
-        _pullPending = false;
-        unawaited(pullAndMerge());
-      } else if (_pushPending) {
-        _pushPending = false;
-        unawaited(pushNow());
+      _drainPendingWork();
+    }
+  }
+
+  void _drainPendingWork({bool forceFallback = false}) {
+    final pull = _pullPending;
+    final pullUser = _pullPendingUserInitiated;
+    final push = _pushPending;
+    final pushForce = _pushPendingForce || forceFallback;
+    _pullPending = false;
+    _pullPendingUserInitiated = false;
+    _pushPending = false;
+    _pushPendingForce = false;
+
+    if (!pull && !push) return;
+
+    final wait = _remainingCooldown();
+    void run() {
+      if (pull) {
+        unawaited(pullAndMerge(userInitiated: pullUser));
+      } else if (push) {
+        unawaited(pushNow(force: pushForce));
       }
     }
+
+    // 手动同步排队立即执行；自动推送仍遵守冷却
+    if (wait != null && !(pull && pullUser)) {
+      _scheduleAfterCooldown(run);
+      return;
+    }
+    run();
   }
 
   Future<bool> testConnection(WebDavConfig config) async {
@@ -749,26 +891,55 @@ class WebDavSyncService {
 
   void startPolling() {
     stopPolling();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      final config = await _loadConfig();
-      if (!config.enabled || !config.autoSync) return;
-      final interval = config.pollIntervalSeconds;
-      final last = lastSyncedAt;
-      if (last != null &&
-          DateTime.now().difference(last).inSeconds < interval) {
-        return;
+    _pollingEnabled = true;
+    _armNextPoll();
+  }
+
+  void _armNextPoll() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    if (!_pollingEnabled) return;
+    unawaited(_scheduleNextPoll());
+  }
+
+  Future<void> _scheduleNextPoll() async {
+    if (!_pollingEnabled) return;
+    final config = await _loadConfig();
+    if (!_pollingEnabled || !config.enabled || !config.autoSync) return;
+
+    final interval = Duration(seconds: _pollIntervalSeconds(config));
+    var delay = interval;
+    final cooldown = _remainingCooldown();
+    if (cooldown != null && cooldown > delay) {
+      delay = cooldown;
+    }
+
+    if (!_pollingEnabled) return;
+    _pollTimer = Timer(delay, () async {
+      try {
+        if (!_pollingEnabled) return;
+        final latest = await _loadConfig();
+        if (!_pollingEnabled || !latest.enabled || !latest.autoSync) return;
+        if (_canStartAutoSync(latest)) {
+          await pullAndMerge();
+        }
+      } finally {
+        if (_pollingEnabled) {
+          _armNextPoll();
+        }
       }
-      await pullAndMerge();
     });
   }
 
   void stopPolling() {
+    _pollingEnabled = false;
     _pollTimer?.cancel();
     _pollTimer = null;
   }
 
   void dispose() {
     _debounceTimer?.cancel();
+    _cooldownRetryTimer?.cancel();
     stopPolling();
     _statusController.close();
   }

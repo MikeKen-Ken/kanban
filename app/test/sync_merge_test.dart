@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/kanban/column_card_preferences.dart';
 import 'package:kanban/features/project/project_settings.dart';
 import 'package:kanban/features/project/projects_manifest.dart';
 import 'package:kanban/features/sync_conflict/sync_conflict.dart';
@@ -208,6 +209,39 @@ void main() {
     expect(merged.themeId, 'light');
     expect(merged.hasConflict, isTrue);
     expect(merged.conflictSide?.themeId, 'dark');
+  });
+
+  test('Settings 一侧为空默认桩时不制造冲突', () {
+    final local = ProjectSettings(
+      doneColumnName: '已完成',
+      columnPreferences: {
+        'todo': const ColumnCardPreferences(),
+      },
+      updatedAt: 100,
+      revision: 3,
+    );
+    const remote = ProjectSettings(); // updatedAt=0 revision=0
+    final merged = mergeSettings(local: local, remote: remote);
+    expect(merged.hasConflict, isFalse);
+    expect(merged.revision, 3);
+    expect(merged.columnPreferences.containsKey('todo'), isTrue);
+  });
+
+  test('Settings 已有空默认桩 conflictSide → 下次合并自动清除', () {
+    final local = ProjectSettings(
+      doneColumnName: '已完成',
+      columnPreferences: {
+        'todo': const ColumnCardPreferences(),
+      },
+      updatedAt: 100,
+      revision: 5,
+      conflictSide: const ProjectSettings(),
+    );
+    final remote = local.copyWith(clearConflictSide: true, updatedAt: 90);
+    final merged = mergeSettings(local: local, remote: remote);
+    expect(merged.hasConflict, isFalse);
+    expect(merged.conflictSide, isNull);
+    expect(merged.revision, 5);
   });
 
   test('双侧都删 → 卡片消失', () {

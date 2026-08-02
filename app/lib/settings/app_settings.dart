@@ -35,9 +35,6 @@ class AppSettings {
   /// 0ms：按下并移动即拖
   bool get immediateDrag => dragLongPressMs <= 0;
 
-  /// 短延迟仍走整卡拖拽，避免 LongPressDraggable 在小手柄上难以触发
-  bool get usePointerDrag => dragLongPressMs <= 200;
-
   Duration get dragDelay => Duration(milliseconds: dragLongPressMs);
 
   AppSettings copyWith({

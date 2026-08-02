@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -11,7 +10,7 @@ import '../attachments/card_attachment_viewer.dart';
 import 'card_detail_sheet.dart';
 import 'kanban_labels.dart';
 
-/// 单张看板卡片：勾选完成、拖动手柄、置顶、元数据展示
+/// 单张看板卡片：勾选完成、拖拽、置顶、元数据展示
 class KanbanCardTile extends StatelessWidget {
   const KanbanCardTile({
     super.key,
@@ -36,7 +35,6 @@ class KanbanCardTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = context.watch<BoardController>();
     final customLabels = controller.appSettings.customLabels;
-    final usePointerDrag = controller.appSettings.usePointerDrag;
     final themeId = controller.projectSettings.themeId;
 
     if (!card.matchesSearch(searchQuery, customLabels: customLabels)) {
@@ -65,20 +63,9 @@ class KanbanCardTile extends StatelessWidget {
       isPinned: isPinned,
       customLabels: customLabels,
       themeId: themeId,
-      dragHandle: usePointerDrag
-          ? null
-          : _CardDragHandle(
-              card: card,
-              feedback: feedback,
-              onDragStarted: onDragStarted,
-              onDragEnded: onDragEnded,
-            ),
     );
 
-    if (!usePointerDrag) {
-      return content;
-    }
-
+    // note: 任意按压时长都走整卡拖拽；原先 >200ms 仅手柄可拖，桌面上几乎拖不动
     if (controller.appSettings.immediateDrag) {
       return Draggable<KanbanCard>(
         data: card,
@@ -111,60 +98,6 @@ class KanbanCardTile extends StatelessWidget {
   }
 }
 
-class _CardDragHandle extends StatelessWidget {
-  const _CardDragHandle({
-    required this.card,
-    required this.feedback,
-    this.onDragStarted,
-    this.onDragEnded,
-  });
-
-  final KanbanCard card;
-  final Widget feedback;
-  final VoidCallback? onDragStarted;
-  final VoidCallback? onDragEnded;
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = context.watch<BoardController>();
-    final colorScheme = Theme.of(context).colorScheme;
-
-    final handle = Tooltip(
-      message: '长按手柄移动卡片',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.grab,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 4, top: 4),
-          child: SizedBox(
-            width: 32,
-            height: 32,
-            child: Icon(
-              Icons.drag_indicator,
-              size: 20,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    return LongPressDraggable<KanbanCard>(
-      data: card,
-      delay: controller.appSettings.dragDelay,
-      hapticFeedbackOnStart: true,
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      onDragStarted: onDragStarted,
-      onDragEnd: (_) => onDragEnded?.call(),
-      feedback: feedback,
-      childWhenDragging: Opacity(
-        opacity: 0.25,
-        child: handle,
-      ),
-      child: handle,
-    );
-  }
-}
-
 class _CardContent extends StatelessWidget {
   const _CardContent({
     required this.card,
@@ -174,7 +107,6 @@ class _CardContent extends StatelessWidget {
     this.isPinned = false,
     this.customLabels = const [],
     this.themeId = '',
-    this.dragHandle,
   });
 
   final KanbanCard card;
@@ -184,7 +116,6 @@ class _CardContent extends StatelessWidget {
   final bool isPinned;
   final List<KanbanLabel> customLabels;
   final String themeId;
-  final Widget? dragHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -443,33 +374,26 @@ class _CardContent extends StatelessWidget {
                 ),
               ),
               if (!dragging && columnId != null)
-                Column(
-                  children: [
-                    IconButton(
-                      tooltip: isPinned ? '取消置顶' : '置顶',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 28,
-                        minHeight: 28,
-                      ),
-                      onPressed: () => context
-                          .read<BoardController>()
-                          .toggleCardPin(columnId!, card.id),
-                      icon: Icon(
-                        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                        size: 18,
-                        color: isPinned
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.55),
-                      ),
-                    ),
-                    if (dragHandle != null) dragHandle!,
-                  ],
-                )
-              else if (dragHandle != null)
-                dragHandle!,
+                IconButton(
+                  tooltip: isPinned ? '取消置顶' : '置顶',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
+                  onPressed: () => context
+                      .read<BoardController>()
+                      .toggleCardPin(columnId!, card.id),
+                  icon: Icon(
+                    isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    size: 18,
+                    color: isPinned
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.55),
+                  ),
+                ),
                 ],
               ),
             ),

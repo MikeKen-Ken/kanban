@@ -1568,7 +1568,7 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> syncNow() async {
-    await _syncService.pullAndMerge();
+    await _syncService.pullAndMerge(userInitiated: true);
     manifest = await _repository.loadManifest();
     if (activeProjectId != null) {
       board = await _repository.loadBoard(activeProjectId!);
