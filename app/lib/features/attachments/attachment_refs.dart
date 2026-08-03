@@ -1,11 +1,14 @@
 import '../../models/kanban_models.dart';
+import '../project/project_settings.dart';
 import '../trash/trash_models.dart';
 
-/// 从看板与回收站收集所有被引用的附件 id
+/// 从看板、回收站与项目设置收集所有被引用的附件 id
 Set<String> collectReferencedAttachmentIds(
   KanbanBoard board,
-  TrashBin trash,
-) {
+  TrashBin trash, {
+  ProjectSettings? settings,
+  String? backgroundAttachmentId,
+}) {
   final ids = <String>{};
   for (final col in board.columns) {
     for (final card in col.cards) {
@@ -29,6 +32,11 @@ Set<String> collectReferencedAttachmentIds(
         ids.add(attachment.id);
       }
     }
+  }
+
+  final bgId = backgroundAttachmentId ?? settings?.backgroundAttachmentId;
+  if (bgId != null && bgId.isNotEmpty) {
+    ids.add(bgId);
   }
   return ids;
 }

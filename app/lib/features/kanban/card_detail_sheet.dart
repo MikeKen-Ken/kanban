@@ -902,6 +902,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             return FilterChip(
                               label: Text(p.label),
                               selected: selected,
+                              showCheckmark: false,
                               onSelected: (_) =>
                                   _safeSetState(() => _priority = p),
                               avatar: p == CardPriority.none

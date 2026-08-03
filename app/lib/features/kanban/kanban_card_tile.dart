@@ -8,10 +8,11 @@ import '../../models/kanban_models.dart';
 import '../attachments/card_attachment_image.dart';
 import '../attachments/card_attachment_viewer.dart';
 import 'card_detail_sheet.dart';
+import 'card_drag.dart';
 import 'kanban_labels.dart';
 
 /// 单张看板卡片：勾选完成、拖拽、置顶、元数据展示
-class KanbanCardTile extends StatelessWidget {
+class KanbanCardTile extends StatefulWidget {
   const KanbanCardTile({
     super.key,
     required this.columnId,
@@ -32,68 +33,142 @@ class KanbanCardTile extends StatelessWidget {
   final VoidCallback? onDragEnded;
 
   @override
+  State<KanbanCardTile> createState() => _KanbanCardTileState();
+}
+
+class _KanbanCardTileState extends State<KanbanCardTile> {
+  int? _pointerDownMs;
+  bool _dragStarted = false;
+  bool _blockTap = false;
+
+  void _onPointerDown(PointerDownEvent event) {
+    _pointerDownMs = DateTime.now().millisecondsSinceEpoch;
+    _dragStarted = false;
+    _blockTap = false;
+  }
+
+  void _onDragStarted() {
+    _dragStarted = true;
+    _blockTap = true;
+    widget.onDragStarted?.call();
+  }
+
+  void _onDragEnded() {
+    widget.onDragEnded?.call();
+  }
+
+  void _openDetail() {
+    if (_blockTap || _dragStarted) return;
+    final down = _pointerDownMs;
+    if (down != null) {
+      final heldMs = DateTime.now().millisecondsSinceEpoch - down;
+      final settings = context.read<BoardController>().appSettings;
+      if (shouldSuppressCardTapAfterPress(
+        heldMs: heldMs,
+        dragLongPressMs: settings.dragLongPressMs,
+        dragStarted: _dragStarted,
+      )) {
+        return;
+      }
+    }
+    showCardDetailSheet(
+      context: context,
+      columnId: widget.columnId,
+      card: widget.card,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final controller = context.watch<BoardController>();
     final customLabels = controller.appSettings.customLabels;
     final themeId = controller.projectSettings.themeId;
+    final immediateDrag = controller.appSettings.immediateDrag;
 
-    if (!card.matchesSearch(searchQuery, customLabels: customLabels)) {
+    if (!widget.card
+        .matchesSearch(widget.searchQuery, customLabels: customLabels)) {
       return const SizedBox.shrink();
     }
 
-    final feedback = Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(8),
-      child: SizedBox(
-        width: 268,
-        child: _CardContent(
-          card: card,
-          dragging: true,
-          isPinned: isPinned,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final feedbackWidth =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 268.0;
+
+        final feedback = Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: feedbackWidth,
+            child: _CardContent(
+              card: widget.card,
+              dragging: true,
+              isPinned: widget.isPinned,
+              customLabels: customLabels,
+              themeId: themeId,
+            ),
+          ),
+        );
+
+        final content = _CardContent(
+          card: widget.card,
+          columnId: widget.columnId,
+          allColumns: widget.allColumns,
+          isPinned: widget.isPinned,
           customLabels: customLabels,
           themeId: themeId,
-        ),
-      ),
-    );
+          // 延迟拖拽时关掉按下水波，避免「填充动画」误导成已可拖
+          suppressInk: !immediateDrag,
+          onOpenDetail: _openDetail,
+        );
 
-    final content = _CardContent(
-      card: card,
-      columnId: columnId,
-      allColumns: allColumns,
-      isPinned: isPinned,
-      customLabels: customLabels,
-      themeId: themeId,
-    );
+        Offset anchorStrategy(
+          Draggable<Object> draggable,
+          BuildContext ctx,
+          Offset position,
+        ) {
+          return feedbackCenterDragAnchorStrategy(
+            draggable,
+            ctx,
+            position,
+            feedbackWidth: feedbackWidth,
+          );
+        }
 
-    // note: 任意按压时长都走整卡拖拽；原先 >200ms 仅手柄可拖，桌面上几乎拖不动
-    if (controller.appSettings.immediateDrag) {
-      return Draggable<KanbanCard>(
-        data: card,
-        dragAnchorStrategy: pointerDragAnchorStrategy,
-        onDragStarted: onDragStarted,
-        onDragEnd: (_) => onDragEnded?.call(),
-        feedback: feedback,
-        childWhenDragging: Opacity(
-          opacity: 0.25,
-          child: content,
-        ),
-        child: content,
-      );
-    }
+        final Widget draggableChild = immediateDrag
+            ? Draggable<KanbanCard>(
+                data: widget.card,
+                dragAnchorStrategy: anchorStrategy,
+                onDragStarted: _onDragStarted,
+                onDragEnd: (_) => _onDragEnded(),
+                feedback: feedback,
+                childWhenDragging: Opacity(
+                  opacity: 0.25,
+                  child: content,
+                ),
+                child: content,
+              )
+            : CardLongPressDraggable<KanbanCard>(
+                data: widget.card,
+                delay: controller.appSettings.dragDelay,
+                hapticFeedbackOnStart: true,
+                dragAnchorStrategy: anchorStrategy,
+                onDragStarted: _onDragStarted,
+                onDragEnd: (_) => _onDragEnded(),
+                feedback: feedback,
+                childWhenDragging: Opacity(
+                  opacity: 0.25,
+                  child: content,
+                ),
+                child: content,
+              );
 
-    return LongPressDraggable<KanbanCard>(
-      data: card,
-      delay: controller.appSettings.dragDelay,
-      hapticFeedbackOnStart: true,
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      onDragStarted: onDragStarted,
-      onDragEnd: (_) => onDragEnded?.call(),
-      feedback: feedback,
-      childWhenDragging: Opacity(
-        opacity: 0.25,
-        child: content,
-      ),
-      child: content,
+        return Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: _onPointerDown,
+          child: draggableChild,
+        );
+      },
     );
   }
 }
@@ -107,6 +182,8 @@ class _CardContent extends StatelessWidget {
     this.isPinned = false,
     this.customLabels = const [],
     this.themeId = '',
+    this.suppressInk = false,
+    this.onOpenDetail,
   });
 
   final KanbanCard card;
@@ -116,6 +193,8 @@ class _CardContent extends StatelessWidget {
   final bool isPinned;
   final List<KanbanLabel> customLabels;
   final String themeId;
+  final bool suppressInk;
+  final VoidCallback? onOpenDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -156,13 +235,12 @@ class _CardContent extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: dragging || columnId == null
+        splashFactory: suppressInk ? NoSplash.splashFactory : null,
+        highlightColor: suppressInk ? Colors.transparent : null,
+        splashColor: suppressInk ? Colors.transparent : null,
+        onTap: dragging || columnId == null || onOpenDetail == null
             ? null
-            : () => showCardDetailSheet(
-                  context: context,
-                  columnId: columnId!,
-                  card: card,
-                ),
+            : onOpenDetail,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -245,164 +323,168 @@ class _CardContent extends StatelessWidget {
                     )
                   else
                     const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isPinned)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.push_pin,
-                              size: 14,
-                              color: colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '已置顶',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (card.labels.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: card.labels.map((key) {
-                            final label =
-                                findKanbanLabel(key, customLabels, themeId);
-                            if (label == null) return const SizedBox.shrink();
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: label.color.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                label.name,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: label.color,
-                                  fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isPinned)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.push_pin,
+                                  size: 14,
+                                  color: colorScheme.primary,
                                 ),
-                              ),
-                            );
-                          }).toList(),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '已置顶',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (card.labels.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: card.labels.map((key) {
+                                final label = findKanbanLabel(
+                                    key, customLabels, themeId);
+                                if (label == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: label.color.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    label.name,
+                                    style:
+                                        theme.textTheme.labelSmall?.copyWith(
+                                      color: label.color,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        Text(
+                          card.title,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            height: 1.25,
+                            leadingDistribution: TextLeadingDistribution.even,
+                            decoration: card.completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                            color: card.completed
+                                ? colorScheme.onSurface.withValues(alpha: 0.5)
+                                : null,
+                          ),
                         ),
+                        if (card.description != null &&
+                            card.description!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            card.description!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (dueInfo != null ||
+                            card.priority != CardPriority.none ||
+                            card.hasChecklist) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (dueInfo != null) dueInfo,
+                              if (card.priority != CardPriority.none)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.flag,
+                                      size: 14,
+                                      color: card.priority.color(
+                                        colorScheme,
+                                        theme: themePreset,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      card.priority.label,
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color: card.priority.color(
+                                          colorScheme,
+                                          theme: themePreset,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              if (card.hasChecklist)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.checklist,
+                                      size: 14,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '${card.checklistDone}/${card.checklist.length}',
+                                      style: theme.textTheme.labelSmall,
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (!dragging && columnId != null)
+                    IconButton(
+                      tooltip: isPinned ? '取消置顶' : '置顶',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
                       ),
-                    Text(
-                      card.title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        height: 1.25,
-                        leadingDistribution: TextLeadingDistribution.even,
-                        decoration: card.completed
-                            ? TextDecoration.lineThrough
-                            : null,
-                        color: card.completed
-                            ? colorScheme.onSurface.withValues(alpha: 0.5)
-                            : null,
+                      onPressed: () => context
+                          .read<BoardController>()
+                          .toggleCardPin(columnId!, card.id),
+                      icon: Icon(
+                        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                        size: 18,
+                        color: isPinned
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.55),
                       ),
                     ),
-                    if (card.description != null &&
-                        card.description!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        card.description!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    if (dueInfo != null ||
-                        card.priority != CardPriority.none ||
-                        card.hasChecklist) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          if (dueInfo != null) dueInfo,
-                          if (card.priority != CardPriority.none)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.flag,
-                                  size: 14,
-                                  color: card.priority.color(
-                                    colorScheme,
-                                    theme: themePreset,
-                                  ),
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  card.priority.label,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: card.priority.color(
-                                    colorScheme,
-                                    theme: themePreset,
-                                  ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          if (card.hasChecklist)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.checklist,
-                                  size: 14,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  '${card.checklistDone}/${card.checklist.length}',
-                                  style: theme.textTheme.labelSmall,
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (!dragging && columnId != null)
-                IconButton(
-                  tooltip: isPinned ? '取消置顶' : '置顶',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
-                  ),
-                  onPressed: () => context
-                      .read<BoardController>()
-                      .toggleCardPin(columnId!, card.id),
-                  icon: Icon(
-                    isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                    size: 18,
-                    color: isPinned
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant
-                            .withValues(alpha: 0.55),
-                  ),
-                ),
                 ],
               ),
             ),

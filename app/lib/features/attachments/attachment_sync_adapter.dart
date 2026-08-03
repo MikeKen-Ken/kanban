@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../../models/kanban_models.dart';
+import '../project/project_settings.dart';
 import '../trash/trash_models.dart';
 import 'attachment_refs.dart';
 import 'attachment_store.dart';
@@ -13,8 +14,12 @@ class AttachmentSyncAdapter {
 
   bool get isAvailable => _storage != null;
 
-  Set<String> referencedIds(KanbanBoard board, TrashBin trash) =>
-      collectReferencedAttachmentIds(board, trash);
+  Set<String> referencedIds(
+    KanbanBoard board,
+    TrashBin trash, {
+    ProjectSettings? settings,
+  }) =>
+      collectReferencedAttachmentIds(board, trash, settings: settings);
 
   Future<Uint8List?> readFile(
     String projectId,

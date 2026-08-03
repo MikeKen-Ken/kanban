@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
 import '../features/kanban/card_detail_sheet.dart';
+import '../features/project/board_background_layer.dart';
 import '../features/project/project_switcher.dart';
 import '../features/quick_capture/quick_capture.dart';
 import '../features/sync_conflict/conflict_center_screen.dart';
@@ -372,6 +373,9 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         ): () => context.read<BoardController>().syncNow(),
       },
       child: Scaffold(
+        backgroundColor: controller.projectSettings.hasBackgroundImage
+            ? Colors.transparent
+            : null,
         appBar: AppBar(
           title: const ProjectSwitcher(),
           actions: [
@@ -630,112 +634,137 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
           icon: const Icon(Icons.add),
           label: const Text('快速添加'),
         ),
-        body: Consumer<BoardController>(
-          builder: (context, controller, _) {
-            if (controller.isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        body: _buildBoardBody(
+          compact: compact,
+          backgroundAttachmentId:
+              controller.projectSettings.backgroundAttachmentId,
+          overlayOpacity: controller.projectSettings.backgroundOverlayOpacity,
+        ),
+      ),
+    );
+  }
 
-            final board = controller.board;
-            if (board == null) {
-              return Center(child: Text(controller.errorMessage ?? '加载失败'));
-            }
+  Widget _buildBoardBody({
+    required bool compact,
+    required String backgroundAttachmentId,
+    required double overlayOpacity,
+  }) {
+    final content = Consumer<BoardController>(
+      builder: (context, controller, _) {
+        if (controller.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-            if (board.columns.isEmpty) {
-              return _EmptyBoardState(
-                  onCreateColumn: () => _addColumn(context));
-            }
+        final board = controller.board;
+        if (board == null) {
+          return Center(child: Text(controller.errorMessage ?? '加载失败'));
+        }
 
-            final projectId = controller.activeProjectId ?? board.id;
-            final spec = _filter.copyWith(keyword: _searchQuery);
-            final references = buildCardReferences(
-              manifest: controller.manifest!,
-              boards: {projectId: board},
-              customLabels: controller.appSettings.customLabels,
-            );
-            final visibleIds = const CardQueryService()
-                .query(references, spec)
-                .map((card) => card.cardId)
-                .toSet();
-            if (spec.hasFilters && visibleIds.isEmpty) {
-              return _SearchEmptyState(
-                onClear: () {
-                  _searchController.clear();
-                  setState(() {
-                    _searchQuery = '';
-                    _filter = const FilterSpec();
-                  });
-                },
+        if (board.columns.isEmpty) {
+          return _EmptyBoardState(onCreateColumn: () => _addColumn(context));
+        }
+
+        final projectId = controller.activeProjectId ?? board.id;
+        final spec = _filter.copyWith(keyword: _searchQuery);
+        final references = buildCardReferences(
+          manifest: controller.manifest!,
+          boards: {projectId: board},
+          customLabels: controller.appSettings.customLabels,
+        );
+        final visibleIds = const CardQueryService()
+            .query(references, spec)
+            .map((card) => card.cardId)
+            .toSet();
+        if (spec.hasFilters && visibleIds.isEmpty) {
+          return _SearchEmptyState(
+            onClear: () {
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+                _filter = const FilterSpec();
+              });
+            },
+          );
+        }
+
+        if (compact) {
+          final width = MediaQuery.sizeOf(context).width - 24;
+          return PageView.builder(
+            padEnds: false,
+            controller: PageController(viewportFraction: 0.94),
+            itemCount: board.columns.length,
+            itemBuilder: (context, index) {
+              final column = board.columns[index];
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 0, 88),
+                child: KanbanColumnWidget(
+                  column: column,
+                  columnIndex: index,
+                  visibleCardIds: visibleIds,
+                  width: width,
+                ),
               );
-            }
+            },
+          );
+        }
 
-            if (compact) {
-              final width = MediaQuery.sizeOf(context).width - 24;
-              return PageView.builder(
-                padEnds: false,
-                controller: PageController(viewportFraction: 0.94),
-                itemCount: board.columns.length,
-                itemBuilder: (context, index) {
-                  final column = board.columns[index];
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 0, 88),
-                    child: KanbanColumnWidget(
-                      column: column,
-                      columnIndex: index,
-                      visibleCardIds: visibleIds,
-                      width: width,
-                    ),
-                  );
-                },
-              );
-            }
-
-            return Scrollbar(
-              child: ReorderableListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.all(16),
-                buildDefaultDragHandles: false,
-                proxyDecorator: (child, index, animation) {
-                  return AnimatedBuilder(
-                    animation: animation,
-                    builder: (context, child) {
-                      final t = Curves.easeInOut.transform(animation.value);
-                      return Material(
-                        elevation: 8 * t,
-                        borderRadius: BorderRadius.circular(12),
-                        clipBehavior: Clip.antiAlias,
-                        child: child,
-                      );
-                    },
+        return Scrollbar(
+          child: ReorderableListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(16),
+            buildDefaultDragHandles: false,
+            proxyDecorator: (child, index, animation) {
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, child) {
+                  final t = Curves.easeInOut.transform(animation.value);
+                  return Material(
+                    elevation: 8 * t,
+                    borderRadius: BorderRadius.circular(12),
+                    clipBehavior: Clip.antiAlias,
                     child: child,
                   );
                 },
-                itemCount: board.columns.length,
-                onReorderItem: (oldIndex, adjustedNewIndex) {
-                  final legacyNewIndex = adjustedNewIndex > oldIndex
-                      ? adjustedNewIndex + 1
-                      : adjustedNewIndex;
-                  controller.reorderColumn(oldIndex, legacyNewIndex);
-                },
-                itemBuilder: (context, index) {
-                  final column = board.columns[index];
-                  return Padding(
-                    key: ValueKey(column.id),
-                    padding: EdgeInsets.only(
-                      right: index < board.columns.length - 1 ? 12 : 0,
-                    ),
-                    child: KanbanColumnWidget(
-                      column: column,
-                      columnIndex: index,
-                      visibleCardIds: visibleIds,
-                    ),
-                  );
-                },
-              ),
-            );
-          },
+                child: child,
+              );
+            },
+            itemCount: board.columns.length,
+            onReorderItem: (oldIndex, adjustedNewIndex) {
+              final legacyNewIndex = adjustedNewIndex > oldIndex
+                  ? adjustedNewIndex + 1
+                  : adjustedNewIndex;
+              controller.reorderColumn(oldIndex, legacyNewIndex);
+            },
+            itemBuilder: (context, index) {
+              final column = board.columns[index];
+              return Padding(
+                key: ValueKey(column.id),
+                padding: EdgeInsets.only(
+                  right: index < board.columns.length - 1 ? 12 : 0,
+                ),
+                child: KanbanColumnWidget(
+                  column: column,
+                  columnIndex: index,
+                  visibleCardIds: visibleIds,
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (backgroundAttachmentId.isEmpty) return content;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        BoardBackgroundLayer(
+          attachmentId: backgroundAttachmentId,
+          overlayOpacity: overlayOpacity,
         ),
-      ),
+        content,
+      ],
     );
   }
 }

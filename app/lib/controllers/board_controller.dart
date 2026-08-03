@@ -12,6 +12,7 @@ import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/attachments/card_image_picker.dart';
 import '../features/activity/activity_models.dart';
 import '../features/import_export/backup_archive_service.dart';
+import '../features/mcp/kanban_mcp_host.dart';
 import '../features/project/project_list_preferences.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
@@ -57,6 +58,7 @@ class BoardController extends ChangeNotifier {
   SharedContent sharedContent = SharedContent.empty;
   WebDavConfig webDavConfig = WebDavConfig.empty;
   AppSettings appSettings = AppSettings.platformDefault();
+  late final KanbanMcpHost mcpHost = KanbanMcpHost(this);
   TrashBin activeProjectTrash = TrashBin.empty;
   TrashBin appTrash = TrashBin.empty;
   Map<String, TrashBin> projectTrashes = {};
@@ -256,6 +258,9 @@ class BoardController extends ChangeNotifier {
       projectId: pid,
       board: board!,
       trash: trash,
+      settings: projectId == null || projectId == activeProjectId
+          ? projectSettings
+          : null,
     );
     notifyListeners();
   }
@@ -622,6 +627,23 @@ class BoardController extends ChangeNotifier {
       _syncService.startPolling();
       unawaited(_syncInBackground());
     }
+
+    unawaited(_syncMcpHost());
+  }
+
+  Future<void> _syncMcpHost() async {
+    await mcpHost.syncWithSettings(
+      enabled: appSettings.mcpEnabled,
+      port: appSettings.mcpPort,
+    );
+  }
+
+  /// 只读加载某项目看板快照（不切换当前项目）。
+  Future<KanbanBoard?> loadBoardSnapshot(String projectId) async {
+    if (projectId == activeProjectId) return board;
+    if (manifest?.findById(projectId) == null) return null;
+    if (!await _repository.storage.hasProjectBoard(projectId)) return null;
+    return _repository.loadBoard(projectId);
   }
 
   Future<void> _syncInBackground() async {
@@ -970,6 +992,90 @@ class BoardController extends ChangeNotifier {
     await _persistProjectSettings(bumped);
   }
 
+  /// 为当前看板选择背景图（立即落盘并调度同步）
+  Future<String?> setBoardBackgroundFromGallery() async {
+    if (board == null || activeProjectId == null) return '看板未就绪';
+    final store = attachmentStore;
+    if (store == null) return '当前平台不支持图片背景';
+
+    final picked = await pickCardImagesFromGallery();
+    if (picked.isEmpty) return null;
+
+    final image = picked.first;
+    final CardAttachment attachment;
+    try {
+      attachment = await store.saveImage(
+        projectId: activeProjectId!,
+        sourceBytes: image.bytes,
+        fileName: image.fileName,
+        order: 0,
+      );
+    } catch (_) {
+      return '图片处理失败';
+    }
+
+    final previousId = projectSettings.backgroundAttachmentId;
+    await _persistProjectSettings(
+      projectSettings
+          .copyWith(
+            backgroundAttachmentId: attachment.id,
+            clearConflictSide: true,
+          )
+          .bump(),
+    );
+
+    if (previousId.isNotEmpty && previousId != attachment.id) {
+      await store.deleteAttachment(
+        projectId: activeProjectId!,
+        attachmentId: previousId,
+      );
+    }
+    await refreshMissingAttachments();
+    return null;
+  }
+
+  /// 清除当前看板背景图
+  Future<void> clearBoardBackground() async {
+    if (board == null || activeProjectId == null) return;
+    final previousId = projectSettings.backgroundAttachmentId;
+    if (previousId.isEmpty) return;
+
+    await _persistProjectSettings(
+      projectSettings
+          .copyWith(
+            backgroundAttachmentId: '',
+            clearConflictSide: true,
+          )
+          .bump(),
+    );
+
+    final store = attachmentStore;
+    if (store != null) {
+      await store.deleteAttachment(
+        projectId: activeProjectId!,
+        attachmentId: previousId,
+      );
+    }
+    await refreshMissingAttachments();
+  }
+
+  /// 调整背景遮罩强度（立即落盘并调度同步）
+  Future<void> setBoardBackgroundOverlayOpacity(double opacity) async {
+    if (board == null) return;
+    final next = ProjectSettings.clampOverlayOpacity(opacity);
+    if ((projectSettings.backgroundOverlayOpacity - next).abs() < 0.001) {
+      return;
+    }
+    await _persistProjectSettings(
+      projectSettings
+          .copyWith(
+            backgroundOverlayOpacity: next,
+            clearConflictSide: true,
+          )
+          .bump(),
+    );
+  }
+
   Future<void> updateTitle(String title) async {
     if (board == null) return;
     await _persistAndSync(_bump(board!.copyWith(title: title)));
@@ -1030,9 +1136,14 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> saveAppSettings(AppSettings settings) async {
+    final mcpChanged = settings.mcpEnabled != appSettings.mcpEnabled ||
+        settings.mcpPort != appSettings.mcpPort;
     appSettings = settings;
     await _repository.saveAppSettings(settings);
     notifyListeners();
+    if (mcpChanged) {
+      await _syncMcpHost();
+    }
   }
 
   Future<String> addCustomLabel(String name, int colorValue) async {
@@ -2153,6 +2264,7 @@ class BoardController extends ChangeNotifier {
       final ids = collectReferencedAttachmentIds(
         project.board,
         project.projectTrash,
+        settings: project.settings,
       );
       for (final id in ids) {
         await store.deleteAttachment(projectId: projectId, attachmentId: id);
@@ -2361,6 +2473,7 @@ class BoardController extends ChangeNotifier {
 
   @override
   void dispose() {
+    mcpHost.dispose();
     _syncService.dispose();
     super.dispose();
   }

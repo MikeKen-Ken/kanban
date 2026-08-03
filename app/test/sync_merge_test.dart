@@ -324,6 +324,74 @@ void main() {
     expect(merged.conflictSide?.themeId, 'dark');
   });
 
+  test('Settings 背景图字段冲突挂 conflictSide', () {
+    final local = const ProjectSettings(
+      backgroundAttachmentId: 'bg-local',
+      backgroundOverlayOpacity: 0.2,
+      updatedAt: 100,
+      revision: 2,
+    );
+    final remote = const ProjectSettings(
+      backgroundAttachmentId: 'bg-remote',
+      backgroundOverlayOpacity: 0.5,
+      updatedAt: 200,
+      revision: 2,
+    );
+    final merged = mergeSettings(local: local, remote: remote);
+    expect(merged.backgroundAttachmentId, 'bg-remote');
+    expect(merged.hasConflict, isTrue);
+    expect(merged.conflictSide?.backgroundAttachmentId, 'bg-local');
+  });
+
+  test('Settings 三路合并可分别采纳背景与遮罩', () {
+    const base = ProjectSettings(
+      backgroundAttachmentId: 'bg-base',
+      backgroundOverlayOpacity: 0.4,
+      updatedAt: 10,
+      revision: 1,
+    );
+    final local = base.copyWith(
+      backgroundAttachmentId: 'bg-local',
+      updatedAt: 20,
+      revision: 2,
+    );
+    final remote = base.copyWith(
+      backgroundOverlayOpacity: 0.6,
+      updatedAt: 30,
+      revision: 2,
+    );
+    final merged = mergeSettings(local: local, remote: remote, base: base);
+    expect(merged.hasConflict, isFalse);
+    expect(merged.backgroundAttachmentId, 'bg-local');
+    expect(merged.backgroundOverlayOpacity, closeTo(0.6, 0.001));
+  });
+
+  test('ProjectSettings 背景字段序列化往返', () {
+    final settings = const ProjectSettings(
+      backgroundAttachmentId: 'bg-1',
+      backgroundOverlayOpacity: 0.55,
+      updatedAt: 42,
+      revision: 3,
+    );
+    final roundtrip = ProjectSettings.fromJson(settings.toJson());
+    expect(roundtrip.backgroundAttachmentId, 'bg-1');
+    expect(roundtrip.backgroundOverlayOpacity, closeTo(0.55, 0.001));
+    expect(roundtrip.hasBackgroundImage, isTrue);
+  });
+
+  test('旧 settings.json 缺背景字段时使用安全默认值', () {
+    final settings = ProjectSettings.fromJson({
+      'doneColumnName': '已完成',
+      'updatedAt': 1,
+      'revision': 1,
+    });
+    expect(settings.backgroundAttachmentId, isEmpty);
+    expect(
+      settings.backgroundOverlayOpacity,
+      ProjectSettings.defaultBackgroundOverlayOpacity,
+    );
+  });
+
   test('Settings 一侧为空默认桩时不制造冲突', () {
     final local = const ProjectSettings(
       doneColumnName: '已完成',

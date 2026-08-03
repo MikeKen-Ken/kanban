@@ -26,6 +26,7 @@ dependencies:
   archive: ^4.0.9
   crypto: ^3.0.7
   path: ^1.9.1
+  mcp_dart: ^2.4.0
 
 dev_dependencies:
   flutter_test:

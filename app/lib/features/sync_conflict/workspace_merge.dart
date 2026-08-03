@@ -38,9 +38,13 @@ bool _intMapEq(Map<String, int> a, Map<String, int> b) {
 bool _isUninitializedSettings(ProjectSettings s) =>
     s.updatedAt == 0 && s.revision == 0;
 
+bool _overlayEq(double a, double b) => (a - b).abs() < 0.001;
+
 bool _settingsContentDiffers(ProjectSettings a, ProjectSettings b) =>
     a.doneColumnName != b.doneColumnName ||
     a.themeId != b.themeId ||
+    a.backgroundAttachmentId != b.backgroundAttachmentId ||
+    !_overlayEq(a.backgroundOverlayOpacity, b.backgroundOverlayOpacity) ||
     !_prefsEq(a.columnPreferences, b.columnPreferences) ||
     !_intMapEq(a.columnWipLimits, b.columnWipLimits);
 
@@ -103,6 +107,18 @@ ProjectSettings mergeSettings({
       effectiveRemote.doneColumnName != base.doneColumnName;
   final themeLocalChanged = effectiveLocal.themeId != base.themeId;
   final themeRemoteChanged = effectiveRemote.themeId != base.themeId;
+  final bgLocalChanged =
+      effectiveLocal.backgroundAttachmentId != base.backgroundAttachmentId;
+  final bgRemoteChanged =
+      effectiveRemote.backgroundAttachmentId != base.backgroundAttachmentId;
+  final overlayLocalChanged = !_overlayEq(
+    effectiveLocal.backgroundOverlayOpacity,
+    base.backgroundOverlayOpacity,
+  );
+  final overlayRemoteChanged = !_overlayEq(
+    effectiveRemote.backgroundOverlayOpacity,
+    base.backgroundOverlayOpacity,
+  );
   final prefsLocalChanged =
       !_prefsEq(effectiveLocal.columnPreferences, base.columnPreferences);
   final prefsRemoteChanged =
@@ -118,6 +134,16 @@ ProjectSettings mergeSettings({
   final themeConflict = themeLocalChanged &&
       themeRemoteChanged &&
       effectiveLocal.themeId != effectiveRemote.themeId;
+  final bgConflict = bgLocalChanged &&
+      bgRemoteChanged &&
+      effectiveLocal.backgroundAttachmentId !=
+          effectiveRemote.backgroundAttachmentId;
+  final overlayConflict = overlayLocalChanged &&
+      overlayRemoteChanged &&
+      !_overlayEq(
+        effectiveLocal.backgroundOverlayOpacity,
+        effectiveRemote.backgroundOverlayOpacity,
+      );
   final prefsConflict = prefsLocalChanged &&
       prefsRemoteChanged &&
       !_prefsEq(
@@ -131,7 +157,12 @@ ProjectSettings mergeSettings({
         effectiveRemote.columnWipLimits,
       );
 
-  if (doneConflict || themeConflict || prefsConflict || wipConflict) {
+  if (doneConflict ||
+      themeConflict ||
+      bgConflict ||
+      overlayConflict ||
+      prefsConflict ||
+      wipConflict) {
     final localWins = effectiveLocal.updatedAt >= effectiveRemote.updatedAt;
     final primary = localWins ? effectiveLocal : effectiveRemote;
     final other = localWins ? effectiveRemote : effectiveLocal;
@@ -157,6 +188,16 @@ ProjectSettings mergeSettings({
         : themeRemoteChanged
             ? effectiveRemote.themeId
             : base.themeId,
+    backgroundAttachmentId: bgLocalChanged
+        ? effectiveLocal.backgroundAttachmentId
+        : bgRemoteChanged
+            ? effectiveRemote.backgroundAttachmentId
+            : base.backgroundAttachmentId,
+    backgroundOverlayOpacity: overlayLocalChanged
+        ? effectiveLocal.backgroundOverlayOpacity
+        : overlayRemoteChanged
+            ? effectiveRemote.backgroundOverlayOpacity
+            : base.backgroundOverlayOpacity,
     columnPreferences: prefsLocalChanged
         ? effectiveLocal.columnPreferences
         : prefsRemoteChanged

@@ -1,4 +1,5 @@
 import '../../models/kanban_models.dart';
+import '../project/project_settings.dart';
 import '../trash/trash_models.dart';
 import 'attachment_refs.dart';
 import 'attachment_store.dart';
@@ -9,10 +10,11 @@ Future<Set<String>> findMissingAttachmentIds({
   required String projectId,
   required KanbanBoard board,
   required TrashBin trash,
+  ProjectSettings? settings,
 }) async {
   if (store == null) return {};
 
-  final ids = collectReferencedAttachmentIds(board, trash);
+  final ids = collectReferencedAttachmentIds(board, trash, settings: settings);
   final missing = <String>{};
   for (final id in ids) {
     final exists = await store.exists(

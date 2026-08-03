@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../../settings/settings_section.dart';
+import '../attachments/card_attachment_image.dart';
 import 'project_settings.dart';
 import 'project_theme.dart';
 
@@ -19,7 +20,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   late final TextEditingController _doneColumnController;
   late String _selectedThemeId;
   late Map<String, int> _wipLimits;
+  double? _overlayDraft;
   bool _saving = false;
+  bool _backgroundBusy = false;
 
   @override
   void initState() {
@@ -68,6 +71,34 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     Navigator.pop(context);
   }
 
+  Future<void> _pickBackground() async {
+    setState(() => _backgroundBusy = true);
+    final error =
+        await context.read<BoardController>().setBoardBackgroundFromGallery();
+    if (!mounted) return;
+    setState(() => _backgroundBusy = false);
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('背景已更新，将自动同步')),
+      );
+    }
+  }
+
+  Future<void> _clearBackground() async {
+    setState(() => _backgroundBusy = true);
+    await context.read<BoardController>().clearBoardBackground();
+    if (!mounted) return;
+    setState(() {
+      _backgroundBusy = false;
+      _overlayDraft = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已清除背景图')),
+    );
+  }
+
   Future<void> _resolveConflict({required bool keepPrimary}) async {
     final controller = context.read<BoardController>();
     await controller.resolveSettingsConflict(keepPrimary: keepPrimary);
@@ -78,6 +109,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
       _selectedThemeId =
           settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
       _wipLimits = Map<String, int>.from(settings.columnWipLimits);
+      _overlayDraft = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -98,6 +130,16 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     }
     if (primary.themeId != other.themeId) {
       parts.add('主题：${_themeLabel(other.themeId)}');
+    }
+    if (primary.backgroundAttachmentId != other.backgroundAttachmentId) {
+      parts.add(other.hasBackgroundImage ? '背景图不同' : '无自定义背景图');
+    }
+    if ((primary.backgroundOverlayOpacity - other.backgroundOverlayOpacity)
+            .abs() >=
+        0.001) {
+      parts.add(
+        '背景遮罩：${(other.backgroundOverlayOpacity * 100).round()}%',
+      );
     }
     final prefsDiffer =
         primary.columnPreferences.length != other.columnPreferences.length ||
@@ -128,6 +170,8 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     final controller = context.watch<BoardController>();
     final projectTitle = controller.activeProject?.title ?? '项目';
     final settings = controller.projectSettings;
+    final overlayValue = (_overlayDraft ?? settings.backgroundOverlayOpacity)
+        .clamp(0.0, ProjectSettings.maxBackgroundOverlayOpacity);
 
     return Theme(
       data: buildKanbanTheme(
@@ -204,6 +248,122 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                             setState(() => _selectedThemeId = preset.id),
                       );
                     }).toList(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SettingsSection(
+              icon: Icons.wallpaper_outlined,
+              title: '看板背景',
+              subtitle: '每块看板可单独设置背景图，会随项目同步；图片铺满裁切，不会拉伸变形',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: settings.hasBackgroundImage
+                              ? Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    CardAttachmentImage(
+                                      attachmentId:
+                                          settings.backgroundAttachmentId,
+                                      thumb: false,
+                                      fit: BoxFit.cover,
+                                      showMissingLabel: true,
+                                    ),
+                                    if (overlayValue > 0)
+                                      ColoredBox(
+                                        color: Colors.black.withValues(
+                                          alpha: overlayValue,
+                                        ),
+                                      ),
+                                  ],
+                                )
+                              : ColoredBox(
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                  child: Center(
+                                    child: Text(
+                                      '未设置背景图，使用主题底色',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color: theme
+                                            .colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed:
+                                _backgroundBusy ? null : _pickBackground,
+                            icon: _backgroundBusy
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.image_outlined),
+                            label: Text(
+                              settings.hasBackgroundImage ? '更换图片' : '选择图片',
+                            ),
+                          ),
+                          if (settings.hasBackgroundImage)
+                            OutlinedButton.icon(
+                              onPressed:
+                                  _backgroundBusy ? null : _clearBackground,
+                              icon: const Icon(Icons.hide_image_outlined),
+                              label: const Text('清除'),
+                            ),
+                        ],
+                      ),
+                      if (settings.hasBackgroundImage) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '遮罩：${(overlayValue * 100).round()}%',
+                          style: theme.textTheme.labelLarge,
+                        ),
+                        Slider(
+                          value: overlayValue,
+                          min: 0,
+                          max: ProjectSettings.maxBackgroundOverlayOpacity,
+                          divisions: 14,
+                          label: '${(overlayValue * 100).round()}%',
+                          onChanged: _backgroundBusy
+                              ? null
+                              : (value) {
+                                  setState(() => _overlayDraft = value);
+                                },
+                          onChangeEnd: (value) async {
+                            await controller
+                                .setBoardBackgroundOverlayOpacity(value);
+                            if (!mounted) return;
+                            setState(() => _overlayDraft = null);
+                          },
+                        ),
+                        Text(
+                          '加深遮罩可提高列与文字在复杂背景上的可读性',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -294,7 +454,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '保存后设置会写入当前项目数据，并在下次同步时上传到 WebDAV。',
+                    '主题与看板选项点「保存」后写入；背景图与遮罩会立即生效并同步到 WebDAV。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

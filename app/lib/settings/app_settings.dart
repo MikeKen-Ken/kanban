@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/kanban/kanban_labels.dart';
+import '../features/mcp/mcp_constants.dart';
 import '../features/project/project_list_preferences.dart';
 
 /// 本地应用偏好（不同步到 WebDAV）
@@ -17,6 +18,8 @@ class AppSettings {
     this.pinnedProjectIds = const [],
     this.projectLastUsedAt = const {},
     this.customLabels = const [],
+    this.mcpEnabled = false,
+    this.mcpPort = McpConstants.defaultPort,
   });
 
   /// 拖拽前按压时长（毫秒）。0 表示按下即拖。
@@ -40,6 +43,12 @@ class AppSettings {
   /// 用户自定义标签（全局，所有项目共用）
   final List<KanbanLabel> customLabels;
 
+  /// 是否启用 Windows 内嵌 MCP（仅本机）
+  final bool mcpEnabled;
+
+  /// MCP 监听端口（仅本机）
+  final int mcpPort;
+
   /// 0ms：按下并移动即拖
   bool get immediateDrag => dragLongPressMs <= 0;
 
@@ -53,6 +62,8 @@ class AppSettings {
     List<String>? pinnedProjectIds,
     Map<String, int>? projectLastUsedAt,
     List<KanbanLabel>? customLabels,
+    bool? mcpEnabled,
+    int? mcpPort,
   }) {
     return AppSettings(
       dragLongPressMs: dragLongPressMs ?? this.dragLongPressMs,
@@ -63,6 +74,8 @@ class AppSettings {
       pinnedProjectIds: pinnedProjectIds ?? this.pinnedProjectIds,
       projectLastUsedAt: projectLastUsedAt ?? this.projectLastUsedAt,
       customLabels: customLabels ?? this.customLabels,
+      mcpEnabled: mcpEnabled ?? this.mcpEnabled,
+      mcpPort: mcpPort ?? this.mcpPort,
     );
   }
 
@@ -75,13 +88,17 @@ class AppSettings {
         'projectLastUsedAt': projectLastUsedAt,
         if (customLabels.isNotEmpty)
           'customLabels': customLabels.map((label) => label.toJson()).toList(),
+        'mcpEnabled': mcpEnabled,
+        'mcpPort': mcpPort,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
+    final defaults = AppSettings.platformDefault();
     final lastUsedRaw = json['projectLastUsedAt'] as Map<String, dynamic>?;
+    final port = json['mcpPort'] as int? ?? defaults.mcpPort;
     return AppSettings(
       dragLongPressMs: json['dragLongPressMs'] as int? ??
-          AppSettings.platformDefault().dragLongPressMs,
+          defaults.dragLongPressMs,
       themeMode: ThemeMode.values.firstWhere(
         (mode) => mode.name == json['themeMode'],
         orElse: () => ThemeMode.system,
@@ -101,6 +118,8 @@ class AppSettings {
       customLabels: (json['customLabels'] as List<dynamic>? ?? [])
           .map((e) => KanbanLabel.fromJson(e as Map<String, dynamic>))
           .toList(),
+      mcpEnabled: json['mcpEnabled'] as bool? ?? defaults.mcpEnabled,
+      mcpPort: port < 1 || port > 65535 ? defaults.mcpPort : port,
     );
   }
 
@@ -118,9 +137,16 @@ class AppSettings {
     }
   }
 
+  static bool _platformMcpEnabledDefault() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.windows;
+  }
+
   static AppSettings platformDefault() {
     return AppSettings(
       dragLongPressMs: _platformImmediateDrag() ? 0 : 500,
+      mcpEnabled: _platformMcpEnabledDefault(),
+      mcpPort: McpConstants.defaultPort,
     );
   }
 }

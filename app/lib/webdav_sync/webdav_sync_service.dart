@@ -415,12 +415,14 @@ class WebDavSyncService {
     String projectId,
     KanbanBoard board,
     TrashBin trash, {
+    ProjectSettings? settings,
     bool cleanupOrphans = true,
   }) async {
     if (!_attachmentSync.isAvailable) return 0;
 
     var failed = 0;
-    final keepIds = _attachmentSync.referencedIds(board, trash);
+    final keepIds =
+        _attachmentSync.referencedIds(board, trash, settings: settings);
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
     final remoteNames =
@@ -496,12 +498,14 @@ class WebDavSyncService {
     String base,
     String projectId,
     KanbanBoard board,
-    TrashBin trash,
-  ) async {
+    TrashBin trash, {
+    ProjectSettings? settings,
+  }) async {
     if (!_attachmentSync.isAvailable) return 0;
 
     var failed = 0;
-    final keepIds = _attachmentSync.referencedIds(board, trash);
+    final keepIds =
+        _attachmentSync.referencedIds(board, trash, settings: settings);
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
     for (final id in keepIds) {
@@ -595,6 +599,7 @@ class WebDavSyncService {
       projectId,
       board,
       trash,
+      settings: settings,
     );
     return attachmentFailures;
   }
@@ -933,12 +938,14 @@ class WebDavSyncService {
           final board = merged.boards[entry.id];
           if (board == null) continue;
           final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
+          final settings = merged.settings[entry.id];
           attachmentFailures += await _pullProjectAttachments(
             client,
             base,
             entry.id,
             board,
             trash,
+            settings: settings,
           );
         }
       }
@@ -957,12 +964,14 @@ class WebDavSyncService {
             final board = merged.boards[entry.id];
             if (board == null) continue;
             final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
+            final settings = merged.settings[entry.id];
             attachmentFailures += await _pushProjectAttachments(
               client,
               base,
               entry.id,
               board,
               trash,
+              settings: settings,
               cleanupOrphans: false,
             );
           }
