@@ -79,6 +79,17 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     });
   }
 
+  void _toggleSearch() {
+    setState(() {
+      _showSearch = !_showSearch;
+      if (!_showSearch) {
+        _searchController.clear();
+        _searchQuery = '';
+      }
+    });
+    if (_showSearch) _showAndFocusSearch();
+  }
+
   Future<void> _quickCapture() async {
     final draft = await showQuickCaptureDialog(context);
     if (!mounted || draft == null) return;
@@ -98,6 +109,24 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     );
   }
 
+  Future<void> _undoWithFeedback() async {
+    final controller = context.read<BoardController>();
+    final label = controller.undoLabel;
+    final undone = await controller.undoLastAction();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          undone
+              ? label == null
+                  ? '已撤销上一项操作'
+                  : '已撤销：$label'
+              : '没有可撤销的操作',
+        ),
+      ),
+    );
+  }
+
   Future<void> _showFilters() async {
     final controller = context.read<BoardController>();
     final labels = {
@@ -113,16 +142,16 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
   }
 
   Future<void> _saveCurrentView() async {
-    final nameController = TextEditingController();
+    var draftName = '';
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('保存当前视图'),
-        content: TextField(
-          controller: nameController,
+        content: TextFormField(
           autofocus: true,
           decoration: const InputDecoration(labelText: '视图名称'),
-          onSubmitted: (value) => Navigator.pop(context, value.trim()),
+          onChanged: (value) => draftName = value,
+          onFieldSubmitted: (value) => Navigator.pop(context, value.trim()),
         ),
         actions: [
           TextButton(
@@ -130,18 +159,21 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, nameController.text.trim()),
+            onPressed: () => Navigator.pop(context, draftName.trim()),
             child: const Text('保存'),
           ),
         ],
       ),
     );
-    nameController.dispose();
     if (name == null || name.isEmpty || !mounted) return;
     await context.read<BoardController>().saveView(
           name: name,
           filter: _filter.copyWith(keyword: _searchQuery),
         );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已保存视图「$name」')),
+    );
   }
 
   Future<void> _openToday() async {
@@ -160,6 +192,60 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     );
   }
 
+  Future<void> _openGlobalQuery() async {
+    final controller = context.read<BoardController>();
+    final labels = {
+      for (final label in controller.appSettings.customLabels)
+        label.key: label.name,
+    };
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GlobalQueryScreen(
+          loadCards: controller.loadAllCardReferences,
+          onOpen: _openReference,
+          onToggleCompleted: _toggleReferenceCompleted,
+          labels: labels,
+          savedViews: () => controller.savedViews,
+          onSaveView: (id, name, filter) => controller.saveView(
+            id: id,
+            name: name,
+            filter: filter,
+          ),
+          onDeleteView: (view) => controller.deleteSavedView(view.id),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _manageSavedViews() async {
+    final controller = context.read<BoardController>();
+    final selected = await Navigator.of(context).push<SavedView>(
+      MaterialPageRoute<SavedView>(
+        builder: (_) => SavedViewsScreen(
+          views: controller.savedViews,
+          onRename: (view, name) => controller.saveView(
+            id: view.id,
+            name: name,
+            filter: view.filter,
+          ),
+          onDelete: (view) => controller.deleteSavedView(view.id),
+        ),
+      ),
+    );
+    if (selected != null && mounted) _applySavedView(selected);
+  }
+
+  void _applySavedView(SavedView view) {
+    _searchController.text = view.filter.keyword;
+    setState(() {
+      _searchQuery = view.filter.keyword;
+      _filter = view.filter.copyWith(keyword: '');
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已应用「${view.name}」')),
+    );
+  }
+
   Future<void> _openReference(CardReference reference) async {
     final controller = context.read<BoardController>();
     if (controller.activeProjectId != reference.projectId) {
@@ -171,7 +257,12 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         .expand((column) => column.cards)
         .where((card) => card.id == reference.cardId)
         .firstOrNull;
-    if (card == null) return;
+    if (card == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('这张卡片已被删除或移动，请刷新后重试')),
+      );
+      return;
+    }
     await showCardDetailSheet(
       context: context,
       columnId: reference.columnId,
@@ -187,18 +278,62 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     await controller.toggleCardCompleted(reference.columnId, reference.cardId);
   }
 
+  void _openTrash() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const TrashScreen()),
+    );
+  }
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+    );
+  }
+
+  void _handleCompactAction(String action) {
+    switch (action) {
+      case 'today':
+        _openToday();
+        break;
+      case 'filter':
+        _showFilters();
+        break;
+      case 'search':
+        _toggleSearch();
+        break;
+      case 'save':
+        _saveCurrentView();
+        break;
+      case 'saved':
+        _manageSavedViews();
+        break;
+      case 'undo':
+        _undoWithFeedback();
+        break;
+      case 'column':
+        _addColumn(context);
+        break;
+      case 'trash':
+        _openTrash();
+        break;
+      case 'settings':
+        _openSettings();
+        break;
+    }
+  }
+
   Future<void> _addColumn(BuildContext context) async {
     final controller = context.read<BoardController>();
-    final textController = TextEditingController();
+    var draftTitle = '';
     final title = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('新建列'),
-        content: TextField(
-          controller: textController,
+        content: TextFormField(
           autofocus: true,
           decoration: const InputDecoration(hintText: '列名称'),
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+          onChanged: (value) => draftTitle = value,
+          onFieldSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
           TextButton(
@@ -206,7 +341,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, textController.text.trim()),
+            onPressed: () => Navigator.pop(ctx, draftTitle.trim()),
             child: const Text('创建'),
           ),
         ],
@@ -219,15 +354,17 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
 
   @override
   Widget build(BuildContext context) {
-    final savedViews = context.watch<BoardController>().savedViews;
+    final controller = context.watch<BoardController>();
+    final savedViews = controller.savedViews;
+    final compact = MediaQuery.sizeOf(context).width < 600;
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyF, control: true):
             _showAndFocusSearch,
         const SingleActivator(LogicalKeyboardKey.keyN, control: true):
             _quickCapture,
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
-            context.read<BoardController>().undoLastAction(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+            _undoWithFeedback,
         const SingleActivator(
           LogicalKeyboardKey.keyS,
           control: true,
@@ -238,97 +375,105 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         appBar: AppBar(
           title: const ProjectSwitcher(),
           actions: [
-            IconButton(
-              tooltip: '新建列',
-              icon: const Icon(Icons.view_column_outlined),
-              onPressed: () => _addColumn(context),
-            ),
-            IconButton(
-              tooltip: '今日任务',
-              icon: const Icon(Icons.today_outlined),
-              onPressed: _openToday,
-            ),
-            PopupMenuButton<String>(
-              tooltip: _filter.hasFilters ? '筛选已启用' : '筛选与保存视图',
-              icon: Badge(
-                isLabelVisible: _filter.hasFilters,
-                child: const Icon(Icons.filter_list),
+            if (!compact)
+              IconButton(
+                tooltip: controller.canUndo
+                    ? '撤销：${controller.undoLabel ?? '上一项操作'}'
+                    : '没有可撤销的操作',
+                icon: const Icon(Icons.undo),
+                onPressed: controller.canUndo ? _undoWithFeedback : null,
               ),
-              onSelected: (value) {
-                if (value == '__filter') {
-                  _showFilters();
-                } else if (value == '__save') {
-                  _saveCurrentView();
-                } else {
-                  final view =
-                      savedViews.where((item) => item.id == value).firstOrNull;
-                  if (view == null) return;
-                  _searchController.text = view.filter.keyword;
-                  setState(() {
-                    _searchQuery = view.filter.keyword;
-                    _filter = view.filter.copyWith(keyword: '');
-                  });
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: '__filter',
-                  child: ListTile(
-                    leading: Icon(Icons.tune),
-                    title: Text('编辑筛选'),
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: '__save',
-                  child: ListTile(
-                    leading: Icon(Icons.bookmark_add_outlined),
-                    title: Text('保存当前视图'),
-                  ),
-                ),
-                for (final view in savedViews)
-                  PopupMenuItem(
-                    value: view.id,
-                    child: ListTile(
-                      leading: const Icon(Icons.bookmark_outline),
-                      title: Text(view.name),
-                    ),
-                  ),
-              ],
-            ),
-            IconButton(
-              tooltip: _showSearch ? '关闭搜索' : '搜索卡片',
-              icon: Icon(
-                _showSearch ? Icons.search_off : Icons.search,
+            if (!compact)
+              IconButton(
+                tooltip: '新建列',
+                icon: const Icon(Icons.view_column_outlined),
+                onPressed: () => _addColumn(context),
               ),
-              onPressed: () {
-                setState(() {
-                  _showSearch = !_showSearch;
-                  if (!_showSearch) {
-                    _searchController.clear();
-                    _searchQuery = '';
-                  }
-                });
-                if (_showSearch) _showAndFocusSearch();
-              },
+            if (!compact)
+              IconButton(
+                tooltip: '今日任务',
+                icon: const Icon(Icons.today_outlined),
+                onPressed: _openToday,
+              ),
+            IconButton(
+              tooltip: '全部卡片',
+              icon: const Icon(Icons.view_list_outlined),
+              onPressed: _openGlobalQuery,
             ),
-            Selector<BoardController, int>(
-              selector: (_, c) => c.trashItemCount,
-              builder: (context, count, _) => IconButton(
-                tooltip: '回收站',
+            if (!compact)
+              PopupMenuButton<String>(
+                tooltip: _filter.hasFilters ? '筛选已启用' : '筛选与保存视图',
                 icon: Badge(
-                  isLabelVisible: count > 0,
-                  label: Text('$count'),
-                  child: const Icon(Icons.delete_outline),
+                  isLabelVisible: _filter.hasFilters,
+                  child: const Icon(Icons.filter_list),
                 ),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const TrashScreen(),
-                    ),
-                  );
+                onSelected: (value) {
+                  if (value == '__filter') {
+                    _showFilters();
+                  } else if (value == '__save') {
+                    _saveCurrentView();
+                  } else if (value == '__manage') {
+                    _manageSavedViews();
+                  } else {
+                    final view = savedViews
+                        .where((item) => item.id == value)
+                        .firstOrNull;
+                    if (view != null) _applySavedView(view);
+                  }
                 },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: '__filter',
+                    child: ListTile(
+                      leading: Icon(Icons.tune),
+                      title: Text('编辑筛选'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: '__save',
+                    child: ListTile(
+                      leading: Icon(Icons.bookmark_add_outlined),
+                      title: Text('保存当前视图'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: '__manage',
+                    child: ListTile(
+                      leading: Icon(Icons.bookmarks_outlined),
+                      title: Text('管理保存视图'),
+                    ),
+                  ),
+                  for (final view in savedViews)
+                    PopupMenuItem(
+                      value: view.id,
+                      child: ListTile(
+                        leading: const Icon(Icons.bookmark_outline),
+                        title: Text(view.name),
+                      ),
+                    ),
+                ],
               ),
-            ),
+            if (!compact)
+              IconButton(
+                tooltip: _showSearch ? '关闭搜索' : '搜索卡片',
+                icon: Icon(
+                  _showSearch ? Icons.search_off : Icons.search,
+                ),
+                onPressed: _toggleSearch,
+              ),
+            if (!compact)
+              Selector<BoardController, int>(
+                selector: (_, c) => c.trashItemCount,
+                builder: (context, count, _) => IconButton(
+                  tooltip: '回收站',
+                  icon: Badge(
+                    isLabelVisible: count > 0,
+                    label: Text('$count'),
+                    child: const Icon(Icons.delete_outline),
+                  ),
+                  onPressed: _openTrash,
+                ),
+              ),
             Selector<BoardController, (SyncStatus, String?, int, DateTime?)>(
               selector: (_, c) => (
                 c.syncStatus,
@@ -341,6 +486,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 error: data.$2,
                 conflictCount: data.$3,
                 lastSyncedAt: data.$4,
+                compact: compact,
                 onTap: () {
                   final controller = context.read<BoardController>();
                   if (data.$3 <= 0) {
@@ -355,17 +501,98 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 },
               ),
             ),
-            IconButton(
-              tooltip: '设置',
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const SettingsScreen(),
+            if (!compact)
+              IconButton(
+                tooltip: '设置',
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: _openSettings,
+              ),
+            if (compact)
+              PopupMenuButton<String>(
+                tooltip: '更多操作',
+                onSelected: _handleCompactAction,
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'search',
+                    child: ListTile(
+                      leading: Icon(
+                        _showSearch ? Icons.search_off : Icons.search,
+                      ),
+                      title: Text(
+                        _showSearch ? '关闭当前项目搜索' : '搜索当前项目',
+                      ),
+                    ),
                   ),
-                );
-              },
-            ),
+                  const PopupMenuItem(
+                    value: 'today',
+                    child: ListTile(
+                      leading: Icon(Icons.today_outlined),
+                      title: Text('今日任务'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'filter',
+                    child: ListTile(
+                      leading: Badge(
+                        isLabelVisible: _filter.hasFilters,
+                        child: const Icon(Icons.filter_list),
+                      ),
+                      title: const Text('编辑筛选'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'save',
+                    child: ListTile(
+                      leading: Icon(Icons.bookmark_add_outlined),
+                      title: Text('保存当前视图'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'saved',
+                    child: ListTile(
+                      leading: Icon(Icons.bookmarks_outlined),
+                      title: Text('管理保存视图'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'undo',
+                    enabled: controller.canUndo,
+                    child: ListTile(
+                      leading: const Icon(Icons.undo),
+                      title: Text(
+                        controller.canUndo
+                            ? '撤销：${controller.undoLabel ?? '上一项操作'}'
+                            : '没有可撤销的操作',
+                      ),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'column',
+                    child: ListTile(
+                      leading: Icon(Icons.view_column_outlined),
+                      title: Text('新建列'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'trash',
+                    child: ListTile(
+                      leading: Badge(
+                        isLabelVisible: controller.trashItemCount > 0,
+                        label: Text('${controller.trashItemCount}'),
+                        child: const Icon(Icons.delete_outline),
+                      ),
+                      title: const Text('回收站'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'settings',
+                    child: ListTile(
+                      leading: Icon(Icons.settings_outlined),
+                      title: Text('设置'),
+                    ),
+                  ),
+                ],
+              ),
           ],
           bottom: _showSearch
               ? PreferredSize(
@@ -415,7 +642,8 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
             }
 
             if (board.columns.isEmpty) {
-              return const Center(child: Text('点击右下角添加第一列'));
+              return _EmptyBoardState(
+                  onCreateColumn: () => _addColumn(context));
             }
 
             final projectId = controller.activeProjectId ?? board.id;
@@ -441,7 +669,6 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
               );
             }
 
-            final compact = MediaQuery.sizeOf(context).width < 600;
             if (compact) {
               final width = MediaQuery.sizeOf(context).width - 24;
               return PageView.builder(
@@ -484,11 +711,11 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                   );
                 },
                 itemCount: board.columns.length,
-              onReorderItem: (oldIndex, adjustedNewIndex) {
-                final legacyNewIndex = adjustedNewIndex > oldIndex
-                    ? adjustedNewIndex + 1
-                    : adjustedNewIndex;
-                controller.reorderColumn(oldIndex, legacyNewIndex);
+                onReorderItem: (oldIndex, adjustedNewIndex) {
+                  final legacyNewIndex = adjustedNewIndex > oldIndex
+                      ? adjustedNewIndex + 1
+                      : adjustedNewIndex;
+                  controller.reorderColumn(oldIndex, legacyNewIndex);
                 },
                 itemBuilder: (context, index) {
                   final column = board.columns[index];
@@ -507,6 +734,48 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyBoardState extends StatelessWidget {
+  const _EmptyBoardState({required this.onCreateColumn});
+
+  final VoidCallback onCreateColumn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.view_column_outlined,
+              size: 56,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '先创建第一列',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '创建列后，就可以用右下角的“快速添加”录入卡片',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onCreateColumn,
+              icon: const Icon(Icons.add),
+              label: const Text('创建第一列'),
+            ),
+          ],
         ),
       ),
     );
@@ -556,12 +825,14 @@ class _SyncIndicator extends StatelessWidget {
     this.error,
     this.conflictCount = 0,
     this.lastSyncedAt,
+    this.compact = false,
   });
 
   final SyncStatus status;
   final String? error;
   final int conflictCount;
   final DateTime? lastSyncedAt;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -584,30 +855,40 @@ class _SyncIndicator extends StatelessWidget {
         ? '尚未成功同步'
         : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
 
+    final tooltip = conflictCount > 0
+        ? '有未解决的同步冲突，点击进入冲突中心'
+        : error == null
+            ? '$lastSuccess\n点击立即同步'
+            : '$error\n$lastSuccess';
+    final icon = Icon(
+      conflictCount > 0 ? Icons.warning_amber_outlined : syncStatusIcon(status),
+      color: color,
+      size: 20,
+    );
+
     return Semantics(
       liveRegion: true,
       label: label,
       button: true,
       child: Tooltip(
-        message: conflictCount > 0
-            ? '有未解决的同步冲突，点击进入冲突中心'
-            : error == null
-                ? '$lastSuccess\n点击立即同步'
-                : '$error\n$lastSuccess',
-        child: TextButton.icon(
-          onPressed: onTap,
-          icon: Icon(
-            conflictCount > 0
-                ? Icons.warning_amber_outlined
-                : syncStatusIcon(status),
-            color: color,
-            size: 20,
-          ),
-          label: Text(
-            label,
-            style: TextStyle(color: color, fontSize: 13),
-          ),
-        ),
+        message: tooltip,
+        child: compact
+            ? IconButton(
+                onPressed: onTap,
+                icon: Badge(
+                  isLabelVisible: conflictCount > 0,
+                  label: Text('$conflictCount'),
+                  child: icon,
+                ),
+              )
+            : TextButton.icon(
+                onPressed: onTap,
+                icon: icon,
+                label: Text(
+                  label,
+                  style: TextStyle(color: color, fontSize: 13),
+                ),
+              ),
       ),
     );
   }

@@ -117,6 +117,21 @@ void main() {
     expect(result.map((card) => card.cardId), ['c1']);
   });
 
+  test('全局视图可组合项目、状态和排序条件', () {
+    final result = service.query(
+      cards,
+      const FilterSpec(
+        projectIds: ['work', 'home'],
+        completion: CompletionFilter.incomplete,
+        sortField: CardSortField.updatedAt,
+        sortDirection: SortDirection.descending,
+      ),
+      now: now,
+    );
+
+    expect(result.map((card) => card.cardId), ['c4', 'c1', 'c2']);
+  });
+
   test('今日筛选只包含今天到期的卡片', () {
     final result = service.query(
       cards,

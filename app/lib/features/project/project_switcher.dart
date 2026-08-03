@@ -253,10 +253,16 @@ class ProjectSwitcher extends StatelessWidget {
                 final isActive = project.id == controller.activeProjectId;
                 final isPinned = controller.isProjectPinned(project.id);
                 return PopupMenuItem<String>(
-                  enabled: false,
+                  value: project.id,
                   padding: EdgeInsets.zero,
                   child: ListTile(
                     dense: true,
+                    selected: isActive,
+                    selectedTileColor: theme.colorScheme.primaryContainer,
+                    selectedColor: theme.colorScheme.onPrimaryContainer,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     leading: Icon(
                       isActive
@@ -271,6 +277,13 @@ class ProjectSwitcher extends StatelessWidget {
                           child: Text(
                             project.title,
                             overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isActive
+                                  ? theme.colorScheme.onPrimaryContainer
+                                  : theme.colorScheme.onSurface,
+                              fontWeight:
+                                  isActive ? FontWeight.w700 : FontWeight.w400,
+                            ),
                           ),
                         ),
                         if (project.hasConflict) ...[
@@ -339,7 +352,6 @@ class ProjectSwitcher extends StatelessWidget {
                           ),
                       ],
                     ),
-                    onTap: () => Navigator.pop(context, project.id),
                   ),
                 );
               }),

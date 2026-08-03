@@ -6,20 +6,34 @@ Future<FilterSpec?> showCardFilterSheet({
   required BuildContext context,
   required FilterSpec initial,
   required Map<String, String> labels,
+  Map<String, String> projects = const {},
+  bool showSort = false,
 }) {
   return showModalBottomSheet<FilterSpec>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => _FilterSheet(initial: initial, labels: labels),
+    builder: (_) => _FilterSheet(
+      initial: initial,
+      labels: labels,
+      projects: projects,
+      showSort: showSort,
+    ),
   );
 }
 
 class _FilterSheet extends StatefulWidget {
-  const _FilterSheet({required this.initial, required this.labels});
+  const _FilterSheet({
+    required this.initial,
+    required this.labels,
+    required this.projects,
+    required this.showSort,
+  });
 
   final FilterSpec initial;
   final Map<String, String> labels;
+  final Map<String, String> projects;
+  final bool showSort;
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
@@ -44,6 +58,12 @@ class _FilterSheetState extends State<_FilterSheet> {
     final next = [..._value.labelIds];
     next.contains(id) ? next.remove(id) : next.add(id);
     setState(() => _value = _value.copyWith(labelIds: next));
+  }
+
+  void _toggleProject(String id) {
+    final next = [..._value.projectIds];
+    next.contains(id) ? next.remove(id) : next.add(id);
+    setState(() => _value = _value.copyWith(projectIds: next));
   }
 
   @override
@@ -72,6 +92,23 @@ class _FilterSheetState extends State<_FilterSheet> {
                 ],
               ),
               const SizedBox(height: 16),
+              if (widget.projects.isNotEmpty) ...[
+                Text('项目', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final entry in widget.projects.entries)
+                      FilterChip(
+                        label: Text(entry.value),
+                        selected: _value.projectIds.contains(entry.key),
+                        onSelected: (_) => _toggleProject(entry.key),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ],
               Text('日期', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               SegmentedButton<DueDateFilter>(
@@ -163,6 +200,68 @@ class _FilterSheetState extends State<_FilterSheet> {
                         selected: _value.labelIds.contains(entry.key),
                         onSelected: (_) => _toggleLabel(entry.key),
                       ),
+                  ],
+                ),
+              ],
+              if (widget.showSort) ...[
+                const SizedBox(height: 20),
+                Text('排序', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<CardSortField>(
+                        initialValue: _value.sortField,
+                        decoration: const InputDecoration(labelText: '排序字段'),
+                        items: [
+                          for (final item in const [
+                            (CardSortField.dueDate, '到期日'),
+                            (CardSortField.priority, '优先级'),
+                            (CardSortField.title, '标题'),
+                            (CardSortField.createdAt, '创建时间'),
+                            (CardSortField.updatedAt, '更新时间'),
+                            (CardSortField.project, '项目'),
+                            (CardSortField.column, '列'),
+                          ])
+                            DropdownMenuItem(
+                              value: item.$1,
+                              child: Text(item.$2),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(
+                              () => _value = _value.copyWith(sortField: value),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<SortDirection>(
+                        initialValue: _value.sortDirection,
+                        decoration: const InputDecoration(labelText: '方向'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: SortDirection.ascending,
+                            child: Text('升序'),
+                          ),
+                          DropdownMenuItem(
+                            value: SortDirection.descending,
+                            child: Text('降序'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(
+                              () => _value =
+                                  _value.copyWith(sortDirection: value),
+                            );
+                          }
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ],
