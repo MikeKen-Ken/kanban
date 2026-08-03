@@ -19,23 +19,25 @@ void installWindowsClipboardHistoryPasteFix() {
 /// 暴露供单测；运行时由 [installWindowsClipboardHistoryPasteFix] 挂到
 /// [PlatformDispatcher.onKeyData]。
 class WindowsClipboardHistoryKeyFix {
-  WindowsClipboardHistoryKeyFix();
+  WindowsClipboardHistoryKeyFix({VoidCallback? onPaste})
+      : _onPaste = onPaste ?? _pasteIntoFocusedTextField;
 
   static final instance = WindowsClipboardHistoryKeyFix();
 
-  static const int _controlLeftPhysical = 0x700e0;
   static const int _controlLeftLogical = 0x200000100;
-  static const int _vPhysical = 0x70019;
-  static const int _vLogical = 0x76;
   static const int _brokenPhysical = 0x1600000000;
 
+  final VoidCallback _onPaste;
   bool _active = false;
   bool _installed = false;
 
   @visibleForTesting
   bool get isActive => _active;
 
-  /// 纠正单条键数据。返回应转发的 [KeyData]；返回 `null` 表示吞掉该事件。
+  /// 处理单条键数据。返回 `null` 表示已处理并吞掉该事件。
+  ///
+  /// 识别到剪贴板历史注入序列时直接调用 Flutter 的粘贴动作，避免再把
+  /// 损坏事件伪造成 Ctrl+V 后交给 [HardwareKeyboard] 的按键状态机。
   @visibleForTesting
   KeyData? rewrite(KeyData data) {
     if (!_active &&
@@ -44,14 +46,8 @@ class WindowsClipboardHistoryKeyFix {
         data.type == KeyEventType.down &&
         !data.synthesized) {
       _active = true;
-      return KeyData(
-        timeStamp: data.timeStamp,
-        type: KeyEventType.down,
-        physical: _controlLeftPhysical,
-        logical: _controlLeftLogical,
-        character: null,
-        synthesized: false,
-      );
+      _onPaste();
+      return null;
     }
 
     if (_active &&
@@ -65,47 +61,11 @@ class WindowsClipboardHistoryKeyFix {
     if (_active &&
         data.physical == _brokenPhysical &&
         data.logical == _controlLeftLogical &&
-        data.type == KeyEventType.up &&
-        !data.synthesized) {
-      return KeyData(
-        timeStamp: data.timeStamp,
-        type: KeyEventType.down,
-        physical: _vPhysical,
-        logical: _vLogical,
-        character: null,
-        synthesized: false,
-      );
-    }
-
-    if (_active &&
-        data.physical == _brokenPhysical &&
-        data.logical == _controlLeftLogical &&
-        data.type == KeyEventType.down &&
-        data.synthesized) {
-      return KeyData(
-        timeStamp: data.timeStamp,
-        type: KeyEventType.up,
-        physical: _vPhysical,
-        logical: _vLogical,
-        character: null,
-        synthesized: false,
-      );
-    }
-
-    if (_active &&
-        data.physical == _brokenPhysical &&
-        data.logical == _controlLeftLogical &&
-        data.type == KeyEventType.up &&
-        data.synthesized) {
-      _active = false;
-      return KeyData(
-        timeStamp: data.timeStamp,
-        type: KeyEventType.up,
-        physical: _controlLeftPhysical,
-        logical: _controlLeftLogical,
-        character: null,
-        synthesized: false,
-      );
+        (data.type == KeyEventType.up || data.synthesized)) {
+      if (data.type == KeyEventType.up && data.synthesized) {
+        _active = false;
+      }
+      return null;
     }
 
     _active = false;
@@ -123,6 +83,15 @@ class WindowsClipboardHistoryKeyFix {
       if (rewritten == null) return true;
       return original(rewritten);
     };
+  }
+
+  static void _pasteIntoFocusedTextField() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return;
+    Actions.maybeInvoke(
+      context,
+      const PasteTextIntent(SelectionChangedCause.keyboard),
+    );
   }
 
   @visibleForTesting
