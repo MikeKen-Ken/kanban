@@ -1664,6 +1664,35 @@ class BoardController extends ChangeNotifier {
     await _persistProjectSettings(next.bump());
   }
 
+  /// 解决项目删改冲突：保留项目或确认删除
+  Future<void> resolveProjectConflict(
+    String projectId, {
+    required bool keepProject,
+  }) async {
+    if (manifest == null) return;
+    final entry = manifest!.findById(projectId);
+    if (entry == null || !entry.conflictDeleted) return;
+
+    if (!keepProject) {
+      await deleteProject(projectId);
+      return;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final projects = manifest!.projects.map((p) {
+      if (p.id != projectId) return p;
+      return p.copyWith(
+        clearConflict: true,
+        updatedAt: now,
+        revision: p.revision + 1,
+      );
+    }).toList();
+    manifest = manifest!.bump().copyWith(projects: projects);
+    await _repository.saveManifest(manifest!);
+    notifyListeners();
+    _syncService.schedulePush();
+  }
+
   @override
   void dispose() {
     _syncService.dispose();

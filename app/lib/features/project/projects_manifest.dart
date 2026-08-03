@@ -8,6 +8,7 @@ class ProjectEntry {
     required this.updatedAt,
     required this.revision,
     this.conflictTitle,
+    this.conflictDeleted = false,
   });
 
   final String id;
@@ -18,7 +19,10 @@ class ProjectEntry {
   /// 项目标题冲突时的另一侧标题
   final String? conflictTitle;
 
-  bool get hasConflict => conflictTitle != null;
+  /// 另一侧删除了此项目（删 vs 改）
+  final bool conflictDeleted;
+
+  bool get hasConflict => conflictTitle != null || conflictDeleted;
 
   ProjectEntry copyWith({
     String? id,
@@ -27,17 +31,21 @@ class ProjectEntry {
     int? revision,
     Object? conflictTitle = _sentinel,
     bool clearConflictTitle = false,
+    bool? conflictDeleted,
+    bool clearConflict = false,
   }) {
     return ProjectEntry(
       id: id ?? this.id,
       title: title ?? this.title,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
-      conflictTitle: clearConflictTitle
+      conflictTitle: clearConflict || clearConflictTitle
           ? null
           : (conflictTitle == _sentinel
               ? this.conflictTitle
               : conflictTitle as String?),
+      conflictDeleted:
+          clearConflict ? false : (conflictDeleted ?? this.conflictDeleted),
     );
   }
 
@@ -49,6 +57,7 @@ class ProjectEntry {
         'updatedAt': updatedAt,
         'revision': revision,
         if (conflictTitle != null) 'conflictTitle': conflictTitle,
+        if (conflictDeleted) 'conflictDeleted': true,
       };
 
   factory ProjectEntry.fromJson(Map<String, dynamic> json) {
@@ -58,6 +67,7 @@ class ProjectEntry {
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
       conflictTitle: json['conflictTitle'] as String?,
+      conflictDeleted: json['conflictDeleted'] as bool? ?? false,
     );
   }
 }

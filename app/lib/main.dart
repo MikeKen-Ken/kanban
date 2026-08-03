@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 import 'controllers/board_controller.dart';
 import 'features/project/project_theme.dart';
 import 'screens/home_screen.dart';
+import 'utils/windows_clipboard_history_paste.dart';
 import 'webdav_sync/webdav_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final controller = await BoardController.create();
   runApp(KanbanApp(controller: controller));
+  // 修复 Windows Win+V 剪贴板历史无法粘贴到输入框（flutter#143997）
+  installWindowsClipboardHistoryPasteFix();
 }
 
 class KanbanApp extends StatelessWidget {

@@ -50,6 +50,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late List<CardAttachment> _attachments;
   int? _colorValue;
   final _checklistInput = TextEditingController();
+  bool _persisted = false;
+  bool _skipPersist = false;
 
   Iterable<TextEditingController> get _textControllers =>
       [_titleController, _descController, _checklistInput];
@@ -87,29 +89,117 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void _safeSetState(VoidCallback fn) =>
       imeSafeSetState(fn, _textControllers);
 
-  Future<void> _save() async {
+  String get _effectiveTitle {
     final title = _titleController.text.trim();
-    if (title.isEmpty) return;
+    return title.isEmpty ? widget.card.title : title;
+  }
 
-    final controller = context.read<BoardController>();
-    await controller.updateCardFull(
+  String? get _effectiveDescription {
+    final desc = _descController.text.trim();
+    return desc.isEmpty ? null : desc;
+  }
+
+  bool _isDirty() {
+    final originalDesc = widget.card.description?.trim();
+    final nextDesc = _effectiveDescription;
+    final originalDue = widget.card.dueDate;
+    final nextDue = _dueDate?.millisecondsSinceEpoch;
+    if (_effectiveTitle != widget.card.title) return true;
+    if (nextDesc != (originalDesc == null || originalDesc.isEmpty ? null : originalDesc)) {
+      return true;
+    }
+    if (_completed != widget.card.completed) return true;
+    if (nextDue != originalDue) return true;
+    if (_priority != widget.card.priority) return true;
+    if (!_listEquals(_labels, widget.card.labels)) return true;
+    if (!_checklistEquals(_checklist, widget.card.checklist)) return true;
+    if (_colorValue != widget.card.colorValue) return true;
+    if (!_attachmentIdsEqual(_attachments, widget.card.sortedAttachments)) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static bool _checklistEquals(List<ChecklistItem> a, List<ChecklistItem> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id ||
+          a[i].text != b[i].text ||
+          a[i].completed != b[i].completed) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _attachmentIdsEqual(
+    List<CardAttachment> a,
+    List<CardAttachment> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id || a[i].order != b[i].order) return false;
+    }
+    return true;
+  }
+
+  /// 持久化当前编辑；点击周边/关闭/返回时也会调用。
+  Future<void> _persist() async {
+    if (_persisted || _skipPersist) return;
+    if (!_isDirty()) {
+      _persisted = true;
+      return;
+    }
+
+    // 在可能 dispose 之前同步快照，再异步写入。
+    final title = _effectiveTitle;
+    final description = _effectiveDescription;
+    final completed = _completed;
+    final dueDate = _dueDate?.millisecondsSinceEpoch;
+    final clearDueDate = _dueDate == null;
+    final priority = _priority;
+    final labels = List<String>.from(_labels);
+    final checklist = List<ChecklistItem>.from(_checklist);
+    final attachments = List<CardAttachment>.from(_attachments);
+    final colorValue = _colorValue;
+    final clearColor = _colorValue == null;
+
+    _persisted = true;
+    await _boardController.updateCardFull(
       widget.columnId,
       widget.card.id,
       title: title,
-      description: _descController.text.trim().isEmpty
-          ? null
-          : _descController.text.trim(),
-      completed: _completed,
-      dueDate: _dueDate?.millisecondsSinceEpoch,
-      clearDueDate: _dueDate == null,
-      priority: _priority,
-      labels: _labels,
-      checklist: _checklist,
-      attachments: _attachments,
-      colorValue: _colorValue,
-      clearColor: _colorValue == null,
+      description: description,
+      completed: completed,
+      dueDate: dueDate,
+      clearDueDate: clearDueDate,
+      priority: priority,
+      labels: labels,
+      checklist: checklist,
+      attachments: attachments,
+      colorValue: colorValue,
+      clearColor: clearColor,
     );
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    await _persist();
     if (mounted) Navigator.pop(context);
+  }
+
+  void _closeWithoutPersist() {
+    _skipPersist = true;
+    Navigator.pop(context);
   }
 
   Future<void> _pickDueDate() async {
@@ -373,17 +463,25 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       _boardController.missingAttachmentIds,
     );
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return Material(
-            child: Column(
-              children: [
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          // 点击遮罩/关闭/系统返回时自动保存；删除与冲突解决会跳过。
+          _persist();
+        }
+      },
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Material(
+              child: Column(
+                children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
                   child: Row(
@@ -413,7 +511,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         cardId: widget.card.id,
                       ),
                       IconButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () => Navigator.maybePop(context),
                         icon: const Icon(Icons.close),
                       ),
                     ],
@@ -461,7 +559,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                     widget.card.id,
                                     CardConflictResolution.keepPrimary,
                                   );
-                                  if (context.mounted) Navigator.pop(context);
+                                  if (context.mounted) _closeWithoutPersist();
                                 },
                                 child: const Text('保留当前'),
                               ),
@@ -472,7 +570,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                     widget.card.id,
                                     CardConflictResolution.keepOther,
                                   );
-                                  if (context.mounted) Navigator.pop(context);
+                                  if (context.mounted) _closeWithoutPersist();
                                 },
                                 child: Text(
                                   widget.card.conflictDeleted ? '确认删除' : '保留另一份',
@@ -796,7 +894,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             await context
                                 .read<BoardController>()
                                 .deleteCard(widget.columnId, widget.card.id);
-                            if (context.mounted) Navigator.pop(context);
+                            if (context.mounted) _closeWithoutPersist();
                           }
                         },
                         child: Text(
@@ -816,6 +914,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
             ),
           );
         },
+      ),
       ),
     );
   }

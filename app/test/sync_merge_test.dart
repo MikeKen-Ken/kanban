@@ -3,6 +3,7 @@ import 'package:kanban/features/kanban/column_card_preferences.dart';
 import 'package:kanban/features/project/project_settings.dart';
 import 'package:kanban/features/project/projects_manifest.dart';
 import 'package:kanban/features/sync_conflict/sync_conflict.dart';
+import 'package:kanban/features/trash/trash_models.dart';
 import 'package:kanban/models/kanban_models.dart';
 
 KanbanCard _card({
@@ -183,6 +184,118 @@ void main() {
     expect(merged.projects.map((p) => p.id).toSet(), {'a', 'b'});
   });
 
+  test('Manifest 远端删且本地相对 base 未改 → 采纳删除', () {
+    const keep = ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
+    const gone = ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
+    final base = ProjectsManifest(
+      projects: [keep, gone],
+      updatedAt: 1,
+      revision: 1,
+    );
+    final local = base;
+    final remote = ProjectsManifest(
+      projects: [keep],
+      updatedAt: 2,
+      revision: 2,
+    );
+    final merged = mergeManifests(local: local, remote: remote, base: base);
+    expect(merged.projects.map((p) => p.id).toSet(), {'a'});
+  });
+
+  test('Manifest 远端删但本地改过 → 保留并挂 conflictDeleted', () {
+    const keep = ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
+    const goneBase =
+        ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
+    const goneLocal =
+        ProjectEntry(id: 'b', title: 'B改过', updatedAt: 50, revision: 2);
+    final base = ProjectsManifest(
+      projects: [keep, goneBase],
+      updatedAt: 1,
+      revision: 1,
+    );
+    final local = ProjectsManifest(
+      projects: [keep, goneLocal],
+      updatedAt: 50,
+      revision: 2,
+    );
+    final remote = ProjectsManifest(
+      projects: [keep],
+      updatedAt: 2,
+      revision: 2,
+    );
+    final merged = mergeManifests(local: local, remote: remote, base: base);
+    expect(merged.projects.map((p) => p.id).toSet(), {'a', 'b'});
+    final b = merged.projects.firstWhere((p) => p.id == 'b');
+    expect(b.title, 'B改过');
+    expect(b.conflictDeleted, isTrue);
+  });
+
+  test('Manifest 无 base 时远端缺项目 → 保留本地（避免误删离线新建）', () {
+    final local = ProjectsManifest(
+      projects: [
+        const ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
+        const ProjectEntry(id: 'new', title: '新建', updatedAt: 9, revision: 1),
+      ],
+      updatedAt: 9,
+      revision: 2,
+    );
+    final remote = ProjectsManifest(
+      projects: [
+        const ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
+      ],
+      updatedAt: 1,
+      revision: 1,
+    );
+    final merged = mergeManifests(local: local, remote: remote);
+    expect(merged.projects.map((p) => p.id).toSet(), {'a', 'new'});
+  });
+
+  test('Manifest 本地删且远端相对 base 未改 → 保持删除', () {
+    const keep = ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
+    const gone = ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
+    final base = ProjectsManifest(
+      projects: [keep, gone],
+      updatedAt: 1,
+      revision: 1,
+    );
+    final local = ProjectsManifest(
+      projects: [keep],
+      updatedAt: 3,
+      revision: 2,
+    );
+    final remote = base;
+    final merged = mergeManifests(local: local, remote: remote, base: base);
+    expect(merged.projects.map((p) => p.id).toSet(), {'a'});
+  });
+
+  test('Manifest 本地删但远端改过 → 保留远端并挂 conflictDeleted', () {
+    const keep = ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
+    const goneBase =
+        ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
+    const goneRemote =
+        ProjectEntry(id: 'b', title: '远端改', updatedAt: 80, revision: 3);
+    final base = ProjectsManifest(
+      projects: [keep, goneBase],
+      updatedAt: 1,
+      revision: 1,
+    );
+    final local = ProjectsManifest(
+      projects: [keep],
+      updatedAt: 3,
+      revision: 2,
+    );
+    final remote = ProjectsManifest(
+      projects: [keep, goneRemote],
+      updatedAt: 80,
+      revision: 3,
+    );
+    final merged = mergeManifests(local: local, remote: remote, base: base);
+    expect(merged.projects.map((p) => p.id).toSet(), {'a', 'b'});
+    final b = merged.projects.firstWhere((p) => p.id == 'b');
+    expect(b.title, '远端改');
+    expect(b.conflictDeleted, isTrue);
+  });
+
   test('旧 JSON 无 conflict 字段仍可解析', () {
     final card = KanbanCard.fromJson({
       'id': 'c1',
@@ -262,5 +375,103 @@ void main() {
     );
     final merged = mergeBoards(local: empty, remote: empty, base: base);
     expect(merged.columns.first.cards, isEmpty);
+  });
+
+  test('工作区远端删未改项目 → 从清单移除并写入回收站', () {
+    const keepEntry =
+        ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
+    const goneEntry =
+        ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
+    final keepBoard = KanbanBoard.empty(id: 'a').copyWith(revision: 1, updatedAt: 1);
+    final goneBoard = KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
+    final base = ProjectWorkspaceSnapshot(
+      manifest: ProjectsManifest(
+        projects: [keepEntry, goneEntry],
+        updatedAt: 1,
+        revision: 1,
+      ),
+      boards: {'a': keepBoard, 'b': goneBoard},
+      settings: {
+        'a': const ProjectSettings(),
+        'b': const ProjectSettings(),
+      },
+    );
+    final remoteTrash = TrashBin(
+      items: [
+        TrashItem.forProject(
+          trashId: 't1',
+          deletedAt: 200,
+          entry: goneEntry,
+          board: goneBoard,
+          settings: const ProjectSettings(),
+          projectTrash: TrashBin.empty,
+        ),
+      ],
+      updatedAt: 200,
+      revision: 1,
+    );
+    final local = base;
+    final remote = ProjectWorkspaceSnapshot(
+      manifest: ProjectsManifest(
+        projects: [keepEntry],
+        updatedAt: 2,
+        revision: 2,
+      ),
+      boards: {'a': keepBoard},
+      settings: {'a': const ProjectSettings()},
+      appTrash: remoteTrash,
+    );
+
+    final merged = mergeWorkspaces(local: local, remote: remote, base: base);
+    expect(merged.manifest.projects.map((p) => p.id).toSet(), {'a'});
+    expect(merged.boards.containsKey('b'), isFalse);
+    expect(
+      merged.appTrash.items.any(
+        (i) => i.type == TrashItemType.project && i.projectId == 'b',
+      ),
+      isTrue,
+    );
+  });
+
+  test('工作区远端删但本地改过看板内容 → conflictDeleted', () {
+    const keepEntry =
+        ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
+    const goneEntry =
+        ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
+    final keepBoard = KanbanBoard.empty(id: 'a').copyWith(revision: 1, updatedAt: 1);
+    final goneBase = KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
+    final goneLocal = goneBase.copyWith(revision: 5, updatedAt: 500, title: '本地板');
+    final base = ProjectWorkspaceSnapshot(
+      manifest: ProjectsManifest(
+        projects: [keepEntry, goneEntry],
+        updatedAt: 1,
+        revision: 1,
+      ),
+      boards: {'a': keepBoard, 'b': goneBase},
+      settings: {
+        'a': const ProjectSettings(),
+        'b': const ProjectSettings(),
+      },
+    );
+    final local = ProjectWorkspaceSnapshot(
+      manifest: base.manifest,
+      boards: {'a': keepBoard, 'b': goneLocal},
+      settings: base.settings,
+    );
+    final remote = ProjectWorkspaceSnapshot(
+      manifest: ProjectsManifest(
+        projects: [keepEntry],
+        updatedAt: 2,
+        revision: 2,
+      ),
+      boards: {'a': keepBoard},
+      settings: {'a': const ProjectSettings()},
+    );
+
+    final merged = mergeWorkspaces(local: local, remote: remote, base: base);
+    expect(merged.manifest.projects.map((p) => p.id).toSet(), {'a', 'b'});
+    final b = merged.manifest.projects.firstWhere((p) => p.id == 'b');
+    expect(b.conflictDeleted, isTrue);
+    expect(merged.boards['b']?.title, '本地板');
   });
 }

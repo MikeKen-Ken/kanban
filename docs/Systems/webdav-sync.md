@@ -30,11 +30,11 @@
 
 | 实体 | 策略 |
 |---|---|
-| Manifest | 按项目 id **并集**；同 id 标题冲突挂 `conflictTitle` |
+| Manifest | 有 base 时传播删除：一侧缺且对侧相对 base 未改 → 采纳删除；对侧改过（条目或看板/设置内容）→ 挂 `conflictDeleted`；无 base 时按 id **并集**（避免误删离线新建）。同 id 标题冲突挂 `conflictTitle` |
 | Board | 列 id 并集；列元数据 LWW；卡片见下 |
 | Card | 非重叠字段自动合；同字段冲突 / 删改冲突 → `conflictSide` |
 | Settings | 字段级合并；冲突挂 `conflictSide` |
-| Trash | 按条目 id 并集 |
+| Trash | 按条目 id 并集；项目被采纳删除且回收站尚无快照时补写项目条目 |
 
 合并结果相对远端有变更时再 push，避免并集内容只留在本机。
 
@@ -42,7 +42,7 @@
 
 - 卡片：`conflictSide`（另一侧完整快照）、`conflictColumnId`、`conflictDeleted`（删除意图）
 - 看板：`conflictTitle`
-- 项目条目：`conflictTitle`
+- 项目条目：`conflictTitle`、`conflictDeleted`（删 vs 改）
 - 设置：`conflictSide`
 
 冲突字段会随 JSON 同步到 WebDAV，其它端可见。
@@ -52,7 +52,8 @@
 1. 看板卡片显示「冲突」角标与边框
 2. 打开详情：保留当前 / 保留另一份（或确认删除）
 3. `BoardController.resolveCardConflict` 清空冲突字段并 `bump` 后推送
-4. 顶栏同步指示器显示未解决冲突数量
+4. 项目删改冲突：项目切换器显示「冲突」，可「保留项目」或「确认删除」（`resolveProjectConflict`）
+5. 顶栏同步指示器显示未解决冲突数量
 
 ## 明确不做（二期）
 

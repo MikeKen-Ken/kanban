@@ -109,6 +109,42 @@ class ProjectSwitcher extends StatelessWidget {
     }
   }
 
+  Future<void> _resolveProjectConflict(
+    BuildContext context,
+    ProjectEntry project,
+  ) async {
+    final controller = context.read<BoardController>();
+    final choice = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('同步冲突'),
+        content: Text(
+          '另一侧删除了「${project.title}」，但本机有未同步的修改。\n'
+          '选择保留项目，或确认删除并移至回收站。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('确认删除'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('保留项目'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    await controller.resolveProjectConflict(
+      project.id,
+      keepProject: choice,
+    );
+  }
+
   Widget _sortModeTile(
     BuildContext context, {
     required ProjectSortMode mode,
@@ -230,13 +266,42 @@ class ProjectSwitcher extends StatelessWidget {
                       size: 18,
                       color: isActive ? theme.colorScheme.primary : null,
                     ),
-                    title: Text(
-                      project.title,
-                      overflow: TextOverflow.ellipsis,
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            project.title,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (project.conflictDeleted) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '冲突',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (project.conflictDeleted)
+                          IconButton(
+                            tooltip: '解决同步冲突',
+                            icon: Icon(
+                              Icons.error_outline,
+                              size: 18,
+                              color: theme.colorScheme.error,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () async {
+                              Navigator.pop(context);
+                              await _resolveProjectConflict(context, project);
+                            },
+                          ),
                         IconButton(
                           tooltip: isPinned ? '取消置顶' : '置顶',
                           icon: Icon(

@@ -155,11 +155,19 @@ ProjectSettings mergeSettings({
   );
 }
 
-/// Manifest：按项目 id 并集；同 id 标题冲突时挂 conflictTitle
+bool _projectEntryChanged(ProjectEntry current, ProjectEntry base) {
+  return current.title != base.title ||
+      current.revision != base.revision ||
+      current.updatedAt != base.updatedAt;
+}
+
+/// Manifest：有 SyncBase 时传播删除；无 base 时并集；同 id 标题冲突挂 conflictTitle
 ProjectsManifest mergeManifests({
   required ProjectsManifest local,
   required ProjectsManifest remote,
   ProjectsManifest? base,
+  Set<String> localContentChangedIds = const {},
+  Set<String> remoteContentChangedIds = const {},
 }) {
   final localById = {for (final p in local.projects) p.id: p};
   final remoteById = {for (final p in remote.projects) p.id: p};
@@ -179,15 +187,29 @@ ProjectsManifest mergeManifests({
     final b = baseById[id];
 
     if (l != null && r == null) {
-      // 远端删：若有 base 且本地未改标题/条目，可接受删除；第一期并集保留本地新增/仍在侧
-      if (base != null && b != null && !localById.containsKey(id)) {
+      // 远端缺：无 base / 本地新建 → 保留；有 base 且未改 → 采纳删除；本地改过 → 删改冲突
+      if (base == null || b == null) {
+        merged.add(l);
         continue;
       }
-      merged.add(l);
+      final localChanged = _projectEntryChanged(l, b) ||
+          localContentChangedIds.contains(id);
+      if (localChanged) {
+        merged.add(l.copyWith(conflictDeleted: true));
+      }
       continue;
     }
     if (l == null && r != null) {
-      merged.add(r);
+      // 本地缺：无 base / 远端新建 → 保留；有 base 且远端未改 → 采纳本地删除；远端改过 → 删改冲突
+      if (base == null || b == null) {
+        merged.add(r);
+        continue;
+      }
+      final remoteChanged = _projectEntryChanged(r, b) ||
+          remoteContentChangedIds.contains(id);
+      if (remoteChanged) {
+        merged.add(r.copyWith(conflictDeleted: true));
+      }
       continue;
     }
     if (l == null || r == null) continue;
@@ -220,6 +242,7 @@ ProjectsManifest mergeManifests({
       conflictTitle = l.conflictTitle ?? r.conflictTitle;
     }
 
+    final conflictDeleted = l.conflictDeleted || r.conflictDeleted;
     merged.add(
       ProjectEntry(
         id: id,
@@ -227,8 +250,17 @@ ProjectsManifest mergeManifests({
         updatedAt: l.updatedAt >= r.updatedAt ? l.updatedAt : r.updatedAt,
         revision: l.revision >= r.revision ? l.revision : r.revision,
         conflictTitle: conflictTitle,
+        conflictDeleted: conflictDeleted,
       ),
     );
+  }
+
+  // note: 合并结果不能清空全部项目；若误删导致空清单，回退为并集保底
+  if (merged.isEmpty && allIds.isNotEmpty) {
+    for (final id in allIds) {
+      final entry = localById[id] ?? remoteById[id];
+      if (entry != null) merged.add(entry);
+    }
   }
 
   return ProjectsManifest(
@@ -240,29 +272,108 @@ ProjectsManifest mergeManifests({
   );
 }
 
+bool _boardMetaChanged(KanbanBoard? current, KanbanBoard? baseBoard) {
+  if (current == null && baseBoard == null) return false;
+  if (current == null || baseBoard == null) return true;
+  return current.revision != baseBoard.revision ||
+      current.updatedAt != baseBoard.updatedAt ||
+      current.title != baseBoard.title;
+}
+
+bool _settingsMetaChanged(ProjectSettings? current, ProjectSettings? baseSettings) {
+  final cur = current ?? const ProjectSettings();
+  final baseVal = baseSettings ?? const ProjectSettings();
+  if (_isUninitializedSettings(cur) && _isUninitializedSettings(baseVal)) {
+    return false;
+  }
+  return cur.revision != baseVal.revision ||
+      cur.updatedAt != baseVal.updatedAt ||
+      _settingsContentDiffers(cur, baseVal);
+}
+
+Set<String> _contentChangedProjectIds({
+  required ProjectWorkspaceSnapshot side,
+  required ProjectWorkspaceSnapshot? base,
+}) {
+  if (base == null) return {};
+  final ids = <String>{
+    ...side.boards.keys,
+    ...side.settings.keys,
+    ...base.boards.keys,
+    ...base.settings.keys,
+  };
+  final changed = <String>{};
+  for (final id in ids) {
+    if (_boardMetaChanged(side.boards[id], base.boards[id]) ||
+        _settingsMetaChanged(side.settings[id], base.settings[id])) {
+      changed.add(id);
+    }
+  }
+  return changed;
+}
+
+bool _appTrashHasProject(TrashBin trash, String projectId) {
+  return trash.items.any(
+    (item) =>
+        item.type == TrashItemType.project && item.projectId == projectId,
+  );
+}
+
+TrashBin _ensureDeletedProjectInAppTrash({
+  required TrashBin appTrash,
+  required String projectId,
+  required ProjectEntry? entry,
+  required KanbanBoard? board,
+  required ProjectSettings? settings,
+  required TrashBin? projectTrash,
+}) {
+  if (_appTrashHasProject(appTrash, projectId)) return appTrash;
+  if (entry == null || board == null) return appTrash;
+  return appTrash.bump().copyWith(
+        items: [
+          TrashItem.forProject(
+            trashId: 'sync-del-$projectId',
+            deletedAt: DateTime.now().millisecondsSinceEpoch,
+            entry: entry.copyWith(clearConflict: true),
+            board: board,
+            settings: settings ?? const ProjectSettings(),
+            projectTrash: projectTrash ?? TrashBin.empty,
+          ),
+          ...appTrash.items,
+        ],
+      );
+}
+
 /// 工作区三路合并入口
 ProjectWorkspaceSnapshot mergeWorkspaces({
   required ProjectWorkspaceSnapshot local,
   required ProjectWorkspaceSnapshot remote,
   ProjectWorkspaceSnapshot? base,
 }) {
+  final localChangedIds = _contentChangedProjectIds(side: local, base: base);
+  final remoteChangedIds = _contentChangedProjectIds(side: remote, base: base);
+
   final mergedManifest = mergeManifests(
     local: local.manifest,
     remote: remote.manifest,
     base: base?.manifest,
+    localContentChangedIds: localChangedIds,
+    remoteContentChangedIds: remoteChangedIds,
   );
 
-  final allIds = <String>{
-    ...local.boards.keys,
-    ...remote.boards.keys,
-    ...mergedManifest.projects.map((p) => p.id),
+  final mergedIds = mergedManifest.projects.map((p) => p.id).toSet();
+  final priorIds = <String>{
+    ...local.manifest.projects.map((p) => p.id),
+    ...remote.manifest.projects.map((p) => p.id),
+    ...?base?.manifest.projects.map((p) => p.id),
   };
+  final deletedIds = priorIds.difference(mergedIds);
 
   final mergedBoards = <String, KanbanBoard>{};
   final mergedSettings = <String, ProjectSettings>{};
   final mergedProjectTrash = <String, TrashBin>{};
 
-  for (final id in allIds) {
+  for (final id in mergedIds) {
     final localBoard = local.boards[id];
     final remoteBoard = remote.boards[id];
     final baseBoard = base?.boards[id];
@@ -289,11 +400,35 @@ ProjectWorkspaceSnapshot mergeWorkspaces({
     mergedProjectTrash[id] = localTrash.mergeWith(remoteTrash);
   }
 
+  var appTrash = local.appTrash.mergeWith(remote.appTrash);
+  final localById = {
+    for (final p in local.manifest.projects) p.id: p,
+  };
+  final remoteById = {
+    for (final p in remote.manifest.projects) p.id: p,
+  };
+  final baseById = {
+    for (final p in base?.manifest.projects ?? const <ProjectEntry>[]) p.id: p,
+  };
+
+  for (final id in deletedIds) {
+    appTrash = _ensureDeletedProjectInAppTrash(
+      appTrash: appTrash,
+      projectId: id,
+      entry: localById[id] ?? remoteById[id] ?? baseById[id],
+      board: local.boards[id] ?? remote.boards[id] ?? base?.boards[id],
+      settings: local.settings[id] ?? remote.settings[id] ?? base?.settings[id],
+      projectTrash: local.projectTrash[id] ??
+          remote.projectTrash[id] ??
+          base?.projectTrash[id],
+    );
+  }
+
   return ProjectWorkspaceSnapshot(
     manifest: mergedManifest,
     boards: mergedBoards,
     settings: mergedSettings,
     projectTrash: mergedProjectTrash,
-    appTrash: local.appTrash.mergeWith(remote.appTrash),
+    appTrash: appTrash,
   );
 }
