@@ -66,9 +66,7 @@ class KanbanBoard {
         'updatedAt': updatedAt,
         'revision': revision,
         'version': 2,
-        'columns': columns
-            .map((c) => {'id': c.id, 'order': c.order})
-            .toList(),
+        'columns': columns.map((c) => {'id': c.id, 'order': c.order}).toList(),
         if (conflictTitle != null) 'conflictTitle': conflictTitle,
       };
 
@@ -320,6 +318,9 @@ class KanbanCard {
     this.completed = false,
     this.completedAt,
     this.dueDate,
+    this.reminderAt,
+    this.recurrence = CardRecurrence.none,
+    this.recurrenceSeriesId,
     this.priority = CardPriority.none,
     this.labels = const [],
     this.checklist = const [],
@@ -339,6 +340,9 @@ class KanbanCard {
   final bool completed;
   final int? completedAt;
   final int? dueDate;
+  final int? reminderAt;
+  final CardRecurrence recurrence;
+  final String? recurrenceSeriesId;
   final CardPriority priority;
   final List<String> labels;
   final List<ChecklistItem> checklist;
@@ -360,8 +364,7 @@ class KanbanCard {
 
   bool get hasConflict => conflictSide != null || conflictDeleted;
 
-  int get checklistDone =>
-      checklist.where((item) => item.completed).length;
+  int get checklistDone => checklist.where((item) => item.completed).length;
 
   bool get hasChecklist => checklist.isNotEmpty;
 
@@ -385,6 +388,9 @@ class KanbanCard {
     bool? completed,
     Object? completedAt = _sentinel,
     Object? dueDate = _sentinel,
+    Object? reminderAt = _sentinel,
+    CardRecurrence? recurrence,
+    Object? recurrenceSeriesId = _sentinel,
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
@@ -403,10 +409,15 @@ class KanbanCard {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       completed: completed ?? this.completed,
-      completedAt: completedAt == _sentinel
-          ? this.completedAt
-          : completedAt as int?,
+      completedAt:
+          completedAt == _sentinel ? this.completedAt : completedAt as int?,
       dueDate: dueDate == _sentinel ? this.dueDate : dueDate as int?,
+      reminderAt:
+          reminderAt == _sentinel ? this.reminderAt : reminderAt as int?,
+      recurrence: recurrence ?? this.recurrence,
+      recurrenceSeriesId: recurrenceSeriesId == _sentinel
+          ? this.recurrenceSeriesId
+          : recurrenceSeriesId as String?,
       priority: priority ?? this.priority,
       labels: labels ?? this.labels,
       checklist: checklist ?? this.checklist,
@@ -442,6 +453,9 @@ class KanbanCard {
       'completed': completed,
       if (completedAt != null) 'completedAt': completedAt,
       if (dueDate != null) 'dueDate': dueDate,
+      if (reminderAt != null) 'reminderAt': reminderAt,
+      if (recurrence != CardRecurrence.none) 'recurrence': recurrence.name,
+      if (recurrenceSeriesId != null) 'recurrenceSeriesId': recurrenceSeriesId,
       if (priority != CardPriority.none) 'priority': priority.name,
       if (labels.isNotEmpty) 'labels': labels,
       if (checklist.isNotEmpty)
@@ -474,6 +488,9 @@ class KanbanCard {
       completed: json['completed'] as bool? ?? false,
       completedAt: json['completedAt'] as int?,
       dueDate: json['dueDate'] as int?,
+      reminderAt: json['reminderAt'] as int?,
+      recurrence: CardRecurrence.fromString(json['recurrence'] as String?),
+      recurrenceSeriesId: json['recurrenceSeriesId'] as String?,
       priority: CardPriority.fromString(json['priority'] as String?),
       labels: (json['labels'] as List<dynamic>? ?? [])
           .map((e) => e as String)
@@ -485,14 +502,14 @@ class KanbanCard {
           .map((e) => CardAttachment.fromJson(e as Map<String, dynamic>))
           .toList(),
       colorValue: json['color'] as int?,
-      conflictSide:
-          sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
+      conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
       conflictColumnId: json['conflictColumnId'] as String?,
       conflictDeleted: json['conflictDeleted'] as bool? ?? false,
     );
   }
 
-  bool matchesSearch(String query, {List<KanbanLabel> customLabels = const []}) {
+  bool matchesSearch(String query,
+      {List<KanbanLabel> customLabels = const []}) {
     if (query.isEmpty) return true;
     final q = query.toLowerCase();
     if (title.toLowerCase().contains(q)) return true;
@@ -505,5 +522,26 @@ class KanbanCard {
       if (label != null && label.name.toLowerCase().contains(q)) return true;
     }
     return false;
+  }
+}
+
+enum CardRecurrence {
+  none,
+  daily,
+  weekly,
+  monthly;
+
+  String get label => switch (this) {
+        CardRecurrence.none => '不重复',
+        CardRecurrence.daily => '每天',
+        CardRecurrence.weekly => '每周',
+        CardRecurrence.monthly => '每月',
+      };
+
+  static CardRecurrence fromString(String? value) {
+    return CardRecurrence.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => CardRecurrence.none,
+    );
   }
 }

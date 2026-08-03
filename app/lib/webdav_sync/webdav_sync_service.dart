@@ -9,6 +9,7 @@ import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/attachments/attachment_sync_plan.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/shared_content/shared_content.dart';
 import '../features/sync_conflict/sync_conflict.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
@@ -64,6 +65,7 @@ class WebDavSyncService {
 
   /// 上次开始同步尝试的时间（成功/失败都更新，用于节流）
   DateTime? _lastAttemptAt;
+
   /// 限流/失败后的冷却截止时间
   DateTime? _cooldownUntil;
   int _consecutiveFailures = 0;
@@ -373,7 +375,8 @@ class WebDavSyncService {
           bytes,
           thumb: thumb,
         );
-        return await _attachmentSync.exists(projectId, attachmentId, thumb: thumb);
+        return await _attachmentSync.exists(projectId, attachmentId,
+            thumb: thumb);
       }
 
       final expectedName = KanbanPaths.remoteProjectAttachmentFileName(
@@ -394,7 +397,8 @@ class WebDavSyncService {
           bytes,
           thumb: thumb,
         );
-        if (await _attachmentSync.exists(projectId, attachmentId, thumb: thumb)) {
+        if (await _attachmentSync.exists(projectId, attachmentId,
+            thumb: thumb)) {
           return true;
         }
       }
@@ -419,7 +423,8 @@ class WebDavSyncService {
     final keepIds = _attachmentSync.referencedIds(board, trash);
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
-    final remoteNames = await _listRemoteAttachmentNames(client, attachmentsDir);
+    final remoteNames =
+        await _listRemoteAttachmentNames(client, attachmentsDir);
 
     for (final id in keepIds) {
       for (final thumb in const [false, true]) {
@@ -655,6 +660,14 @@ class WebDavSyncService {
         KanbanPaths.remoteAppTrashPath(base),
         workspace.appTrash.toJson(),
       );
+      // 旧端/尚未接入共享存储的调用方会提供未初始化默认值，此时不能覆盖远端文件。
+      if (!workspace.sharedContent.isUninitialized) {
+        await _writeJson(
+          client,
+          KanbanPaths.remoteSharedContentPath(base),
+          workspace.sharedContent.toJson(),
+        );
+      }
 
       for (final entry in workspace.manifest.projects) {
         final board = workspace.boards[entry.id];
@@ -733,8 +746,8 @@ class WebDavSyncService {
       return KanbanBoard.fromJson(meta);
     }
 
-    final refs = (meta['columns'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
+    final refs =
+        (meta['columns'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final columns = <KanbanColumn>[];
     for (final ref in refs) {
       final id = ref['id'] as String;
@@ -829,9 +842,8 @@ class WebDavSyncService {
           client,
           KanbanPaths.remoteProjectTrashPath(base, projectId),
         );
-        projectTrash[projectId] = trashJson == null
-            ? TrashBin.empty
-            : TrashBin.fromJson(trashJson);
+        projectTrash[projectId] =
+            trashJson == null ? TrashBin.empty : TrashBin.fromJson(trashJson);
       }
 
       final appTrashJson = await _readJson(
@@ -841,6 +853,13 @@ class WebDavSyncService {
       final appTrash = appTrashJson == null
           ? TrashBin.empty
           : TrashBin.fromJson(appTrashJson);
+      final sharedContentJson = await _readJson(
+        client,
+        KanbanPaths.remoteSharedContentPath(base),
+      );
+      final sharedContent = sharedContentJson == null
+          ? SharedContent.empty
+          : SharedContent.fromJson(sharedContentJson);
 
       return ProjectWorkspaceSnapshot(
         manifest: manifest,
@@ -848,6 +867,7 @@ class WebDavSyncService {
         settings: settings,
         projectTrash: projectTrash,
         appTrash: appTrash,
+        sharedContent: sharedContent,
       );
     } on Object catch (e) {
       final message = e.toString().toLowerCase();

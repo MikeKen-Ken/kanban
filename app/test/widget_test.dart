@@ -21,18 +21,21 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final storage = BoardStorage(baseDirectory: tempDir, prefs: prefs);
     final board = KanbanBoard.empty(id: 'split-test');
-    await storage.saveBoard(board);
+    await storage.saveBoard(board.id, board);
 
     final dataDir = Directory(p.join(tempDir.path, 'kanban'));
-    final boardFile = File(p.join(dataDir.path, 'board.json'));
-    final todoFile = File(p.join(dataDir.path, 'columns', 'todo.json'));
+    final projectDir = Directory(
+      p.join(dataDir.path, 'projects', board.id),
+    );
+    final boardFile = File(p.join(projectDir.path, 'board.json'));
+    final todoFile = File(p.join(projectDir.path, 'columns', 'todo.json'));
 
     expect(await boardFile.exists(), isTrue);
     expect(await todoFile.exists(), isTrue);
     expect(await boardFile.readAsString(), contains('"version": 2'));
     expect(await todoFile.readAsString(), contains('"title": "待办"'));
 
-    final loaded = await storage.loadBoard();
+    final loaded = await storage.loadBoard(board.id);
     expect(loaded.columns.length, 3);
     expect(loaded.columns.first.id, 'todo');
   });

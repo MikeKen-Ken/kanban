@@ -1,5 +1,6 @@
 import '../project/project_settings.dart';
 import '../project/projects_manifest.dart';
+import '../shared_content/shared_content.dart';
 import '../trash/trash_models.dart';
 import '../../models/kanban_models.dart';
 
@@ -11,6 +12,7 @@ class ProjectWorkspaceSnapshot {
     required this.settings,
     this.projectTrash = const {},
     this.appTrash = TrashBin.empty,
+    this.sharedContent = SharedContent.empty,
   });
 
   final ProjectsManifest manifest;
@@ -18,14 +20,15 @@ class ProjectWorkspaceSnapshot {
   final Map<String, ProjectSettings> settings;
   final Map<String, TrashBin> projectTrash;
   final TrashBin appTrash;
+  final SharedContent sharedContent;
 
   Map<String, dynamic> toJson() => {
         'manifest': manifest.toJson(),
         'boards': boards.map((k, v) => MapEntry(k, v.toJson())),
         'settings': settings.map((k, v) => MapEntry(k, v.toJson())),
-        'projectTrash':
-            projectTrash.map((k, v) => MapEntry(k, v.toJson())),
+        'projectTrash': projectTrash.map((k, v) => MapEntry(k, v.toJson())),
         'appTrash': appTrash.toJson(),
+        'sharedContent': sharedContent.toJson(),
       };
 
   factory ProjectWorkspaceSnapshot.fromJson(Map<String, dynamic> json) {
@@ -49,6 +52,11 @@ class ProjectWorkspaceSnapshot {
       appTrash: json['appTrash'] == null
           ? TrashBin.empty
           : TrashBin.fromJson(json['appTrash'] as Map<String, dynamic>),
+      sharedContent: json['sharedContent'] is Map
+          ? SharedContent.fromJson(
+              Map<String, dynamic>.from(json['sharedContent'] as Map),
+            )
+          : SharedContent.empty,
     );
   }
 

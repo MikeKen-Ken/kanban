@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../models/kanban_models.dart';
 import '../../settings/settings_section.dart';
 import 'project_settings.dart';
 import 'project_theme.dart';
@@ -17,6 +18,7 @@ class ProjectSettingsScreen extends StatefulWidget {
 class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   late final TextEditingController _doneColumnController;
   late String _selectedThemeId;
+  late Map<String, int> _wipLimits;
   bool _saving = false;
 
   @override
@@ -25,9 +27,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     final settings = context.read<BoardController>().projectSettings;
     _doneColumnController =
         TextEditingController(text: settings.doneColumnName);
-    _selectedThemeId = settings.themeId.isEmpty
-        ? kDefaultProjectThemeId
-        : settings.themeId;
+    _selectedThemeId =
+        settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
+    _wipLimits = Map<String, int>.from(settings.columnWipLimits);
   }
 
   @override
@@ -47,14 +49,14 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
 
     setState(() => _saving = true);
     final controller = context.read<BoardController>();
-    final themeId = _selectedThemeId == kDefaultProjectThemeId
-        ? ''
-        : _selectedThemeId;
+    final themeId =
+        _selectedThemeId == kDefaultProjectThemeId ? '' : _selectedThemeId;
     // note: 主动保存视为采用当前编辑结果，一并清除未解决的设置冲突
     await controller.saveProjectSettings(
       controller.projectSettings.copyWith(
         doneColumnName: name,
         themeId: themeId,
+        columnWipLimits: _wipLimits,
         clearConflictSide: true,
       ),
     );
@@ -75,6 +77,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
       _doneColumnController.text = settings.doneColumnName;
       _selectedThemeId =
           settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
+      _wipLimits = Map<String, int>.from(settings.columnWipLimits);
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -96,17 +99,21 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     if (primary.themeId != other.themeId) {
       parts.add('主题：${_themeLabel(other.themeId)}');
     }
-    final prefsDiffer = primary.columnPreferences.length !=
-            other.columnPreferences.length ||
-        primary.columnPreferences.keys.any((key) {
-          final a = primary.columnPreferences[key];
-          final b = other.columnPreferences[key];
-          if (a == null || b == null) return true;
-          return a.sortMode != b.sortMode ||
-              a.pinnedCardIds.join(',') != b.pinnedCardIds.join(',');
-        });
+    final prefsDiffer =
+        primary.columnPreferences.length != other.columnPreferences.length ||
+            primary.columnPreferences.keys.any((key) {
+              final a = primary.columnPreferences[key];
+              final b = other.columnPreferences[key];
+              if (a == null || b == null) return true;
+              return a.sortMode != b.sortMode ||
+                  a.pinnedCardIds.join(',') != b.pinnedCardIds.join(',');
+            });
     if (prefsDiffer) {
       parts.add('列排序/置顶偏好不同');
+    }
+    if (primary.columnWipLimits.toString() !=
+        other.columnWipLimits.toString()) {
+      parts.add('列 WIP 上限不同');
     }
     if (parts.isEmpty) {
       return '另一侧为较旧或空默认设置，通常保留当前即可';
@@ -222,6 +229,48 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            SettingsSection(
+              icon: Icons.speed_outlined,
+              title: '在制品上限',
+              subtitle: '达到上限时高亮并提醒，但不会阻止继续添加或移动',
+              children: [
+                for (final column
+                    in controller.board?.columns ?? const <KanbanColumn>[])
+                  ListTile(
+                    title: Text(column.title),
+                    subtitle: Text(
+                      (_wipLimits[column.id] ?? 0) < 1
+                          ? '不限'
+                          : '建议最多 ${_wipLimits[column.id]} 张未完成卡片',
+                    ),
+                    trailing: SizedBox(
+                      width: 150,
+                      child: Slider(
+                        value: (_wipLimits[column.id] ?? 0)
+                            .clamp(0, 20)
+                            .toDouble(),
+                        min: 0,
+                        max: 20,
+                        divisions: 20,
+                        label: (_wipLimits[column.id] ?? 0) < 1
+                            ? '不限'
+                            : '${_wipLimits[column.id]}',
+                        onChanged: (value) {
+                          setState(() {
+                            final limit = value.round();
+                            if (limit < 1) {
+                              _wipLimits.remove(column.id);
+                            } else {
+                              _wipLimits[column.id] = limit;
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _saving ? null : _save,
@@ -321,8 +370,7 @@ class _ThemeOptionTile extends StatelessWidget {
             Text(
               preset.name,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
             ),
             if (selected)

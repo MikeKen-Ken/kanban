@@ -96,6 +96,10 @@ class TrashScreen extends StatelessWidget {
     );
     if (ok != true || !context.mounted) return;
     await controller.permanentlyDeleteTrashItem(item.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已永久删除「${item.displayName}」')),
+    );
   }
 
   Future<void> _confirmEmptyTrash(
@@ -106,7 +110,7 @@ class TrashScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清空回收站？'),
-        content: const Text('所有项目将被永久删除，无法恢复'),
+        content: const Text('所有回收项将被永久删除，无法恢复'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -124,6 +128,10 @@ class TrashScreen extends StatelessWidget {
     );
     if (ok != true || !context.mounted) return;
     await controller.emptyTrash();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('回收站已清空')),
+    );
   }
 
   @override

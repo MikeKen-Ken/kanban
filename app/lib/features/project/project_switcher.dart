@@ -40,7 +40,8 @@ class ProjectSwitcher extends StatelessWidget {
     }
   }
 
-  Future<void> _renameProject(BuildContext context, ProjectEntry project) async {
+  Future<void> _renameProject(
+      BuildContext context, ProjectEntry project) async {
     final controller = context.read<BoardController>();
     final textController = TextEditingController(text: project.title);
     final title = await showDialog<String>(
@@ -65,14 +66,12 @@ class ProjectSwitcher extends StatelessWidget {
       ),
     );
     if (title != null && title.isNotEmpty && title != project.title) {
-      if (project.id == controller.activeProjectId) {
-        await controller.renameActiveProject(title);
-      }
-      // note: 非当前项目的重命名通过同步 manifest 处理，暂仅支持当前项目
+      await controller.renameProject(project.id, title);
     }
   }
 
-  Future<void> _deleteProject(BuildContext context, ProjectEntry project) async {
+  Future<void> _deleteProject(
+      BuildContext context, ProjectEntry project) async {
     final controller = context.read<BoardController>();
     if (controller.projects.length <= 1) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -274,7 +273,7 @@ class ProjectSwitcher extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (project.conflictDeleted) ...[
+                        if (project.hasConflict) ...[
                           const SizedBox(width: 6),
                           Text(
                             '冲突',
@@ -302,6 +301,15 @@ class ProjectSwitcher extends StatelessWidget {
                               await _resolveProjectConflict(context, project);
                             },
                           ),
+                        IconButton(
+                          tooltip: '重命名项目',
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _renameProject(context, project);
+                          },
+                        ),
                         IconButton(
                           tooltip: isPinned ? '取消置顶' : '置顶',
                           icon: Icon(

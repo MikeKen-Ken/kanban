@@ -1,5 +1,4 @@
 import '../../models/kanban_models.dart';
-import 'kanban_labels.dart';
 
 /// 列内卡片排序方式
 enum CardSortMode {

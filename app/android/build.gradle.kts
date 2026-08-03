@@ -1,4 +1,6 @@
 import com.android.build.gradle.LibraryExtension
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 allprojects {
     repositories {
@@ -33,6 +35,11 @@ subprojects {
     pluginManager.withPlugin("com.android.library") {
         extensions.configure<LibraryExtension>("android") {
             compileSdk = 36
+        }
+        tasks.withType<KotlinJvmCompile>().configureEach {
+            compilerOptions.jvmTarget.set(
+                if (project.name == "pasteboard") JvmTarget.JVM_1_8 else JvmTarget.JVM_17,
+            )
         }
     }
 }

@@ -4,6 +4,7 @@ import '../project/projects_manifest.dart';
 import '../trash/trash_models.dart';
 import '../kanban/column_card_preferences.dart';
 import 'board_merge.dart';
+import 'shared_content_merge.dart';
 import 'workspace_snapshot.dart';
 
 bool _prefsEq(
@@ -25,6 +26,14 @@ bool _prefsEq(
   return true;
 }
 
+bool _intMapEq(Map<String, int> a, Map<String, int> b) {
+  if (a.length != b.length) return false;
+  for (final entry in a.entries) {
+    if (b[entry.key] != entry.value) return false;
+  }
+  return true;
+}
+
 /// 从未真正写入过的默认设置（远端缺文件时常被填成这个）
 bool _isUninitializedSettings(ProjectSettings s) =>
     s.updatedAt == 0 && s.revision == 0;
@@ -32,7 +41,8 @@ bool _isUninitializedSettings(ProjectSettings s) =>
 bool _settingsContentDiffers(ProjectSettings a, ProjectSettings b) =>
     a.doneColumnName != b.doneColumnName ||
     a.themeId != b.themeId ||
-    !_prefsEq(a.columnPreferences, b.columnPreferences);
+    !_prefsEq(a.columnPreferences, b.columnPreferences) ||
+    !_intMapEq(a.columnWipLimits, b.columnWipLimits);
 
 /// Settings：字段级合并；同字段冲突挂 conflictSide
 ProjectSettings mergeSettings({
@@ -54,16 +64,13 @@ ProjectSettings mergeSettings({
 
   if (base == null) {
     // note: 缺文件被填成默认桩时，直接采用已初始化一侧，避免幽灵冲突
-    if (_isUninitializedSettings(local) &&
-        !_isUninitializedSettings(remote)) {
+    if (_isUninitializedSettings(local) && !_isUninitializedSettings(remote)) {
       return remote;
     }
-    if (_isUninitializedSettings(remote) &&
-        !_isUninitializedSettings(local)) {
+    if (_isUninitializedSettings(remote) && !_isUninitializedSettings(local)) {
       return local;
     }
-    if (_isUninitializedSettings(local) &&
-        _isUninitializedSettings(remote)) {
+    if (_isUninitializedSettings(local) && _isUninitializedSettings(remote)) {
       return local;
     }
 
@@ -91,8 +98,7 @@ ProjectSettings mergeSettings({
           ? base
           : remote;
 
-  final doneLocalChanged =
-      effectiveLocal.doneColumnName != base.doneColumnName;
+  final doneLocalChanged = effectiveLocal.doneColumnName != base.doneColumnName;
   final doneRemoteChanged =
       effectiveRemote.doneColumnName != base.doneColumnName;
   final themeLocalChanged = effectiveLocal.themeId != base.themeId;
@@ -101,6 +107,10 @@ ProjectSettings mergeSettings({
       !_prefsEq(effectiveLocal.columnPreferences, base.columnPreferences);
   final prefsRemoteChanged =
       !_prefsEq(effectiveRemote.columnPreferences, base.columnPreferences);
+  final wipLocalChanged =
+      !_intMapEq(effectiveLocal.columnWipLimits, base.columnWipLimits);
+  final wipRemoteChanged =
+      !_intMapEq(effectiveRemote.columnWipLimits, base.columnWipLimits);
 
   final doneConflict = doneLocalChanged &&
       doneRemoteChanged &&
@@ -114,8 +124,14 @@ ProjectSettings mergeSettings({
         effectiveLocal.columnPreferences,
         effectiveRemote.columnPreferences,
       );
+  final wipConflict = wipLocalChanged &&
+      wipRemoteChanged &&
+      !_intMapEq(
+        effectiveLocal.columnWipLimits,
+        effectiveRemote.columnWipLimits,
+      );
 
-  if (doneConflict || themeConflict || prefsConflict) {
+  if (doneConflict || themeConflict || prefsConflict || wipConflict) {
     final localWins = effectiveLocal.updatedAt >= effectiveRemote.updatedAt;
     final primary = localWins ? effectiveLocal : effectiveRemote;
     final other = localWins ? effectiveRemote : effectiveLocal;
@@ -146,6 +162,11 @@ ProjectSettings mergeSettings({
         : prefsRemoteChanged
             ? effectiveRemote.columnPreferences
             : base.columnPreferences,
+    columnWipLimits: wipLocalChanged
+        ? effectiveLocal.columnWipLimits
+        : wipRemoteChanged
+            ? effectiveRemote.columnWipLimits
+            : base.columnWipLimits,
     updatedAt: effectiveLocal.updatedAt >= effectiveRemote.updatedAt
         ? effectiveLocal.updatedAt
         : effectiveRemote.updatedAt,
@@ -192,8 +213,8 @@ ProjectsManifest mergeManifests({
         merged.add(l);
         continue;
       }
-      final localChanged = _projectEntryChanged(l, b) ||
-          localContentChangedIds.contains(id);
+      final localChanged =
+          _projectEntryChanged(l, b) || localContentChangedIds.contains(id);
       if (localChanged) {
         merged.add(l.copyWith(conflictDeleted: true));
       }
@@ -205,8 +226,8 @@ ProjectsManifest mergeManifests({
         merged.add(r);
         continue;
       }
-      final remoteChanged = _projectEntryChanged(r, b) ||
-          remoteContentChangedIds.contains(id);
+      final remoteChanged =
+          _projectEntryChanged(r, b) || remoteContentChangedIds.contains(id);
       if (remoteChanged) {
         merged.add(r.copyWith(conflictDeleted: true));
       }
@@ -265,8 +286,9 @@ ProjectsManifest mergeManifests({
 
   return ProjectsManifest(
     projects: merged,
-    updatedAt:
-        local.updatedAt >= remote.updatedAt ? local.updatedAt : remote.updatedAt,
+    updatedAt: local.updatedAt >= remote.updatedAt
+        ? local.updatedAt
+        : remote.updatedAt,
     revision:
         local.revision >= remote.revision ? local.revision : remote.revision,
   );
@@ -280,7 +302,8 @@ bool _boardMetaChanged(KanbanBoard? current, KanbanBoard? baseBoard) {
       current.title != baseBoard.title;
 }
 
-bool _settingsMetaChanged(ProjectSettings? current, ProjectSettings? baseSettings) {
+bool _settingsMetaChanged(
+    ProjectSettings? current, ProjectSettings? baseSettings) {
   final cur = current ?? const ProjectSettings();
   final baseVal = baseSettings ?? const ProjectSettings();
   if (_isUninitializedSettings(cur) && _isUninitializedSettings(baseVal)) {
@@ -314,8 +337,7 @@ Set<String> _contentChangedProjectIds({
 
 bool _appTrashHasProject(TrashBin trash, String projectId) {
   return trash.items.any(
-    (item) =>
-        item.type == TrashItemType.project && item.projectId == projectId,
+    (item) => item.type == TrashItemType.project && item.projectId == projectId,
   );
 }
 
@@ -330,18 +352,18 @@ TrashBin _ensureDeletedProjectInAppTrash({
   if (_appTrashHasProject(appTrash, projectId)) return appTrash;
   if (entry == null || board == null) return appTrash;
   return appTrash.bump().copyWith(
-        items: [
-          TrashItem.forProject(
-            trashId: 'sync-del-$projectId',
-            deletedAt: DateTime.now().millisecondsSinceEpoch,
-            entry: entry.copyWith(clearConflict: true),
-            board: board,
-            settings: settings ?? const ProjectSettings(),
-            projectTrash: projectTrash ?? TrashBin.empty,
-          ),
-          ...appTrash.items,
-        ],
-      );
+    items: [
+      TrashItem.forProject(
+        trashId: 'sync-del-$projectId',
+        deletedAt: DateTime.now().millisecondsSinceEpoch,
+        entry: entry.copyWith(clearConflict: true),
+        board: board,
+        settings: settings ?? const ProjectSettings(),
+        projectTrash: projectTrash ?? TrashBin.empty,
+      ),
+      ...appTrash.items,
+    ],
+  );
 }
 
 /// 工作区三路合并入口
@@ -430,5 +452,10 @@ ProjectWorkspaceSnapshot mergeWorkspaces({
     settings: mergedSettings,
     projectTrash: mergedProjectTrash,
     appTrash: appTrash,
+    sharedContent: mergeSharedContent(
+      local: local.sharedContent,
+      remote: remote.sharedContent,
+      base: base?.sharedContent,
+    ),
   );
 }

@@ -1,18 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/sync_conflict/board_merge.dart';
+import 'package:kanban/features/project/projects_manifest.dart';
 import 'package:kanban/models/kanban_models.dart';
 import 'package:kanban/storage/kanban_paths.dart';
 
 void main() {
   test('merge prefers higher revision', () {
-    final local = KanbanBoard.empty(id: '1').copyWith(revision: 2, updatedAt: 100);
-    final remote = KanbanBoard.empty(id: '1').copyWith(revision: 3, updatedAt: 50);
+    final local =
+        KanbanBoard.empty(id: '1').copyWith(revision: 2, updatedAt: 100);
+    final remote =
+        KanbanBoard.empty(id: '1').copyWith(revision: 3, updatedAt: 50);
     expect(local.mergeWith(remote).revision, 3);
   });
 
   test('merge uses updatedAt when revision equal', () {
-    final local = KanbanBoard.empty(id: '1').copyWith(revision: 2, updatedAt: 100);
-    final remote = KanbanBoard.empty(id: '1').copyWith(revision: 2, updatedAt: 200);
+    final local =
+        KanbanBoard.empty(id: '1').copyWith(revision: 2, updatedAt: 100);
+    final remote =
+        KanbanBoard.empty(id: '1').copyWith(revision: 2, updatedAt: 200);
     expect(local.mergeWith(remote).updatedAt, 200);
   });
 
@@ -161,9 +166,36 @@ void main() {
     );
   });
 
+  test('看板与项目标题冲突可选择另一侧并清除标记', () {
+    final board = KanbanBoard.empty(id: '1').copyWith(
+      conflictTitle: '另一侧看板',
+    );
+    final resolvedBoard = board.copyWith(
+      title: board.conflictTitle,
+      clearConflictTitle: true,
+    );
+    expect(resolvedBoard.title, '另一侧看板');
+    expect(resolvedBoard.conflictTitle, isNull);
+
+    const project = ProjectEntry(
+      id: '1',
+      title: '当前项目',
+      updatedAt: 1,
+      revision: 1,
+      conflictTitle: '另一侧项目',
+    );
+    final resolvedProject = project.copyWith(
+      title: project.conflictTitle,
+      clearConflictTitle: true,
+    );
+    expect(resolvedProject.title, '另一侧项目');
+    expect(resolvedProject.conflictTitle, isNull);
+  });
+
   test('attachmentIdFromRemoteFileName parses main and thumb files', () {
     expect(
-      KanbanPaths.attachmentIdFromRemoteFileName('550e8400-e29b-41d4-a716-446655440000.jpg'),
+      KanbanPaths.attachmentIdFromRemoteFileName(
+          '550e8400-e29b-41d4-a716-446655440000.jpg'),
       '550e8400-e29b-41d4-a716-446655440000',
     );
     expect(

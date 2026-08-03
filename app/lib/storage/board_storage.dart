@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/shared_content/shared_content.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import 'board_storage_stub.dart'
@@ -26,6 +27,9 @@ abstract class BoardStorage {
 
   Future<TrashBin> loadAppTrash();
   Future<void> saveAppTrash(TrashBin trash);
+
+  Future<SharedContent> loadSharedContent();
+  Future<void> saveSharedContent(SharedContent content);
 
   /// 从 v2 单项目结构迁移到 v3 多项目结构
   Future<bool> migrateFromLegacyIfNeeded();

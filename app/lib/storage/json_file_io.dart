@@ -88,17 +88,17 @@ Map<String, dynamic>? tryDecodeJsonBytes(List<int> bytes, {String? path}) {
 
 String describeNonJsonPayload(List<int> bytes, {String? path}) {
   final prefix = path == null ? '' : '$path ';
-  if (bytes.isEmpty) return '${prefix}内容为空';
+  if (bytes.isEmpty) return '$prefix内容为空';
   final allZero = bytes.every((b) => b == 0);
-  if (allZero) return '${prefix}文件已损坏（全空字节）';
+  if (allZero) return '$prefix文件已损坏（全空字节）';
   if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
-    return '${prefix}收到的是图片二进制而非 JSON';
+    return '$prefix收到的是图片二进制而非 JSON';
   }
   if (bytes.isNotEmpty && (bytes[0] == 0x3C || bytes[0] == 0x7B)) {
     // < or { — { should have been accepted; < is HTML/XML
-    if (bytes[0] == 0x3C) return '${prefix}收到的是 HTML/XML 而非 JSON';
+    if (bytes[0] == 0x3C) return '$prefix收到的是 HTML/XML 而非 JSON';
   }
-  return '${prefix}不是有效的 JSON（${bytes.length} 字节）';
+  return '$prefix不是有效的 JSON（${bytes.length} 字节）';
 }
 
 /// 便于测试：检测 Uint8List

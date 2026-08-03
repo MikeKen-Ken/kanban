@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,12 +9,22 @@ import '../features/attachments/attachment_missing.dart';
 import '../features/attachments/attachment_refs.dart';
 import '../features/attachments/attachment_store.dart';
 import '../features/attachments/attachment_sync_adapter.dart';
-import '../features/attachments/card_image_add_source.dart';
 import '../features/attachments/card_image_picker.dart';
+import '../features/activity/activity_models.dart';
+import '../features/import_export/backup_archive_service.dart';
 import '../features/project/project_list_preferences.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/project/project_theme.dart';
+import '../features/quick_capture/quick_capture.dart';
+import '../features/reminders/recurrence_service.dart';
+import '../features/reminders/reminder_scheduler.dart';
+import '../features/shared_content/shared_content.dart';
+import '../features/statistics/statistics_service.dart';
 import '../features/sync_conflict/sync_conflict.dart';
+import '../features/templates/card_template.dart';
+import '../features/undo/undo_stack.dart';
+import '../features/views/views.dart';
 import '../models/kanban_models.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_labels.dart';
@@ -35,11 +44,15 @@ class BoardController extends ChangeNotifier {
 
   final BoardRepository _repository;
   final WebDavSyncService _syncService;
+  final ReminderScheduler _reminderScheduler = ReminderScheduler();
+  final UndoStack _undoStack = UndoStack();
+  static const RecurrenceService _recurrenceService = RecurrenceService();
 
   KanbanBoard? board;
   ProjectsManifest? manifest;
   String? activeProjectId;
   ProjectSettings projectSettings = const ProjectSettings();
+  SharedContent sharedContent = SharedContent.empty;
   WebDavConfig webDavConfig = WebDavConfig.empty;
   AppSettings appSettings = AppSettings.platformDefault();
   TrashBin activeProjectTrash = TrashBin.empty;
@@ -55,6 +68,86 @@ class BoardController extends ChangeNotifier {
   String? get attachmentSyncWarning => _syncService.attachmentSyncWarning;
   DateTime? get lastSyncedAt => _syncService.lastSyncedAt;
   Stream<SyncStatus> get syncStatusStream => _syncService.statusStream;
+  bool get canUndo => _undoStack.canUndo;
+  String? get undoLabel => _undoStack.nextLabel;
+
+  Future<void> initializeReminders({bool requestPermission = false}) async {
+    try {
+      await _reminderScheduler.initialize();
+      if (requestPermission) {
+        await _reminderScheduler.requestPermission();
+      }
+      await _rescheduleReminders();
+    } catch (error) {
+      debugPrint('初始化任务提醒失败：$error');
+    }
+  }
+
+  Future<void> _rescheduleReminders() async {
+    final workspace = await _loadWorkspaceSnapshot();
+    await _reminderScheduler.rescheduleAll(workspace.boards);
+  }
+
+  Future<bool> undoLastAction() async {
+    final undone = await _undoStack.undo();
+    if (undone) notifyListeners();
+    return undone;
+  }
+
+  Future<Uint8List> createBackupArchive() async {
+    final workspace = await _loadWorkspaceSnapshot();
+    final attachments = <String, Uint8List>{};
+    final store = attachmentStore;
+    if (store != null) {
+      for (final project in workspace.manifest.projects) {
+        for (final attachmentId
+            in await store.listLocalAttachmentIds(project.id)) {
+          final source = await store.readBytes(
+            projectId: project.id,
+            attachmentId: attachmentId,
+            thumb: false,
+          );
+          if (source != null) {
+            attachments['attachments/${project.id}/$attachmentId'] = source;
+          }
+          final thumb = await store.readBytes(
+            projectId: project.id,
+            attachmentId: attachmentId,
+            thumb: true,
+          );
+          if (thumb != null) {
+            attachments['attachments/${project.id}/thumbs/$attachmentId'] =
+                thumb;
+          }
+        }
+      }
+    }
+    return const BackupArchiveService().encode(
+      BackupPackage(workspace: workspace, attachments: attachments),
+    );
+  }
+
+  Future<void> restoreBackupArchive(Uint8List bytes) async {
+    final package = const BackupArchiveService().decode(bytes);
+    await _applyWorkspaceSnapshot(package.workspace);
+    final store = attachmentStore;
+    if (store != null) {
+      for (final entry in package.attachments.entries) {
+        final segments = entry.key.split('/');
+        if (segments.length < 3) continue;
+        final isThumb = segments.length >= 4 && segments[2] == 'thumbs';
+        final attachmentId = isThumb ? segments[3] : segments[2];
+        await store.writeBytes(
+          projectId: segments[1],
+          attachmentId: attachmentId,
+          bytes: entry.value,
+          thumb: isThumb,
+        );
+      }
+    }
+    notifyListeners();
+    _syncService.schedulePush();
+  }
 
   List<ProjectEntry> get projects {
     final entries = manifest?.projects ?? const <ProjectEntry>[];
@@ -140,6 +233,176 @@ class BoardController extends ChangeNotifier {
     return manifest!.findById(activeProjectId!);
   }
 
+  List<SavedView> get savedViews => sharedContent.savedViews;
+  List<CardTemplate> get cardTemplates => sharedContent.cardTemplates;
+  List<ActivityEvent> get activeProjectActivity {
+    final events = [
+      ...(sharedContent.activityByProject[activeProjectId]?.events ??
+          const <ActivityEvent>[]),
+    ];
+    events.sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    return events;
+  }
+
+  Future<List<CardReference>> loadAllCardReferences() async {
+    final workspace = await _loadWorkspaceSnapshot();
+    return buildCardReferences(
+      manifest: workspace.manifest,
+      boards: workspace.boards,
+      customLabels: appSettings.customLabels,
+    );
+  }
+
+  Future<KanbanStatistics> loadStatistics() async {
+    final workspace = await _loadWorkspaceSnapshot();
+    return const StatisticsService().calculate(workspace.boards);
+  }
+
+  Future<void> saveView({
+    String? id,
+    required String name,
+    required FilterSpec filter,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final viewId = id ?? const Uuid().v4();
+    final existing =
+        sharedContent.savedViews.where((view) => view.id == viewId).firstOrNull;
+    final view = SavedView(
+      id: viewId,
+      name: name.trim(),
+      filter: filter,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    );
+    await _persistSharedContent(
+      sharedContent.copyWith(
+        savedViews: [
+          for (final item in sharedContent.savedViews)
+            if (item.id != viewId) item,
+          view,
+        ],
+      ),
+    );
+  }
+
+  Future<void> deleteSavedView(String id) async {
+    await _persistSharedContent(
+      sharedContent.copyWith(
+        savedViews:
+            sharedContent.savedViews.where((view) => view.id != id).toList(),
+      ),
+    );
+  }
+
+  Future<String> saveCardAsTemplate({
+    required KanbanCard card,
+    required String name,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final template = CardTemplate.fromCard(
+      id: const Uuid().v4(),
+      name: name.trim(),
+      card: card,
+      updatedAt: now,
+    );
+    await _persistSharedContent(
+      sharedContent.copyWith(
+        cardTemplates: [...sharedContent.cardTemplates, template],
+      ),
+    );
+    return template.id;
+  }
+
+  Future<String?> createCardFromTemplate({
+    required String templateId,
+    required String columnId,
+  }) async {
+    final template = sharedContent.cardTemplates
+        .where((item) => item.id == templateId)
+        .firstOrNull;
+    if (template == null || board == null) return null;
+    final cardId = const Uuid().v4();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final card = template.createCard(
+      cardId: cardId,
+      createdAt: now,
+      checklistIds: [
+        for (var i = 0; i < template.checklist.length; i++) const Uuid().v4(),
+      ],
+    );
+    final columns = board!.columns.map((column) {
+      if (column.id != columnId) return column;
+      return column.copyWith(
+        cards: [
+          ...column.cards,
+          card.copyWith(order: column.cards.length),
+        ],
+      );
+    }).toList();
+    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    return cardId;
+  }
+
+  Future<void> deleteCardTemplate(String id) async {
+    await _persistSharedContent(
+      sharedContent.copyWith(
+        cardTemplates: sharedContent.cardTemplates
+            .where((template) => template.id != id)
+            .toList(),
+      ),
+    );
+  }
+
+  Future<String?> quickCapture(QuickCaptureDraft draft) async {
+    if (board == null || draft.title.trim().isEmpty) return null;
+    final desiredColumn = draft.columnName?.trim();
+    final column = board!.columns.cast<KanbanColumn?>().firstWhere(
+          (item) =>
+              desiredColumn != null &&
+              item!.title.toLowerCase() == desiredColumn.toLowerCase(),
+          orElse: () => board!.columns.cast<KanbanColumn?>().firstWhere(
+                (item) => item!.id == 'todo',
+                orElse: () =>
+                    board!.columns.isEmpty ? null : board!.columns.first,
+              ),
+        );
+    if (column == null) return null;
+
+    final labelKeys = <String>[];
+    for (final name in draft.labels) {
+      final existing = appSettings.customLabels.cast<KanbanLabel?>().firstWhere(
+            (label) => label!.name.toLowerCase() == name.toLowerCase(),
+            orElse: () => null,
+          );
+      if (existing != null) {
+        labelKeys.add(existing.key);
+      } else {
+        labelKeys.add(
+          await addCustomLabel(
+            name,
+            projectThemeForId(projectSettings.themeId)
+                .defaultLabelColor
+                .toARGB32(),
+          ),
+        );
+      }
+    }
+
+    final priority = switch (draft.priority) {
+      QuickCapturePriority.low => CardPriority.low,
+      QuickCapturePriority.medium => CardPriority.medium,
+      QuickCapturePriority.high => CardPriority.high,
+      null => CardPriority.none,
+    };
+    return addCard(
+      column.id,
+      draft.title.trim(),
+      dueDate: draft.dueDate?.millisecondsSinceEpoch,
+      priority: priority,
+      labels: labelKeys,
+    );
+  }
+
   int get unresolvedConflictCount {
     var n = 0;
     if (board != null) {
@@ -162,8 +425,7 @@ class BoardController extends ChangeNotifier {
   static Future<BoardController> create() async {
     final prefs = await SharedPreferences.getInstance();
     final repository = BoardRepository(prefs);
-    final attachmentSync =
-        AttachmentSyncAdapter(repository.attachmentStore);
+    final attachmentSync = AttachmentSyncAdapter(repository.attachmentStore);
     late BoardController controller;
     final syncService = WebDavSyncService(
       loadConfig: () async => controller.webDavConfig,
@@ -201,6 +463,7 @@ class BoardController extends ChangeNotifier {
       settings: settings,
       projectTrash: projectTrash,
       appTrash: await _repository.loadAppTrash(),
+      sharedContent: await _repository.loadSharedContent(),
     );
   }
 
@@ -223,26 +486,26 @@ class BoardController extends ChangeNotifier {
       }
     }
     await _repository.saveAppTrash(workspace.appTrash);
+    await _repository.saveSharedContent(workspace.sharedContent);
 
     manifest = workspace.manifest;
     projectTrashes = Map<String, TrashBin>.from(workspace.projectTrash);
     appTrash = workspace.appTrash;
+    sharedContent = workspace.sharedContent;
+    await _mirrorSharedLabelsToLocalPreferences();
     final currentId = activeProjectId;
     if (currentId != null && workspace.manifest.findById(currentId) != null) {
       board = workspace.boards[currentId];
       projectSettings =
           workspace.settings[currentId] ?? const ProjectSettings();
-      activeProjectTrash =
-          workspace.projectTrash[currentId] ?? TrashBin.empty;
+      activeProjectTrash = workspace.projectTrash[currentId] ?? TrashBin.empty;
     } else if (workspace.manifest.projects.isNotEmpty) {
       final first = workspace.manifest.projects.first;
       activeProjectId = first.id;
       await _repository.saveActiveProjectId(first.id);
       board = workspace.boards[first.id];
-      projectSettings =
-          workspace.settings[first.id] ?? const ProjectSettings();
-      activeProjectTrash =
-          workspace.projectTrash[first.id] ?? TrashBin.empty;
+      projectSettings = workspace.settings[first.id] ?? const ProjectSettings();
+      activeProjectTrash = workspace.projectTrash[first.id] ?? TrashBin.empty;
     }
     await refreshMissingAttachments();
   }
@@ -253,13 +516,11 @@ class BoardController extends ChangeNotifier {
     projectTrashes = {};
     if (manifest != null) {
       for (final entry in manifest!.projects) {
-        projectTrashes[entry.id] =
-            await _repository.loadProjectTrash(entry.id);
+        projectTrashes[entry.id] = await _repository.loadProjectTrash(entry.id);
       }
     }
     if (activeProjectId != null) {
-      activeProjectTrash =
-          projectTrashes[activeProjectId!] ?? TrashBin.empty;
+      activeProjectTrash = projectTrashes[activeProjectId!] ?? TrashBin.empty;
     } else {
       activeProjectTrash = TrashBin.empty;
     }
@@ -286,8 +547,8 @@ class BoardController extends ChangeNotifier {
 
   Future<void> _addToActiveProjectTrash(TrashItem item) async {
     activeProjectTrash = activeProjectTrash.bump().copyWith(
-          items: [item, ...activeProjectTrash.items],
-        );
+      items: [item, ...activeProjectTrash.items],
+    );
     await _persistActiveProjectTrash();
   }
 
@@ -307,8 +568,7 @@ class BoardController extends ChangeNotifier {
       }
 
       board = await _repository.loadBoard(activeProjectId!);
-      projectSettings =
-          await _repository.loadProjectSettings(activeProjectId!);
+      projectSettings = await _repository.loadProjectSettings(activeProjectId!);
       await _loadTrashState();
     } catch (e) {
       errorMessage = e.toString();
@@ -338,6 +598,8 @@ class BoardController extends ChangeNotifier {
         board = await _repository.loadBoard(activeProjectId!);
         projectSettings =
             await _repository.loadProjectSettings(activeProjectId!);
+        sharedContent = await _repository.loadSharedContent();
+        await _initializeSharedLabels();
         await _loadTrashState();
       }
       await refreshMissingAttachments();
@@ -355,6 +617,77 @@ class BoardController extends ChangeNotifier {
     await _updateManifestEntry(title: next.title);
     notifyListeners();
     _syncService.schedulePush();
+  }
+
+  Future<void> _persistSharedContent(SharedContent next) async {
+    sharedContent = next.bump();
+    await _repository.saveSharedContent(sharedContent);
+    await _mirrorSharedLabelsToLocalPreferences();
+    notifyListeners();
+    _syncService.schedulePush();
+  }
+
+  Future<void> _recordActivity({
+    required String entityId,
+    required String entityTitle,
+    required ActivityAction action,
+    String entityType = 'card',
+    Map<String, String> details = const {},
+  }) async {
+    final projectId = activeProjectId;
+    if (projectId == null) return;
+    final logs = Map<String, ActivityLog>.from(sharedContent.activityByProject);
+    final current = logs[projectId] ?? const ActivityLog();
+    logs[projectId] = current.add(
+      ActivityEvent(
+        id: const Uuid().v4(),
+        projectId: projectId,
+        entityType: entityType,
+        entityId: entityId,
+        entityTitle: entityTitle,
+        action: action,
+        occurredAt: DateTime.now().millisecondsSinceEpoch,
+        details: details,
+      ),
+    );
+    await _persistSharedContent(
+      sharedContent.copyWith(activityByProject: logs),
+    );
+  }
+
+  Future<void> _initializeSharedLabels() async {
+    if (sharedContent.isUninitialized && appSettings.customLabels.isNotEmpty) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _persistSharedContent(
+        sharedContent.copyWith(
+          labels: [
+            for (final label in appSettings.customLabels)
+              SharedLabel(
+                id: label.key,
+                name: label.name,
+                colorValue: label.colorValue,
+                updatedAt: now,
+              ),
+          ],
+        ),
+      );
+      return;
+    }
+    await _mirrorSharedLabelsToLocalPreferences();
+  }
+
+  Future<void> _mirrorSharedLabelsToLocalPreferences() async {
+    if (sharedContent.isUninitialized) return;
+    final labels = [
+      for (final label in sharedContent.labels)
+        KanbanLabel(
+          key: label.id,
+          name: label.name,
+          color: Color(label.colorValue),
+        ),
+    ];
+    appSettings = appSettings.copyWith(customLabels: labels);
+    await _repository.saveAppSettings(appSettings);
   }
 
   Future<void> _persistProjectSettings(ProjectSettings next) async {
@@ -466,7 +799,8 @@ class BoardController extends ChangeNotifier {
     } else {
       pinned.insert(0, cardId);
     }
-    await _saveColumnPreferences(columnId, prefs.copyWith(pinnedCardIds: pinned));
+    await _saveColumnPreferences(
+        columnId, prefs.copyWith(pinnedCardIds: pinned));
   }
 
   ({List<String> pinned, Map<String, int> orders}) _pinnedAndOrdersFromDisplay(
@@ -538,7 +872,48 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> renameActiveProject(String title) async {
-    await updateTitle(title);
+    final projectId = activeProjectId;
+    if (projectId == null) return;
+    await renameProject(projectId, title);
+  }
+
+  /// 重命名任意项目，并保持项目清单与看板标题一致。
+  Future<void> renameProject(String projectId, String title) async {
+    final normalized = title.trim();
+    final entry = manifest?.findById(projectId);
+    if (entry == null || normalized.isEmpty) return;
+
+    final isActive = projectId == activeProjectId;
+    final targetBoard =
+        isActive ? board : await _repository.loadBoard(projectId);
+    if (targetBoard == null) return;
+    if (entry.title == normalized && targetBoard.title == normalized) return;
+
+    final nextBoard = _bump(
+      targetBoard.copyWith(
+        title: normalized,
+        clearConflictTitle: true,
+      ),
+    );
+    await _repository.saveBoard(projectId, nextBoard);
+    if (isActive) {
+      board = nextBoard;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final projects = manifest!.projects.map((project) {
+      if (project.id != projectId) return project;
+      return project.copyWith(
+        title: normalized,
+        updatedAt: now,
+        revision: project.revision + 1,
+        clearConflictTitle: true,
+      );
+    }).toList();
+    manifest = manifest!.bump().copyWith(projects: projects);
+    await _repository.saveManifest(manifest!);
+    notifyListeners();
+    _syncService.schedulePush();
   }
 
   Future<void> saveProjectSettings(ProjectSettings settings) async {
@@ -624,17 +999,42 @@ class BoardController extends ChangeNotifier {
 
   Future<String> addCustomLabel(String name, int colorValue) async {
     final key = const Uuid().v4();
-    final label = KanbanLabel(
-      key: key,
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final label = SharedLabel(
+      id: key,
       name: name,
-      color: Color(colorValue),
+      colorValue: colorValue,
+      updatedAt: now,
     );
-    await saveAppSettings(
-      appSettings.copyWith(
-        customLabels: [...appSettings.customLabels, label],
-      ),
+    await _persistSharedContent(
+      sharedContent.copyWith(labels: [...sharedContent.labels, label]),
     );
     return key;
+  }
+
+  /// 修改自定义标签名称或颜色；标签 key 不变，已有卡片引用无需迁移。
+  Future<bool> updateCustomLabel(
+    String key, {
+    required String name,
+    required int colorValue,
+  }) async {
+    final normalized = name.trim();
+    if (normalized.isEmpty) return false;
+    final index =
+        appSettings.customLabels.indexWhere((label) => label.key == key);
+    if (index < 0) return false;
+
+    final labels = [...sharedContent.labels];
+    final sharedIndex = labels.indexWhere((label) => label.id == key);
+    if (sharedIndex < 0) return false;
+    labels[sharedIndex] = SharedLabel(
+      id: key,
+      name: normalized,
+      colorValue: colorValue,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    await _persistSharedContent(sharedContent.copyWith(labels: labels));
+    return true;
   }
 
   Future<void> removeCustomLabel(String key) async {
@@ -655,10 +1055,9 @@ class BoardController extends ChangeNotifier {
     ];
     await _persistLabelTrash();
 
-    await saveAppSettings(
-      appSettings.copyWith(
-        customLabels:
-            appSettings.customLabels.where((l) => l.key != key).toList(),
+    await _persistSharedContent(
+      sharedContent.copyWith(
+        labels: sharedContent.labels.where((label) => label.id != key).toList(),
       ),
     );
   }
@@ -705,8 +1104,7 @@ class BoardController extends ChangeNotifier {
       ),
     );
 
-    final columns =
-        board!.columns.where((col) => col.id != columnId).toList();
+    final columns = board!.columns.where((col) => col.id != columnId).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
   }
 
@@ -722,23 +1120,23 @@ class BoardController extends ChangeNotifier {
     final settings = projectId == activeProjectId
         ? projectSettings
         : await _repository.loadProjectSettings(projectId);
-    final trash =
-        projectTrashes[projectId] ?? await _repository.loadProjectTrash(projectId);
+    final trash = projectTrashes[projectId] ??
+        await _repository.loadProjectTrash(projectId);
 
     final now = DateTime.now().millisecondsSinceEpoch;
     appTrash = appTrash.bump().copyWith(
-          items: [
-            TrashItem.forProject(
-              trashId: const Uuid().v4(),
-              deletedAt: now,
-              entry: entry,
-              board: projectBoard,
-              settings: settings,
-              projectTrash: trash,
-            ),
-            ...appTrash.items,
-          ],
-        );
+      items: [
+        TrashItem.forProject(
+          trashId: const Uuid().v4(),
+          deletedAt: now,
+          entry: entry,
+          board: projectBoard,
+          settings: settings,
+          projectTrash: trash,
+        ),
+        ...appTrash.items,
+      ],
+    );
 
     final remaining =
         manifest!.projects.where((p) => p.id != projectId).toList();
@@ -760,25 +1158,68 @@ class BoardController extends ChangeNotifier {
     return true;
   }
 
-  Future<void> addCard(String columnId, String title, {String? description}) async {
-    if (board == null) return;
+  Future<String?> addCard(
+    String columnId,
+    String title, {
+    String? description,
+    int? dueDate,
+    int? reminderAt,
+    CardRecurrence recurrence = CardRecurrence.none,
+    CardPriority priority = CardPriority.none,
+    List<String> labels = const [],
+  }) async {
+    if (board == null) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
+    final cardId = const Uuid().v4();
+    var added = false;
     final columns = board!.columns.map((col) {
       if (col.id != columnId) return col;
+      added = true;
       final cards = [
         ...col.cards,
         KanbanCard(
-          id: const Uuid().v4(),
+          id: cardId,
           title: title,
           description: description,
           order: col.cards.length,
           createdAt: now,
           updatedAt: now,
+          dueDate: dueDate,
+          reminderAt: reminderAt,
+          recurrence: recurrence,
+          recurrenceSeriesId: recurrence == CardRecurrence.none ? null : cardId,
+          priority: priority,
+          labels: labels,
         ),
       ];
       return col.copyWith(cards: cards);
     }).toList();
+    if (!added) return null;
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    _undoStack.push(
+      UndoEntry(
+        label: '新建「$title」',
+        undo: () => deleteCard(columnId, cardId),
+      ),
+    );
+    if (reminderAt != null && activeProjectId != null) {
+      await _reminderScheduler.schedule(
+        projectId: activeProjectId!,
+        columnId: columnId,
+        card: columns
+            .firstWhere((column) => column.id == columnId)
+            .cards
+            .firstWhere((card) => card.id == cardId),
+      );
+    }
+    unawaited(
+      _recordActivity(
+        entityId: cardId,
+        entityTitle: title,
+        action: ActivityAction.created,
+      ),
+    );
+    return cardId;
   }
 
   Future<void> updateCard(
@@ -800,9 +1241,13 @@ class BoardController extends ChangeNotifier {
     String cardId, {
     String? title,
     String? description,
+    bool clearDescription = false,
     bool? completed,
     int? dueDate,
     bool clearDueDate = false,
+    int? reminderAt,
+    bool clearReminder = false,
+    CardRecurrence? recurrence,
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
@@ -812,6 +1257,11 @@ class BoardController extends ChangeNotifier {
   }) async {
     if (board == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
+    final original = board!.columns
+        .where((column) => column.id == columnId)
+        .expand((column) => column.cards)
+        .where((card) => card.id == cardId)
+        .firstOrNull;
     final columns = board!.columns.map((col) {
       if (col.id != columnId) return col;
       final cards = col.cards.map((card) {
@@ -819,12 +1269,13 @@ class BoardController extends ChangeNotifier {
         final nextCompleted = completed ?? card.completed;
         return card.copyWith(
           title: title ?? card.title,
-          description: description ?? card.description,
+          description:
+              clearDescription ? null : (description ?? card.description),
           completed: nextCompleted,
-          completedAt: nextCompleted
-              ? (card.completedAt ?? now)
-              : null,
+          completedAt: nextCompleted ? (card.completedAt ?? now) : null,
           dueDate: clearDueDate ? null : (dueDate ?? card.dueDate),
+          reminderAt: clearReminder ? null : (reminderAt ?? card.reminderAt),
+          recurrence: recurrence ?? card.recurrence,
           priority: priority ?? card.priority,
           labels: labels ?? card.labels,
           checklist: checklist ?? card.checklist,
@@ -838,6 +1289,40 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(
       _bump(board!.copyWith(columns: _normalizeOrders(columns))),
     );
+    if (original != null) {
+      _undoStack.push(
+        UndoEntry(
+          label: '编辑「${original.title}」',
+          undo: () => updateCardFull(
+            columnId,
+            cardId,
+            title: original.title,
+            description: original.description,
+            clearDescription: original.description == null,
+            completed: original.completed,
+            dueDate: original.dueDate,
+            clearDueDate: original.dueDate == null,
+            reminderAt: original.reminderAt,
+            clearReminder: original.reminderAt == null,
+            recurrence: original.recurrence,
+            priority: original.priority,
+            labels: original.labels,
+            checklist: original.checklist,
+            attachments: original.attachments,
+            colorValue: original.colorValue,
+            clearColor: original.colorValue == null,
+          ),
+        ),
+      );
+      unawaited(
+        _recordActivity(
+          entityId: cardId,
+          entityTitle: title ?? original.title,
+          action: ActivityAction.updated,
+        ),
+      );
+    }
+    unawaited(_rescheduleReminders());
   }
 
   Future<String?> addCardAttachmentsFromSource(
@@ -892,7 +1377,8 @@ class BoardController extends ChangeNotifier {
     final nextAttachments = [...target.attachments];
     var nextOrder = nextAttachments.isEmpty
         ? 0
-        : nextAttachments.map((a) => a.order).reduce((a, b) => a > b ? a : b) + 1;
+        : nextAttachments.map((a) => a.order).reduce((a, b) => a > b ? a : b) +
+            1;
 
     try {
       for (final image in picked) {
@@ -999,8 +1485,7 @@ class BoardController extends ChangeNotifier {
 
     final nextAttachments = [
       selected.first.copyWith(order: 0),
-      for (var i = 0; i < others.length; i++)
-        others[i].copyWith(order: i + 1),
+      for (var i = 0; i < others.length; i++) others[i].copyWith(order: i + 1),
     ];
 
     await updateCardFull(
@@ -1044,15 +1529,19 @@ class BoardController extends ChangeNotifier {
         completed: true,
         completedAt: now,
       );
+      await _afterCompletionChanged(
+        target,
+        sourceColumnId: columnId,
+        completed: true,
+      );
       return;
     }
 
     if (!nextCompleted && doneColumn?.id == columnId) {
       final todoColumn = current.columns.cast<KanbanColumn?>().firstWhere(
             (col) => col!.id == 'todo',
-            orElse: () => current.columns.isNotEmpty
-                ? current.columns.first
-                : null,
+            orElse: () =>
+                current.columns.isNotEmpty ? current.columns.first : null,
           );
       if (todoColumn != null && todoColumn.id != columnId) {
         await moveCard(
@@ -1063,11 +1552,62 @@ class BoardController extends ChangeNotifier {
           completed: false,
           completedAt: null,
         );
+        await _afterCompletionChanged(
+          target,
+          sourceColumnId: columnId,
+          completed: false,
+        );
         return;
       }
     }
 
     await updateCardFull(columnId, cardId, completed: nextCompleted);
+    await _afterCompletionChanged(
+      target,
+      sourceColumnId: columnId,
+      completed: nextCompleted,
+    );
+  }
+
+  Future<void> _afterCompletionChanged(
+    KanbanCard card, {
+    required String sourceColumnId,
+    required bool completed,
+  }) async {
+    await _reminderScheduler.cancel(card.id);
+    if (completed) {
+      final next = _recurrenceService.createNextOccurrence(card);
+      if (next != null &&
+          board != null &&
+          !board!.columns.any(
+            (column) => column.cards.any((item) => item.id == next.id),
+          )) {
+        final columns = board!.columns.map((column) {
+          if (column.id != sourceColumnId) return column;
+          return column.copyWith(
+            cards: [
+              ...column.cards,
+              next.copyWith(order: column.cards.length),
+            ],
+          );
+        }).toList();
+        await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+        if (next.reminderAt != null && activeProjectId != null) {
+          await _reminderScheduler.schedule(
+            projectId: activeProjectId!,
+            columnId: sourceColumnId,
+            card: next,
+          );
+        }
+      }
+    }
+    unawaited(
+      _recordActivity(
+        entityId: card.id,
+        entityTitle: card.title,
+        action: completed ? ActivityAction.completed : ActivityAction.reopened,
+      ),
+    );
   }
 
   Future<void> deleteCard(String columnId, String cardId) async {
@@ -1088,9 +1628,10 @@ class BoardController extends ChangeNotifier {
     if (target == null || sourceColumn == null) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
+    final trashId = const Uuid().v4();
     await _addToActiveProjectTrash(
       TrashItem.forCard(
-        trashId: const Uuid().v4(),
+        trashId: trashId,
         deletedAt: now,
         projectId: activeProjectId!,
         projectTitle: board!.title,
@@ -1106,6 +1647,23 @@ class BoardController extends ChangeNotifier {
       return col.copyWith(cards: cards);
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    await _reminderScheduler.cancel(cardId);
+    _undoStack.push(
+      UndoEntry(
+        label: '删除「${target.title}」',
+        undo: () async {
+          final error = await restoreTrashItem(trashId);
+          if (error != null) throw StateError(error);
+        },
+      ),
+    );
+    unawaited(
+      _recordActivity(
+        entityId: cardId,
+        entityTitle: target.title,
+        action: ActivityAction.deleted,
+      ),
+    );
   }
 
   Future<void> moveCard({
@@ -1155,9 +1713,7 @@ class BoardController extends ChangeNotifier {
       final markDone = toColumnId == doneColumn.id;
       cardToInsert = cardToInsert.copyWith(
         completed: markDone,
-        completedAt: markDone
-            ? (cardToInsert.completedAt ?? now)
-            : null,
+        completedAt: markDone ? (cardToInsert.completedAt ?? now) : null,
         updatedAt: now,
       );
     } else {
@@ -1185,8 +1741,8 @@ class BoardController extends ChangeNotifier {
         return col.copyWith(cards: cards);
       }
 
-      final targetPinned =
-          nextPinnedByColumn[toColumnId]?.pinnedCardIds ?? toPrefs.pinnedCardIds;
+      final targetPinned = nextPinnedByColumn[toColumnId]?.pinnedCardIds ??
+          toPrefs.pinnedCardIds;
       final pinnedCount = pinnedCardCount(targetPinned, col.cards);
       var display = sortColumnCards(
         col.cards,
@@ -1226,9 +1782,9 @@ class BoardController extends ChangeNotifier {
         cardId,
       );
 
-      nextPinnedByColumn[toColumnId] = (nextPinnedByColumn[toColumnId] ??
-              toPrefs)
-          .copyWith(pinnedCardIds: derived.pinned);
+      nextPinnedByColumn[toColumnId] =
+          (nextPinnedByColumn[toColumnId] ?? toPrefs)
+              .copyWith(pinnedCardIds: derived.pinned);
 
       return col.copyWith(cards: cards);
     }).toList();
@@ -1238,13 +1794,39 @@ class BoardController extends ChangeNotifier {
             columnPreferences: nextPinnedByColumn,
           );
       if (activeProjectId != null) {
-        await _repository.saveProjectSettings(activeProjectId!, projectSettings);
+        await _repository.saveProjectSettings(
+            activeProjectId!, projectSettings);
       }
     }
 
     await _persistAndSync(
       _bump(board!.copyWith(columns: _normalizeOrders(inserted))),
     );
+    if (fromColumnId != toColumnId) {
+      final originalIndex = moving!.order;
+      _undoStack.push(
+        UndoEntry(
+          label: '移动「${moving!.title}」',
+          undo: () => moveCard(
+            cardId: cardId,
+            fromColumnId: toColumnId,
+            toColumnId: fromColumnId,
+            toDisplayIndex: originalIndex,
+          ),
+        ),
+      );
+      unawaited(
+        _recordActivity(
+          entityId: cardId,
+          entityTitle: moving!.title,
+          action: ActivityAction.moved,
+          details: {
+            'fromColumnId': fromColumnId,
+            'toColumnId': toColumnId,
+          },
+        ),
+      );
+    }
   }
 
   Future<String?> restoreTrashItem(String trashItemId) async {
@@ -1253,7 +1835,8 @@ class BoardController extends ChangeNotifier {
       return _restoreLabel(labelTrash[labelIndex]);
     }
 
-    final appIndex = appTrash.items.indexWhere((item) => item.id == trashItemId);
+    final appIndex =
+        appTrash.items.indexWhere((item) => item.id == trashItemId);
     if (appIndex >= 0) {
       return _restoreProject(appTrash.items[appIndex]);
     }
@@ -1290,7 +1873,8 @@ class BoardController extends ChangeNotifier {
         await _deleteTrashItemAttachments(target);
       }
       appTrash = appTrash.bump().copyWith(
-            items: appTrash.items.where((item) => item.id != trashItemId).toList(),
+            items:
+                appTrash.items.where((item) => item.id != trashItemId).toList(),
           );
       await _persistAppTrash();
       return;
@@ -1346,9 +1930,17 @@ class BoardController extends ChangeNotifier {
       return '标签已存在';
     }
 
-    await saveAppSettings(
-      appSettings.copyWith(
-        customLabels: [...appSettings.customLabels, label],
+    await _persistSharedContent(
+      sharedContent.copyWith(
+        labels: [
+          ...sharedContent.labels,
+          SharedLabel(
+            id: label.key,
+            name: label.name,
+            colorValue: label.colorValue,
+            updatedAt: DateTime.now().millisecondsSinceEpoch,
+          ),
+        ],
       ),
     );
     labelTrash = labelTrash.where((i) => i.id != item.id).toList();
@@ -1368,8 +1960,8 @@ class BoardController extends ChangeNotifier {
     await _repository.saveProjectTrash(payload.entry.id, payload.projectTrash);
 
     manifest = manifest!.bump().copyWith(
-          projects: [...manifest!.projects, payload.entry],
-        );
+      projects: [...manifest!.projects, payload.entry],
+    );
     await _repository.saveManifest(manifest!);
 
     projectTrashes[payload.entry.id] = payload.projectTrash;
@@ -1572,8 +2164,7 @@ class BoardController extends ChangeNotifier {
     manifest = await _repository.loadManifest();
     if (activeProjectId != null) {
       board = await _repository.loadBoard(activeProjectId!);
-      projectSettings =
-          await _repository.loadProjectSettings(activeProjectId!);
+      projectSettings = await _repository.loadProjectSettings(activeProjectId!);
       await _loadTrashState();
     }
     await refreshMissingAttachments();
@@ -1615,14 +2206,8 @@ class BoardController extends ChangeNotifier {
       }
     } else {
       if (target.conflictDeleted) {
-        // note: 选择另一侧删除意图 → 删卡（由调用方或此处进回收站较重，第一期直接从板移除）
-        final columns = board!.columns.map((col) {
-          if (col.id != targetColumnId) return col;
-          return col.copyWith(
-            cards: col.cards.where((c) => c.id != cardId).toList(),
-          );
-        }).toList();
-        await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+        // 选择另一侧删除意图与普通删除一致，保留可恢复快照。
+        await deleteCard(targetColumnId, cardId);
         return;
       }
       final other = target.conflictSide;
@@ -1662,6 +2247,46 @@ class BoardController extends ChangeNotifier {
         : (projectSettings.conflictSide ?? projectSettings)
             .copyWith(clearConflictSide: true);
     await _persistProjectSettings(next.bump());
+  }
+
+  /// 解决当前看板的标题冲突。
+  Future<void> resolveBoardTitleConflict({required bool keepPrimary}) async {
+    final current = board;
+    if (current == null || current.conflictTitle == null) return;
+    final title = keepPrimary ? current.title : current.conflictTitle!;
+    await _persistAndSync(
+      _bump(
+        current.copyWith(
+          title: title,
+          clearConflictTitle: true,
+        ),
+      ),
+    );
+  }
+
+  /// 解决项目清单条目的标题冲突。
+  Future<void> resolveProjectTitleConflict(
+    String projectId, {
+    required bool keepPrimary,
+  }) async {
+    final entry = manifest?.findById(projectId);
+    if (entry == null || entry.conflictTitle == null) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final title = keepPrimary ? entry.title : entry.conflictTitle!;
+    final projects = manifest!.projects.map((project) {
+      if (project.id != projectId) return project;
+      return project.copyWith(
+        title: title,
+        updatedAt: now,
+        revision: project.revision + 1,
+        clearConflictTitle: true,
+      );
+    }).toList();
+    manifest = manifest!.bump().copyWith(projects: projects);
+    await _repository.saveManifest(manifest!);
+    notifyListeners();
+    _syncService.schedulePush();
   }
 
   /// 解决项目删改冲突：保留项目或确认删除

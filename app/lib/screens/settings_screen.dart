@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
+import '../features/activity/activity_screen.dart';
+import '../features/import_export/backup_file_picker.dart';
+import '../features/labels/label_management_screen.dart';
 import '../features/project/project_settings_screen.dart';
-import '../settings/app_settings.dart';
+import '../features/statistics/statistics_screen.dart';
 import '../features/trash/trash_screen.dart';
 import '../settings/settings_section.dart';
 import '../webdav_sync/webdav_config.dart';
@@ -69,8 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ? '/KanbanApp'
           : _pathController.text.trim(),
       autoSync: _autoSync,
-      pollIntervalSeconds:
-          WebDavConfig.clampPollIntervalSeconds(_pollSeconds),
+      pollIntervalSeconds: WebDavConfig.clampPollIntervalSeconds(_pollSeconds),
       pushDebounceSeconds:
           WebDavConfig.clampPushDebounceSeconds(_pushDebounceSeconds),
     );
@@ -94,8 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _testing = true;
       _testResult = null;
     });
-    final ok =
-        await context.read<BoardController>().testWebDav(_buildConfig());
+    final ok = await context.read<BoardController>().testWebDav(_buildConfig());
     if (!mounted) return;
     setState(() {
       _testing = false;
@@ -125,6 +126,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const SnackBar(content: Text('已保存，变更将自动同步到网盘')),
     );
     Navigator.pop(context);
+  }
+
+  Future<void> _exportBackup() async {
+    final controller = context.read<BoardController>();
+    final bytes = await controller.createBackupArchive();
+    final now = DateTime.now();
+    final fileName =
+        'kanban-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.kanban-backup';
+    final saved = await saveBackupFile(bytes, fileName);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(saved ? '完整备份已导出' : '已取消导出')),
+    );
+  }
+
+  Future<void> _importBackup() async {
+    final bytes = await pickBackupFile();
+    if (!mounted || bytes == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('恢复完整备份？'),
+        content: const Text('当前工作区会被备份内容替换。建议先导出当前数据。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await context.read<BoardController>().restoreBackupArchive(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('备份已恢复')),
+      );
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('备份无效：${error.message}')),
+      );
+    }
   }
 
   @override
@@ -162,6 +211,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 16),
             SettingsSection(
+              icon: Icons.palette_outlined,
+              title: '外观与提醒',
+              subtitle: '仅保存在本机',
+              children: [
+                Selector<BoardController, ThemeMode>(
+                  selector: (_, controller) => controller.appSettings.themeMode,
+                  builder: (context, mode, _) => SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        label: Text('跟随系统'),
+                        icon: Icon(Icons.brightness_auto_outlined),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.light,
+                        label: Text('浅色'),
+                        icon: Icon(Icons.light_mode_outlined),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.dark,
+                        label: Text('深色'),
+                        icon: Icon(Icons.dark_mode_outlined),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (selection) {
+                      final controller = context.read<BoardController>();
+                      controller.saveAppSettings(
+                        controller.appSettings.copyWith(
+                          themeMode: selection.single,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const Divider(),
+                SettingsNavigationTile(
+                  icon: Icons.notifications_active_outlined,
+                  title: '启用任务提醒',
+                  subtitle: '请求系统通知权限并重新安排提醒',
+                  onTap: () async {
+                    await context
+                        .read<BoardController>()
+                        .initializeReminders(requestPermission: true);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('提醒设置已更新')),
+                    );
+                  },
+                ),
+                SettingsNavigationTile(
+                  icon: Icons.insights_outlined,
+                  title: '工作区统计',
+                  subtitle: '查看任务总量、逾期和完成趋势',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const StatisticsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SettingsSection(
+              icon: Icons.label_outline,
+              title: '标签',
+              subtitle: '自定义标签会随工作区同步',
+              children: [
+                Selector<BoardController, int>(
+                  selector: (_, c) => c.appSettings.customLabels.length,
+                  builder: (context, count, _) => SettingsNavigationTile(
+                    icon: Icons.label_important_outline,
+                    title: '标签管理',
+                    subtitle: count > 0 ? '$count 个自定义标签' : '新增、改名、改色或删除',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const LabelManagementScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SettingsSection(
+              icon: Icons.inventory_2_outlined,
+              title: '导入与导出',
+              subtitle: '包含全部项目、设置、共享内容和附件',
+              children: [
+                SettingsNavigationTile(
+                  icon: Icons.file_upload_outlined,
+                  title: '导出完整备份',
+                  subtitle: '保存为 .kanban-backup 文件',
+                  onTap: _exportBackup,
+                ),
+                SettingsNavigationTile(
+                  icon: Icons.file_download_outlined,
+                  title: '恢复完整备份',
+                  subtitle: '将替换当前工作区',
+                  onTap: _importBackup,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SettingsSection(
               icon: Icons.folder_outlined,
               title: '当前项目',
               subtitle: '设置会随项目同步到 WebDAV',
@@ -174,6 +332,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const ProjectSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                SettingsNavigationTile(
+                  icon: Icons.history,
+                  title: '活动历史',
+                  subtitle: '查看当前项目最近的卡片变更',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ActivityScreen(),
                       ),
                     );
                   },
@@ -336,8 +506,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (_autoSync)
                         SettingsSliderRow(
                           title: '变更后上传延迟',
-                          description:
-                              '停止编辑后再上传；本地会立刻保存，仅延迟云端请求',
+                          description: '停止编辑后再上传；本地会立刻保存，仅延迟云端请求',
                           value: _pushDebounceSeconds.toDouble(),
                           valueLabel: _formatPushDebounce(_pushDebounceSeconds),
                           min: WebDavConfig.minPushDebounceSeconds.toDouble(),

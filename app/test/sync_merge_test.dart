@@ -166,16 +166,16 @@ void main() {
   });
 
   test('Manifest 两侧各建项目 → 并集', () {
-    final local = ProjectsManifest(
+    final local = const ProjectsManifest(
       projects: [
-        const ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
+        ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
       ],
       updatedAt: 1,
       revision: 1,
     );
-    final remote = ProjectsManifest(
+    final remote = const ProjectsManifest(
       projects: [
-        const ProjectEntry(id: 'b', title: 'B', updatedAt: 2, revision: 1),
+        ProjectEntry(id: 'b', title: 'B', updatedAt: 2, revision: 1),
       ],
       updatedAt: 2,
       revision: 1,
@@ -187,13 +187,13 @@ void main() {
   test('Manifest 远端删且本地相对 base 未改 → 采纳删除', () {
     const keep = ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
     const gone = ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
-    final base = ProjectsManifest(
+    final base = const ProjectsManifest(
       projects: [keep, gone],
       updatedAt: 1,
       revision: 1,
     );
     final local = base;
-    final remote = ProjectsManifest(
+    final remote = const ProjectsManifest(
       projects: [keep],
       updatedAt: 2,
       revision: 2,
@@ -208,17 +208,17 @@ void main() {
         ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
     const goneLocal =
         ProjectEntry(id: 'b', title: 'B改过', updatedAt: 50, revision: 2);
-    final base = ProjectsManifest(
+    final base = const ProjectsManifest(
       projects: [keep, goneBase],
       updatedAt: 1,
       revision: 1,
     );
-    final local = ProjectsManifest(
+    final local = const ProjectsManifest(
       projects: [keep, goneLocal],
       updatedAt: 50,
       revision: 2,
     );
-    final remote = ProjectsManifest(
+    final remote = const ProjectsManifest(
       projects: [keep],
       updatedAt: 2,
       revision: 2,
@@ -231,17 +231,17 @@ void main() {
   });
 
   test('Manifest 无 base 时远端缺项目 → 保留本地（避免误删离线新建）', () {
-    final local = ProjectsManifest(
+    final local = const ProjectsManifest(
       projects: [
-        const ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
-        const ProjectEntry(id: 'new', title: '新建', updatedAt: 9, revision: 1),
+        ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
+        ProjectEntry(id: 'new', title: '新建', updatedAt: 9, revision: 1),
       ],
       updatedAt: 9,
       revision: 2,
     );
-    final remote = ProjectsManifest(
+    final remote = const ProjectsManifest(
       projects: [
-        const ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
+        ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1),
       ],
       updatedAt: 1,
       revision: 1,
@@ -253,12 +253,12 @@ void main() {
   test('Manifest 本地删且远端相对 base 未改 → 保持删除', () {
     const keep = ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
     const gone = ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
-    final base = ProjectsManifest(
+    final base = const ProjectsManifest(
       projects: [keep, gone],
       updatedAt: 1,
       revision: 1,
     );
-    final local = ProjectsManifest(
+    final local = const ProjectsManifest(
       projects: [keep],
       updatedAt: 3,
       revision: 2,
@@ -274,17 +274,17 @@ void main() {
         ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
     const goneRemote =
         ProjectEntry(id: 'b', title: '远端改', updatedAt: 80, revision: 3);
-    final base = ProjectsManifest(
+    final base = const ProjectsManifest(
       projects: [keep, goneBase],
       updatedAt: 1,
       revision: 1,
     );
-    final local = ProjectsManifest(
+    final local = const ProjectsManifest(
       projects: [keep],
       updatedAt: 3,
       revision: 2,
     );
-    final remote = ProjectsManifest(
+    final remote = const ProjectsManifest(
       projects: [keep, goneRemote],
       updatedAt: 80,
       revision: 3,
@@ -325,10 +325,10 @@ void main() {
   });
 
   test('Settings 一侧为空默认桩时不制造冲突', () {
-    final local = ProjectSettings(
+    final local = const ProjectSettings(
       doneColumnName: '已完成',
       columnPreferences: {
-        'todo': const ColumnCardPreferences(),
+        'todo': ColumnCardPreferences(),
       },
       updatedAt: 100,
       revision: 3,
@@ -341,14 +341,14 @@ void main() {
   });
 
   test('Settings 已有空默认桩 conflictSide → 下次合并自动清除', () {
-    final local = ProjectSettings(
+    final local = const ProjectSettings(
       doneColumnName: '已完成',
       columnPreferences: {
-        'todo': const ColumnCardPreferences(),
+        'todo': ColumnCardPreferences(),
       },
       updatedAt: 100,
       revision: 5,
-      conflictSide: const ProjectSettings(),
+      conflictSide: ProjectSettings(),
     );
     final remote = local.copyWith(clearConflictSide: true, updatedAt: 90);
     final merged = mergeSettings(local: local, remote: remote);
@@ -385,7 +385,7 @@ void main() {
     final keepBoard = KanbanBoard.empty(id: 'a').copyWith(revision: 1, updatedAt: 1);
     final goneBoard = KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
     final base = ProjectWorkspaceSnapshot(
-      manifest: ProjectsManifest(
+      manifest: const ProjectsManifest(
         projects: [keepEntry, goneEntry],
         updatedAt: 1,
         revision: 1,
@@ -412,7 +412,7 @@ void main() {
     );
     final local = base;
     final remote = ProjectWorkspaceSnapshot(
-      manifest: ProjectsManifest(
+      manifest: const ProjectsManifest(
         projects: [keepEntry],
         updatedAt: 2,
         revision: 2,
@@ -442,7 +442,7 @@ void main() {
     final goneBase = KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
     final goneLocal = goneBase.copyWith(revision: 5, updatedAt: 500, title: '本地板');
     final base = ProjectWorkspaceSnapshot(
-      manifest: ProjectsManifest(
+      manifest: const ProjectsManifest(
         projects: [keepEntry, goneEntry],
         updatedAt: 1,
         revision: 1,
@@ -459,7 +459,7 @@ void main() {
       settings: base.settings,
     );
     final remote = ProjectWorkspaceSnapshot(
-      manifest: ProjectsManifest(
+      manifest: const ProjectsManifest(
         projects: [keepEntry],
         updatedAt: 2,
         revision: 2,

@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/shared_content/shared_content.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import 'board_storage.dart';
@@ -29,7 +30,8 @@ class BoardStorageWeb implements BoardStorage {
   static const _legacyMetaKey = 'kanban_v2_board_meta';
   static const _legacyColumnIndexKey = 'kanban_v2_column_ids';
 
-  String _projectMetaKey(String projectId) => 'kanban_v3_project_${projectId}_meta';
+  String _projectMetaKey(String projectId) =>
+      'kanban_v3_project_${projectId}_meta';
   String _projectSettingsKey(String projectId) =>
       'kanban_v3_project_${projectId}_settings';
   String _projectColumnKey(String projectId, String columnId) =>
@@ -39,6 +41,7 @@ class BoardStorageWeb implements BoardStorage {
   String _projectTrashKey(String projectId) =>
       'kanban_v3_project_${projectId}_trash';
   static const _appTrashKey = 'kanban_v3_app_trash';
+  static const _sharedContentKey = 'kanban_v3_shared_content';
 
   @override
   Future<bool> hasManifest() async => _prefs.containsKey(_manifestKey);
@@ -76,8 +79,8 @@ class BoardStorageWeb implements BoardStorage {
       return KanbanBoard.fromJson(meta);
     }
 
-    final refs = (meta['columns'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
+    final refs =
+        (meta['columns'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final columns = <KanbanColumn>[];
     for (final ref in refs) {
       final id = ref['id'] as String;
@@ -162,6 +165,28 @@ class BoardStorageWeb implements BoardStorage {
     await _prefs.setString(
       _appTrashKey,
       const JsonEncoder.withIndent('  ').convert(trash.toJson()),
+    );
+  }
+
+  @override
+  Future<SharedContent> loadSharedContent() async {
+    final raw = _prefs.getString(_sharedContentKey);
+    if (raw == null || raw.isEmpty) return SharedContent.empty;
+    try {
+      final json = jsonDecode(raw);
+      return json is Map
+          ? SharedContent.fromJson(Map<String, dynamic>.from(json))
+          : SharedContent.empty;
+    } catch (_) {
+      return SharedContent.empty;
+    }
+  }
+
+  @override
+  Future<void> saveSharedContent(SharedContent content) async {
+    await _prefs.setString(
+      _sharedContentKey,
+      const JsonEncoder.withIndent('  ').convert(content.toJson()),
     );
   }
 

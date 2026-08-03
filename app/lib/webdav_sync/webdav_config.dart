@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/shared_content/shared_content.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import '../settings/app_settings.dart';
@@ -235,6 +236,11 @@ class BoardRepository {
 
   Future<void> saveAppTrash(TrashBin trash) => _storage.saveAppTrash(trash);
 
+  Future<SharedContent> loadSharedContent() => _storage.loadSharedContent();
+
+  Future<void> saveSharedContent(SharedContent content) =>
+      _storage.saveSharedContent(content);
+
   List<TrashItem> loadLabelTrash() {
     final raw = _prefs.getString(_labelTrashKey);
     if (raw == null) return const [];
@@ -273,8 +279,8 @@ class BoardRepository {
       revision: 1,
     );
     await _storage.saveManifest(manifest.bump().copyWith(
-          projects: [...manifest.projects, entry],
-        ));
+      projects: [...manifest.projects, entry],
+    ));
     return projectId;
   }
 

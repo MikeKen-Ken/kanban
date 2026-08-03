@@ -44,6 +44,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late BoardController _boardController;
   late bool _completed;
   DateTime? _dueDate;
+  DateTime? _reminderAt;
+  late CardRecurrence _recurrence;
   late CardPriority _priority;
   late List<String> _labels;
   late List<ChecklistItem> _checklist;
@@ -60,11 +62,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.card.title);
-    _descController = TextEditingController(text: widget.card.description ?? '');
+    _descController =
+        TextEditingController(text: widget.card.description ?? '');
     _completed = widget.card.completed;
     _dueDate = widget.card.dueDate != null
         ? DateTime.fromMillisecondsSinceEpoch(widget.card.dueDate!)
         : null;
+    _reminderAt = widget.card.reminderAt != null
+        ? DateTime.fromMillisecondsSinceEpoch(widget.card.reminderAt!)
+        : null;
+    _recurrence = widget.card.recurrence;
     _priority = widget.card.priority;
     _labels = [...widget.card.labels];
     _checklist = [...widget.card.checklist];
@@ -86,8 +93,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
 
   void _onBoardChanged() => deferRebuildIfComposing(_textControllers);
 
-  void _safeSetState(VoidCallback fn) =>
-      imeSafeSetState(fn, _textControllers);
+  void _safeSetState(VoidCallback fn) => imeSafeSetState(fn, _textControllers);
 
   String get _effectiveTitle {
     final title = _titleController.text.trim();
@@ -104,12 +110,17 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final nextDesc = _effectiveDescription;
     final originalDue = widget.card.dueDate;
     final nextDue = _dueDate?.millisecondsSinceEpoch;
+    final originalReminder = widget.card.reminderAt;
+    final nextReminder = _reminderAt?.millisecondsSinceEpoch;
     if (_effectiveTitle != widget.card.title) return true;
-    if (nextDesc != (originalDesc == null || originalDesc.isEmpty ? null : originalDesc)) {
+    if (nextDesc !=
+        (originalDesc == null || originalDesc.isEmpty ? null : originalDesc)) {
       return true;
     }
     if (_completed != widget.card.completed) return true;
     if (nextDue != originalDue) return true;
+    if (nextReminder != originalReminder) return true;
+    if (_recurrence != widget.card.recurrence) return true;
     if (_priority != widget.card.priority) return true;
     if (!_listEquals(_labels, widget.card.labels)) return true;
     if (!_checklistEquals(_checklist, widget.card.checklist)) return true;
@@ -165,6 +176,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final completed = _completed;
     final dueDate = _dueDate?.millisecondsSinceEpoch;
     final clearDueDate = _dueDate == null;
+    final reminderAt = _reminderAt?.millisecondsSinceEpoch;
+    final clearReminder = _reminderAt == null;
+    final recurrence = _recurrence;
     final priority = _priority;
     final labels = List<String>.from(_labels);
     final checklist = List<ChecklistItem>.from(_checklist);
@@ -178,9 +192,13 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       widget.card.id,
       title: title,
       description: description,
+      clearDescription: description == null,
       completed: completed,
       dueDate: dueDate,
       clearDueDate: clearDueDate,
+      reminderAt: reminderAt,
+      clearReminder: clearReminder,
+      recurrence: recurrence,
       priority: priority,
       labels: labels,
       checklist: checklist,
@@ -195,6 +213,47 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (title.isEmpty) return;
     await _persist();
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _saveAsTemplate() async {
+    final nameController = TextEditingController(text: '$_effectiveTitle 模板');
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('保存为模板'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '模板名称'),
+          onSubmitted: (value) => Navigator.pop(context, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, nameController.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    nameController.dispose();
+    if (!mounted || name == null || name.isEmpty) return;
+    await _persist();
+    final card = _boardController.board?.columns
+        .where((column) => column.id == widget.columnId)
+        .expand((column) => column.cards)
+        .where((card) => card.id == widget.card.id)
+        .firstOrNull;
+    if (card == null) return;
+    await _boardController.saveCardAsTemplate(card: card, name: name);
+    _persisted = false;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已保存模板「$name」')),
+    );
   }
 
   void _closeWithoutPersist() {
@@ -214,6 +273,34 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (picked != null && mounted) {
       _safeSetState(() => _dueDate = picked);
     }
+  }
+
+  Future<void> _pickReminder() async {
+    final now = DateTime.now();
+    final initial = _reminderAt ?? _dueDate ?? now;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: now.subtract(const Duration(days: 1)),
+      lastDate: DateTime(now.year + 5),
+      helpText: '选择提醒日期',
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      helpText: '选择提醒时间',
+    );
+    if (time == null || !mounted) return;
+    _safeSetState(
+      () => _reminderAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      ),
+    );
   }
 
   Future<void> _pickCardColor() async {
@@ -354,7 +441,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_attachments.length >= KanbanCard.maxAttachments) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('每张卡片最多 ${KanbanCard.maxAttachments} 张图片'),
         ),
       );
@@ -382,7 +469,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   }
 
   void _reloadAttachmentsFromBoard() {
-    final updated = context.read<BoardController>().board?.columns
+    final updated = context
+        .read<BoardController>()
+        .board
+        ?.columns
         .where((col) => col.id == widget.columnId)
         .expand((col) => col.cards)
         .where((card) => card.id == widget.card.id)
@@ -418,7 +508,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         ..sort((a, b) => a.order.compareTo(b.order));
       _attachments = [
         selected.copyWith(order: 0),
-        for (var i = 0; i < others.length; i++) others[i].copyWith(order: i + 1),
+        for (var i = 0; i < others.length; i++)
+          others[i].copyWith(order: i + 1),
       ];
     });
   }
@@ -482,439 +573,491 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
             return Material(
               child: Column(
                 children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                  child: Row(
-                    children: [
-                      Checkbox(
-                        value: _completed,
-                        onChanged: (v) =>
-                            _safeSetState(() => _completed = v ?? false),
-                      ),
-                      Expanded(
-                        child: TextField(
-                          key: const ValueKey('card-detail-title'),
-                          controller: _titleController,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            decoration: _completed
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: '卡片标题',
-                            border: InputBorder.none,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: _completed,
+                          onChanged: (v) =>
+                              _safeSetState(() => _completed = v ?? false),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            key: const ValueKey('card-detail-title'),
+                            controller: _titleController,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              decoration: _completed
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: '卡片标题',
+                              border: InputBorder.none,
+                            ),
                           ),
                         ),
-                      ),
-                      _CardPinButton(
-                        columnId: widget.columnId,
-                        cardId: widget.card.id,
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.maybePop(context),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                if (widget.card.hasConflict)
-                  Material(
-                    color: theme.colorScheme.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.card.conflictDeleted
-                                ? '同步冲突：另一侧删除了此卡片'
-                                : '同步冲突：存在另一份副本',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: theme.colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (widget.card.conflictSide != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              '另一份：${widget.card.conflictSide!.title}'
-                              '${widget.card.conflictSide!.description == null || widget.card.conflictSide!.description!.isEmpty ? '' : ' — ${widget.card.conflictSide!.description}'}',
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onErrorContainer,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              FilledButton(
-                                onPressed: () async {
-                                  await _boardController.resolveCardConflict(
-                                    widget.columnId,
-                                    widget.card.id,
-                                    CardConflictResolution.keepPrimary,
-                                  );
-                                  if (context.mounted) _closeWithoutPersist();
-                                },
-                                child: const Text('保留当前'),
-                              ),
-                              OutlinedButton(
-                                onPressed: () async {
-                                  await _boardController.resolveCardConflict(
-                                    widget.columnId,
-                                    widget.card.id,
-                                    CardConflictResolution.keepOther,
-                                  );
-                                  if (context.mounted) _closeWithoutPersist();
-                                },
-                                child: Text(
-                                  widget.card.conflictDeleted ? '确认删除' : '保留另一份',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                        _CardPinButton(
+                          columnId: widget.columnId,
+                          cardId: widget.card.id,
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.maybePop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
                     ),
                   ),
-                Expanded(
-                  child: ListView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text('备注', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      TextField(
-                        key: const ValueKey('card-detail-desc'),
-                        controller: _descController,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          hintText: '添加详细说明…',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text('卡片背景色', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          FilledButton.tonalIcon(
-                            onPressed: _pickCardColor,
-                            icon: const Icon(Icons.palette_outlined, size: 18),
-                            label: Text(
-                              _colorValue == null
-                                  ? '设置颜色'
-                                  : '已设置',
-                            ),
-                          ),
-                          if (_colorValue != null) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: Color(_colorValue!),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: theme.colorScheme.outlineVariant,
-                                ),
+                  const Divider(height: 1),
+                  if (widget.card.hasConflict)
+                    Material(
+                      color: theme.colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.card.conflictDeleted
+                                  ? '同步冲突：另一侧删除了此卡片'
+                                  : '同步冲突：存在另一份副本',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: theme.colorScheme.onErrorContainer,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            TextButton(
-                              onPressed: () =>
-                                  _safeSetState(() => _colorValue = null),
-                              child: const Text('清除'),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Text('图片', style: theme.textTheme.titleSmall),
-                          const Spacer(),
-                          Text(
-                            '${_attachments.length}/${KanbanCard.maxAttachments}',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (missingCount > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: MaterialBanner(
-                            content: Text('有 $missingCount 张图片未下载到本机，请检查同步'),
-                            leading: Icon(
-                              Icons.cloud_off_outlined,
-                              color: theme.colorScheme.error,
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () =>
-                                    context.read<BoardController>().syncNow(),
-                                child: const Text('立即同步'),
+                            if (widget.card.conflictSide != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                '另一份：${widget.card.conflictSide!.title}'
+                                '${widget.card.conflictSide!.description == null || widget.card.conflictSide!.description!.isEmpty ? '' : ' — ${widget.card.conflictSide!.description}'}',
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onErrorContainer,
+                                ),
                               ),
                             ],
-                          ),
-                        ),
-                      if (_attachments.isNotEmpty)
-                        CardAttachmentReorderGrid(
-                          attachments: _attachments,
-                          missingAttachmentIds:
-                              _boardController.missingAttachmentIds,
-                          onReorder: _reorderAttachments,
-                          onTap: _openAttachmentViewer,
-                          onLongPress: (index) async {
-                            final attachment = _attachments[index];
-                            final isCover = index == 0;
-                            final action = await showModalBottomSheet<String>(
-                              context: context,
-                              builder: (ctx) => SafeArea(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (!isCover)
-                                      ListTile(
-                                        leading: const Icon(Icons.photo),
-                                        title: const Text('设为封面'),
-                                        onTap: () =>
-                                            Navigator.pop(ctx, 'cover'),
-                                      ),
-                                    ListTile(
-                                      leading: Icon(
-                                        Icons.delete_outline,
-                                        color: theme.colorScheme.error,
-                                      ),
-                                      title: Text(
-                                        '删除图片',
-                                        style: TextStyle(
-                                          color: theme.colorScheme.error,
-                                        ),
-                                      ),
-                                      onTap: () =>
-                                          Navigator.pop(ctx, 'delete'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                            if (!mounted || action == null) return;
-                            if (action == 'cover') {
-                              await _setCover(attachment.id);
-                            } else if (action == 'delete') {
-                              await _removeAttachment(attachment.id);
-                            }
-                          },
-                        ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '长按拖动可调整顺序',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      FilledButton.tonalIcon(
-                        onPressed: _attachments.length >= KanbanCard.maxAttachments
-                            ? null
-                            : _pickAttachments,
-                        icon: const Icon(Icons.add_photo_alternate_outlined,
-                            size: 18),
-                        label: const Text('添加图片'),
-                      ),
-                      const SizedBox(height: 20),
-                      Text('截止日期', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          FilledButton.tonalIcon(
-                            onPressed: _pickDueDate,
-                            icon: const Icon(Icons.event, size: 18),
-                            label: Text(
-                              _dueDate == null
-                                  ? '设置日期'
-                                  : DateFormat.yMMMd('zh_CN')
-                                      .format(_dueDate!),
-                            ),
-                          ),
-                          if (_dueDate != null) ...[
-                            const SizedBox(width: 8),
-                            TextButton(
-                              onPressed: () =>
-                                  _safeSetState(() => _dueDate = null),
-                              child: const Text('清除'),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Text('优先级', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: CardPriority.values.map((p) {
-                          final selected = _priority == p;
-                          return FilterChip(
-                            label: Text(p.label),
-                            selected: selected,
-                            onSelected: (_) =>
-                                _safeSetState(() => _priority = p),
-                            avatar: p == CardPriority.none
-                                ? null
-                                : Icon(
-                                    Icons.flag,
-                                    size: 16,
-                                    color: p.color(
-                                      theme.colorScheme,
-                                      theme: themePreset,
-                                    ),
-                                  ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Text('标签', style: theme.textTheme.titleSmall),
-                          const Spacer(),
-                          TextButton.icon(
-                            onPressed: _showAddLabelDialog,
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text('新建'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final label in allLabels)
-                            FilterChip(
-                              label: Text(label.name),
-                              selected: _labels.contains(label.key),
-                              onSelected: (_) => _toggleLabel(label.key),
-                              backgroundColor:
-                                  label.color.withValues(alpha: 0.12),
-                              selectedColor:
-                                  label.color.withValues(alpha: 0.35),
-                              checkmarkColor: label.color,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Text('子任务', style: theme.textTheme.titleSmall),
-                          if (_checklist.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '${_checklist.where((i) => i.completed).length}/${_checklist.length}',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ..._checklist.map(
-                        (item) => CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: item.completed,
-                          title: Text(
-                            item.text,
-                            style: item.completed
-                                ? const TextStyle(
-                                    decoration: TextDecoration.lineThrough,
-                                  )
-                                : null,
-                          ),
-                          onChanged: (_) => _toggleChecklistItem(item.id),
-                          secondary: IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () => _removeChecklistItem(item.id),
-                          ),
-                          controlAffinity: ListTileControlAffinity.leading,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              key: const ValueKey('card-detail-checklist'),
-                              controller: _checklistInput,
-                              decoration: const InputDecoration(
-                                hintText: '添加子任务…',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                              onSubmitted: (_) => _addChecklistItem(),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _addChecklistItem,
-                            icon: const Icon(Icons.add),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      TextButton(
-                        onPressed: () async {
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('删除卡片？'),
-                              content: Text('「${widget.card.title}」将移至回收站'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('取消'),
-                                ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
                                 FilledButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('删除'),
+                                  onPressed: () async {
+                                    await _boardController.resolveCardConflict(
+                                      widget.columnId,
+                                      widget.card.id,
+                                      CardConflictResolution.keepPrimary,
+                                    );
+                                    if (context.mounted) _closeWithoutPersist();
+                                  },
+                                  child: const Text('保留当前'),
+                                ),
+                                OutlinedButton(
+                                  onPressed: () async {
+                                    await _boardController.resolveCardConflict(
+                                      widget.columnId,
+                                      widget.card.id,
+                                      CardConflictResolution.keepOther,
+                                    );
+                                    if (context.mounted) _closeWithoutPersist();
+                                  },
+                                  child: Text(
+                                    widget.card.conflictDeleted
+                                        ? '确认删除'
+                                        : '保留另一份',
+                                  ),
                                 ),
                               ],
                             ),
-                          );
-                          if (ok == true && context.mounted) {
-                            await context
-                                .read<BoardController>()
-                                .deleteCard(widget.columnId, widget.card.id);
-                            if (context.mounted) _closeWithoutPersist();
-                          }
-                        },
-                        child: Text(
-                          '删除',
-                          style: TextStyle(color: theme.colorScheme.error),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed: _save,
-                        child: const Text('保存'),
-                      ),
-                    ],
+                    ),
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Text('备注', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        TextField(
+                          key: const ValueKey('card-detail-desc'),
+                          controller: _descController,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            hintText: '添加详细说明…',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text('卡片背景色', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: _pickCardColor,
+                              icon:
+                                  const Icon(Icons.palette_outlined, size: 18),
+                              label: Text(
+                                _colorValue == null ? '设置颜色' : '已设置',
+                              ),
+                            ),
+                            if (_colorValue != null) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: Color(_colorValue!),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: theme.colorScheme.outlineVariant,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: () =>
+                                    _safeSetState(() => _colorValue = null),
+                                child: const Text('清除'),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text('图片', style: theme.textTheme.titleSmall),
+                            const Spacer(),
+                            Text(
+                              '${_attachments.length}/${KanbanCard.maxAttachments}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (missingCount > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: MaterialBanner(
+                              content: Text('有 $missingCount 张图片未下载到本机，请检查同步'),
+                              leading: Icon(
+                                Icons.cloud_off_outlined,
+                                color: theme.colorScheme.error,
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      context.read<BoardController>().syncNow(),
+                                  child: const Text('立即同步'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_attachments.isNotEmpty)
+                          CardAttachmentReorderGrid(
+                            attachments: _attachments,
+                            missingAttachmentIds:
+                                _boardController.missingAttachmentIds,
+                            onReorder: _reorderAttachments,
+                            onTap: _openAttachmentViewer,
+                            onLongPress: (index) async {
+                              final attachment = _attachments[index];
+                              final isCover = index == 0;
+                              final action = await showModalBottomSheet<String>(
+                                context: context,
+                                builder: (ctx) => SafeArea(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (!isCover)
+                                        ListTile(
+                                          leading: const Icon(Icons.photo),
+                                          title: const Text('设为封面'),
+                                          onTap: () =>
+                                              Navigator.pop(ctx, 'cover'),
+                                        ),
+                                      ListTile(
+                                        leading: Icon(
+                                          Icons.delete_outline,
+                                          color: theme.colorScheme.error,
+                                        ),
+                                        title: Text(
+                                          '删除图片',
+                                          style: TextStyle(
+                                            color: theme.colorScheme.error,
+                                          ),
+                                        ),
+                                        onTap: () =>
+                                            Navigator.pop(ctx, 'delete'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                              if (!mounted || action == null) return;
+                              if (action == 'cover') {
+                                await _setCover(attachment.id);
+                              } else if (action == 'delete') {
+                                await _removeAttachment(attachment.id);
+                              }
+                            },
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '长按拖动可调整顺序',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.tonalIcon(
+                          onPressed:
+                              _attachments.length >= KanbanCard.maxAttachments
+                                  ? null
+                                  : _pickAttachments,
+                          icon: const Icon(Icons.add_photo_alternate_outlined,
+                              size: 18),
+                          label: const Text('添加图片'),
+                        ),
+                        const SizedBox(height: 20),
+                        Text('截止日期', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: _pickDueDate,
+                              icon: const Icon(Icons.event, size: 18),
+                              label: Text(
+                                _dueDate == null
+                                    ? '设置日期'
+                                    : DateFormat.yMMMd('zh_CN')
+                                        .format(_dueDate!),
+                              ),
+                            ),
+                            if (_dueDate != null) ...[
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: () =>
+                                    _safeSetState(() => _dueDate = null),
+                                child: const Text('清除'),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text('提醒', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: _pickReminder,
+                              icon: const Icon(
+                                Icons.notifications_outlined,
+                                size: 18,
+                              ),
+                              label: Text(
+                                _reminderAt == null
+                                    ? '设置提醒'
+                                    : DateFormat('MMMd HH:mm', 'zh_CN')
+                                        .format(_reminderAt!),
+                              ),
+                            ),
+                            if (_reminderAt != null) ...[
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: () =>
+                                    _safeSetState(() => _reminderAt = null),
+                                child: const Text('清除'),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text('重复', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final recurrence in CardRecurrence.values)
+                              ChoiceChip(
+                                label: Text(recurrence.label),
+                                selected: _recurrence == recurrence,
+                                onSelected: (_) => _safeSetState(
+                                  () => _recurrence = recurrence,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text('优先级', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: CardPriority.values.map((p) {
+                            final selected = _priority == p;
+                            return FilterChip(
+                              label: Text(p.label),
+                              selected: selected,
+                              onSelected: (_) =>
+                                  _safeSetState(() => _priority = p),
+                              avatar: p == CardPriority.none
+                                  ? null
+                                  : Icon(
+                                      Icons.flag,
+                                      size: 16,
+                                      color: p.color(
+                                        theme.colorScheme,
+                                        theme: themePreset,
+                                      ),
+                                    ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text('标签', style: theme.textTheme.titleSmall),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _showAddLabelDialog,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('新建'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final label in allLabels)
+                              FilterChip(
+                                label: Text(label.name),
+                                selected: _labels.contains(label.key),
+                                onSelected: (_) => _toggleLabel(label.key),
+                                backgroundColor:
+                                    label.color.withValues(alpha: 0.12),
+                                selectedColor:
+                                    label.color.withValues(alpha: 0.35),
+                                checkmarkColor: label.color,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text('子任务', style: theme.textTheme.titleSmall),
+                            if (_checklist.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '${_checklist.where((i) => i.completed).length}/${_checklist.length}',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ..._checklist.map(
+                          (item) => CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: item.completed,
+                            title: Text(
+                              item.text,
+                              style: item.completed
+                                  ? const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                    )
+                                  : null,
+                            ),
+                            onChanged: (_) => _toggleChecklistItem(item.id),
+                            secondary: IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () => _removeChecklistItem(item.id),
+                            ),
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                key: const ValueKey('card-detail-checklist'),
+                                controller: _checklistInput,
+                                decoration: const InputDecoration(
+                                  hintText: '添加子任务…',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                onSubmitted: (_) => _addChecklistItem(),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _addChecklistItem,
+                              icon: const Icon(Icons.add),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: _saveAsTemplate,
+                          icon: const Icon(Icons.bookmark_add_outlined),
+                          label: const Text('存为模板'),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('删除卡片？'),
+                                content: Text('「${widget.card.title}」将移至回收站'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('取消'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('删除'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok == true && context.mounted) {
+                              await context
+                                  .read<BoardController>()
+                                  .deleteCard(widget.columnId, widget.card.id);
+                              if (context.mounted) _closeWithoutPersist();
+                            }
+                          },
+                          child: Text(
+                            '删除',
+                            style: TextStyle(color: theme.colorScheme.error),
+                          ),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed: _save,
+                          child: const Text('保存'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

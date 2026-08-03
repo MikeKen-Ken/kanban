@@ -8,6 +8,7 @@ class ProjectSettings {
     this.doneColumnName = '已完成',
     this.themeId = '',
     this.columnPreferences = const {},
+    this.columnWipLimits = const {},
     this.updatedAt = 0,
     this.revision = 0,
     this.conflictSide,
@@ -21,6 +22,9 @@ class ProjectSettings {
 
   /// 各列卡片展示偏好（排序、置顶）
   final Map<String, ColumnCardPreferences> columnPreferences;
+
+  /// 各列建议的在制品上限；未配置或小于 1 表示不限
+  final Map<String, int> columnWipLimits;
   final int updatedAt;
   final int revision;
 
@@ -35,6 +39,7 @@ class ProjectSettings {
     String? doneColumnName,
     String? themeId,
     Map<String, ColumnCardPreferences>? columnPreferences,
+    Map<String, int>? columnWipLimits,
     int? updatedAt,
     int? revision,
     Object? conflictSide = _sentinel,
@@ -44,6 +49,7 @@ class ProjectSettings {
       doneColumnName: doneColumnName ?? this.doneColumnName,
       themeId: themeId ?? this.themeId,
       columnPreferences: columnPreferences ?? this.columnPreferences,
+      columnWipLimits: columnWipLimits ?? this.columnWipLimits,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
       conflictSide: clearConflictSide
@@ -59,6 +65,11 @@ class ProjectSettings {
   ColumnCardPreferences columnPreferencesFor(String columnId) =>
       columnPreferences[columnId] ?? const ColumnCardPreferences();
 
+  int? wipLimitFor(String columnId) {
+    final value = columnWipLimits[columnId];
+    return value == null || value < 1 ? null : value;
+  }
+
   Map<String, dynamic> toJson({bool includeConflict = true}) {
     final map = <String, dynamic>{
       'doneColumnName': doneColumnName,
@@ -67,6 +78,7 @@ class ProjectSettings {
         'columnPreferences': columnPreferences.map(
           (key, value) => MapEntry(key, value.toJson()),
         ),
+      if (columnWipLimits.isNotEmpty) 'columnWipLimits': columnWipLimits,
       'updatedAt': updatedAt,
       'revision': revision,
     };
@@ -78,6 +90,7 @@ class ProjectSettings {
 
   factory ProjectSettings.fromJson(Map<String, dynamic> json) {
     final prefsRaw = json['columnPreferences'] as Map<String, dynamic>?;
+    final wipRaw = json['columnWipLimits'] as Map<String, dynamic>?;
     final sideRaw = json['conflictSide'] as Map<String, dynamic>?;
     return ProjectSettings(
       doneColumnName:
@@ -93,10 +106,12 @@ class ProjectSettings {
                 ),
               ),
             ),
+      columnWipLimits: wipRaw == null
+          ? const {}
+          : wipRaw.map((key, value) => MapEntry(key, value as int)),
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
-      conflictSide:
-          sideRaw == null ? null : ProjectSettings.fromJson(sideRaw),
+      conflictSide: sideRaw == null ? null : ProjectSettings.fromJson(sideRaw),
     );
   }
 

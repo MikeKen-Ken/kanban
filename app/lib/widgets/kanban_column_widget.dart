@@ -13,14 +13,22 @@ class KanbanColumnWidget extends StatelessWidget {
     required this.column,
     required this.columnIndex,
     this.searchQuery = '',
+    this.visibleCardIds,
+    this.width = 300,
   });
 
   final KanbanColumn column;
   final int columnIndex;
   final String searchQuery;
+  final Set<String>? visibleCardIds;
+  final double width;
 
   List<KanbanCard> _displayCards(BoardController controller) {
-    return controller.displayCardsForColumn(column);
+    final cards = controller.displayCardsForColumn(column);
+    final visible = visibleCardIds;
+    return visible == null
+        ? cards
+        : cards.where((card) => visible.contains(card.id)).toList();
   }
 
   Future<void> _pickSortMode(BuildContext context) async {
@@ -68,7 +76,7 @@ class KanbanColumnWidget extends StatelessWidget {
     final controller = context.read<BoardController>();
     final titleController = TextEditingController();
 
-    final result = await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('在「${column.title}」添加卡片'),
@@ -79,24 +87,48 @@ class KanbanColumnWidget extends StatelessWidget {
             labelText: '标题',
             hintText: '输入后回车快速添加',
           ),
-          onSubmitted: (_) => Navigator.pop(ctx, true),
+          onSubmitted: (_) => Navigator.pop(ctx, 'add'),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('取消'),
           ),
+          if (controller.cardTemplates.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'template'),
+              child: const Text('从模板'),
+            ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.pop(ctx, 'add'),
             child: const Text('添加'),
           ),
         ],
       ),
     );
 
-    // note: 点击遮罩或返回键时 result 为 null；有内容时视为添加，仅「取消」为放弃
     final title = titleController.text.trim();
-    if (title.isNotEmpty && result != false) {
+    if (result == 'template' && context.mounted) {
+      final templateId = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('选择卡片模板'),
+          children: [
+            for (final template in controller.cardTemplates)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, template.id),
+                child: Text(template.name),
+              ),
+          ],
+        ),
+      );
+      if (templateId != null) {
+        await controller.createCardFromTemplate(
+          templateId: templateId,
+          columnId: column.id,
+        );
+      }
+    } else if (title.isNotEmpty && result == 'add') {
       await controller.addCard(column.id, title);
     }
   }
@@ -173,6 +205,9 @@ class KanbanColumnWidget extends StatelessWidget {
         column.colorValue != null ? Color(column.colorValue!) : null;
     final cards = _displayCards(controller);
     final columnPrefs = controller.columnPreferencesFor(column.id);
+    final wipLimit = controller.projectSettings.wipLimitFor(column.id);
+    final activeCount = column.cards.where((card) => !card.completed).length;
+    final overWip = wipLimit != null && activeCount > wipLimit;
     final allColumns = controller.board?.columns ?? [];
     final customLabels = controller.appSettings.customLabels;
     final visibleCount = cards
@@ -180,15 +215,17 @@ class KanbanColumnWidget extends StatelessWidget {
         .length;
 
     return Container(
-      width: 300,
+      width: width,
       decoration: BoxDecoration(
         color: columnColor != null
             ? columnColor.withValues(alpha: 0.12)
             : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: columnColor ?? colorScheme.outlineVariant,
-          width: columnColor != null ? 1.5 : 1,
+          color: overWip
+              ? colorScheme.error
+              : (columnColor ?? colorScheme.outlineVariant),
+          width: overWip || columnColor != null ? 1.5 : 1,
         ),
       ),
       child: Column(
@@ -215,26 +252,41 @@ class KanbanColumnWidget extends StatelessWidget {
                       Expanded(
                         child: Text(
                           column.title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: columnColor,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: columnColor,
+                                  ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    searchQuery.isEmpty
-                        ? '${cards.length}'
-                        : '$visibleCount/${cards.length}',
-                    style: Theme.of(context).textTheme.labelMedium,
+                Tooltip(
+                  message: wipLimit == null
+                      ? '卡片数量'
+                      : '未完成 $activeCount / 建议上限 $wipLimit'
+                          '${overWip ? '，已超出' : ''}',
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: overWip
+                          ? colorScheme.errorContainer
+                          : colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      wipLimit == null
+                          ? (searchQuery.isEmpty
+                              ? '${cards.length}'
+                              : '$visibleCount/${cards.length}')
+                          : '$activeCount/$wipLimit',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color:
+                                overWip ? colorScheme.onErrorContainer : null,
+                            fontWeight: overWip ? FontWeight.w700 : null,
+                          ),
+                    ),
                   ),
                 ),
                 ReorderableDragStartListener(

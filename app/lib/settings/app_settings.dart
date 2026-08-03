@@ -11,6 +11,8 @@ import '../features/project/project_list_preferences.dart';
 class AppSettings {
   const AppSettings({
     required this.dragLongPressMs,
+    this.themeMode = ThemeMode.system,
+    this.hasCompletedOnboarding = false,
     this.projectSortMode = ProjectSortMode.defaultOrder,
     this.pinnedProjectIds = const [],
     this.projectLastUsedAt = const {},
@@ -19,6 +21,12 @@ class AppSettings {
 
   /// 拖拽前按压时长（毫秒）。0 表示按下即拖。
   final int dragLongPressMs;
+
+  /// 设备本机的明暗模式偏好
+  final ThemeMode themeMode;
+
+  /// 是否已完成首次使用引导
+  final bool hasCompletedOnboarding;
 
   /// 项目列表排序方式
   final ProjectSortMode projectSortMode;
@@ -39,6 +47,8 @@ class AppSettings {
 
   AppSettings copyWith({
     int? dragLongPressMs,
+    ThemeMode? themeMode,
+    bool? hasCompletedOnboarding,
     ProjectSortMode? projectSortMode,
     List<String>? pinnedProjectIds,
     Map<String, int>? projectLastUsedAt,
@@ -46,6 +56,9 @@ class AppSettings {
   }) {
     return AppSettings(
       dragLongPressMs: dragLongPressMs ?? this.dragLongPressMs,
+      themeMode: themeMode ?? this.themeMode,
+      hasCompletedOnboarding:
+          hasCompletedOnboarding ?? this.hasCompletedOnboarding,
       projectSortMode: projectSortMode ?? this.projectSortMode,
       pinnedProjectIds: pinnedProjectIds ?? this.pinnedProjectIds,
       projectLastUsedAt: projectLastUsedAt ?? this.projectLastUsedAt,
@@ -55,12 +68,13 @@ class AppSettings {
 
   Map<String, dynamic> toJson() => {
         'dragLongPressMs': dragLongPressMs,
+        'themeMode': themeMode.name,
+        'hasCompletedOnboarding': hasCompletedOnboarding,
         'projectSortMode': projectSortMode.name,
         'pinnedProjectIds': pinnedProjectIds,
         'projectLastUsedAt': projectLastUsedAt,
         if (customLabels.isNotEmpty)
-          'customLabels':
-              customLabels.map((label) => label.toJson()).toList(),
+          'customLabels': customLabels.map((label) => label.toJson()).toList(),
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -68,6 +82,11 @@ class AppSettings {
     return AppSettings(
       dragLongPressMs: json['dragLongPressMs'] as int? ??
           AppSettings.platformDefault().dragLongPressMs,
+      themeMode: ThemeMode.values.firstWhere(
+        (mode) => mode.name == json['themeMode'],
+        orElse: () => ThemeMode.system,
+      ),
+      hasCompletedOnboarding: json['hasCompletedOnboarding'] as bool? ?? false,
       projectSortMode: ProjectSortMode.fromName(
         json['projectSortMode'] as String?,
       ),

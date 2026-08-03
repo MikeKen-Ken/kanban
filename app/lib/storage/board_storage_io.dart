@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
+import '../features/shared_content/shared_content.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import 'board_storage.dart';
@@ -79,8 +80,8 @@ class BoardStorageIo implements BoardStorage {
       return KanbanBoard.fromJson(meta);
     }
 
-    final refs = (meta['columns'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
+    final refs =
+        (meta['columns'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final columns = <KanbanColumn>[];
     for (final ref in refs) {
       final id = ref['id'] as String;
@@ -206,6 +207,23 @@ class BoardStorageIo implements BoardStorage {
       await dir.create(recursive: true);
     }
     await writeJsonFileAtomic(KanbanPathsIo.appTrashFile(dir), trash.toJson());
+  }
+
+  @override
+  Future<SharedContent> loadSharedContent() async {
+    final dir = await _dataDir();
+    final json = await readJsonFile(KanbanPathsIo.sharedContentFile(dir));
+    if (json == null) return SharedContent.empty;
+    return SharedContent.fromJson(json);
+  }
+
+  @override
+  Future<void> saveSharedContent(SharedContent content) async {
+    final dir = await _dataDir();
+    await writeJsonFileAtomic(
+      KanbanPathsIo.sharedContentFile(dir),
+      content.toJson(),
+    );
   }
 
   @override

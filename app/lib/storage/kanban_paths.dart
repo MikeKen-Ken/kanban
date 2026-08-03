@@ -12,6 +12,7 @@ class KanbanPaths {
   static const settingsFileName = 'settings.json';
   static const trashFileName = 'trash.json';
   static const appTrashFileName = 'app_trash.json';
+  static const sharedContentFileName = 'shared_content.json';
 
   /// 远端根目录；兼容旧配置 `/KanbanApp/board.json`
   static String remoteBaseDir(String remotePath) {
@@ -89,7 +90,8 @@ class KanbanPaths {
 
   static String? attachmentIdFromRemoteFileName(String fileName) {
     if (!fileName.endsWith('.$attachmentFileExt')) return null;
-    final base = fileName.substring(0, fileName.length - attachmentFileExt.length - 1);
+    final base =
+        fileName.substring(0, fileName.length - attachmentFileExt.length - 1);
     if (base.endsWith('_thumb')) {
       return base.substring(0, base.length - 6);
     }
@@ -103,6 +105,9 @@ class KanbanPaths {
 
   static String remoteAppTrashPath(String baseDir) =>
       '$baseDir/$appTrashFileName';
+
+  static String remoteSharedContentPath(String baseDir) =>
+      '$baseDir/$sharedContentFileName';
 
   static String? columnIdFromRemoteFile(String filePath) {
     final name = filePath.split('/').last;

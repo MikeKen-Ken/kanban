@@ -61,6 +61,9 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       a.completed == b.completed &&
       a.completedAt == b.completedAt &&
       a.dueDate == b.dueDate &&
+      a.reminderAt == b.reminderAt &&
+      a.recurrence == b.recurrence &&
+      a.recurrenceSeriesId == b.recurrenceSeriesId &&
       a.priority == b.priority &&
       a.colorValue == b.colorValue &&
       _listEq(a.labels, b.labels) &&
@@ -86,9 +89,7 @@ KanbanCard _withConflict({
   );
   // note: 保留已有未解决冲突时，若 primary 已有 conflictSide 且与 other 不同，优先保留已有
   final existing = primary.conflictSide;
-  final conflictSide = existing != null && !otherDeleted
-      ? existing
-      : side;
+  final conflictSide = existing != null && !otherDeleted ? existing : side;
   return stripConflict(primary).copyWith(
     conflictSide: conflictSide,
     conflictColumnId: otherDeleted ? null : otherColumnId,
@@ -112,7 +113,8 @@ CardMergeResult mergeCardTwoWay({
 
   // note: 已有未解决冲突：保留主内容较新者，并保留 conflictSide
   if (localCard.hasConflict || remoteCard.hasConflict) {
-    final primary = localCard.updatedAt >= remoteCard.updatedAt ? local : remote;
+    final primary =
+        localCard.updatedAt >= remoteCard.updatedAt ? local : remote;
     final other = identical(primary, local) ? remote : local;
     final preserved = primary.card.hasConflict
         ? primary.card
@@ -175,6 +177,9 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
       local.completed != remote.completed ||
       local.completedAt != remote.completedAt ||
       local.dueDate != remote.dueDate ||
+      local.reminderAt != remote.reminderAt ||
+      local.recurrence != remote.recurrence ||
+      local.recurrenceSeriesId != remote.recurrenceSeriesId ||
       local.priority != remote.priority ||
       local.colorValue != remote.colorValue ||
       !_listEq(local.labels, remote.labels) ||
@@ -289,6 +294,24 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.dueDate,
     eq: (a, b) => a == b,
   );
+  final reminderConflict = _fieldConflict(
+    base: base.card.reminderAt,
+    local: loc.card.reminderAt,
+    remote: rem.card.reminderAt,
+    eq: (a, b) => a == b,
+  );
+  final recurrenceConflict = _fieldConflict(
+    base: base.card.recurrence,
+    local: loc.card.recurrence,
+    remote: rem.card.recurrence,
+    eq: (a, b) => a == b,
+  );
+  final recurrenceSeriesConflict = _fieldConflict(
+    base: base.card.recurrenceSeriesId,
+    local: loc.card.recurrenceSeriesId,
+    remote: rem.card.recurrenceSeriesId,
+    eq: (a, b) => a == b,
+  );
   final priorityConflict = _fieldConflict(
     base: base.card.priority,
     local: loc.card.priority,
@@ -331,6 +354,9 @@ CardMergeResult mergeCardThreeWay({
       completedConflict ||
       completedAtConflict ||
       dueConflict ||
+      reminderConflict ||
+      recurrenceConflict ||
+      recurrenceSeriesConflict ||
       priorityConflict ||
       colorConflict ||
       labelsConflict ||
@@ -381,6 +407,21 @@ CardMergeResult mergeCardThreeWay({
     local: loc.card.dueDate,
     remote: rem.card.dueDate,
   );
+  final mergedReminder = _threeWayValue(
+    base: base.card.reminderAt,
+    local: loc.card.reminderAt,
+    remote: rem.card.reminderAt,
+  );
+  final mergedRecurrence = _threeWayValue(
+    base: base.card.recurrence,
+    local: loc.card.recurrence,
+    remote: rem.card.recurrence,
+  );
+  final mergedRecurrenceSeries = _threeWayValue(
+    base: base.card.recurrenceSeriesId,
+    local: loc.card.recurrenceSeriesId,
+    remote: rem.card.recurrenceSeriesId,
+  );
   final mergedPriority = _threeWayValue(
     base: base.card.priority,
     local: loc.card.priority,
@@ -429,6 +470,9 @@ CardMergeResult mergeCardThreeWay({
     completed: mergedCompleted,
     completedAt: mergedCompletedAt,
     dueDate: mergedDue,
+    reminderAt: mergedReminder,
+    recurrence: mergedRecurrence,
+    recurrenceSeriesId: mergedRecurrenceSeries,
     priority: mergedPriority,
     labels: mergedLabels,
     checklist: mergedChecklist,
@@ -441,8 +485,7 @@ CardMergeResult mergeCardThreeWay({
   );
 }
 
-T _threeWayValue<T>(
-  {
+T _threeWayValue<T>({
   required T base,
   required T local,
   required T remote,

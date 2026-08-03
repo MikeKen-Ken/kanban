@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/board_controller.dart';
+import 'features/onboarding/onboarding_screen.dart';
 import 'features/project/project_theme.dart';
 import 'screens/home_screen.dart';
 import 'utils/windows_clipboard_history_paste.dart';
@@ -10,6 +11,7 @@ import 'webdav_sync/webdav_sync_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final controller = await BoardController.create();
+  await controller.initializeReminders();
   runApp(KanbanApp(controller: controller));
   // 修复 Windows Win+V 剪贴板历史无法粘贴到输入框（flutter#143997）
   installWindowsClipboardHistoryPasteFix();
@@ -26,14 +28,24 @@ class KanbanApp extends StatelessWidget {
       value: controller,
       child: Consumer<BoardController>(
         builder: (context, boardController, _) {
-          final preset = projectThemeForId(boardController.projectSettings.themeId);
+          final preset =
+              projectThemeForId(boardController.projectSettings.themeId);
           return MaterialApp(
             title: '看板',
             debugShowCheckedModeBanner: false,
             theme: buildKanbanTheme(preset, Brightness.light),
             darkTheme: buildKanbanTheme(preset, Brightness.dark),
+            themeMode: boardController.appSettings.themeMode,
             locale: const Locale('zh', 'CN'),
-            home: const HomeScreen(),
+            home: boardController.appSettings.hasCompletedOnboarding
+                ? const HomeScreen()
+                : OnboardingScreen(
+                    onCompleted: () => boardController.saveAppSettings(
+                      boardController.appSettings.copyWith(
+                        hasCompletedOnboarding: true,
+                      ),
+                    ),
+                  ),
           );
         },
       ),
@@ -52,6 +64,25 @@ String syncStatusLabel(SyncStatus status) {
     case SyncStatus.error:
       return '同步失败';
   }
+}
+
+String formatSyncTime(DateTime time) {
+  String twoDigits(int value) => value.toString().padLeft(2, '0');
+  return '${twoDigits(time.month)}-${twoDigits(time.day)} '
+      '${twoDigits(time.hour)}:${twoDigits(time.minute)}';
+}
+
+String syncStatusWithLastSuccessLabel(
+  SyncStatus status,
+  DateTime? lastSyncedAt,
+) {
+  if (lastSyncedAt == null || status == SyncStatus.syncing) {
+    return syncStatusLabel(status);
+  }
+  if (status == SyncStatus.error) {
+    return syncStatusLabel(status);
+  }
+  return '已同步 ${formatSyncTime(lastSyncedAt)}';
 }
 
 IconData syncStatusIcon(SyncStatus status) {

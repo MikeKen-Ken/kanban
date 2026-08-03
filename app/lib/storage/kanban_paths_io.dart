@@ -86,4 +86,7 @@ class KanbanPathsIo {
 
   static File appTrashFile(Directory dataDir) =>
       File(p.join(dataDir.path, KanbanPaths.appTrashFileName));
+
+  static File sharedContentFile(Directory dataDir) =>
+      File(p.join(dataDir.path, KanbanPaths.sharedContentFileName));
 }

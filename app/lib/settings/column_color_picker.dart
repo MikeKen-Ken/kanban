@@ -185,15 +185,15 @@ class _SvPicker extends StatelessWidget {
                     ),
                     child: const SizedBox.expand(),
                   ),
-                  DecoratedBox(
-                    decoration: const BoxDecoration(
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [Colors.transparent, Colors.black],
                       ),
                     ),
-                    child: const SizedBox.expand(),
+                    child: SizedBox.expand(),
                   ),
                   Positioned(
                     left: saturation * size.width - 8,
