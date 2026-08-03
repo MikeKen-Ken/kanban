@@ -52,6 +52,8 @@ class BoardController extends ChangeNotifier {
   ProjectsManifest? manifest;
   String? activeProjectId;
   ProjectSettings projectSettings = const ProjectSettings();
+  /// 各项目 themeId 缓存（供项目切换菜单等展示；权威数据仍在 settings.json）
+  Map<String, String> projectThemeIds = {};
   SharedContent sharedContent = SharedContent.empty;
   WebDavConfig webDavConfig = WebDavConfig.empty;
   AppSettings appSettings = AppSettings.platformDefault();
@@ -161,6 +163,36 @@ class BoardController extends ChangeNotifier {
 
   bool isProjectPinned(String projectId) =>
       appSettings.pinnedProjectIds.contains(projectId);
+
+  /// 读取某项目的主题 id；当前项目以内存中的设置为准
+  String themeIdForProject(String projectId) {
+    if (projectId == activeProjectId) return projectSettings.themeId;
+    return projectThemeIds[projectId] ?? '';
+  }
+
+  Future<void> _refreshProjectThemeIds() async {
+    final entries = manifest?.projects ?? const <ProjectEntry>[];
+    if (entries.isEmpty) {
+      projectThemeIds = {};
+      return;
+    }
+    final next = <String, String>{};
+    for (final entry in entries) {
+      if (entry.id == activeProjectId) {
+        next[entry.id] = projectSettings.themeId;
+        continue;
+      }
+      final settings = await _repository.loadProjectSettings(entry.id);
+      next[entry.id] = settings.themeId;
+    }
+    projectThemeIds = next;
+  }
+
+  void _setProjectThemeIdsFrom(Map<String, ProjectSettings> settings) {
+    projectThemeIds = {
+      for (final entry in settings.entries) entry.key: entry.value.themeId,
+    };
+  }
 
   /// 所有回收站条目（当前项目 + 已删项目 + 标签），按删除时间倒序
   List<TrashItem> get allTrashItems {
@@ -492,6 +524,7 @@ class BoardController extends ChangeNotifier {
     projectTrashes = Map<String, TrashBin>.from(workspace.projectTrash);
     appTrash = workspace.appTrash;
     sharedContent = workspace.sharedContent;
+    _setProjectThemeIdsFrom(workspace.settings);
     await _mirrorSharedLabelsToLocalPreferences();
     final currentId = activeProjectId;
     if (currentId != null && workspace.manifest.findById(currentId) != null) {
@@ -569,6 +602,7 @@ class BoardController extends ChangeNotifier {
 
       board = await _repository.loadBoard(activeProjectId!);
       projectSettings = await _repository.loadProjectSettings(activeProjectId!);
+      await _refreshProjectThemeIds();
       await _loadTrashState();
     } catch (e) {
       errorMessage = e.toString();
@@ -600,6 +634,7 @@ class BoardController extends ChangeNotifier {
             await _repository.loadProjectSettings(activeProjectId!);
         sharedContent = await _repository.loadSharedContent();
         await _initializeSharedLabels();
+        await _refreshProjectThemeIds();
         await _loadTrashState();
       }
       await refreshMissingAttachments();
@@ -693,6 +728,7 @@ class BoardController extends ChangeNotifier {
   Future<void> _persistProjectSettings(ProjectSettings next) async {
     if (activeProjectId == null) return;
     projectSettings = next;
+    projectThemeIds[activeProjectId!] = next.themeId;
     await _repository.saveProjectSettings(activeProjectId!, next);
     notifyListeners();
     _syncService.schedulePush();
@@ -858,6 +894,7 @@ class BoardController extends ChangeNotifier {
     await _repository.saveActiveProjectId(projectId);
     board = await _repository.loadBoard(projectId);
     projectSettings = await _repository.loadProjectSettings(projectId);
+    projectThemeIds[projectId] = projectSettings.themeId;
     activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
     await _recordProjectUsed(projectId);
     notifyListeners();
@@ -867,6 +904,7 @@ class BoardController extends ChangeNotifier {
     final projectId = await _repository.createProject(title);
     manifest = await _repository.loadManifest();
     projectTrashes[projectId] = TrashBin.empty;
+    projectThemeIds[projectId] = '';
     await switchProject(projectId);
     _syncService.schedulePush();
   }
@@ -1143,6 +1181,7 @@ class BoardController extends ChangeNotifier {
     manifest = manifest!.bump().copyWith(projects: remaining);
     await _repository.saveManifest(manifest!);
     projectTrashes.remove(projectId);
+    projectThemeIds.remove(projectId);
 
     if (activeProjectId == projectId) {
       final next = remaining.first;
@@ -1150,6 +1189,7 @@ class BoardController extends ChangeNotifier {
       await _repository.saveActiveProjectId(next.id);
       board = await _repository.loadBoard(next.id);
       projectSettings = await _repository.loadProjectSettings(next.id);
+      projectThemeIds[next.id] = projectSettings.themeId;
       activeProjectTrash = projectTrashes[next.id] ?? TrashBin.empty;
     }
 
@@ -1965,6 +2005,7 @@ class BoardController extends ChangeNotifier {
     await _repository.saveManifest(manifest!);
 
     projectTrashes[payload.entry.id] = payload.projectTrash;
+    projectThemeIds[payload.entry.id] = payload.settings.themeId;
     appTrash = appTrash.bump().copyWith(
           items: appTrash.items.where((i) => i.id != item.id).toList(),
         );

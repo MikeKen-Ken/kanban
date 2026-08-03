@@ -5,10 +5,16 @@ import '../../controllers/board_controller.dart';
 import '../../features/project/project_list_preferences.dart';
 import '../../features/project/projects_manifest.dart';
 import 'project_settings_screen.dart';
+import 'project_theme.dart';
 
 /// 左上角项目切换器
 class ProjectSwitcher extends StatelessWidget {
   const ProjectSwitcher({super.key});
+
+  static const double _menuMinWidth = 360;
+  static const double _menuMaxWidth = 440;
+  static const double _titleMinWidth = 168;
+  static const double _titleMaxWidth = 280;
 
   Future<void> _createProject(BuildContext context) async {
     final controller = context.read<BoardController>();
@@ -169,6 +175,11 @@ class ProjectSwitcher extends StatelessWidget {
     );
   }
 
+  Color _projectSeedColor(String themeId, Brightness brightness) {
+    final preset = projectThemeForId(themeId);
+    return brightness == Brightness.dark ? preset.seedDark : preset.seedLight;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<BoardController>(
@@ -179,6 +190,10 @@ class ProjectSwitcher extends StatelessWidget {
 
         return PopupMenuButton<String>(
           tooltip: '切换项目',
+          constraints: const BoxConstraints(
+            minWidth: _menuMinWidth,
+            maxWidth: _menuMaxWidth,
+          ),
           onSelected: (value) async {
             if (value == '__new__') {
               await _createProject(context);
@@ -189,10 +204,6 @@ class ProjectSwitcher extends StatelessWidget {
                   builder: (_) => const ProjectSettingsScreen(),
                 ),
               );
-            } else if (value == '__rename__') {
-              if (active != null) {
-                await _renameProject(context, active);
-              }
             } else if (value.startsWith('__sort__:')) {
               final modeName = value.substring('__sort__:'.length);
               await controller.setProjectSortMode(
@@ -202,33 +213,39 @@ class ProjectSwitcher extends StatelessWidget {
               await controller.switchProject(value);
             }
           },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.folder_outlined, size: 20),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    active?.title ?? '看板',
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minWidth: _titleMinWidth,
+              maxWidth: _titleMaxWidth,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.folder_outlined, size: 20),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      active?.title ?? '看板',
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 2),
-                Icon(
-                  Icons.arrow_drop_down,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
-                ),
-              ],
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                  ),
+                ],
+              ),
             ),
           ),
           itemBuilder: (context) {
             final theme = Theme.of(context);
+            final brightness = theme.brightness;
             final subtitleStyle = theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             );
@@ -252,14 +269,28 @@ class ProjectSwitcher extends StatelessWidget {
               ...projects.map((project) {
                 final isActive = project.id == controller.activeProjectId;
                 final isPinned = controller.isProjectPinned(project.id);
+                final seed = _projectSeedColor(
+                  controller.themeIdForProject(project.id),
+                  brightness,
+                );
+                final scheme = ColorScheme.fromSeed(
+                  seedColor: seed,
+                  brightness: brightness,
+                );
+                final tileBg = scheme.primaryContainer.withValues(
+                  alpha: isActive ? 0.95 : 0.45,
+                );
+                final onTile = scheme.onPrimaryContainer;
+
                 return PopupMenuItem<String>(
                   value: project.id,
                   padding: EdgeInsets.zero,
                   child: ListTile(
                     dense: true,
                     selected: isActive,
-                    selectedTileColor: theme.colorScheme.primaryContainer,
-                    selectedColor: theme.colorScheme.onPrimaryContainer,
+                    tileColor: tileBg,
+                    selectedTileColor: tileBg,
+                    selectedColor: onTile,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -269,7 +300,7 @@ class ProjectSwitcher extends StatelessWidget {
                           ? Icons.radio_button_checked
                           : Icons.radio_button_off,
                       size: 18,
-                      color: isActive ? theme.colorScheme.primary : null,
+                      color: scheme.primary,
                     ),
                     title: Row(
                       children: [
@@ -278,11 +309,9 @@ class ProjectSwitcher extends StatelessWidget {
                             project.title,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: isActive
-                                  ? theme.colorScheme.onPrimaryContainer
-                                  : theme.colorScheme.onSurface,
+                              color: onTile,
                               fontWeight:
-                                  isActive ? FontWeight.w700 : FontWeight.w400,
+                                  isActive ? FontWeight.w700 : FontWeight.w500,
                             ),
                           ),
                         ),
@@ -316,7 +345,11 @@ class ProjectSwitcher extends StatelessWidget {
                           ),
                         IconButton(
                           tooltip: '重命名项目',
-                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: onTile.withValues(alpha: 0.85),
+                          ),
                           visualDensity: VisualDensity.compact,
                           onPressed: () async {
                             Navigator.pop(context);
@@ -328,7 +361,9 @@ class ProjectSwitcher extends StatelessWidget {
                           icon: Icon(
                             isPinned ? Icons.push_pin : Icons.push_pin_outlined,
                             size: 18,
-                            color: isPinned ? theme.colorScheme.primary : null,
+                            color: isPinned
+                                ? scheme.primary
+                                : onTile.withValues(alpha: 0.85),
                           ),
                           visualDensity: VisualDensity.compact,
                           onPressed: () async {
@@ -365,16 +400,6 @@ class ProjectSwitcher extends StatelessWidget {
                   dense: true,
                 ),
               ),
-              if (active != null)
-                const PopupMenuItem(
-                  value: '__rename__',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.edit_outlined),
-                    title: Text('重命名当前项目'),
-                    dense: true,
-                  ),
-                ),
               const PopupMenuItem(
                 value: '__settings__',
                 child: ListTile(
