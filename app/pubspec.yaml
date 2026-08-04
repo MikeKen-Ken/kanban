@@ -1,7 +1,7 @@
 name: kanban
 description: Cross-platform kanban board with automatic WebDAV sync.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.5.0
@@ -27,6 +27,7 @@ dependencies:
   crypto: ^3.0.7
   path: ^1.9.1
   mcp_dart: ^2.4.0
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

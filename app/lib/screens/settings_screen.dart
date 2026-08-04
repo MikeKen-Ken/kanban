@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
 import '../features/activity/activity_screen.dart';
+import '../features/app_update/app_update_screen.dart';
 import '../features/import_export/backup_file_picker.dart';
 import '../features/labels/label_management_screen.dart';
 import '../features/mcp/kanban_mcp_host.dart';
@@ -361,6 +362,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       );
                     },
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SettingsSection(
+            icon: Icons.system_update_alt_outlined,
+            title: '关于与更新',
+            subtitle: '从 GitHub Release 下载安装包',
+            children: [
+              SettingsNavigationTile(
+                icon: Icons.download_outlined,
+                title: '检查更新',
+                subtitle: 'Android 安装 APK；Windows 同目录覆盖后重启',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AppUpdateScreen(),
+                    ),
                   );
                 },
               ),

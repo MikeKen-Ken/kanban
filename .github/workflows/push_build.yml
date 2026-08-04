@@ -157,11 +157,12 @@ jobs:
           cd windows-release
           zip -r ../Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip .
 
+      # 正式发布（非 draft），便于客户端软件内更新通过公开 API 发现
       - name: Upload to GitHub Release
         uses: ./.github/actions/publish-release-asset
         with:
           tag: v${{ needs.version.outputs.version }}
-          draft: "true"
+          draft: "false"
           assets: |
             apk-result/app-release.apk#Kanban-${{ needs.version.outputs.version }}-android-arm64v8.apk
             Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip#Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip

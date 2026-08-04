@@ -92,6 +92,7 @@
 - `import_export/`：完整备份、校验与导入
 - `labels/`：共享自定义标签管理
 - `onboarding/`：首次引导
+- `app_update/`：从 GitHub Release 检查/下载更新（Android APK 安装；Windows zip 同目录覆盖重启）
 
 跨功能日期判断、标识符和结果类型放在 `app/lib/common/`。
 

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
+import '../features/app_update/app_update_screen.dart';
 import '../features/kanban/card_detail_sheet.dart';
 import '../features/project/board_background_layer.dart';
 import '../features/project/project_switcher.dart';
@@ -55,6 +58,10 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     });
     bindImeGuard(_textControllers);
     _searchController.addListener(_onSearchChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(maybePromptAppUpdate(context));
+    });
   }
 
   void _onSearchChanged() {

@@ -11,7 +11,7 @@ inputs:
     default: ""
   draft:
     description: Create as draft when the release does not exist yet
-    default: "true"
+    default: "false"
 
 runs:
   using: composite

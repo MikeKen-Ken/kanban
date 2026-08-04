@@ -95,5 +95,6 @@ jobs:
         uses: ./.github/actions/publish-release-asset
         with:
           tag: v${{ needs.build.outputs.version }}
+          draft: "false"
           assets: |
             apk-result/app-release.apk#Kanban-${{ needs.build.outputs.version }}-android-arm64v8.apk
