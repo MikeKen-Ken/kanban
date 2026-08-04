@@ -9,6 +9,7 @@ class ProjectSettings {
     this.themeId = '',
     this.backgroundAttachmentId = '',
     this.backgroundOverlayOpacity = defaultBackgroundOverlayOpacity,
+    this.cardSurfaceOpacity = defaultCardSurfaceOpacity,
     this.columnPreferences = const {},
     this.columnWipLimits = const {},
     this.updatedAt = 0,
@@ -28,6 +29,9 @@ class ProjectSettings {
   /// 背景图上的半透明遮罩强度（0–[maxBackgroundOverlayOpacity]）
   final double backgroundOverlayOpacity;
 
+  /// 看板卡片表面不透明度（[minCardSurfaceOpacity]–1）；低于 1 时透过卡片看到壁纸
+  final double cardSurfaceOpacity;
+
   /// 各列卡片展示偏好（排序、置顶）
   final Map<String, ColumnCardPreferences> columnPreferences;
 
@@ -46,12 +50,15 @@ class ProjectSettings {
   static const defaultDoneColumnName = '已完成';
   static const defaultBackgroundOverlayOpacity = 0.4;
   static const maxBackgroundOverlayOpacity = 0.7;
+  static const defaultCardSurfaceOpacity = 1.0;
+  static const minCardSurfaceOpacity = 0.35;
 
   ProjectSettings copyWith({
     String? doneColumnName,
     String? themeId,
     String? backgroundAttachmentId,
     double? backgroundOverlayOpacity,
+    double? cardSurfaceOpacity,
     Map<String, ColumnCardPreferences>? columnPreferences,
     Map<String, int>? columnWipLimits,
     int? updatedAt,
@@ -66,6 +73,7 @@ class ProjectSettings {
           backgroundAttachmentId ?? this.backgroundAttachmentId,
       backgroundOverlayOpacity:
           backgroundOverlayOpacity ?? this.backgroundOverlayOpacity,
+      cardSurfaceOpacity: cardSurfaceOpacity ?? this.cardSurfaceOpacity,
       columnPreferences: columnPreferences ?? this.columnPreferences,
       columnWipLimits: columnWipLimits ?? this.columnWipLimits,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -91,6 +99,9 @@ class ProjectSettings {
   static double clampOverlayOpacity(double value) =>
       value.clamp(0.0, maxBackgroundOverlayOpacity).toDouble();
 
+  static double clampCardSurfaceOpacity(double value) =>
+      value.clamp(minCardSurfaceOpacity, defaultCardSurfaceOpacity).toDouble();
+
   Map<String, dynamic> toJson({bool includeConflict = true}) {
     final map = <String, dynamic>{
       'doneColumnName': doneColumnName,
@@ -99,6 +110,8 @@ class ProjectSettings {
         'backgroundAttachmentId': backgroundAttachmentId,
       if (backgroundOverlayOpacity != defaultBackgroundOverlayOpacity)
         'backgroundOverlayOpacity': backgroundOverlayOpacity,
+      if (cardSurfaceOpacity != defaultCardSurfaceOpacity)
+        'cardSurfaceOpacity': cardSurfaceOpacity,
       if (columnPreferences.isNotEmpty)
         'columnPreferences': columnPreferences.map(
           (key, value) => MapEntry(key, value.toJson()),
@@ -121,12 +134,17 @@ class ProjectSettings {
     final overlay = overlayRaw is num
         ? clampOverlayOpacity(overlayRaw.toDouble())
         : defaultBackgroundOverlayOpacity;
+    final cardOpacityRaw = json['cardSurfaceOpacity'];
+    final cardOpacity = cardOpacityRaw is num
+        ? clampCardSurfaceOpacity(cardOpacityRaw.toDouble())
+        : defaultCardSurfaceOpacity;
     return ProjectSettings(
       doneColumnName:
           json['doneColumnName'] as String? ?? defaultDoneColumnName,
       themeId: json['themeId'] as String? ?? '',
       backgroundAttachmentId: json['backgroundAttachmentId'] as String? ?? '',
       backgroundOverlayOpacity: overlay,
+      cardSurfaceOpacity: cardOpacity,
       columnPreferences: prefsRaw == null
           ? const {}
           : prefsRaw.map(

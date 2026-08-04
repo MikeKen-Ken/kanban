@@ -45,6 +45,7 @@ bool _settingsContentDiffers(ProjectSettings a, ProjectSettings b) =>
     a.themeId != b.themeId ||
     a.backgroundAttachmentId != b.backgroundAttachmentId ||
     !_overlayEq(a.backgroundOverlayOpacity, b.backgroundOverlayOpacity) ||
+    !_overlayEq(a.cardSurfaceOpacity, b.cardSurfaceOpacity) ||
     !_prefsEq(a.columnPreferences, b.columnPreferences) ||
     !_intMapEq(a.columnWipLimits, b.columnWipLimits);
 
@@ -119,6 +120,14 @@ ProjectSettings mergeSettings({
     effectiveRemote.backgroundOverlayOpacity,
     base.backgroundOverlayOpacity,
   );
+  final cardOpacityLocalChanged = !_overlayEq(
+    effectiveLocal.cardSurfaceOpacity,
+    base.cardSurfaceOpacity,
+  );
+  final cardOpacityRemoteChanged = !_overlayEq(
+    effectiveRemote.cardSurfaceOpacity,
+    base.cardSurfaceOpacity,
+  );
   final prefsLocalChanged =
       !_prefsEq(effectiveLocal.columnPreferences, base.columnPreferences);
   final prefsRemoteChanged =
@@ -144,6 +153,12 @@ ProjectSettings mergeSettings({
         effectiveLocal.backgroundOverlayOpacity,
         effectiveRemote.backgroundOverlayOpacity,
       );
+  final cardOpacityConflict = cardOpacityLocalChanged &&
+      cardOpacityRemoteChanged &&
+      !_overlayEq(
+        effectiveLocal.cardSurfaceOpacity,
+        effectiveRemote.cardSurfaceOpacity,
+      );
   final prefsConflict = prefsLocalChanged &&
       prefsRemoteChanged &&
       !_prefsEq(
@@ -161,6 +176,7 @@ ProjectSettings mergeSettings({
       themeConflict ||
       bgConflict ||
       overlayConflict ||
+      cardOpacityConflict ||
       prefsConflict ||
       wipConflict) {
     final localWins = effectiveLocal.updatedAt >= effectiveRemote.updatedAt;
@@ -198,6 +214,11 @@ ProjectSettings mergeSettings({
         : overlayRemoteChanged
             ? effectiveRemote.backgroundOverlayOpacity
             : base.backgroundOverlayOpacity,
+    cardSurfaceOpacity: cardOpacityLocalChanged
+        ? effectiveLocal.cardSurfaceOpacity
+        : cardOpacityRemoteChanged
+            ? effectiveRemote.cardSurfaceOpacity
+            : base.cardSurfaceOpacity,
     columnPreferences: prefsLocalChanged
         ? effectiveLocal.columnPreferences
         : prefsRemoteChanged

@@ -1076,6 +1076,23 @@ class BoardController extends ChangeNotifier {
     );
   }
 
+  /// 调整看板卡片表面不透明度（立即落盘并调度同步）
+  Future<void> setCardSurfaceOpacity(double opacity) async {
+    if (board == null) return;
+    final next = ProjectSettings.clampCardSurfaceOpacity(opacity);
+    if ((projectSettings.cardSurfaceOpacity - next).abs() < 0.001) {
+      return;
+    }
+    await _persistProjectSettings(
+      projectSettings
+          .copyWith(
+            cardSurfaceOpacity: next,
+            clearConflictSide: true,
+          )
+          .bump(),
+    );
+  }
+
   Future<void> updateTitle(String title) async {
     if (board == null) return;
     await _persistAndSync(_bump(board!.copyWith(title: title)));

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../features/project/project_settings.dart';
 import '../../features/project/project_theme.dart';
 import '../../models/kanban_models.dart';
 import '../attachments/card_attachment_image.dart';
@@ -83,6 +84,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     final controller = context.watch<BoardController>();
     final customLabels = controller.appSettings.customLabels;
     final themeId = controller.projectSettings.themeId;
+    final cardSurfaceOpacity = controller.projectSettings.cardSurfaceOpacity;
     final immediateDrag = controller.appSettings.immediateDrag;
 
     if (!widget.card
@@ -106,6 +108,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
               isPinned: widget.isPinned,
               customLabels: customLabels,
               themeId: themeId,
+              surfaceOpacity: cardSurfaceOpacity,
             ),
           ),
         );
@@ -117,6 +120,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           isPinned: widget.isPinned,
           customLabels: customLabels,
           themeId: themeId,
+          surfaceOpacity: cardSurfaceOpacity,
           // 延迟拖拽时关掉按下水波，避免「填充动画」误导成已可拖
           suppressInk: !immediateDrag,
           onOpenDetail: _openDetail,
@@ -182,6 +186,7 @@ class _CardContent extends StatelessWidget {
     this.isPinned = false,
     this.customLabels = const [],
     this.themeId = '',
+    this.surfaceOpacity = ProjectSettings.defaultCardSurfaceOpacity,
     this.suppressInk = false,
     this.onOpenDetail,
   });
@@ -193,6 +198,7 @@ class _CardContent extends StatelessWidget {
   final bool isPinned;
   final List<KanbanLabel> customLabels;
   final String themeId;
+  final double surfaceOpacity;
   final bool suppressInk;
   final VoidCallback? onOpenDetail;
 
@@ -207,13 +213,15 @@ class _CardContent extends StatelessWidget {
         card.attachments.length > 1 ? card.attachments.length - 1 : 0;
     final cardColor =
         card.colorValue != null ? Color(card.colorValue!) : null;
-    // note: 用不透明 surface 底色 + 描边，避免与列内模块背景融在一起
-    final cardBackground = cardColor != null
+    final opacity = ProjectSettings.clampCardSurfaceOpacity(surfaceOpacity);
+    // note: 卡片底色带不透明度，降低后可透过整张卡片看到壁纸；文字仍用不透明前景色
+    final solidBackground = cardColor != null
         ? Color.alphaBlend(
             cardColor.withValues(alpha: 0.18),
             colorScheme.surface,
           )
         : colorScheme.surface;
+    final cardBackground = solidBackground.withValues(alpha: opacity);
 
     final hasConflict = card.hasConflict;
     final BorderSide cardOutline = hasConflict

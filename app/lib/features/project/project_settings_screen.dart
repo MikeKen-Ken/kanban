@@ -21,6 +21,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   late String _selectedThemeId;
   late Map<String, int> _wipLimits;
   double? _overlayDraft;
+  double? _cardOpacityDraft;
   bool _saving = false;
   bool _backgroundBusy = false;
 
@@ -93,6 +94,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     setState(() {
       _backgroundBusy = false;
       _overlayDraft = null;
+      _cardOpacityDraft = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已清除背景图')),
@@ -110,6 +112,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
           settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
       _wipLimits = Map<String, int>.from(settings.columnWipLimits);
       _overlayDraft = null;
+      _cardOpacityDraft = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -139,6 +142,12 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
         0.001) {
       parts.add(
         '背景遮罩：${(other.backgroundOverlayOpacity * 100).round()}%',
+      );
+    }
+    if ((primary.cardSurfaceOpacity - other.cardSurfaceOpacity).abs() >=
+        0.001) {
+      parts.add(
+        '卡片不透明度：${(other.cardSurfaceOpacity * 100).round()}%',
       );
     }
     final prefsDiffer =
@@ -172,6 +181,11 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     final settings = controller.projectSettings;
     final overlayValue = (_overlayDraft ?? settings.backgroundOverlayOpacity)
         .clamp(0.0, ProjectSettings.maxBackgroundOverlayOpacity);
+    final cardOpacityValue =
+        (_cardOpacityDraft ?? settings.cardSurfaceOpacity).clamp(
+      ProjectSettings.minCardSurfaceOpacity,
+      ProjectSettings.defaultCardSurfaceOpacity,
+    );
 
     return Theme(
       data: buildKanbanTheme(
@@ -363,6 +377,34 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 8),
+                      Text(
+                        '卡片不透明度：${(cardOpacityValue * 100).round()}%',
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      Slider(
+                        value: cardOpacityValue,
+                        min: ProjectSettings.minCardSurfaceOpacity,
+                        max: ProjectSettings.defaultCardSurfaceOpacity,
+                        divisions: 13,
+                        label: '${(cardOpacityValue * 100).round()}%',
+                        onChanged: _backgroundBusy
+                            ? null
+                            : (value) {
+                                setState(() => _cardOpacityDraft = value);
+                              },
+                        onChangeEnd: (value) async {
+                          await controller.setCardSurfaceOpacity(value);
+                          if (!mounted) return;
+                          setState(() => _cardOpacityDraft = null);
+                        },
+                      ),
+                      Text(
+                        '降低后整张卡片底色半透明，可透过卡片看到壁纸；标题与文字仍保持清晰',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -454,7 +496,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '主题与看板选项点「保存」后写入；背景图与遮罩会立即生效并同步到 WebDAV。',
+                    '主题与看板选项点「保存」后写入；背景图、遮罩与卡片不透明度会立即生效并同步到 WebDAV。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

@@ -366,16 +366,40 @@ void main() {
     expect(merged.backgroundOverlayOpacity, closeTo(0.6, 0.001));
   });
 
+  test('Settings 三路合并可分别采纳卡片不透明度', () {
+    const base = ProjectSettings(
+      cardSurfaceOpacity: 1.0,
+      updatedAt: 10,
+      revision: 1,
+    );
+    final local = base.copyWith(
+      cardSurfaceOpacity: 0.7,
+      updatedAt: 20,
+      revision: 2,
+    );
+    final remote = base.copyWith(
+      doneColumnName: '完成',
+      updatedAt: 30,
+      revision: 2,
+    );
+    final merged = mergeSettings(local: local, remote: remote, base: base);
+    expect(merged.hasConflict, isFalse);
+    expect(merged.cardSurfaceOpacity, closeTo(0.7, 0.001));
+    expect(merged.doneColumnName, '完成');
+  });
+
   test('ProjectSettings 背景字段序列化往返', () {
     final settings = const ProjectSettings(
       backgroundAttachmentId: 'bg-1',
       backgroundOverlayOpacity: 0.55,
+      cardSurfaceOpacity: 0.8,
       updatedAt: 42,
       revision: 3,
     );
     final roundtrip = ProjectSettings.fromJson(settings.toJson());
     expect(roundtrip.backgroundAttachmentId, 'bg-1');
     expect(roundtrip.backgroundOverlayOpacity, closeTo(0.55, 0.001));
+    expect(roundtrip.cardSurfaceOpacity, closeTo(0.8, 0.001));
     expect(roundtrip.hasBackgroundImage, isTrue);
   });
 
@@ -389,6 +413,10 @@ void main() {
     expect(
       settings.backgroundOverlayOpacity,
       ProjectSettings.defaultBackgroundOverlayOpacity,
+    );
+    expect(
+      settings.cardSurfaceOpacity,
+      ProjectSettings.defaultCardSurfaceOpacity,
     );
   });
 
