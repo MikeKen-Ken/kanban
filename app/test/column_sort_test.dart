@@ -4,6 +4,12 @@ import 'package:kanban/features/kanban/kanban_labels.dart';
 import 'package:kanban/models/kanban_models.dart';
 
 void main() {
+  test('column sort defaults to priority', () {
+    expect(const ColumnCardPreferences().sortMode, CardSortMode.priority);
+    expect(CardSortMode.fromName(null), CardSortMode.priority);
+    expect(CardSortMode.fromName('unknown'), CardSortMode.priority);
+  });
+
   test('sortColumnCards keeps pinned cards on top', () {
     final cards = [
       KanbanCard(id: 'a', title: 'A', order: 0, createdAt: 1, updatedAt: 1),

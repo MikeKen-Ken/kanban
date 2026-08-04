@@ -2,12 +2,12 @@ import '../../models/kanban_models.dart';
 
 /// 列内卡片排序方式
 enum CardSortMode {
-  custom('自定义'),
-  updatedAt('按时间'),
-  name('按名称'),
   priority('按紧急程度'),
   dueDate('按到期时间'),
-  createdAt('按添加时间');
+  updatedAt('按时间'),
+  name('按名称'),
+  createdAt('按添加时间'),
+  custom('自定义');
 
   const CardSortMode(this.label);
 
@@ -16,7 +16,7 @@ enum CardSortMode {
   static CardSortMode fromName(String? name) {
     return CardSortMode.values.firstWhere(
       (mode) => mode.name == name,
-      orElse: () => CardSortMode.custom,
+      orElse: () => CardSortMode.priority,
     );
   }
 }
@@ -24,7 +24,7 @@ enum CardSortMode {
 /// 单列的卡片展示偏好（随项目同步）
 class ColumnCardPreferences {
   const ColumnCardPreferences({
-    this.sortMode = CardSortMode.custom,
+    this.sortMode = CardSortMode.priority,
     this.pinnedCardIds = const [],
   });
 
