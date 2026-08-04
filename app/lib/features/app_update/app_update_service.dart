@@ -56,8 +56,8 @@ class AppUpdateService {
     }
 
     final release = pool.first;
-    final asset = pickAssetForPlatform(
-      release.assets,
+    final asset = await _client.resolvePlatformAsset(
+      release,
       android: !kIsWeb && Platform.isAndroid,
       windows: !kIsWeb && Platform.isWindows,
     );

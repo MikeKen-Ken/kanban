@@ -78,4 +78,30 @@ void main() {
       expect(info.assets.first.name, 'app.apk');
     });
   });
+
+  group('parseReleasesAtom', () {
+    test('解析最新 entry 的 tag 与标题', () {
+      const atom = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>tag:github.com,2008:Repository/1/v1.0.1</id>
+    <updated>2026-08-04T23:07:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/MikeKen-Ken/kanban/releases/tag/v1.0.1"/>
+    <title>1.0.1</title>
+    <content type="html">&lt;p&gt;notes&lt;/p&gt;</content>
+  </entry>
+</feed>
+''';
+      final list = parseReleasesAtom(
+        atom,
+        owner: 'MikeKen-Ken',
+        repo: 'kanban',
+      );
+      expect(list, hasLength(1));
+      expect(list.first.tagName, 'v1.0.1');
+      expect(list.first.versionLabel, '1.0.1');
+      expect(list.first.body, contains('notes'));
+    });
+  });
 }

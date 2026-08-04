@@ -22,25 +22,79 @@ runs:
         GH_TOKEN: ${{ github.token }}
         TAG: ${{ inputs.tag }}
         DRAFT: ${{ inputs.draft }}
+        REPO: ${{ github.repository }}
+        SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
-        if gh release view "$TAG" >/dev/null 2>&1; then
-          echo "Release $TAG already exists"
+
+        # 从上一个正式 Release 到当前提交，生成提交列表作为更新说明
+        NOTES_FILE="$(mktemp)"
+        PREV_TAG="$(
+          gh release list --repo "$REPO" --exclude-drafts --limit 30 \
+            --json tagName,isPrerelease \
+            --jq "[.[] | select(.isPrerelease | not) | .tagName] | map(select(. != \"$TAG\")) | .[0] // empty"
+        )"
+
+        {
+          echo "## 更新内容"
+          echo ""
+          if [ -n "${PREV_TAG}" ]; then
+            echo "相对 ${PREV_TAG} 的提交："
+            echo ""
+            COMPARE="$(gh api "repos/${REPO}/compare/${PREV_TAG}...${SHA}" --jq '
+              [.commits[]
+                | select(.parents | length <= 1)
+                | "- " + (.commit.message | split("\n")[0]) + " (" + (.sha[0:7]) + ")"
+              ] | join("\n")
+            ' || true)"
+            if [ -n "${COMPARE}" ]; then
+              printf '%s\n' "$COMPARE"
+            else
+              echo "- （无新的非合并提交）"
+            fi
+            echo ""
+            echo "完整对比：https://github.com/${REPO}/compare/${PREV_TAG}...${TAG}"
+          else
+            echo "近期提交："
+            echo ""
+            RECENT="$(gh api "repos/${REPO}/commits?sha=${SHA}&per_page=30" --jq '
+              [.[]
+                | select(.parents | length <= 1)
+                | "- " + (.commit.message | split("\n")[0]) + " (" + (.sha[0:7]) + ")"
+              ] | join("\n")
+            ' || true)"
+            if [ -n "${RECENT}" ]; then
+              printf '%s\n' "$RECENT"
+            else
+              echo "- （暂无提交摘要）"
+            fi
+          fi
+        } > "$NOTES_FILE"
+
+        TITLE="${TAG#v}"
+
+        if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+          echo "Release $TAG already exists，刷新更新说明"
+          gh release edit "$TAG" --repo "$REPO" --notes-file "$NOTES_FILE"
+          rm -f "$NOTES_FILE"
           exit 0
         fi
 
-        TITLE="${TAG#v}"
-        ARGS=(release create "$TAG" --title "$TITLE" --generate-notes)
+        ARGS=(release create "$TAG" --repo "$REPO" --title "$TITLE" --notes-file "$NOTES_FILE")
         if [ "$DRAFT" = "true" ]; then
           ARGS+=(--draft)
         fi
 
         if ! gh "${ARGS[@]}"; then
-          gh release view "$TAG" >/dev/null 2>&1 || {
+          gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 || {
             echo "Failed to create or find release $TAG"
+            rm -f "$NOTES_FILE"
             exit 1
           }
+          # 并发创建时可能已存在，仍刷新说明
+          gh release edit "$TAG" --repo "$REPO" --notes-file "$NOTES_FILE" || true
         fi
+        rm -f "$NOTES_FILE"
 
     - name: Upload release assets
       if: ${{ inputs.assets != '' }}
