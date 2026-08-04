@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -10,8 +11,19 @@ class ReminderScheduler {
     FlutterLocalNotificationsPlugin? plugin,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
+  static const androidChannelId = 'kanban_reminders';
+  static const androidChannelName = '任务提醒';
+  static const androidChannelDescription = '卡片截止日期与自定义提醒';
+  static const _settingsChannel = MethodChannel(
+    'com.mikeken.kanban/notifications',
+  );
+
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
+
+  AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -25,17 +37,48 @@ class ReminderScheduler {
       ),
     );
     await _plugin.initialize(settings: settings);
+    await _ensureAndroidChannel();
     _initialized = true;
+  }
+
+  /// 提前创建渠道，让系统设置页能显示「任务提醒」分类。
+  Future<void> _ensureAndroidChannel() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    await _android?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        androidChannelId,
+        androidChannelName,
+        description: androidChannelDescription,
+        importance: Importance.high,
+      ),
+    );
+  }
+
+  Future<bool> areNotificationsEnabled() async {
+    await initialize();
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    return await _android?.areNotificationsEnabled() ?? true;
   }
 
   Future<bool> requestPermission() async {
     await initialize();
     if (defaultTargetPlatform != TargetPlatform.android) return true;
-    return await _plugin
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
-            ?.requestNotificationsPermission() ??
-        false;
+    return await _android?.requestNotificationsPermission() ?? false;
+  }
+
+  /// 打开系统应用通知设置页（永久拒绝后的兜底）。
+  Future<bool> openSystemNotificationSettings() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    try {
+      await _settingsChannel.invokeMethod<void>('openNotificationSettings');
+      return true;
+    } on MissingPluginException {
+      debugPrint('打开通知设置失败：未注册平台通道');
+      return false;
+    } on PlatformException catch (error) {
+      debugPrint('打开通知设置失败：$error');
+      return false;
+    }
   }
 
   Future<void> rescheduleAll(Map<String, KanbanBoard> boards) async {
@@ -78,9 +121,9 @@ class ReminderScheduler {
       scheduledDate: tz.TZDateTime.from(instant, tz.UTC),
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
-          'kanban_reminders',
-          '任务提醒',
-          channelDescription: '卡片截止日期与自定义提醒',
+          androidChannelId,
+          androidChannelName,
+          channelDescription: androidChannelDescription,
           importance: Importance.high,
           priority: Priority.high,
         ),

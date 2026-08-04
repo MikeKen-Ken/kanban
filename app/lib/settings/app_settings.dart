@@ -14,6 +14,7 @@ class AppSettings {
     required this.dragLongPressMs,
     this.themeMode = ThemeMode.system,
     this.hasCompletedOnboarding = false,
+    this.hasRequestedNotificationPermission = false,
     this.projectSortMode = ProjectSortMode.defaultOrder,
     this.pinnedProjectIds = const [],
     this.projectLastUsedAt = const {},
@@ -30,6 +31,9 @@ class AppSettings {
 
   /// 是否已完成首次使用引导
   final bool hasCompletedOnboarding;
+
+  /// 是否已在本机请求过通知权限（仅 Android 有意义）
+  final bool hasRequestedNotificationPermission;
 
   /// 项目列表排序方式
   final ProjectSortMode projectSortMode;
@@ -58,6 +62,7 @@ class AppSettings {
     int? dragLongPressMs,
     ThemeMode? themeMode,
     bool? hasCompletedOnboarding,
+    bool? hasRequestedNotificationPermission,
     ProjectSortMode? projectSortMode,
     List<String>? pinnedProjectIds,
     Map<String, int>? projectLastUsedAt,
@@ -70,6 +75,9 @@ class AppSettings {
       themeMode: themeMode ?? this.themeMode,
       hasCompletedOnboarding:
           hasCompletedOnboarding ?? this.hasCompletedOnboarding,
+      hasRequestedNotificationPermission:
+          hasRequestedNotificationPermission ??
+              this.hasRequestedNotificationPermission,
       projectSortMode: projectSortMode ?? this.projectSortMode,
       pinnedProjectIds: pinnedProjectIds ?? this.pinnedProjectIds,
       projectLastUsedAt: projectLastUsedAt ?? this.projectLastUsedAt,
@@ -83,6 +91,8 @@ class AppSettings {
         'dragLongPressMs': dragLongPressMs,
         'themeMode': themeMode.name,
         'hasCompletedOnboarding': hasCompletedOnboarding,
+        'hasRequestedNotificationPermission':
+            hasRequestedNotificationPermission,
         'projectSortMode': projectSortMode.name,
         'pinnedProjectIds': pinnedProjectIds,
         'projectLastUsedAt': projectLastUsedAt,
@@ -104,6 +114,8 @@ class AppSettings {
         orElse: () => ThemeMode.system,
       ),
       hasCompletedOnboarding: json['hasCompletedOnboarding'] as bool? ?? false,
+      hasRequestedNotificationPermission:
+          json['hasRequestedNotificationPermission'] as bool? ?? false,
       projectSortMode: ProjectSortMode.fromName(
         json['projectSortMode'] as String?,
       ),

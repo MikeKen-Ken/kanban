@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -14,21 +16,36 @@ Future<void> main() async {
   // 卡片/详情里的 DateFormat.*('zh_CN') 依赖 locale 数据；未初始化会变成超高 ErrorWidget
   await initializeDateFormatting('zh_CN');
   final controller = await BoardController.create();
+  // 先初始化渠道与调度；权限申请需等 Activity 就绪后再做
   await controller.initializeReminders();
   runApp(KanbanApp(controller: controller));
   // 修复 Windows Win+V 剪贴板历史无法粘贴到输入框（flutter#143997）
   installWindowsClipboardHistoryPasteFix();
 }
 
-class KanbanApp extends StatelessWidget {
+class KanbanApp extends StatefulWidget {
   const KanbanApp({super.key, required this.controller});
 
   final BoardController controller;
 
   @override
+  State<KanbanApp> createState() => _KanbanAppState();
+}
+
+class _KanbanAppState extends State<KanbanApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Activity 就绪后首次申请通知权限（Android 13+）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(widget.controller.ensureNotificationPermissionOnFirstLaunch());
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
-      value: controller,
+      value: widget.controller,
       child: Consumer<BoardController>(
         builder: (context, boardController, _) {
           final preset =

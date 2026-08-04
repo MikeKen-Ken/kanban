@@ -170,14 +170,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsNavigationTile(
                 icon: Icons.notifications_active_outlined,
                 title: '启用任务提醒',
-                subtitle: '请求系统通知权限并重新安排提醒',
+                subtitle: '首次启动会申请通知权限；也可在此重新启用',
                 onTap: () async {
-                  await context
+                  final result = await context
                       .read<BoardController>()
-                      .initializeReminders(requestPermission: true);
+                      .enableRemindersFromSettings();
                   if (!context.mounted) return;
+                  final message = switch (result) {
+                    NotificationPermissionResult.enabled => '通知已启用，提醒已重新安排',
+                    NotificationPermissionResult.openedSystemSettings =>
+                      '请在系统设置中允许通知后返回',
+                    NotificationPermissionResult.denied =>
+                      '未能开启通知，请在系统设置中允许本应用通知',
+                  };
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('提醒设置已更新')),
+                    SnackBar(content: Text(message)),
                   );
                 },
               ),

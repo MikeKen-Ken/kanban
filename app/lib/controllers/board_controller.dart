@@ -36,6 +36,13 @@ import '../webdav_sync/webdav_sync_service.dart';
 
 enum CardConflictResolution { keepPrimary, keepOther }
 
+/// 设置页启用提醒后的结果，用于给用户准确反馈。
+enum NotificationPermissionResult {
+  enabled,
+  denied,
+  openedSystemSettings,
+}
+
 class BoardController extends ChangeNotifier {
   BoardController._({
     required BoardRepository repository,
@@ -79,7 +86,7 @@ class BoardController extends ChangeNotifier {
     try {
       await _reminderScheduler.initialize();
       if (requestPermission) {
-        await _reminderScheduler.requestPermission();
+        await _requestNotificationPermissionAndPersist();
       }
       await _rescheduleReminders();
     } catch (error) {
@@ -87,9 +94,80 @@ class BoardController extends ChangeNotifier {
     }
   }
 
+  /// 安装后首次进入界面时申请通知权限（需 Activity 就绪）。
+  Future<bool> ensureNotificationPermissionOnFirstLaunch() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    if (appSettings.hasRequestedNotificationPermission) {
+      return _reminderScheduler.areNotificationsEnabled();
+    }
+    return _requestNotificationPermissionAndPersist();
+  }
+
+  /// 设置页：已授权则重新调度；未授权则弹窗；永久拒绝则打开系统设置。
+  Future<NotificationPermissionResult> enableRemindersFromSettings() async {
+    try {
+      await _reminderScheduler.initialize();
+      final alreadyEnabled =
+          await _reminderScheduler.areNotificationsEnabled();
+      if (alreadyEnabled) {
+        await _rescheduleReminders();
+        return NotificationPermissionResult.enabled;
+      }
+
+      final granted = await _requestNotificationPermissionAndPersist();
+      if (granted) {
+        await _rescheduleReminders();
+        return NotificationPermissionResult.enabled;
+      }
+
+      // 再请求仍未授权，多半是永久拒绝，引导系统设置。
+      final opened =
+          await _reminderScheduler.openSystemNotificationSettings();
+      return opened
+          ? NotificationPermissionResult.openedSystemSettings
+          : NotificationPermissionResult.denied;
+    } catch (error) {
+      debugPrint('启用任务提醒失败：$error');
+      return NotificationPermissionResult.denied;
+    }
+  }
+
+  Future<bool> notificationsEnabled() =>
+      _reminderScheduler.areNotificationsEnabled();
+
+  Future<bool> _requestNotificationPermissionAndPersist() async {
+    final granted = await _reminderScheduler.requestPermission();
+    if (!appSettings.hasRequestedNotificationPermission) {
+      await saveAppSettings(
+        appSettings.copyWith(hasRequestedNotificationPermission: true),
+      );
+    }
+    return granted;
+  }
+
   Future<void> _rescheduleReminders() async {
     final workspace = await _loadWorkspaceSnapshot();
     await _reminderScheduler.rescheduleAll(workspace.boards);
+  }
+
+  /// 调度前若通知未开，再申请一次（用户正在设置提醒时）。
+  Future<void> _scheduleCardReminder({
+    required String projectId,
+    required String columnId,
+    required KanbanCard card,
+  }) async {
+    if (card.reminderAt == null || card.completed) return;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final enabled = await _reminderScheduler.areNotificationsEnabled();
+      if (!enabled) {
+        await _requestNotificationPermissionAndPersist();
+      }
+    }
+    await _reminderScheduler.schedule(
+      projectId: projectId,
+      columnId: columnId,
+      card: card,
+    );
   }
 
   Future<bool> undoLastAction() async {
@@ -1378,7 +1456,7 @@ class BoardController extends ChangeNotifier {
       ),
     );
     if (reminderAt != null && activeProjectId != null) {
-      await _reminderScheduler.schedule(
+      await _scheduleCardReminder(
         projectId: activeProjectId!,
         columnId: columnId,
         card: columns
@@ -1768,7 +1846,7 @@ class BoardController extends ChangeNotifier {
         }).toList();
         await _persistAndSync(_bump(board!.copyWith(columns: columns)));
         if (next.reminderAt != null && activeProjectId != null) {
-          await _reminderScheduler.schedule(
+          await _scheduleCardReminder(
             projectId: activeProjectId!,
             columnId: sourceColumnId,
             card: next,
