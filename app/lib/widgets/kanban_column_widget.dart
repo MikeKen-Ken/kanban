@@ -186,6 +186,42 @@ class KanbanColumnWidget extends StatelessWidget {
     }
   }
 
+  Future<void> _confirmClearDoneColumn(BuildContext context) async {
+    final controller = context.read<BoardController>();
+    final count = column.cards.length;
+    if (count == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已完成列为空，无需清空')),
+      );
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清空已完成列？'),
+        content: Text('将「${column.title}」中的 $count 张卡片移至回收站'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    final cleared = await controller.clearDoneColumnCards(column.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(cleared > 0 ? '已清空 $cleared 张卡片' : '清空失败')),
+    );
+  }
+
   Future<void> _pickColumnColor(BuildContext context) async {
     final controller = context.read<BoardController>();
     final picked = await showColumnColorPicker(
@@ -316,19 +352,29 @@ class KanbanColumnWidget extends StatelessWidget {
                         _pickColumnColor(context);
                       case 'rename':
                         _renameColumn(context);
+                      case 'clear_done':
+                        _confirmClearDoneColumn(context);
                       case 'delete':
                         _confirmDeleteColumn(context);
                     }
                   },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'sort',
-                      child: Text('排序：${columnPrefs.sortMode.label}'),
-                    ),
-                    const PopupMenuItem(value: 'color', child: Text('设置颜色')),
-                    const PopupMenuItem(value: 'rename', child: Text('重命名')),
-                    const PopupMenuItem(value: 'delete', child: Text('删除列')),
-                  ],
+                  itemBuilder: (_) {
+                    final isDone = controller.isDoneColumn(column.id);
+                    return [
+                      PopupMenuItem(
+                        value: 'sort',
+                        child: Text('排序：${columnPrefs.sortMode.label}'),
+                      ),
+                      const PopupMenuItem(value: 'color', child: Text('设置颜色')),
+                      const PopupMenuItem(value: 'rename', child: Text('重命名')),
+                      if (isDone)
+                        const PopupMenuItem(
+                          value: 'clear_done',
+                          child: Text('一键清空'),
+                        ),
+                      const PopupMenuItem(value: 'delete', child: Text('删除列')),
+                    ];
+                  },
                 ),
               ],
             ),

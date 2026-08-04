@@ -908,6 +908,13 @@ class BoardController extends ChangeNotifier {
     return null;
   }
 
+  /// 是否为当前项目设置中的已完成列（各项目可配置不同列名）。
+  bool isDoneColumn(String columnId) {
+    final current = board;
+    if (current == null) return false;
+    return _findDoneColumn(current)?.id == columnId;
+  }
+
   Future<void> switchProject(String projectId) async {
     if (manifest?.findById(projectId) == null) return;
     if (projectId == activeProjectId) return;
@@ -1832,6 +1839,73 @@ class BoardController extends ChangeNotifier {
         action: ActivityAction.deleted,
       ),
     );
+  }
+
+  /// 清空已完成列中的全部卡片（移入回收站）。仅当 [columnId] 为当前项目的已完成列时生效。
+  /// 返回实际清空的卡片数量。
+  Future<int> clearDoneColumnCards(String columnId) async {
+    if (board == null || activeProjectId == null) return 0;
+
+    final doneColumn = _findDoneColumn(board!);
+    if (doneColumn == null || doneColumn.id != columnId) return 0;
+    if (doneColumn.cards.isEmpty) return 0;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final trashIds = <String>[];
+    final newTrashItems = <TrashItem>[];
+    final clearedCards = List<KanbanCard>.from(doneColumn.cards);
+
+    for (final card in clearedCards) {
+      final trashId = const Uuid().v4();
+      trashIds.add(trashId);
+      newTrashItems.add(
+        TrashItem.forCard(
+          trashId: trashId,
+          deletedAt: now,
+          projectId: activeProjectId!,
+          projectTitle: board!.title,
+          columnId: columnId,
+          columnTitle: doneColumn.title,
+          card: card,
+        ),
+      );
+    }
+
+    activeProjectTrash = activeProjectTrash.bump().copyWith(
+      items: [...newTrashItems, ...activeProjectTrash.items],
+    );
+    await _persistActiveProjectTrash();
+
+    final columns = board!.columns.map((col) {
+      if (col.id != columnId) return col;
+      return col.copyWith(cards: const <KanbanCard>[]);
+    }).toList();
+    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+
+    for (final card in clearedCards) {
+      await _reminderScheduler.cancel(card.id);
+      unawaited(
+        _recordActivity(
+          entityId: card.id,
+          entityTitle: card.title,
+          action: ActivityAction.deleted,
+        ),
+      );
+    }
+
+    final count = clearedCards.length;
+    _undoStack.push(
+      UndoEntry(
+        label: '清空「${doneColumn.title}」($count)',
+        undo: () async {
+          for (final trashId in trashIds.reversed) {
+            final error = await restoreTrashItem(trashId);
+            if (error != null) throw StateError(error);
+          }
+        },
+      ),
+    );
+    return count;
   }
 
   Future<void> moveCard({

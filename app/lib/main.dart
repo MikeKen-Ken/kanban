@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/board_controller.dart';
@@ -10,6 +11,8 @@ import 'webdav_sync/webdav_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 卡片/详情里的 DateFormat.*('zh_CN') 依赖 locale 数据；未初始化会变成超高 ErrorWidget
+  await initializeDateFormatting('zh_CN');
   final controller = await BoardController.create();
   await controller.initializeReminders();
   runApp(KanbanApp(controller: controller));
