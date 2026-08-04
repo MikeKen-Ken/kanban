@@ -97,6 +97,39 @@ void main() {
     expect(find.text('已应用「工作重点」'), findsOneWidget);
   });
 
+  testWidgets('显示全部可清除已应用的保存视图', (tester) async {
+    const view = SavedView(
+      id: 'important',
+      name: '工作重点',
+      filter: FilterSpec(
+        keyword: '发布',
+        projectIds: ['work'],
+      ),
+    );
+    await tester.pumpWidget(buildScreen(views: const [view]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('管理保存视图'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('工作重点'));
+    await tester.pumpAndSettle();
+    expect(find.text('购买灯泡'), findsNothing);
+
+    await tester.tap(find.byTooltip('管理保存视图'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('saved-view-show-all')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final search = tester.widget<TextField>(
+      find.byKey(const ValueKey('global-query-search')),
+    );
+    expect(search.controller!.text, isEmpty);
+    expect(find.text('发布新版本'), findsOneWidget);
+    expect(find.text('购买灯泡'), findsOneWidget);
+    expect(find.text('已显示全部卡片'), findsWidgets);
+  });
+
   testWidgets('保存当前查询并提供明确反馈', (tester) async {
     String? savedName;
     FilterSpec? savedFilter;

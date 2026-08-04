@@ -10,11 +10,20 @@ class SavedView {
     this.updatedAt = 0,
   });
 
+  /// 清除搜索与筛选、恢复默认展示的固定入口（不持久化）。
+  static const showAll = SavedView(
+    id: '__show_all',
+    name: '显示全部',
+    filter: FilterSpec(),
+  );
+
   final String id;
   final String name;
   final FilterSpec filter;
   final int createdAt;
   final int updatedAt;
+
+  bool get isShowAll => id == showAll.id;
 
   Map<String, dynamic> toJson() => {
         'version': 1,

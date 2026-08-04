@@ -11,7 +11,7 @@ void main() {
     updatedAt: 2,
   );
 
-  testWidgets('空列表显示创建指引', (tester) async {
+  testWidgets('空列表仍提供显示全部入口', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: SavedViewsScreen(
@@ -22,6 +22,8 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const ValueKey('saved-view-show-all')), findsOneWidget);
+    expect(find.text('显示全部'), findsOneWidget);
     expect(find.text('还没有保存视图'), findsOneWidget);
     expect(find.textContaining('全部卡片'), findsOneWidget);
   });
@@ -64,6 +66,7 @@ void main() {
 
     expect(deleted, isTrue);
     expect(find.text('还没有保存视图'), findsOneWidget);
+    expect(find.text('显示全部'), findsOneWidget);
   });
 
   testWidgets('点击保存视图会将其返回调用页', (tester) async {
@@ -95,5 +98,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(selected?.id, 'focus');
+  });
+
+  testWidgets('点击显示全部会返回清除筛选入口', (tester) async {
+    SavedView? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () async {
+              selected = await Navigator.of(context).push<SavedView>(
+                MaterialPageRoute<SavedView>(
+                  builder: (_) => SavedViewsScreen(
+                    views: const [view],
+                    onRename: (_, __) async {},
+                    onDelete: (_) async {},
+                  ),
+                ),
+              );
+            },
+            child: const Text('打开'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('saved-view-show-all')));
+    await tester.pumpAndSettle();
+
+    expect(selected?.isShowAll, isTrue);
+    expect(selected?.filter.hasFilters, isFalse);
   });
 }

@@ -122,48 +122,58 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('保存视图')),
-      body: _views.isEmpty
-          ? const _SavedViewsEmptyState()
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-              itemCount: _views.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final view = _views[index];
-                return ListTile(
-                  leading: const Icon(Icons.bookmark_outline),
-                  title: Text(view.name),
-                  subtitle: Text(_filterSummary(view)),
-                  onTap: () => Navigator.pop(context, view),
-                  trailing: PopupMenuButton<String>(
-                    tooltip: '管理「${view.name}」',
-                    onSelected: (action) {
-                      if (action == 'rename') {
-                        _rename(view);
-                      } else if (action == 'delete') {
-                        _delete(view);
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'rename',
-                        child: ListTile(
-                          leading: Icon(Icons.edit_outlined),
-                          title: Text('重命名'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: ListTile(
-                          leading: Icon(Icons.delete_outline),
-                          title: Text('删除'),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+      body: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        itemCount: 1 + (_views.isEmpty ? 1 : _views.length),
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return ListTile(
+              key: const ValueKey('saved-view-show-all'),
+              leading: const Icon(Icons.filter_alt_off_outlined),
+              title: const Text('显示全部'),
+              subtitle: const Text('清除搜索和筛选'),
+              onTap: () => Navigator.pop(context, SavedView.showAll),
+            );
+          }
+          if (_views.isEmpty) {
+            return const _SavedViewsEmptyState();
+          }
+          final view = _views[index - 1];
+          return ListTile(
+            leading: const Icon(Icons.bookmark_outline),
+            title: Text(view.name),
+            subtitle: Text(_filterSummary(view)),
+            onTap: () => Navigator.pop(context, view),
+            trailing: PopupMenuButton<String>(
+              tooltip: '管理「${view.name}」',
+              onSelected: (action) {
+                if (action == 'rename') {
+                  _rename(view);
+                } else if (action == 'delete') {
+                  _delete(view);
+                }
               },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'rename',
+                  child: ListTile(
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('重命名'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline),
+                    title: Text('删除'),
+                  ),
+                ),
+              ],
             ),
+          );
+        },
+      ),
     );
   }
 
@@ -189,30 +199,28 @@ class _SavedViewsEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.bookmarks_outlined,
-              size: 56,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '还没有保存视图',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '在“全部卡片”中设置搜索和筛选后即可保存',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.bookmarks_outlined,
+            size: 40,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '还没有保存视图',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '在“全部卡片”中设置搜索和筛选后即可保存',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

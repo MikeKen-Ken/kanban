@@ -13,8 +13,8 @@ class ProjectSwitcher extends StatelessWidget {
 
   static const double _menuMinWidth = 360;
   static const double _menuMaxWidth = 440;
-  static const double _titleMinWidth = 168;
-  static const double _titleMaxWidth = 280;
+  /// 触发器最大宽度：短名随内容收缩，长名到此上限后省略
+  static const double _titleMaxWidth = 320;
 
   Future<void> _createProject(BuildContext context) async {
     final controller = context.read<BoardController>();
@@ -214,17 +214,15 @@ class ProjectSwitcher extends StatelessWidget {
             }
           },
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minWidth: _titleMinWidth,
-              maxWidth: _titleMaxWidth,
-            ),
+            constraints: const BoxConstraints(maxWidth: _titleMaxWidth),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.folder_outlined, size: 20),
                   const SizedBox(width: 6),
-                  Expanded(
+                  Flexible(
                     child: Text(
                       active?.title ?? '看板',
                       overflow: TextOverflow.ellipsis,

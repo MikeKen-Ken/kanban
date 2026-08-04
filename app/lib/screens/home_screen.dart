@@ -128,6 +128,17 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     );
   }
 
+  void _requestSync() {
+    final controller = context.read<BoardController>();
+    if (controller.syncStatus == SyncStatus.syncing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('正在同步…')),
+      );
+      return;
+    }
+    controller.syncNow();
+  }
+
   Future<void> _showFilters() async {
     final controller = context.read<BoardController>();
     final labels = {
@@ -242,9 +253,19 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
       _searchQuery = view.filter.keyword;
       _filter = view.filter.copyWith(keyword: '');
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已应用「${view.name}」')),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          view.isShowAll ? '已显示全部卡片' : '已应用「${view.name}」',
+        ),
+      ),
     );
+  }
+
+  void _showAllCards() {
+    _applySavedView(SavedView.showAll);
   }
 
   Future<void> _openReference(CardReference reference) async {
@@ -301,6 +322,9 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         break;
       case 'search':
         _toggleSearch();
+        break;
+      case 'showAll':
+        _showAllCards();
         break;
       case 'save':
         _saveCurrentView();
@@ -370,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
           LogicalKeyboardKey.keyS,
           control: true,
           shift: true,
-        ): () => context.read<BoardController>().syncNow(),
+        ): () => _requestSync(),
       },
       child: Scaffold(
         backgroundColor: controller.projectSettings.hasBackgroundImage
@@ -414,6 +438,8 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 onSelected: (value) {
                   if (value == '__filter') {
                     _showFilters();
+                  } else if (value == '__show_all') {
+                    _showAllCards();
                   } else if (value == '__save') {
                     _saveCurrentView();
                   } else if (value == '__manage') {
@@ -431,6 +457,13 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                     child: ListTile(
                       leading: Icon(Icons.tune),
                       title: Text('编辑筛选'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: '__show_all',
+                    child: ListTile(
+                      leading: Icon(Icons.filter_alt_off_outlined),
+                      title: Text('显示全部'),
                     ),
                   ),
                   const PopupMenuItem(
@@ -492,9 +525,8 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 lastSyncedAt: data.$4,
                 compact: compact,
                 onTap: () {
-                  final controller = context.read<BoardController>();
                   if (data.$3 <= 0) {
-                    controller.syncNow();
+                    _requestSync();
                     return;
                   }
                   Navigator.of(context).push(
@@ -542,6 +574,13 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                         child: const Icon(Icons.filter_list),
                       ),
                       title: const Text('编辑筛选'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'showAll',
+                    child: ListTile(
+                      leading: Icon(Icons.filter_alt_off_outlined),
+                      title: Text('显示全部'),
                     ),
                   ),
                   const PopupMenuItem(
@@ -886,9 +925,11 @@ class _SyncIndicator extends StatelessWidget {
 
     final tooltip = conflictCount > 0
         ? '有未解决的同步冲突，点击进入冲突中心'
-        : error == null
-            ? '$lastSuccess\n点击立即同步'
-            : '$error\n$lastSuccess';
+        : status == SyncStatus.syncing
+            ? '正在同步…'
+            : error == null
+                ? '$lastSuccess\n点击立即同步'
+                : '$error\n$lastSuccess';
     final icon = Icon(
       conflictCount > 0 ? Icons.warning_amber_outlined : syncStatusIcon(status),
       color: color,

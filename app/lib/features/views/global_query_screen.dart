@@ -168,8 +168,14 @@ class _GlobalQueryScreenState extends State<GlobalQueryScreen> {
     if (selected == null || !mounted) return;
     _searchController.text = selected.filter.keyword;
     setState(() => _filter = selected.filter.copyWith(keyword: ''));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已应用「${selected.name}」')),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          selected.isShowAll ? '已显示全部卡片' : '已应用「${selected.name}」',
+        ),
+      ),
     );
   }
 
