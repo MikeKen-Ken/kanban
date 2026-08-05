@@ -26,16 +26,59 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Get version from pubspec.yaml
+      # 每次 Push Build 发布都对应一个新版本号：
+      # - 若 pubspec 已高于最新正式 Release，沿用 pubspec（手动抬版本）
+      # - 否则在 max(pubspec, latest) 上自动 +patch，避免一直覆盖同一 tag
+      - name: Resolve next release version
         id: get_version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
-          PUBSPEC_BUILD=$(sed -n 's/^version: [0-9.]*+\([0-9]*\).*/\1/p' app/pubspec.yaml)
-          # pubspec build-number + workflow run counter → monotonic versionCode per CI build
-          BUILD_NUMBER=$((PUBSPEC_BUILD + ${{ github.run_number }}))
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
-          echo "Android build-number: $BUILD_NUMBER (pubspec +$PUBSPEC_BUILD, run #${{ github.run_number }})"
+          set -euo pipefail
+
+          PUBSPEC_VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
+          if [ -z "$PUBSPEC_VERSION" ]; then
+            echo "无法从 app/pubspec.yaml 解析 version" >&2
+            exit 1
+          fi
+
+          LATEST_TAG="$(
+            gh release list --repo "${{ github.repository }}" --exclude-drafts --limit 30 \
+              --json tagName,isPrerelease \
+              --jq '[.[] | select(.isPrerelease | not) | .tagName] | .[0] // empty'
+          )"
+          LATEST_VERSION="${LATEST_TAG#v}"
+
+          version_max() {
+            printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1
+          }
+
+          bump_patch() {
+            local major minor patch
+            IFS=. read -r major minor patch <<< "$1"
+            echo "${major}.${minor}.$((patch + 1))"
+          }
+
+          if [ -z "$LATEST_VERSION" ]; then
+            BASE="$PUBSPEC_VERSION"
+          else
+            BASE="$(version_max "$PUBSPEC_VERSION" "$LATEST_VERSION")"
+          fi
+
+          if [ -n "$LATEST_VERSION" ] && [ "$BASE" = "$LATEST_VERSION" ]; then
+            VERSION="$(bump_patch "$BASE")"
+            echo "pubspec=$PUBSPEC_VERSION latest=$LATEST_VERSION → 自动升 patch 为 $VERSION"
+          else
+            VERSION="$BASE"
+            echo "pubspec=$PUBSPEC_VERSION latest=${LATEST_VERSION:-无} → 使用已抬升版本 $VERSION"
+          fi
+
+          # 工作流序号保证 Android versionCode 单调递增
+          BUILD_NUMBER=${{ github.run_number }}
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "发布版本: $VERSION+$BUILD_NUMBER"
 
   build_android:
     needs: version
@@ -77,7 +120,11 @@ jobs:
 
       - name: Build APK
         working-directory: ${{ env.APK_BUILD_DIR }}/app
-        run: flutter build apk --target-platform android-arm64 --build-number=${{ needs.version.outputs.build_number }}
+        run: >
+          flutter build apk
+          --target-platform android-arm64
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v6
@@ -112,7 +159,10 @@ jobs:
 
       - name: Compile for Windows
         working-directory: app
-        run: flutter build windows
+        run: >
+          flutter build windows
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
 
       - name: Create empty settings.json
         working-directory: app
@@ -166,3 +216,31 @@ jobs:
           assets: |
             apk-result/app-release.apk#Kanban-${{ needs.version.outputs.version }}-android-arm64v8.apk
             Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip#Kanban-${{ needs.version.outputs.version }}-windows-x86-64.zip
+
+  # 发布成功后写回 pubspec，避免仓库版本长期落后于 GitHub Release
+  sync_pubspec_version:
+    needs: [version, upload_release]
+    if: ${{ needs.upload_release.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # 拉取最新 main，避免覆盖并发推送
+          ref: main
+          fetch-depth: 0
+
+      - name: Sync app/pubspec.yaml to released version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -i "s/^version: .*/version: ${VERSION}+0/" app/pubspec.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/pubspec.yaml
+          if git diff --staged --quiet; then
+            echo "pubspec 已是 ${VERSION}+0，无需提交"
+            exit 0
+          fi
+          git commit -m "配置：同步发布版本为 ${VERSION} [skip ci]"
+          git push origin HEAD:main
