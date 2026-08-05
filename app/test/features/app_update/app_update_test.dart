@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/app_update/app_update_installer.dart';
 import 'package:kanban/features/app_update/github_release_client.dart';
 import 'package:kanban/features/app_update/github_release_models.dart';
 import 'package:kanban/features/app_update/release_notes_plain_text.dart';
 import 'package:kanban/features/app_update/version_compare.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   group('VersionCompare', () {
@@ -230,6 +234,90 @@ void main() {
         );
       } finally {
         client.close();
+      }
+    });
+  });
+
+  group('windowsUpdaterScript 短路径覆盖', () {
+    test('TEMP 为 8.3 短路径时仍覆盖安装目录根文件', () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+
+      final temp = Directory.systemTemp.path;
+      // 本机常见：TEMP 已是 KEN-NA~1 形式；若无波浪号则无法复现该 bug，直接跳过。
+      if (!temp.contains('~')) {
+        return;
+      }
+
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final installDir = Directory(p.join(temp, 'kanban_upd_install_$stamp'));
+      final sourceDir = Directory(p.join(temp, 'kanban_upd_source_$stamp'));
+      final scriptFile = File(p.join(temp, 'kanban_upd_script_$stamp.ps1'));
+      final logFile = File(p.join(temp, 'kanban_updater_1.log'));
+
+      await installDir.create(recursive: true);
+      await sourceDir.create(recursive: true);
+      await Directory(p.join(sourceDir.path, 'data')).create();
+
+      final oldExe = File(p.join(installDir.path, 'kanban.exe'));
+      final newExe = File(p.join(sourceDir.path, 'kanban.exe'));
+      await oldExe.writeAsString('OLD');
+      await newExe.writeAsString('NEW');
+      await File(p.join(sourceDir.path, 'data', 'app.so')).writeAsString('so');
+      await scriptFile.writeAsString(windowsUpdaterScript);
+
+      try {
+        final result = await Process.run(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            scriptFile.path,
+            '-InstallDir',
+            installDir.path,
+            '-SourceDir',
+            sourceDir.path,
+            '-ExePath',
+            oldExe.path,
+            '-TargetPid',
+            '1',
+            '-SkipLaunch',
+          ],
+        );
+        expect(
+          result.exitCode,
+          0,
+          reason: 'stdout=${result.stdout}\nstderr=${result.stderr}',
+        );
+
+        expect(await oldExe.readAsString(), 'NEW');
+        expect(
+          await File(p.join(installDir.path, 'data', 'app.so')).readAsString(),
+          'so',
+        );
+
+        // 只应覆盖到安装根目录，不应因相对路径算错多出一层无关目录
+        final topNames = installDir
+            .listSync()
+            .map((e) => p.basename(e.path).toLowerCase())
+            .toSet();
+        expect(topNames, equals({'kanban.exe', 'data'}));
+      } finally {
+        if (await installDir.exists()) {
+          await installDir.delete(recursive: true);
+        }
+        if (await sourceDir.exists()) {
+          await sourceDir.delete(recursive: true);
+        }
+        if (await scriptFile.exists()) {
+          await scriptFile.delete();
+        }
+        if (await logFile.exists()) {
+          await logFile.delete();
+        }
       }
     });
   });
