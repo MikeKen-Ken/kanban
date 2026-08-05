@@ -319,6 +319,63 @@ class ChecklistItem {
   }
 }
 
+/// 卡片外链（网页书签），与图片附件分开存储。
+class CardLink {
+  CardLink({
+    required this.id,
+    required this.url,
+    required this.order,
+    required this.createdAt,
+    this.title = '',
+  });
+
+  final String id;
+  final String url;
+  final String title;
+  final int order;
+  final int createdAt;
+
+  CardLink copyWith({
+    String? id,
+    String? url,
+    String? title,
+    int? order,
+    int? createdAt,
+  }) {
+    return CardLink(
+      id: id ?? this.id,
+      url: url ?? this.url,
+      title: title ?? this.title,
+      order: order ?? this.order,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  String get displayTitle {
+    final trimmed = title.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+    return url;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'url': url,
+        if (title.isNotEmpty) 'title': title,
+        'order': order,
+        'createdAt': createdAt,
+      };
+
+  factory CardLink.fromJson(Map<String, dynamic> json) {
+    return CardLink(
+      id: json['id'] as String,
+      url: json['url'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      order: json['order'] as int? ?? 0,
+      createdAt: json['createdAt'] as int? ?? 0,
+    );
+  }
+}
+
 class KanbanCard {
   KanbanCard({
     required this.id,
@@ -337,6 +394,9 @@ class KanbanCard {
     this.labels = const [],
     this.checklist = const [],
     this.attachments = const [],
+    this.links = const [],
+    this.blockedByIds = const [],
+    this.relatedIds = const [],
     this.colorValue,
     this.conflictSide,
     this.conflictColumnId,
@@ -360,6 +420,15 @@ class KanbanCard {
   final List<ChecklistItem> checklist;
   final List<CardAttachment> attachments;
 
+  /// 外链书签
+  final List<CardLink> links;
+
+  /// 阻塞本卡的卡片 id（依赖）
+  final List<String> blockedByIds;
+
+  /// 相关卡片 id（双向链接的本侧引用）
+  final List<String> relatedIds;
+
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
 
@@ -382,8 +451,17 @@ class KanbanCard {
 
   bool get hasAttachments => attachments.isNotEmpty;
 
+  bool get hasLinks => links.isNotEmpty;
+
+  bool get hasRelations => blockedByIds.isNotEmpty || relatedIds.isNotEmpty;
+
   List<CardAttachment> get sortedAttachments {
     final list = [...attachments]..sort((a, b) => a.order.compareTo(b.order));
+    return list;
+  }
+
+  List<CardLink> get sortedLinks {
+    final list = [...links]..sort((a, b) => a.order.compareTo(b.order));
     return list;
   }
 
@@ -407,6 +485,9 @@ class KanbanCard {
     List<String>? labels,
     List<ChecklistItem>? checklist,
     List<CardAttachment>? attachments,
+    List<CardLink>? links,
+    List<String>? blockedByIds,
+    List<String>? relatedIds,
     Object? colorValue = _sentinel,
     Object? conflictSide = _sentinel,
     Object? conflictColumnId = _sentinel,
@@ -434,6 +515,9 @@ class KanbanCard {
       labels: labels ?? this.labels,
       checklist: checklist ?? this.checklist,
       attachments: attachments ?? this.attachments,
+      links: links ?? this.links,
+      blockedByIds: blockedByIds ?? this.blockedByIds,
+      relatedIds: relatedIds ?? this.relatedIds,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
       conflictSide: clearConflict
@@ -474,6 +558,9 @@ class KanbanCard {
         'checklist': checklist.map((c) => c.toJson()).toList(),
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
+      if (links.isNotEmpty) 'links': links.map((link) => link.toJson()).toList(),
+      if (blockedByIds.isNotEmpty) 'blockedByIds': blockedByIds,
+      if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
       if (colorValue != null) 'color': colorValue,
     };
     if (includeConflict) {
@@ -513,6 +600,15 @@ class KanbanCard {
       attachments: (json['attachments'] as List<dynamic>? ?? [])
           .map((e) => CardAttachment.fromJson(e as Map<String, dynamic>))
           .toList(),
+      links: (json['links'] as List<dynamic>? ?? [])
+          .map((e) => CardLink.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      blockedByIds: (json['blockedByIds'] as List<dynamic>? ?? [])
+          .map((e) => e as String)
+          .toList(),
+      relatedIds: (json['relatedIds'] as List<dynamic>? ?? [])
+          .map((e) => e as String)
+          .toList(),
       colorValue: json['color'] as int?,
       conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
       conflictColumnId: json['conflictColumnId'] as String?,
@@ -528,6 +624,10 @@ class KanbanCard {
     if (description?.toLowerCase().contains(q) ?? false) return true;
     for (final item in checklist) {
       if (item.text.toLowerCase().contains(q)) return true;
+    }
+    for (final link in links) {
+      if (link.title.toLowerCase().contains(q)) return true;
+      if (link.url.toLowerCase().contains(q)) return true;
     }
     for (final key in labels) {
       final label = findKanbanLabel(key, customLabels);

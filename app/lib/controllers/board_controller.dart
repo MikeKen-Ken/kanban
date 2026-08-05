@@ -11,6 +11,7 @@ import '../features/attachments/attachment_store.dart';
 import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/attachments/card_image_picker.dart';
 import '../features/activity/activity_models.dart';
+import '../features/automations/automations.dart';
 import '../features/import_export/backup_archive_service.dart';
 import '../features/mcp/kanban_mcp_host.dart';
 import '../features/project/project_list_preferences.dart';
@@ -55,6 +56,8 @@ class BoardController extends ChangeNotifier {
   final ReminderScheduler _reminderScheduler = ReminderScheduler();
   final UndoStack _undoStack = UndoStack();
   static const RecurrenceService _recurrenceService = RecurrenceService();
+  static const AutomationEngine _automationEngine = AutomationEngine();
+  bool _applyingAutomation = false;
 
   KanbanBoard? board;
   ProjectsManifest? manifest;
@@ -693,6 +696,9 @@ class BoardController extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     }
+
+    unawaited(runOverdueAutomations());
+    unawaited(_rescheduleReminders());
 
     _syncService.statusStream.listen((status) {
       if (status == SyncStatus.success || status == SyncStatus.error) {
@@ -1505,6 +1511,9 @@ class BoardController extends ChangeNotifier {
     List<String>? labels,
     List<ChecklistItem>? checklist,
     List<CardAttachment>? attachments,
+    List<CardLink>? links,
+    List<String>? blockedByIds,
+    List<String>? relatedIds,
     int? colorValue,
     bool clearColor = false,
   }) async {
@@ -1533,6 +1542,9 @@ class BoardController extends ChangeNotifier {
           labels: labels ?? card.labels,
           checklist: checklist ?? card.checklist,
           attachments: attachments ?? card.attachments,
+          links: links ?? card.links,
+          blockedByIds: blockedByIds ?? card.blockedByIds,
+          relatedIds: relatedIds ?? card.relatedIds,
           colorValue: clearColor ? null : (colorValue ?? card.colorValue),
           updatedAt: now,
         );
@@ -1542,7 +1554,7 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(
       _bump(board!.copyWith(columns: _normalizeOrders(columns))),
     );
-    if (original != null) {
+    if (original != null && !_applyingAutomation) {
       _undoStack.push(
         UndoEntry(
           label: '编辑「${original.title}」',
@@ -1562,6 +1574,9 @@ class BoardController extends ChangeNotifier {
             labels: original.labels,
             checklist: original.checklist,
             attachments: original.attachments,
+            links: original.links,
+            blockedByIds: original.blockedByIds,
+            relatedIds: original.relatedIds,
             colorValue: original.colorValue,
             clearColor: original.colorValue == null,
           ),
@@ -1576,6 +1591,134 @@ class BoardController extends ChangeNotifier {
       );
     }
     unawaited(_rescheduleReminders());
+
+    if (!_applyingAutomation && original != null) {
+      final updated = board!.columns
+          .where((column) => column.id == columnId)
+          .expand((column) => column.cards)
+          .where((card) => card.id == cardId)
+          .firstOrNull;
+      if (updated != null) {
+        if (completed == true && !original.completed) {
+          await _runAutomations(
+            _automationEngine.effectsForCompleted(
+              rules: projectSettings.automationRules,
+              card: updated,
+            ),
+            columnId: columnId,
+            cardId: cardId,
+          );
+        }
+        final checklistChanged = checklist != null;
+        if (checklistChanged) {
+          await _runAutomations(
+            _automationEngine.effectsForChecklistAllDone(
+              rules: projectSettings.automationRules,
+              card: updated,
+            ),
+            columnId: columnId,
+            cardId: cardId,
+          );
+        }
+      }
+    }
+  }
+
+  /// 按卡片 id 查找所属列。
+  String? findColumnIdForCard(String cardId) {
+    final current = board;
+    if (current == null) return null;
+    for (final column in current.columns) {
+      if (column.cards.any((card) => card.id == cardId)) {
+        return column.id;
+      }
+    }
+    return null;
+  }
+
+  KanbanCard? findCardById(String cardId) {
+    final current = board;
+    if (current == null) return null;
+    for (final column in current.columns) {
+      for (final card in column.cards) {
+        if (card.id == cardId) return card;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _runAutomations(
+    List<AutomationEffect> effects, {
+    required String columnId,
+    required String cardId,
+  }) async {
+    if (effects.isEmpty || _applyingAutomation || board == null) return;
+    _applyingAutomation = true;
+    try {
+      for (final effect in effects) {
+        final card = findCardById(cardId);
+        final currentColumnId = findColumnIdForCard(cardId);
+        if (card == null || currentColumnId == null) return;
+
+        if (effect.moveToDone) {
+          final done = _findDoneColumn(board!);
+          if (done != null && done.id != currentColumnId) {
+            await moveCard(
+              cardId: cardId,
+              fromColumnId: currentColumnId,
+              toColumnId: done.id,
+              toDisplayIndex: done.cards.length,
+              completed: true,
+              completedAt: DateTime.now().millisecondsSinceEpoch,
+            );
+          } else {
+            await updateCardFull(
+              currentColumnId,
+              cardId,
+              completed: true,
+            );
+          }
+          continue;
+        }
+
+        var nextLabels = card.labels;
+        if (effect.addLabelKey != null &&
+            !nextLabels.contains(effect.addLabelKey)) {
+          nextLabels = [...nextLabels, effect.addLabelKey!];
+        }
+        await updateCardFull(
+          currentColumnId,
+          cardId,
+          completed: effect.completed,
+          priority: effect.priority,
+          labels: effect.addLabelKey == null ? null : nextLabels,
+          clearReminder: effect.clearReminder,
+        );
+      }
+    } finally {
+      _applyingAutomation = false;
+    }
+  }
+
+  /// 扫描并执行「已逾期」自动化。
+  Future<void> runOverdueAutomations() async {
+    if (board == null) return;
+    final now = DateTime.now();
+    for (final column in [...board!.columns]) {
+      for (final card in [...column.cards]) {
+        final effects = _automationEngine.effectsForOverdue(
+          rules: projectSettings.automationRules,
+          card: card,
+          now: now,
+        );
+        if (effects.isEmpty) continue;
+        await _runAutomations(
+          effects,
+          columnId: column.id,
+          cardId: card.id,
+        );
+      }
+    }
   }
 
   Future<String?> addCardAttachmentsFromSource(
@@ -2124,28 +2267,44 @@ class BoardController extends ChangeNotifier {
     );
     if (fromColumnId != toColumnId) {
       final originalIndex = moving!.order;
-      _undoStack.push(
-        UndoEntry(
-          label: '移动「${moving!.title}」',
-          undo: () => moveCard(
-            cardId: cardId,
-            fromColumnId: toColumnId,
-            toColumnId: fromColumnId,
-            toDisplayIndex: originalIndex,
+      if (!_applyingAutomation) {
+        _undoStack.push(
+          UndoEntry(
+            label: '移动「${moving!.title}」',
+            undo: () => moveCard(
+              cardId: cardId,
+              fromColumnId: toColumnId,
+              toColumnId: fromColumnId,
+              toDisplayIndex: originalIndex,
+            ),
           ),
-        ),
-      );
-      unawaited(
-        _recordActivity(
-          entityId: cardId,
-          entityTitle: moving!.title,
-          action: ActivityAction.moved,
-          details: {
-            'fromColumnId': fromColumnId,
-            'toColumnId': toColumnId,
-          },
-        ),
-      );
+        );
+        unawaited(
+          _recordActivity(
+            entityId: cardId,
+            entityTitle: moving!.title,
+            action: ActivityAction.moved,
+            details: {
+              'fromColumnId': fromColumnId,
+              'toColumnId': toColumnId,
+            },
+          ),
+        );
+      }
+      if (!_applyingAutomation) {
+        final card = findCardById(cardId);
+        if (card != null) {
+          await _runAutomations(
+            _automationEngine.effectsForMove(
+              rules: projectSettings.automationRules,
+              toColumnId: toColumnId,
+              card: card,
+            ),
+            columnId: toColumnId,
+            cardId: cardId,
+          );
+        }
+      }
     }
   }
 

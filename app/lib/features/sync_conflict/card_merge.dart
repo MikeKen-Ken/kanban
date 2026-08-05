@@ -54,6 +54,19 @@ bool _attachmentsEq(List<CardAttachment> a, List<CardAttachment> b) {
   return true;
 }
 
+bool _linksEq(List<CardLink> a, List<CardLink> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].id != b[i].id ||
+        a[i].url != b[i].url ||
+        a[i].title != b[i].title ||
+        a[i].order != b[i].order) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool cardsContentEqual(KanbanCard a, KanbanCard b) {
   return a.title == b.title &&
       a.description == b.description &&
@@ -68,7 +81,10 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       a.colorValue == b.colorValue &&
       _listEq(a.labels, b.labels) &&
       _checklistEq(a.checklist, b.checklist) &&
-      _attachmentsEq(a.attachments, b.attachments);
+      _attachmentsEq(a.attachments, b.attachments) &&
+      _linksEq(a.links, b.links) &&
+      _listEq(a.blockedByIds, b.blockedByIds) &&
+      _listEq(a.relatedIds, b.relatedIds);
 }
 
 KanbanCard stripConflict(KanbanCard card) {
@@ -184,7 +200,10 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
       local.colorValue != remote.colorValue ||
       !_listEq(local.labels, remote.labels) ||
       !_checklistEq(local.checklist, remote.checklist) ||
-      !_attachmentsEq(local.attachments, remote.attachments);
+      !_attachmentsEq(local.attachments, remote.attachments) ||
+      !_linksEq(local.links, remote.links) ||
+      !_listEq(local.blockedByIds, remote.blockedByIds) ||
+      !_listEq(local.relatedIds, remote.relatedIds);
 }
 
 KanbanCard _mergeFieldsAuto(KanbanCard local, KanbanCard remote) {
@@ -342,6 +361,24 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.attachments,
     eq: _attachmentsEq,
   );
+  final linksConflict = _fieldConflict(
+    base: base.card.links,
+    local: loc.card.links,
+    remote: rem.card.links,
+    eq: _linksEq,
+  );
+  final blockedByConflict = _fieldConflict(
+    base: base.card.blockedByIds,
+    local: loc.card.blockedByIds,
+    remote: rem.card.blockedByIds,
+    eq: _listEq,
+  );
+  final relatedConflict = _fieldConflict(
+    base: base.card.relatedIds,
+    local: loc.card.relatedIds,
+    remote: rem.card.relatedIds,
+    eq: _listEq,
+  );
   final columnConflict = _fieldConflict(
     base: base.columnId,
     local: loc.columnId,
@@ -362,6 +399,9 @@ CardMergeResult mergeCardThreeWay({
       labelsConflict ||
       checklistConflict ||
       attachmentsConflict ||
+      linksConflict ||
+      blockedByConflict ||
+      relatedConflict ||
       columnConflict;
 
   if (anyConflict) {
@@ -450,6 +490,24 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.attachments,
     eq: _attachmentsEq,
   );
+  final mergedLinks = _threeWayValue(
+    base: base.card.links,
+    local: loc.card.links,
+    remote: rem.card.links,
+    eq: _linksEq,
+  );
+  final mergedBlockedBy = _threeWayValue(
+    base: base.card.blockedByIds,
+    local: loc.card.blockedByIds,
+    remote: rem.card.blockedByIds,
+    eq: _listEq,
+  );
+  final mergedRelated = _threeWayValue(
+    base: base.card.relatedIds,
+    local: loc.card.relatedIds,
+    remote: rem.card.relatedIds,
+    eq: _listEq,
+  );
   final columnId = _threeWayValue(
     base: base.columnId,
     local: loc.columnId,
@@ -477,6 +535,9 @@ CardMergeResult mergeCardThreeWay({
     labels: mergedLabels,
     checklist: mergedChecklist,
     attachments: mergedAttachments,
+    links: mergedLinks,
+    blockedByIds: mergedBlockedBy,
+    relatedIds: mergedRelated,
     colorValue: mergedColor,
   );
 

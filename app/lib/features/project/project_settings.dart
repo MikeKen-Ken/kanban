@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import '../automations/automation_models.dart';
 import '../kanban/column_card_preferences.dart';
+import '../kanban/swimlane.dart';
 
 /// 单个项目的偏好设置（随项目数据同步到 WebDAV）
 class ProjectSettings {
@@ -12,6 +14,8 @@ class ProjectSettings {
     this.cardSurfaceOpacity = defaultCardSurfaceOpacity,
     this.columnPreferences = const {},
     this.columnWipLimits = const {},
+    this.swimlaneMode = SwimlaneMode.none,
+    this.automationRules = const [],
     this.updatedAt = 0,
     this.revision = 0,
     this.conflictSide,
@@ -37,6 +41,12 @@ class ProjectSettings {
 
   /// 各列建议的在制品上限；未配置或小于 1 表示不限
   final Map<String, int> columnWipLimits;
+
+  /// 看板泳道分组方式
+  final SwimlaneMode swimlaneMode;
+
+  /// 本地自动化规则
+  final List<AutomationRule> automationRules;
   final int updatedAt;
   final int revision;
 
@@ -61,6 +71,8 @@ class ProjectSettings {
     double? cardSurfaceOpacity,
     Map<String, ColumnCardPreferences>? columnPreferences,
     Map<String, int>? columnWipLimits,
+    SwimlaneMode? swimlaneMode,
+    List<AutomationRule>? automationRules,
     int? updatedAt,
     int? revision,
     Object? conflictSide = _sentinel,
@@ -76,6 +88,8 @@ class ProjectSettings {
       cardSurfaceOpacity: cardSurfaceOpacity ?? this.cardSurfaceOpacity,
       columnPreferences: columnPreferences ?? this.columnPreferences,
       columnWipLimits: columnWipLimits ?? this.columnWipLimits,
+      swimlaneMode: swimlaneMode ?? this.swimlaneMode,
+      automationRules: automationRules ?? this.automationRules,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
       conflictSide: clearConflictSide
@@ -117,6 +131,9 @@ class ProjectSettings {
           (key, value) => MapEntry(key, value.toJson()),
         ),
       if (columnWipLimits.isNotEmpty) 'columnWipLimits': columnWipLimits,
+      if (swimlaneMode != SwimlaneMode.none) 'swimlaneMode': swimlaneMode.name,
+      if (automationRules.isNotEmpty)
+        'automationRules': automationRules.map((r) => r.toJson()).toList(),
       'updatedAt': updatedAt,
       'revision': revision,
     };
@@ -138,6 +155,7 @@ class ProjectSettings {
     final cardOpacity = cardOpacityRaw is num
         ? clampCardSurfaceOpacity(cardOpacityRaw.toDouble())
         : defaultCardSurfaceOpacity;
+    final rulesRaw = json['automationRules'] as List<dynamic>?;
     return ProjectSettings(
       doneColumnName:
           json['doneColumnName'] as String? ?? defaultDoneColumnName,
@@ -158,6 +176,12 @@ class ProjectSettings {
       columnWipLimits: wipRaw == null
           ? const {}
           : wipRaw.map((key, value) => MapEntry(key, value as int)),
+      swimlaneMode: SwimlaneModeX.fromString(json['swimlaneMode'] as String?),
+      automationRules: rulesRaw == null
+          ? const []
+          : rulesRaw
+              .map((e) => AutomationRule.fromJson(e as Map<String, dynamic>))
+              .toList(),
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
       conflictSide: sideRaw == null ? null : ProjectSettings.fromJson(sideRaw),

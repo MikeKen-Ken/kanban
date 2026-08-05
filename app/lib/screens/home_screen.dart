@@ -13,8 +13,9 @@ import '../features/quick_capture/quick_capture.dart';
 import '../features/sync_conflict/conflict_center_screen.dart';
 import '../features/trash/trash_screen.dart';
 import '../features/views/filter_sheet.dart';
-import '../features/views/today_view_screen.dart';
 import '../features/views/views.dart';
+import '../features/kanban/swimlane.dart';
+import '../features/kanban/swimlane_board.dart';
 import '../main.dart';
 import '../utils/ime_guard.dart';
 import '../webdav_sync/webdav_sync_service.dart';
@@ -211,6 +212,108 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     );
   }
 
+  Future<void> _openCalendar() async {
+    final controller = context.read<BoardController>();
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CalendarViewScreen(
+          loadCards: controller.loadAllCardReferences,
+          onOpen: _openReference,
+          onToggleCompleted: _toggleReferenceCompleted,
+          onChangeDueDate: (reference, day) async {
+            if (controller.activeProjectId != reference.projectId) {
+              await controller.switchProject(reference.projectId);
+            }
+            final endOfDay = DateTime(day.year, day.month, day.day, 23, 59, 59);
+            await controller.updateCardFull(
+              reference.columnId,
+              reference.cardId,
+              dueDate: endOfDay.millisecondsSinceEpoch,
+            );
+          },
+          onCreateForDay: (day) async {
+            final titleController = TextEditingController();
+            final title = await showDialog<String>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('新建当天任务'),
+                content: TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: '标题'),
+                  onSubmitted: (_) =>
+                      Navigator.pop(ctx, titleController.text.trim()),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, titleController.text.trim()),
+                    child: const Text('创建'),
+                  ),
+                ],
+              ),
+            );
+            titleController.dispose();
+            if (title == null || title.isEmpty || !mounted) return;
+            final board = controller.board;
+            if (board == null || board.columns.isEmpty) return;
+            final columnId = board.columns.first.id;
+            final endOfDay = DateTime(day.year, day.month, day.day, 23, 59, 59);
+            await controller.addCard(
+              columnId,
+              title,
+              dueDate: endOfDay.millisecondsSinceEpoch,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickSwimlaneMode() async {
+    final controller = context.read<BoardController>();
+    final current = controller.projectSettings.swimlaneMode;
+    final picked = await showModalBottomSheet<SwimlaneMode>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                '看板泳道',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+            ),
+            for (final mode in SwimlaneMode.values)
+              ListTile(
+                leading: Icon(
+                  current == mode
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                ),
+                title: Text(mode.label),
+                onTap: () => Navigator.pop(ctx, mode),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == current || !mounted) return;
+    await controller.saveProjectSettings(
+      controller.projectSettings.copyWith(swimlaneMode: picked),
+    );
+  }
+
   Future<void> _openGlobalQuery() async {
     final controller = context.read<BoardController>();
     final labels = {
@@ -324,6 +427,12 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
       case 'today':
         _openToday();
         break;
+      case 'calendar':
+        _openCalendar();
+        break;
+      case 'swimlane':
+        _pickSwimlaneMode();
+        break;
       case 'filter':
         _showFilters();
         break;
@@ -429,6 +538,23 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 tooltip: '今日任务',
                 icon: const Icon(Icons.today_outlined),
                 onPressed: _openToday,
+              ),
+            if (!compact)
+              IconButton(
+                tooltip: '日历',
+                icon: const Icon(Icons.calendar_month_outlined),
+                onPressed: _openCalendar,
+              ),
+            if (!compact)
+              IconButton(
+                tooltip:
+                    '泳道：${controller.projectSettings.swimlaneMode.label}',
+                icon: Icon(
+                  controller.projectSettings.swimlaneMode == SwimlaneMode.none
+                      ? Icons.view_agenda_outlined
+                      : Icons.view_agenda,
+                ),
+                onPressed: _pickSwimlaneMode,
               ),
             IconButton(
               tooltip: '全部卡片',
@@ -571,6 +697,22 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                     child: ListTile(
                       leading: Icon(Icons.today_outlined),
                       title: Text('今日任务'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'calendar',
+                    child: ListTile(
+                      leading: Icon(Icons.calendar_month_outlined),
+                      title: Text('日历'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'swimlane',
+                    child: ListTile(
+                      leading: const Icon(Icons.view_agenda_outlined),
+                      title: Text(
+                        '泳道：${controller.projectSettings.swimlaneMode.label}',
+                      ),
                     ),
                   ),
                   PopupMenuItem(
@@ -734,6 +876,14 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         }
 
         if (compact) {
+          if (controller.projectSettings.swimlaneMode != SwimlaneMode.none) {
+            return SwimlaneBoard(
+              board: board,
+              visibleCardIds: visibleIds,
+              mode: controller.projectSettings.swimlaneMode,
+              compact: true,
+            );
+          }
           final width = MediaQuery.sizeOf(context).width - 24;
           return PageView.builder(
             padEnds: false,
@@ -751,6 +901,14 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 ),
               );
             },
+          );
+        }
+
+        if (controller.projectSettings.swimlaneMode != SwimlaneMode.none) {
+          return SwimlaneBoard(
+            board: board,
+            visibleCardIds: visibleIds,
+            mode: controller.projectSettings.swimlaneMode,
           );
         }
 

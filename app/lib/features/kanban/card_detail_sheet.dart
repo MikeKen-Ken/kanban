@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../controllers/board_controller.dart';
@@ -50,10 +52,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late List<String> _labels;
   late List<ChecklistItem> _checklist;
   late List<CardAttachment> _attachments;
+  late List<CardLink> _links;
+  late List<String> _blockedByIds;
+  late List<String> _relatedIds;
   int? _colorValue;
   final _checklistInput = TextEditingController();
   bool _persisted = false;
   bool _skipPersist = false;
+  bool _previewMarkdown = false;
 
   Iterable<TextEditingController> get _textControllers =>
       [_titleController, _descController, _checklistInput];
@@ -76,6 +82,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _labels = [...widget.card.labels];
     _checklist = [...widget.card.checklist];
     _attachments = [...widget.card.sortedAttachments];
+    _links = [...widget.card.sortedLinks];
+    _blockedByIds = [...widget.card.blockedByIds];
+    _relatedIds = [...widget.card.relatedIds];
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
@@ -128,7 +137,23 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (!_attachmentIdsEqual(_attachments, widget.card.sortedAttachments)) {
       return true;
     }
+    if (!_linksEqual(_links, widget.card.sortedLinks)) return true;
+    if (!_listEquals(_blockedByIds, widget.card.blockedByIds)) return true;
+    if (!_listEquals(_relatedIds, widget.card.relatedIds)) return true;
     return false;
+  }
+
+  bool _linksEqual(List<CardLink> a, List<CardLink> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id ||
+          a[i].url != b[i].url ||
+          a[i].title != b[i].title ||
+          a[i].order != b[i].order) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static bool _listEquals(List<String> a, List<String> b) {
@@ -183,6 +208,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final labels = List<String>.from(_labels);
     final checklist = List<ChecklistItem>.from(_checklist);
     final attachments = List<CardAttachment>.from(_attachments);
+    final links = List<CardLink>.from(_links);
+    final blockedByIds = List<String>.from(_blockedByIds);
+    final relatedIds = List<String>.from(_relatedIds);
     final colorValue = _colorValue;
     final clearColor = _colorValue == null;
 
@@ -203,6 +231,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       labels: labels,
       checklist: checklist,
       attachments: attachments,
+      links: links,
+      blockedByIds: blockedByIds,
+      relatedIds: relatedIds,
       colorValue: colorValue,
       clearColor: clearColor,
     );
@@ -405,6 +436,145 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       final key = await controller.addCustomLabel(name, labelColor);
       _safeSetState(() => _labels.add(key));
     }
+  }
+
+  Future<void> _addLink() async {
+    final titleController = TextEditingController();
+    final urlController = TextEditingController(text: 'https://');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('添加链接'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: '标题（可选）'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: urlController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '网址'),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('添加'),
+          ),
+        ],
+      ),
+    );
+    final title = titleController.text.trim();
+    var url = urlController.text.trim();
+    titleController.dispose();
+    urlController.dispose();
+    if (confirmed != true || url.isEmpty || !mounted) return;
+    if (!url.contains('://')) url = 'https://$url';
+    _safeSetState(() {
+      _links = [
+        ..._links,
+        CardLink(
+          id: const Uuid().v4(),
+          url: url,
+          title: title,
+          order: _links.length,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+      ];
+    });
+  }
+
+  Future<void> _pickRelatedCard({
+    required String title,
+    required ValueChanged<String> onPicked,
+  }) async {
+    final board = _boardController.board;
+    if (board == null) return;
+    final candidates = <({String id, String title, String column})>[];
+    for (final column in board.columns) {
+      for (final card in column.cards) {
+        if (card.id == widget.card.id) continue;
+        candidates.add((id: card.id, title: card.title, column: column.title));
+      }
+    }
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前看板没有其他可关联的卡片')),
+      );
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(title, style: Theme.of(ctx).textTheme.titleMedium),
+            ),
+            for (final item in candidates)
+              ListTile(
+                title: Text(item.title),
+                subtitle: Text(item.column),
+                onTap: () => Navigator.pop(ctx, item.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) onPicked(picked);
+  }
+
+  List<Widget> _relationTiles({
+    required List<String> ids,
+    required String emptyText,
+    required ValueChanged<String> onRemove,
+  }) {
+    if (ids.isEmpty) {
+      return [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            emptyText,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
+      ];
+    }
+    return [
+      for (final id in ids)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(_boardController.findCardById(id)?.title ?? '未知卡片'),
+          trailing: IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => onRemove(id),
+          ),
+          onTap: () {
+            final card = _boardController.findCardById(id);
+            final columnId = _boardController.findColumnIdForCard(id);
+            if (card == null || columnId == null) return;
+            showCardDetailSheet(
+              context: context,
+              columnId: columnId,
+              card: card,
+            );
+          },
+        ),
+    ];
   }
 
   void _addChecklistItem() {
@@ -680,17 +850,53 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                       controller: scrollController,
                       padding: const EdgeInsets.all(16),
                       children: [
-                        Text('备注', style: theme.textTheme.titleSmall),
-                        const SizedBox(height: 8),
-                        TextField(
-                          key: const ValueKey('card-detail-desc'),
-                          controller: _descController,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            hintText: '添加详细说明…',
-                            border: OutlineInputBorder(),
-                          ),
+                        Row(
+                          children: [
+                            Text('备注', style: theme.textTheme.titleSmall),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: () => _safeSetState(
+                                () => _previewMarkdown = !_previewMarkdown,
+                              ),
+                              child: Text(_previewMarkdown ? '编辑' : '预览'),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 8),
+                        if (_previewMarkdown)
+                          Container(
+                            width: double.infinity,
+                            constraints: const BoxConstraints(minHeight: 120),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: theme.colorScheme.outlineVariant,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: MarkdownBody(
+                              data: _descController.text.isEmpty
+                                  ? '_暂无备注_'
+                                  : _descController.text,
+                              onTapLink: (text, href, title) {
+                                if (href == null) return;
+                                launchUrl(
+                                  Uri.parse(href),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              },
+                            ),
+                          )
+                        else
+                          TextField(
+                            key: const ValueKey('card-detail-desc'),
+                            controller: _descController,
+                            maxLines: 6,
+                            decoration: const InputDecoration(
+                              hintText: '支持 Markdown…',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
                         const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
@@ -821,6 +1027,118 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           icon: const Icon(Icons.add_photo_alternate_outlined,
                               size: 18),
                           label: const Text('添加图片'),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text('链接', style: theme.textTheme.titleSmall),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _addLink,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('添加'),
+                            ),
+                          ],
+                        ),
+                        if (_links.isEmpty)
+                          Text(
+                            '可添加网页书签',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          )
+                        else
+                          ...[
+                            for (final link in _links)
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.link),
+                                title: Text(link.displayTitle),
+                                subtitle: Text(
+                                  link.url,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: IconButton(
+                                  tooltip: '删除链接',
+                                  onPressed: () => _safeSetState(
+                                    () => _links = _links
+                                        .where((item) => item.id != link.id)
+                                        .toList(),
+                                  ),
+                                  icon: const Icon(Icons.close),
+                                ),
+                                onTap: () => launchUrl(
+                                  Uri.parse(link.url),
+                                  mode: LaunchMode.externalApplication,
+                                ),
+                              ),
+                          ],
+                        const SizedBox(height: 20),
+                        Text('依赖与关联', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        Text(
+                          '阻塞本卡',
+                          style: theme.textTheme.labelLarge,
+                        ),
+                        ..._relationTiles(
+                          ids: _blockedByIds,
+                          emptyText: '暂无阻塞依赖',
+                          onRemove: (id) => _safeSetState(
+                            () => _blockedByIds =
+                                _blockedByIds.where((item) => item != id).toList(),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () => _pickRelatedCard(
+                              title: '选择阻塞本卡的任务',
+                              onPicked: (id) {
+                                if (_blockedByIds.contains(id) ||
+                                    id == widget.card.id) {
+                                  return;
+                                }
+                                _safeSetState(
+                                  () => _blockedByIds = [..._blockedByIds, id],
+                                );
+                              },
+                            ),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('添加阻塞依赖'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '相关卡片',
+                          style: theme.textTheme.labelLarge,
+                        ),
+                        ..._relationTiles(
+                          ids: _relatedIds,
+                          emptyText: '暂无相关卡片',
+                          onRemove: (id) => _safeSetState(
+                            () => _relatedIds =
+                                _relatedIds.where((item) => item != id).toList(),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () => _pickRelatedCard(
+                              title: '选择相关卡片',
+                              onPicked: (id) {
+                                if (_relatedIds.contains(id) ||
+                                    id == widget.card.id) {
+                                  return;
+                                }
+                                _safeSetState(
+                                  () => _relatedIds = [..._relatedIds, id],
+                                );
+                              },
+                            ),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('添加相关卡片'),
+                          ),
                         ),
                         const SizedBox(height: 20),
                         Text('截止日期', style: theme.textTheme.titleSmall),

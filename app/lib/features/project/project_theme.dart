@@ -13,6 +13,7 @@ class ProjectThemePreset {
     required this.labelPersonal,
     required this.labelUrgent,
     required this.labelIdea,
+    required this.labelNeedResource,
     required this.priorityLow,
     required this.priorityMedium,
     required this.priorityHigh,
@@ -26,6 +27,8 @@ class ProjectThemePreset {
   final Color labelPersonal;
   final Color labelUrgent;
   final Color labelIdea;
+  /// 缺外部资源 / 暂不具备开工条件（与「紧急」区分的沉稳色）
+  final Color labelNeedResource;
   final Color priorityLow;
   final Color priorityMedium;
   final Color priorityHigh;
@@ -45,6 +48,11 @@ class ProjectThemePreset {
         KanbanLabel(key: 'personal', name: '个人', color: labelPersonal),
         KanbanLabel(key: 'urgent', name: '紧急', color: labelUrgent),
         KanbanLabel(key: 'idea', name: '想法', color: labelIdea),
+        KanbanLabel(
+          key: 'need_resource',
+          name: '缺资源',
+          color: labelNeedResource,
+        ),
       ];
 }
 
@@ -60,6 +68,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF2E9E6A),
     labelUrgent: Color(0xFFE05252),
     labelIdea: Color(0xFF9B59B6),
+    labelNeedResource: Color(0xFF8B7355),
     priorityLow: Color(0xFF2E9E6A),
     priorityMedium: Color(0xFFE09A2E),
     priorityHigh: Color(0xFFE05252),
@@ -73,6 +82,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF5A9E6E),
     labelUrgent: Color(0xFFC45C4A),
     labelIdea: Color(0xFF7A9B4F),
+    labelNeedResource: Color(0xFF8A7A4E),
     priorityLow: Color(0xFF4A9B6E),
     priorityMedium: Color(0xFFD4A03C),
     priorityHigh: Color(0xFFC45C4A),
@@ -86,6 +96,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFFD4A03C),
     labelUrgent: Color(0xFFD64550),
     labelIdea: Color(0xFFB565A7),
+    labelNeedResource: Color(0xFF9A6B4A),
     priorityLow: Color(0xFFD4A03C),
     priorityMedium: Color(0xFFE07A3A),
     priorityHigh: Color(0xFFD64550),
@@ -99,6 +110,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF2E9E9E),
     labelUrgent: Color(0xFFE05252),
     labelIdea: Color(0xFF5B7FBD),
+    labelNeedResource: Color(0xFF7A6E58),
     priorityLow: Color(0xFF2E9E9E),
     priorityMedium: Color(0xFFE09A2E),
     priorityHigh: Color(0xFFE05252),
@@ -112,6 +124,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF6E8B74),
     labelUrgent: Color(0xFFB85C5C),
     labelIdea: Color(0xFF7A6E9B),
+    labelNeedResource: Color(0xFF8A7B68),
     priorityLow: Color(0xFF6E8B74),
     priorityMedium: Color(0xFFB8956A),
     priorityHigh: Color(0xFFB85C5C),
@@ -125,6 +138,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFFD4896A),
     labelUrgent: Color(0xFFD64550),
     labelIdea: Color(0xFF9B6EAD),
+    labelNeedResource: Color(0xFF9A7A62),
     priorityLow: Color(0xFF6E9B7A),
     priorityMedium: Color(0xFFD4896A),
     priorityHigh: Color(0xFFD64550),
@@ -138,6 +152,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF5B8FA8),
     labelUrgent: Color(0xFFC45C6A),
     labelIdea: Color(0xFF9B7EBD),
+    labelNeedResource: Color(0xFF8B735F),
     priorityLow: Color(0xFF5B8FA8),
     priorityMedium: Color(0xFFC9A04A),
     priorityHigh: Color(0xFFC45C6A),
@@ -151,6 +166,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF7A9B4F),
     labelUrgent: Color(0xFFD45C3A),
     labelIdea: Color(0xFFB07A4A),
+    labelNeedResource: Color(0xFF8A6E48),
     priorityLow: Color(0xFF7A9B4F),
     priorityMedium: Color(0xFFC9922E),
     priorityHigh: Color(0xFFD45C3A),
@@ -164,6 +180,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF8B7355),
     labelUrgent: Color(0xFFC24A3A),
     labelIdea: Color(0xFF9B6E5A),
+    labelNeedResource: Color(0xFF7A6A55),
     priorityLow: Color(0xFF7A8B5A),
     priorityMedium: Color(0xFFC9922E),
     priorityHigh: Color(0xFFC24A3A),
@@ -177,6 +194,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelPersonal: Color(0xFF5BA88E),
     labelUrgent: Color(0xFFD45C5C),
     labelIdea: Color(0xFF5B8FBD),
+    labelNeedResource: Color(0xFF8A7A5A),
     priorityLow: Color(0xFF5BA88E),
     priorityMedium: Color(0xFFD4A03C),
     priorityHigh: Color(0xFFD45C5C),

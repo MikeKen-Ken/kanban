@@ -5,6 +5,8 @@ import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../../settings/settings_section.dart';
 import '../attachments/card_attachment_image.dart';
+import '../automations/automation_rules_screen.dart';
+import '../kanban/swimlane.dart';
 import 'project_settings.dart';
 import 'project_theme.dart';
 
@@ -20,6 +22,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   late final TextEditingController _doneColumnController;
   late String _selectedThemeId;
   late Map<String, int> _wipLimits;
+  late SwimlaneMode _swimlaneMode;
   double? _overlayDraft;
   double? _cardOpacityDraft;
   bool _saving = false;
@@ -34,6 +37,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     _selectedThemeId =
         settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
     _wipLimits = Map<String, int>.from(settings.columnWipLimits);
+    _swimlaneMode = settings.swimlaneMode;
   }
 
   @override
@@ -61,6 +65,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
         doneColumnName: name,
         themeId: themeId,
         columnWipLimits: _wipLimits,
+        swimlaneMode: _swimlaneMode,
         clearConflictSide: true,
       ),
     );
@@ -429,6 +434,43 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                     ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                  child: DropdownButtonFormField<SwimlaneMode>(
+                    value: _swimlaneMode,
+                    decoration: const InputDecoration(
+                      labelText: '泳道分组',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      for (final mode in SwimlaneMode.values)
+                        DropdownMenuItem(
+                          value: mode,
+                          child: Text(mode.label),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _swimlaneMode = value);
+                    },
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.bolt_outlined),
+                  title: const Text('自动化规则'),
+                  subtitle: Text(
+                    '已配置 ${controller.projectSettings.automationRules.length} 条',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AutomationRulesScreen(),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -531,6 +573,7 @@ class _ThemeOptionTile extends StatelessWidget {
       preset.labelPersonal,
       preset.labelUrgent,
       preset.labelIdea,
+      preset.labelNeedResource,
     ];
 
     return InkWell(

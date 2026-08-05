@@ -419,7 +419,9 @@ class _CardContent extends StatelessWidget {
                         ],
                         if (dueInfo != null ||
                             card.priority != CardPriority.none ||
-                            card.hasChecklist) ...[
+                            card.hasChecklist ||
+                            card.hasLinks ||
+                            card.hasRelations) ...[
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
@@ -468,6 +470,28 @@ class _CardContent extends StatelessWidget {
                                     ),
                                   ],
                                 ),
+                              if (card.hasLinks)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.link,
+                                      size: 14,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '${card.links.length}',
+                                      style: theme.textTheme.labelSmall,
+                                    ),
+                                  ],
+                                ),
+                              if (card.hasRelations)
+                                Icon(
+                                  Icons.account_tree_outlined,
+                                  size: 14,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                             ],
                           ),
                         ],
@@ -513,7 +537,9 @@ class _CardContent extends StatelessWidget {
         !hasDescription &&
         dueInfo == null &&
         card.priority == CardPriority.none &&
-        !card.hasChecklist;
+        !card.hasChecklist &&
+        !card.hasLinks &&
+        !card.hasRelations;
   }
 
   Widget? _dueDateInfo(int? dueMs, ColorScheme scheme) {

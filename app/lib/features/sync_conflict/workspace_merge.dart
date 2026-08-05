@@ -1,4 +1,5 @@
 import '../../models/kanban_models.dart';
+import '../automations/automation_models.dart';
 import '../project/project_settings.dart';
 import '../project/projects_manifest.dart';
 import '../trash/trash_models.dart';
@@ -47,7 +48,9 @@ bool _settingsContentDiffers(ProjectSettings a, ProjectSettings b) =>
     !_overlayEq(a.backgroundOverlayOpacity, b.backgroundOverlayOpacity) ||
     !_overlayEq(a.cardSurfaceOpacity, b.cardSurfaceOpacity) ||
     !_prefsEq(a.columnPreferences, b.columnPreferences) ||
-    !_intMapEq(a.columnWipLimits, b.columnWipLimits);
+    !_intMapEq(a.columnWipLimits, b.columnWipLimits) ||
+    a.swimlaneMode != b.swimlaneMode ||
+    !AutomationRule.listEquals(a.automationRules, b.automationRules);
 
 /// Settings：字段级合并；同字段冲突挂 conflictSide
 ProjectSettings mergeSettings({
@@ -136,6 +139,18 @@ ProjectSettings mergeSettings({
       !_intMapEq(effectiveLocal.columnWipLimits, base.columnWipLimits);
   final wipRemoteChanged =
       !_intMapEq(effectiveRemote.columnWipLimits, base.columnWipLimits);
+  final swimlaneLocalChanged =
+      effectiveLocal.swimlaneMode != base.swimlaneMode;
+  final swimlaneRemoteChanged =
+      effectiveRemote.swimlaneMode != base.swimlaneMode;
+  final automationLocalChanged = !AutomationRule.listEquals(
+    effectiveLocal.automationRules,
+    base.automationRules,
+  );
+  final automationRemoteChanged = !AutomationRule.listEquals(
+    effectiveRemote.automationRules,
+    base.automationRules,
+  );
 
   final doneConflict = doneLocalChanged &&
       doneRemoteChanged &&
@@ -171,6 +186,15 @@ ProjectSettings mergeSettings({
         effectiveLocal.columnWipLimits,
         effectiveRemote.columnWipLimits,
       );
+  final swimlaneConflict = swimlaneLocalChanged &&
+      swimlaneRemoteChanged &&
+      effectiveLocal.swimlaneMode != effectiveRemote.swimlaneMode;
+  final automationConflict = automationLocalChanged &&
+      automationRemoteChanged &&
+      !AutomationRule.listEquals(
+        effectiveLocal.automationRules,
+        effectiveRemote.automationRules,
+      );
 
   if (doneConflict ||
       themeConflict ||
@@ -178,7 +202,9 @@ ProjectSettings mergeSettings({
       overlayConflict ||
       cardOpacityConflict ||
       prefsConflict ||
-      wipConflict) {
+      wipConflict ||
+      swimlaneConflict ||
+      automationConflict) {
     final localWins = effectiveLocal.updatedAt >= effectiveRemote.updatedAt;
     final primary = localWins ? effectiveLocal : effectiveRemote;
     final other = localWins ? effectiveRemote : effectiveLocal;
@@ -229,6 +255,16 @@ ProjectSettings mergeSettings({
         : wipRemoteChanged
             ? effectiveRemote.columnWipLimits
             : base.columnWipLimits,
+    swimlaneMode: swimlaneLocalChanged
+        ? effectiveLocal.swimlaneMode
+        : swimlaneRemoteChanged
+            ? effectiveRemote.swimlaneMode
+            : base.swimlaneMode,
+    automationRules: automationLocalChanged
+        ? effectiveLocal.automationRules
+        : automationRemoteChanged
+            ? effectiveRemote.automationRules
+            : base.automationRules,
     updatedAt: effectiveLocal.updatedAt >= effectiveRemote.updatedAt
         ? effectiveLocal.updatedAt
         : effectiveRemote.updatedAt,

@@ -158,6 +158,12 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             'completed': JsonSchema.boolean(),
           }),
         ),
+        'blockedByIds': JsonSchema.array(
+          items: JsonSchema.string(description: '阻塞本卡的卡片 id'),
+        ),
+        'relatedIds': JsonSchema.array(
+          items: JsonSchema.string(description: '相关卡片 id'),
+        ),
         'colorValue': JsonSchema.number(),
         'clearColor': JsonSchema.boolean(),
       },
@@ -195,6 +201,22 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
       final checklist = args.containsKey('checklist')
           ? (parseMcpChecklist(args['checklist']) ?? const <ChecklistItem>[])
           : null;
+      final blockedByIds = args.containsKey('blockedByIds')
+          ? (args['blockedByIds'] as List?)
+                  ?.whereType<String>()
+                  .map((item) => item.trim())
+                  .where((item) => item.isNotEmpty)
+                  .toList() ??
+              const <String>[]
+          : null;
+      final relatedIds = args.containsKey('relatedIds')
+          ? (args['relatedIds'] as List?)
+                  ?.whereType<String>()
+                  .map((item) => item.trim())
+                  .where((item) => item.isNotEmpty)
+                  .toList() ??
+              const <String>[]
+          : null;
 
       await controller.updateCardFull(
         columnId,
@@ -216,6 +238,8 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             : parseMcpRecurrence(args['recurrence'] as String?),
         labels: labels,
         checklist: checklist,
+        blockedByIds: blockedByIds,
+        relatedIds: relatedIds,
         colorValue: (args['colorValue'] as num?)?.toInt(),
         clearColor: args['clearColor'] == true,
       );
