@@ -8,9 +8,13 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('default board has three columns', () {
+  test('default board has five columns', () {
     final board = KanbanBoard.empty(id: 'test');
-    expect(board.columns.length, 3);
+    expect(board.columns.length, 5);
+    expect(
+      board.columns.map((c) => c.id).toList(),
+      ['todo', 'doing', 'blocked', 'verify', 'done'],
+    );
   });
 
   test('board storage saves each column to separate json', () async {
@@ -36,8 +40,9 @@ void main() {
     expect(await todoFile.readAsString(), contains('"title": "待办"'));
 
     final loaded = await storage.loadBoard(board.id);
-    expect(loaded.columns.length, 3);
+    expect(loaded.columns.length, 5);
     expect(loaded.columns.first.id, 'todo');
+    expect(loaded.columns.map((c) => c.id), containsAll(['blocked', 'verify']));
   });
 
   test('card json roundtrip with extended fields', () {

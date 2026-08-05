@@ -50,7 +50,9 @@ void main() {
 
     final merged = local.mergeWith(remote);
     expect(merged.columns.map((c) => c.id), contains('done'));
-    expect(merged.columns.length, 3);
+    expect(merged.columns.map((c) => c.id), contains('blocked'));
+    expect(merged.columns.map((c) => c.id), contains('verify'));
+    expect(merged.columns.length, 5);
   });
 
   test('merge keeps newer card when the same card exists on both sides', () {

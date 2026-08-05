@@ -132,9 +132,21 @@ class KanbanBoard {
           cards: [],
         ),
         KanbanColumn(
+          id: 'blocked',
+          title: '阻塞中',
+          order: 2,
+          cards: [],
+        ),
+        KanbanColumn(
+          id: 'verify',
+          title: '待验证',
+          order: 3,
+          cards: [],
+        ),
+        KanbanColumn(
           id: 'done',
           title: doneColumnTitle,
-          order: 2,
+          order: 4,
           cards: [],
         ),
       ],

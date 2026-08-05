@@ -51,7 +51,9 @@ void main() {
     );
     final merged = mergeBoards(local: local, remote: remote);
     expect(merged.columns.map((c) => c.id), contains('done'));
-    expect(merged.columns.length, 3);
+    expect(merged.columns.map((c) => c.id), contains('blocked'));
+    expect(merged.columns.map((c) => c.id), contains('verify'));
+    expect(merged.columns.length, 5);
   });
 
   test('同字段冲突 → 有 conflictSide 且主侧为较新', () {
