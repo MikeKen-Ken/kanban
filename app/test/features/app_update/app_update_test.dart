@@ -144,4 +144,93 @@ void main() {
       expect(list.first.body, contains('- 功能：新增更新 (40e7ff9)'));
     });
   });
+
+  group('parseJsdelivrGhPackage', () {
+    test('将 versions 转为带 v 前缀的 tag', () {
+      const json = '''
+{"type":"gh","name":"MikeKen-Ken/kanban","versions":[
+  {"version":"1.0.1"},
+  {"version":"1.0.0"}
+]}
+''';
+      final list = parseJsdelivrGhPackage(
+        json,
+        owner: 'MikeKen-Ken',
+        repo: 'kanban',
+      );
+      expect(list.map((r) => r.tagName).toList(), ['v1.0.1', 'v1.0.0']);
+      expect(list.first.versionLabel, '1.0.1');
+    });
+  });
+
+  group('GithubReleaseClient.fetchReleases', () {
+    test('Atom 失败且 API 403 时仍可通过 jsDelivr 获取版本', () async {
+      final client = GithubReleaseClient(
+        httpGet: (uri) async {
+          if (uri.host == 'github.com') {
+            return const ReleaseHttpResult(statusCode: 503, body: 'unavailable');
+          }
+          if (uri.host == 'api.github.com') {
+            return const ReleaseHttpResult(
+              statusCode: 403,
+              body: '{"message":"API rate limit exceeded"}',
+              rateLimitRemaining: '0',
+            );
+          }
+          if (uri.host == 'data.jsdelivr.com') {
+            return const ReleaseHttpResult(
+              statusCode: 200,
+              body:
+                  '{"type":"gh","versions":[{"version":"1.0.1"},{"version":"1.0.0"}]}',
+            );
+          }
+          fail('未预期的请求：${uri.host}');
+        },
+      );
+      try {
+        final list = await client.fetchReleases();
+        expect(list.first.tagName, 'v1.0.1');
+        expect(list, hasLength(2));
+      } finally {
+        client.close();
+      }
+    });
+
+    test('全部来源失败时错误信息包含 API 403 限额提示', () async {
+      final client = GithubReleaseClient(
+        httpGet: (uri) async {
+          if (uri.host == 'github.com') {
+            return const ReleaseHttpResult(statusCode: 503, body: '');
+          }
+          if (uri.host == 'data.jsdelivr.com') {
+            return const ReleaseHttpResult(statusCode: 500, body: '');
+          }
+          return const ReleaseHttpResult(
+            statusCode: 403,
+            body: '{"message":"API rate limit exceeded"}',
+            rateLimitRemaining: '0',
+          );
+        },
+      );
+      try {
+        await expectLater(
+          client.fetchReleases(),
+          throwsA(
+            isA<StateError>().having(
+              (e) => e.message,
+              'message',
+              allOf(
+                contains('Atom'),
+                contains('jsDelivr'),
+                contains('403'),
+                contains('限额'),
+              ),
+            ),
+          ),
+        );
+      } finally {
+        client.close();
+      }
+    });
+  });
 }

@@ -7,15 +7,20 @@ import 'package:flutter/services.dart';
 /// 拖拽反馈卡片中心对准指针（而非左上角）。
 ///
 /// [feedbackWidth] 应与反馈层实际宽度一致。
+/// [listBottomMargin] 为列表中卡片用于间距的底部 margin；反馈层通常为 0，
+/// 计算锚点时应从 child 高度中扣除，使中心对准可见卡片本体。
 Offset feedbackCenterDragAnchorStrategy(
   Draggable<Object> draggable,
   BuildContext context,
   Offset position, {
   required double feedbackWidth,
+  double listBottomMargin = 0,
 }) {
   final box = context.findRenderObject() as RenderBox?;
   final height = (box != null && box.hasSize) ? box.size.height : 80.0;
-  return Offset(feedbackWidth / 2, height / 2);
+  final visualHeight =
+      (height - listBottomMargin).clamp(1.0, double.infinity);
+  return Offset(feedbackWidth / 2, visualHeight / 2);
 }
 
 /// 长按未完成或拖拽已开始时，是否应抑制打开卡片详情。

@@ -97,19 +97,16 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         final feedbackWidth =
             constraints.maxWidth.isFinite ? constraints.maxWidth : 268.0;
 
-        final feedback = Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            width: feedbackWidth,
-            child: _CardContent(
-              card: widget.card,
-              dragging: true,
-              isPinned: widget.isPinned,
-              customLabels: customLabels,
-              themeId: themeId,
-              surfaceOpacity: cardSurfaceOpacity,
-            ),
+        // 反馈层只用同一套 _CardContent，避免外包 Material 造成套层与尺寸偏差
+        final feedback = SizedBox(
+          width: feedbackWidth,
+          child: _CardContent(
+            card: widget.card,
+            dragging: true,
+            isPinned: widget.isPinned,
+            customLabels: customLabels,
+            themeId: themeId,
+            surfaceOpacity: cardSurfaceOpacity,
           ),
         );
 
@@ -136,6 +133,8 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
             ctx,
             position,
             feedbackWidth: feedbackWidth,
+            // 列表卡片有 bottom: 8 间距；反馈层 margin 为 0
+            listBottomMargin: 8,
           );
         }
 
@@ -232,7 +231,10 @@ class _CardContent extends StatelessWidget {
                 color: colorScheme.outlineVariant.withValues(alpha: 0.95),
               );
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      // 拖拽反馈去掉列间距 margin，尺寸与可见卡片本体一致
+      margin: dragging
+          ? EdgeInsets.zero
+          : const EdgeInsets.only(bottom: 8),
       color: cardBackground,
       surfaceTintColor: Colors.transparent,
       elevation: 0,

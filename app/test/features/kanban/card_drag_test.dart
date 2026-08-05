@@ -45,6 +45,48 @@ void main() {
       );
       expect(anchor, const Offset(140, 60));
     });
+
+    testWidgets('扣除列表 bottom margin 后对准可见本体中心', (tester) async {
+      late Offset anchor;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 280,
+                height: 128,
+                child: Draggable<int>(
+                  data: 1,
+                  dragAnchorStrategy: (draggable, context, position) {
+                    anchor = feedbackCenterDragAnchorStrategy(
+                      draggable,
+                      context,
+                      position,
+                      feedbackWidth: 280,
+                      listBottomMargin: 8,
+                    );
+                    return anchor;
+                  },
+                  feedback: const SizedBox(width: 280, height: 120),
+                  child: const SizedBox(
+                    key: Key('drag-child-margin'),
+                    width: 280,
+                    height: 128,
+                    child: ColoredBox(color: Colors.blue),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.drag(
+        find.byKey(const Key('drag-child-margin')),
+        const Offset(40, 30),
+      );
+      expect(anchor, const Offset(140, 60));
+    });
   });
 
   group('shouldSuppressCardTapAfterPress', () {

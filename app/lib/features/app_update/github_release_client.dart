@@ -5,20 +5,43 @@ import 'app_update_constants.dart';
 import 'github_release_models.dart';
 import 'release_notes_plain_text.dart';
 
-/// 从 GitHub 拉取已发布版本（优先 Atom，避免 REST API 60 次/小时限额）。
+/// HTTP GET 结果（供单测注入）。
+class ReleaseHttpResult {
+  const ReleaseHttpResult({
+    required this.statusCode,
+    required this.body,
+    this.rateLimitRemaining,
+  });
+
+  final int statusCode;
+  final String body;
+  final String? rateLimitRemaining;
+}
+
+/// 从 GitHub 拉取已发布版本。
+///
+/// 顺序：Atom（无 REST 限额）→ jsDelivr 版本列表（绕过 API 限额）→ GitHub REST API。
 class GithubReleaseClient {
   GithubReleaseClient({
     HttpClient? httpClient,
     this.owner = AppUpdateConstants.owner,
     this.repo = AppUpdateConstants.repo,
-  }) : _httpClient = httpClient ?? HttpClient();
+    Future<ReleaseHttpResult> Function(Uri uri)? httpGet,
+  })  : _httpClient = httpClient ?? HttpClient(),
+        _httpGetOverride = httpGet {
+    _httpClient.userAgent = AppUpdateConstants.userAgent;
+  }
 
   final HttpClient _httpClient;
+  final Future<ReleaseHttpResult> Function(Uri uri)? _httpGetOverride;
   final String owner;
   final String repo;
 
   Uri get _atomUri =>
       Uri.https('github.com', '/$owner/$repo/releases.atom');
+
+  Uri get _jsdelivrUri =>
+      Uri.https('data.jsdelivr.com', '/v1/packages/gh/$owner/$repo');
 
   Uri get _apiUri => Uri.https(
         'api.github.com',
@@ -27,43 +50,56 @@ class GithubReleaseClient {
       );
 
   Future<List<GithubReleaseInfo>> fetchReleases() async {
+    final errors = <String>[];
+
     try {
       return await _fetchViaAtom();
-    } catch (atomError) {
-      try {
-        return await _fetchViaApi();
-      } catch (apiError) {
-        throw StateError(
-          '读取 Release 失败。Atom：$atomError；API：$apiError',
-        );
-      }
+    } catch (e) {
+      errors.add('Atom：$e');
     }
+
+    try {
+      return await _fetchViaJsdelivr();
+    } catch (e) {
+      errors.add('jsDelivr：$e');
+    }
+
+    try {
+      return await _fetchViaApi();
+    } catch (e) {
+      errors.add('API：$e');
+    }
+
+    throw StateError('读取 Release 失败。${errors.join('；')}');
   }
 
   Future<List<GithubReleaseInfo>> _fetchViaAtom() async {
-    final body = await _getText(_atomUri);
-    final releases = parseReleasesAtom(body, owner: owner, repo: repo);
+    final result = await _get(_atomUri);
+    _ensureOk(result, label: 'Atom');
+    final releases = parseReleasesAtom(result.body, owner: owner, repo: repo);
     if (releases.isEmpty) {
       throw StateError('Atom 中没有可用 Release');
     }
     return releases;
   }
 
+  Future<List<GithubReleaseInfo>> _fetchViaJsdelivr() async {
+    final result = await _get(_jsdelivrUri);
+    _ensureOk(result, label: 'jsDelivr');
+    return parseJsdelivrGhPackage(result.body, owner: owner, repo: repo);
+  }
+
   Future<List<GithubReleaseInfo>> _fetchViaApi() async {
-    final request = await _httpClient.getUrl(_apiUri);
-    _applyHeaders(request);
-    final response = await request.close();
-    final body = await response.transform(utf8.decoder).join();
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final remaining = response.headers.value('x-ratelimit-remaining');
-      final hint = response.statusCode == 403 && remaining == '0'
-          ? '（GitHub API 未认证限额已用尽，请稍后再试或改用 Atom）'
+    final result = await _get(_apiUri);
+    if (result.statusCode < 200 || result.statusCode >= 300) {
+      final hint = result.statusCode == 403 && result.rateLimitRemaining == '0'
+          ? '（GitHub API 未认证限额已用尽；请稍后重试，或检查网络能否访问 github.com / data.jsdelivr.com）'
           : '';
       throw StateError(
-        '读取 GitHub Release 失败（HTTP ${response.statusCode}）$hint',
+        '读取 GitHub Release 失败（HTTP ${result.statusCode}）$hint',
       );
     }
-    final decoded = jsonDecode(body);
+    final decoded = jsonDecode(result.body);
     if (decoded is! List) {
       throw const FormatException('GitHub Release 响应格式无效');
     }
@@ -82,7 +118,7 @@ class GithubReleaseClient {
   }) async {
     final uri = Uri.parse(asset.browserDownloadUrl);
     final request = await _httpClient.getUrl(uri);
-    _applyHeaders(request);
+    _applyHeaders(request, uri);
     request.followRedirects = true;
     final response = await request.close();
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -154,7 +190,7 @@ class GithubReleaseClient {
   Future<bool> _headExists(Uri uri) async {
     try {
       final request = await _httpClient.openUrl('HEAD', uri);
-      _applyHeaders(request);
+      _applyHeaders(request, uri);
       request.followRedirects = true;
       final response = await request.close();
       await response.drain<void>();
@@ -163,7 +199,7 @@ class GithubReleaseClient {
       // 部分环境对 HEAD 不友好，改试 Range GET
       try {
         final request = await _httpClient.getUrl(uri);
-        _applyHeaders(request);
+        _applyHeaders(request, uri);
         request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
         request.followRedirects = true;
         final response = await request.close();
@@ -175,26 +211,40 @@ class GithubReleaseClient {
     }
   }
 
-  Future<String> _getText(Uri uri) async {
+  Future<ReleaseHttpResult> _get(Uri uri) async {
+    final override = _httpGetOverride;
+    if (override != null) {
+      return override(uri);
+    }
     final request = await _httpClient.getUrl(uri);
-    _applyHeaders(request);
+    _applyHeaders(request, uri);
     final response = await request.close();
     final body = await response.transform(utf8.decoder).join();
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('HTTP ${response.statusCode}');
-    }
-    return body;
+    return ReleaseHttpResult(
+      statusCode: response.statusCode,
+      body: body,
+      rateLimitRemaining: response.headers.value('x-ratelimit-remaining'),
+    );
   }
 
-  void _applyHeaders(HttpClientRequest request) {
+  void _ensureOk(ReleaseHttpResult result, {required String label}) {
+    if (result.statusCode < 200 || result.statusCode >= 300) {
+      throw StateError('$label HTTP ${result.statusCode}');
+    }
+  }
+
+  void _applyHeaders(HttpClientRequest request, Uri uri) {
     request.headers.set(
       HttpHeaders.userAgentHeader,
       AppUpdateConstants.userAgent,
     );
-    request.headers.set(
-      HttpHeaders.acceptHeader,
-      'application/vnd.github+json, application/atom+xml, */*',
-    );
+    final accept = switch (uri.host) {
+      'api.github.com' => 'application/vnd.github+json',
+      'data.jsdelivr.com' => 'application/json',
+      _ when uri.path.endsWith('.atom') => 'application/atom+xml, */*',
+      _ => '*/*',
+    };
+    request.headers.set(HttpHeaders.acceptHeader, accept);
   }
 
   void close() => _httpClient.close(force: true);
@@ -244,6 +294,49 @@ List<GithubReleaseInfo> parseReleasesAtom(
         assets: const [],
       ),
     );
+  }
+  return results;
+}
+
+/// 解析 jsDelivr GitHub 包版本列表（无 GitHub REST 限额）。
+List<GithubReleaseInfo> parseJsdelivrGhPackage(
+  String jsonText, {
+  required String owner,
+  required String repo,
+}) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<String, dynamic>) {
+    throw const FormatException('jsDelivr 响应格式无效');
+  }
+  final versions = decoded['versions'];
+  if (versions is! List || versions.isEmpty) {
+    throw StateError('jsDelivr 中没有可用版本');
+  }
+
+  final results = <GithubReleaseInfo>[];
+  for (final item in versions) {
+    if (item is! Map) continue;
+    final version = '${item['version'] ?? ''}'.trim();
+    if (version.isEmpty) continue;
+    final tagName = version.startsWith('v') || version.startsWith('V')
+        ? version
+        : 'v$version';
+    final prerelease = version.contains('-');
+    results.add(
+      GithubReleaseInfo(
+        tagName: tagName,
+        name: version,
+        body: '',
+        htmlUrl: 'https://github.com/$owner/$repo/releases/tag/$tagName',
+        draft: false,
+        prerelease: prerelease,
+        publishedAt: null,
+        assets: const [],
+      ),
+    );
+  }
+  if (results.isEmpty) {
+    throw StateError('jsDelivr 中没有可用版本');
   }
   return results;
 }
