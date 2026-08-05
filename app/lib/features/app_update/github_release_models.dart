@@ -1,3 +1,5 @@
+import 'release_notes_plain_text.dart';
+
 /// GitHub Release 摘要（仅更新所需字段）。
 class GithubReleaseInfo {
   const GithubReleaseInfo({
@@ -34,7 +36,7 @@ class GithubReleaseInfo {
     return GithubReleaseInfo(
       tagName: json['tag_name'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      body: json['body'] as String? ?? '',
+      body: releaseNotesToPlainText(json['body'] as String? ?? ''),
       htmlUrl: json['html_url'] as String? ?? '',
       draft: json['draft'] as bool? ?? false,
       prerelease: json['prerelease'] as bool? ?? false,

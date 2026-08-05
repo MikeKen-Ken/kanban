@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/app_update/github_release_client.dart';
 import 'package:kanban/features/app_update/github_release_models.dart';
+import 'package:kanban/features/app_update/release_notes_plain_text.dart';
 import 'package:kanban/features/app_update/version_compare.dart';
 
 void main() {
@@ -79,8 +80,41 @@ void main() {
     });
   });
 
+  group('releaseNotesToPlainText', () {
+    test('将 Atom HTML 说明转为可读纯文本', () {
+      const html = '''
+<h2>更新内容</h2>
+<p>相对 v1.0.0 的提交：</p>
+<ul>
+<li>功能：新增软件内更新。 (<a class="commit-link" href="https://github.com/MikeKen-Ken/kanban/commit/40e7ff9"><tt>40e7ff9</tt></a>)</li>
+<li>配置：Release 更新说明改为列出相对上一版本的提交。 (<a href="https://github.com/x/y/commit/eebf800"><tt>eebf800</tt></a>)</li>
+</ul>
+<p>完整对比：<a href="https://github.com/MikeKen-Ken/kanban/compare/v1.0.0...v1.0.1"><tt>v1.0.0...v1.0.1</tt></a></p>
+''';
+      final plain = releaseNotesToPlainText(html);
+      expect(plain, isNot(contains('<')));
+      expect(plain, contains('更新内容'));
+      expect(plain, contains('- 功能：新增软件内更新。 (40e7ff9)'));
+      expect(plain, contains('完整对比：v1.0.0...v1.0.1'));
+    });
+
+    test('Markdown 标题标记会被去掉', () {
+      const md = '''
+## 更新内容
+
+相对 v1.0.0 的提交：
+
+- 功能：新增更新 (40e7ff9)
+''';
+      final plain = releaseNotesToPlainText(md);
+      expect(plain, startsWith('更新内容'));
+      expect(plain, contains('- 功能：新增更新 (40e7ff9)'));
+      expect(plain, isNot(contains('##')));
+    });
+  });
+
   group('parseReleasesAtom', () {
-    test('解析最新 entry 的 tag 与标题', () {
+    test('解析最新 entry 的 tag 与标题，并去掉 HTML 标签', () {
       const atom = '''
 <?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -89,7 +123,11 @@ void main() {
     <updated>2026-08-04T23:07:50Z</updated>
     <link rel="alternate" type="text/html" href="https://github.com/MikeKen-Ken/kanban/releases/tag/v1.0.1"/>
     <title>1.0.1</title>
-    <content type="html">&lt;p&gt;notes&lt;/p&gt;</content>
+    <content type="html">&lt;h2&gt;更新内容&lt;/h2&gt;
+&lt;p&gt;相对 v1.0.0 的提交：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;功能：新增更新 (&lt;a href=&quot;https://example.com/c&quot;&gt;&lt;tt&gt;40e7ff9&lt;/tt&gt;&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;</content>
   </entry>
 </feed>
 ''';
@@ -101,7 +139,9 @@ void main() {
       expect(list, hasLength(1));
       expect(list.first.tagName, 'v1.0.1');
       expect(list.first.versionLabel, '1.0.1');
-      expect(list.first.body, contains('notes'));
+      expect(list.first.body, isNot(contains('<')));
+      expect(list.first.body, contains('更新内容'));
+      expect(list.first.body, contains('- 功能：新增更新 (40e7ff9)'));
     });
   });
 }

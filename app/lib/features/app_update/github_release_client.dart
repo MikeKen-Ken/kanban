@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'app_update_constants.dart';
 import 'github_release_models.dart';
+import 'release_notes_plain_text.dart';
 
 /// 从 GitHub 拉取已发布版本（优先 Atom，避免 REST API 60 次/小时限额）。
 class GithubReleaseClient {
@@ -226,7 +227,10 @@ List<GithubReleaseInfo> parseReleasesAtom(
         RegExp(r'<updated>([^<]*)</updated>').firstMatch(block)?.group(1);
     final rawContent =
         RegExp(r'<content[^>]*>([\s\S]*?)</content>').firstMatch(block)?.group(1);
-    final body = rawContent == null ? '' : _decodeBasicXml(rawContent);
+    // Atom 的 content 是 HTML（实体编码），解码后转为软件内可读纯文本
+    final body = rawContent == null
+        ? ''
+        : releaseNotesToPlainText(_decodeBasicXml(rawContent));
 
     results.add(
       GithubReleaseInfo(
