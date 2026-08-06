@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../common/async_mutex.dart';
 import '../features/attachments/attachment_missing.dart';
 import '../features/attachments/attachment_refs.dart';
 import '../features/attachments/attachment_store.dart';
@@ -63,6 +64,10 @@ class BoardController extends ChangeNotifier {
   /// MCP 等场景下对非当前项目做变更时置位：不切换 UI，并抑制中间态通知。
   bool _mutatingForeignProject = false;
   bool _pendingNotifyAfterScope = false;
+
+  /// 串行化看板/清单突变，避免 MCP runOnProject 与 UI 写交错。
+  final AsyncMutex _boardMutationMutex = AsyncMutex();
+  bool _inBoardMutation = false;
 
   KanbanBoard? board;
   ProjectsManifest? manifest;
@@ -179,9 +184,11 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<bool> undoLastAction() async {
+    return _withBoardMutation(() async {
     final undone = await _undoStack.undo();
     if (undone) notifyListeners();
     return undone;
+      });
   }
 
   Future<Uint8List> createBackupArchive() async {
@@ -218,6 +225,7 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> restoreBackupArchive(Uint8List bytes) async {
+    return _withBoardMutation(() async {
     final package = const BackupArchiveService().decode(bytes);
     await _applyWorkspaceSnapshot(package.workspace);
     final store = attachmentStore;
@@ -237,6 +245,7 @@ class BoardController extends ChangeNotifier {
     }
     notifyListeners();
     _syncService.schedulePush();
+      });
   }
 
   List<ProjectEntry> get projects {
@@ -397,6 +406,7 @@ class BoardController extends ChangeNotifier {
     required String name,
     required FilterSpec filter,
   }) async {
+    return _withBoardMutation(() async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final viewId = id ?? const Uuid().v4();
     final existing =
@@ -417,21 +427,25 @@ class BoardController extends ChangeNotifier {
         ],
       ),
     );
+      });
   }
 
   Future<void> deleteSavedView(String id) async {
+    return _withBoardMutation(() async {
     await _persistSharedContent(
       sharedContent.copyWith(
         savedViews:
             sharedContent.savedViews.where((view) => view.id != id).toList(),
       ),
     );
+      });
   }
 
   Future<String> saveCardAsTemplate({
     required KanbanCard card,
     required String name,
   }) async {
+    return _withBoardMutation(() async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final template = CardTemplate.fromCard(
       id: const Uuid().v4(),
@@ -445,12 +459,14 @@ class BoardController extends ChangeNotifier {
       ),
     );
     return template.id;
+      });
   }
 
   Future<String?> createCardFromTemplate({
     required String templateId,
     required String columnId,
   }) async {
+    return _withBoardMutation(() async {
     final template = sharedContent.cardTemplates
         .where((item) => item.id == templateId)
         .firstOrNull;
@@ -475,9 +491,11 @@ class BoardController extends ChangeNotifier {
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
     return cardId;
+      });
   }
 
   Future<void> deleteCardTemplate(String id) async {
+    return _withBoardMutation(() async {
     await _persistSharedContent(
       sharedContent.copyWith(
         cardTemplates: sharedContent.cardTemplates
@@ -485,9 +503,11 @@ class BoardController extends ChangeNotifier {
             .toList(),
       ),
     );
+      });
   }
 
   Future<String?> quickCapture(QuickCaptureDraft draft) async {
+    return _withBoardMutation(() async {
     if (board == null || draft.title.trim().isEmpty) return null;
     final desiredColumn = draft.columnName?.trim();
     final column = board!.columns.cast<KanbanColumn?>().firstWhere(
@@ -535,6 +555,7 @@ class BoardController extends ChangeNotifier {
       priority: priority,
       labels: labelKeys,
     );
+      });
   }
 
   int get unresolvedConflictCount {
@@ -595,6 +616,22 @@ class BoardController extends ChangeNotifier {
     super.notifyListeners();
   }
 
+
+  /// 可重入的看板突变临界区：同一次突变内可再入，跨调用串行。
+  Future<T> _withBoardMutation<T>(Future<T> Function() action) async {
+    if (_inBoardMutation) {
+      return action();
+    }
+    return _boardMutationMutex.guard(() async {
+      _inBoardMutation = true;
+      try {
+        return await action();
+      } finally {
+        _inBoardMutation = false;
+      }
+    });
+  }
+
   /// 在指定项目上下文中执行操作：不修改已持久化的 active 项目，也不把 UI 切走。
   ///
   /// 若 [projectId] 即为当前项目，直接执行 [action]。
@@ -603,46 +640,48 @@ class BoardController extends ChangeNotifier {
     String projectId,
     Future<T> Function() action,
   ) async {
-    if (manifest?.findById(projectId) == null) {
-      throw StateError('项目不存在：$projectId');
-    }
-    if (projectId == activeProjectId) {
-      return action();
-    }
-    if (_mutatingForeignProject) {
-      throw StateError('不可嵌套 runOnProject');
-    }
-
-    final savedActiveId = activeProjectId;
-    final savedBoard = board;
-    final savedSettings = projectSettings;
-    final savedTrash = activeProjectTrash;
-
-    _mutatingForeignProject = true;
-    _pendingNotifyAfterScope = false;
-    // 仅内存切换，不调用 saveActiveProjectId
-    activeProjectId = projectId;
-    board = await _repository.loadBoard(projectId);
-    projectSettings = await _repository.loadProjectSettings(projectId);
-    activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
-
-    try {
-      return await action();
-    } finally {
-      projectTrashes[projectId] = activeProjectTrash;
-      projectThemeIds[projectId] = projectSettings.themeId;
-
-      activeProjectId = savedActiveId;
-      board = savedBoard;
-      projectSettings = savedSettings;
-      activeProjectTrash = savedTrash;
-      _mutatingForeignProject = false;
-
-      if (_pendingNotifyAfterScope) {
-        _pendingNotifyAfterScope = false;
-        notifyListeners();
+    return _withBoardMutation(() async {
+      if (manifest?.findById(projectId) == null) {
+        throw StateError('项目不存在：$projectId');
       }
-    }
+      if (projectId == activeProjectId) {
+        return action();
+      }
+      if (_mutatingForeignProject) {
+        throw StateError('不可嵌套 runOnProject');
+      }
+
+      final savedActiveId = activeProjectId;
+      final savedBoard = board;
+      final savedSettings = projectSettings;
+      final savedTrash = activeProjectTrash;
+
+      _mutatingForeignProject = true;
+      _pendingNotifyAfterScope = false;
+      // 仅内存切换，不调用 saveActiveProjectId
+      activeProjectId = projectId;
+      board = await _repository.loadBoard(projectId);
+      projectSettings = await _repository.loadProjectSettings(projectId);
+      activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
+
+      try {
+        return await action();
+      } finally {
+        projectTrashes[projectId] = activeProjectTrash;
+        projectThemeIds[projectId] = projectSettings.themeId;
+
+        activeProjectId = savedActiveId;
+        board = savedBoard;
+        projectSettings = savedSettings;
+        activeProjectTrash = savedTrash;
+        _mutatingForeignProject = false;
+
+        if (_pendingNotifyAfterScope) {
+          _pendingNotifyAfterScope = false;
+          notifyListeners();
+        }
+      }
+    });
   }
 
   Future<ProjectWorkspaceSnapshot> _loadWorkspaceSnapshot() async {
@@ -672,45 +711,47 @@ class BoardController extends ChangeNotifier {
   Future<void> _applyWorkspaceSnapshot(
     ProjectWorkspaceSnapshot workspace,
   ) async {
-    await _repository.saveManifest(workspace.manifest);
-    for (final entry in workspace.manifest.projects) {
-      final board = workspace.boards[entry.id];
-      final settings = workspace.settings[entry.id];
-      final trash = workspace.projectTrash[entry.id];
-      if (board != null) {
-        await _repository.saveBoard(entry.id, board);
+    return _withBoardMutation(() async {
+      await _repository.saveManifest(workspace.manifest);
+      for (final entry in workspace.manifest.projects) {
+        final board = workspace.boards[entry.id];
+        final settings = workspace.settings[entry.id];
+        final trash = workspace.projectTrash[entry.id];
+        if (board != null) {
+          await _repository.saveBoard(entry.id, board);
+        }
+        if (settings != null) {
+          await _repository.saveProjectSettings(entry.id, settings);
+        }
+        if (trash != null) {
+          await _repository.saveProjectTrash(entry.id, trash);
+        }
       }
-      if (settings != null) {
-        await _repository.saveProjectSettings(entry.id, settings);
-      }
-      if (trash != null) {
-        await _repository.saveProjectTrash(entry.id, trash);
-      }
-    }
-    await _repository.saveAppTrash(workspace.appTrash);
-    await _repository.saveSharedContent(workspace.sharedContent);
+      await _repository.saveAppTrash(workspace.appTrash);
+      await _repository.saveSharedContent(workspace.sharedContent);
 
-    manifest = workspace.manifest;
-    projectTrashes = Map<String, TrashBin>.from(workspace.projectTrash);
-    appTrash = workspace.appTrash;
-    sharedContent = workspace.sharedContent;
-    _setProjectThemeIdsFrom(workspace.settings);
-    await _mirrorSharedLabelsToLocalPreferences();
-    final currentId = activeProjectId;
-    if (currentId != null && workspace.manifest.findById(currentId) != null) {
-      board = workspace.boards[currentId];
-      projectSettings =
-          workspace.settings[currentId] ?? const ProjectSettings();
-      activeProjectTrash = workspace.projectTrash[currentId] ?? TrashBin.empty;
-    } else if (workspace.manifest.projects.isNotEmpty) {
-      final first = workspace.manifest.projects.first;
-      activeProjectId = first.id;
-      await _repository.saveActiveProjectId(first.id);
-      board = workspace.boards[first.id];
-      projectSettings = workspace.settings[first.id] ?? const ProjectSettings();
-      activeProjectTrash = workspace.projectTrash[first.id] ?? TrashBin.empty;
-    }
-    await refreshMissingAttachments();
+      manifest = workspace.manifest;
+      projectTrashes = Map<String, TrashBin>.from(workspace.projectTrash);
+      appTrash = workspace.appTrash;
+      sharedContent = workspace.sharedContent;
+      _setProjectThemeIdsFrom(workspace.settings);
+      await _mirrorSharedLabelsToLocalPreferences();
+      final currentId = activeProjectId;
+      if (currentId != null && workspace.manifest.findById(currentId) != null) {
+        board = workspace.boards[currentId];
+        projectSettings =
+            workspace.settings[currentId] ?? const ProjectSettings();
+        activeProjectTrash = workspace.projectTrash[currentId] ?? TrashBin.empty;
+      } else if (workspace.manifest.projects.isNotEmpty) {
+        final first = workspace.manifest.projects.first;
+        activeProjectId = first.id;
+        await _repository.saveActiveProjectId(first.id);
+        board = workspace.boards[first.id];
+        projectSettings = workspace.settings[first.id] ?? const ProjectSettings();
+        activeProjectTrash = workspace.projectTrash[first.id] ?? TrashBin.empty;
+      }
+      await refreshMissingAttachments();
+    });
   }
 
   Future<void> _loadTrashState() async {
@@ -836,20 +877,30 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> _persistAndSync(KanbanBoard next) async {
-    if (activeProjectId == null) return;
-    board = next;
-    await _repository.saveBoard(activeProjectId!, next);
-    await _updateManifestEntry(title: next.title);
-    notifyListeners();
-    _syncService.schedulePush();
+    return _withBoardMutation(() async {
+      // 以看板 id 为落盘主键，避免与 active 短暂不一致时写错项目文件。
+      final projectId = next.id.isNotEmpty ? next.id : activeProjectId;
+      if (projectId == null) return;
+      if (activeProjectId == projectId) {
+        board = next;
+      }
+      await _repository.saveBoard(projectId, next);
+      if (activeProjectId == projectId) {
+        await _updateManifestEntry(title: next.title);
+      }
+      notifyListeners();
+      _syncService.schedulePush();
+    });
   }
 
   Future<void> _persistSharedContent(SharedContent next) async {
-    sharedContent = next.bump();
-    await _repository.saveSharedContent(sharedContent);
-    await _mirrorSharedLabelsToLocalPreferences();
-    notifyListeners();
-    _syncService.schedulePush();
+    return _withBoardMutation(() async {
+      sharedContent = next.bump();
+      await _repository.saveSharedContent(sharedContent);
+      await _mirrorSharedLabelsToLocalPreferences();
+      notifyListeners();
+      _syncService.schedulePush();
+    });
   }
 
   Future<void> _recordActivity({
@@ -916,12 +967,14 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> _persistProjectSettings(ProjectSettings next) async {
-    if (activeProjectId == null) return;
-    projectSettings = next;
-    projectThemeIds[activeProjectId!] = next.themeId;
-    await _repository.saveProjectSettings(activeProjectId!, next);
-    notifyListeners();
-    _syncService.schedulePush();
+    return _withBoardMutation(() async {
+      if (activeProjectId == null) return;
+      projectSettings = next;
+      projectThemeIds[activeProjectId!] = next.themeId;
+      await _repository.saveProjectSettings(activeProjectId!, next);
+      notifyListeners();
+      _syncService.schedulePush();
+    });
   }
 
   Future<void> _updateManifestEntry({String? title}) async {
@@ -1000,15 +1053,18 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> setColumnSortMode(String columnId, CardSortMode mode) async {
+    return _withBoardMutation(() async {
     final current = columnPreferencesFor(columnId);
     if (current.sortMode == mode) return;
     await _saveColumnPreferences(
       columnId,
       current.copyWith(sortMode: mode),
     );
+      });
   }
 
   Future<void> toggleCardPin(String columnId, String cardId) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final column = board!.columns.cast<KanbanColumn?>().firstWhere(
           (col) => col!.id == columnId,
@@ -1027,6 +1083,7 @@ class BoardController extends ChangeNotifier {
     }
     await _saveColumnPreferences(
         columnId, prefs.copyWith(pinnedCardIds: pinned));
+      });
   }
 
   ({List<String> pinned, Map<String, int> orders}) _pinnedAndOrdersFromDisplay(
@@ -1084,6 +1141,7 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> switchProject(String projectId) async {
+    return _withBoardMutation(() async {
     if (manifest?.findById(projectId) == null) return;
     if (projectId == activeProjectId) return;
 
@@ -1095,15 +1153,18 @@ class BoardController extends ChangeNotifier {
     activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
     await _recordProjectUsed(projectId);
     notifyListeners();
+      });
   }
 
   Future<void> createProject(String title) async {
+    return _withBoardMutation(() async {
     final projectId = await _repository.createProject(title);
     manifest = await _repository.loadManifest();
     projectTrashes[projectId] = TrashBin.empty;
     projectThemeIds[projectId] = '';
     await switchProject(projectId);
     _syncService.schedulePush();
+      });
   }
 
   Future<void> renameActiveProject(String title) async {
@@ -1114,6 +1175,7 @@ class BoardController extends ChangeNotifier {
 
   /// 重命名任意项目，并保持项目清单与看板标题一致。
   Future<void> renameProject(String projectId, String title) async {
+    return _withBoardMutation(() async {
     final normalized = title.trim();
     final entry = manifest?.findById(projectId);
     if (entry == null || normalized.isEmpty) return;
@@ -1149,9 +1211,11 @@ class BoardController extends ChangeNotifier {
     await _repository.saveManifest(manifest!);
     notifyListeners();
     _syncService.schedulePush();
+      });
   }
 
   Future<void> saveProjectSettings(ProjectSettings settings) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final bumped = settings.bump();
     final oldName = projectSettings.doneColumnName;
@@ -1165,10 +1229,12 @@ class BoardController extends ChangeNotifier {
     }
 
     await _persistProjectSettings(bumped);
+      });
   }
 
   /// 为当前看板选择背景图（立即落盘并调度同步）
   Future<String?> setBoardBackgroundFromGallery() async {
+    return _withBoardMutation(() async {
     if (board == null || activeProjectId == null) return '看板未就绪';
     final store = attachmentStore;
     if (store == null) return '当前平台不支持图片背景';
@@ -1207,10 +1273,12 @@ class BoardController extends ChangeNotifier {
     }
     await refreshMissingAttachments();
     return null;
+      });
   }
 
   /// 清除当前看板背景图
   Future<void> clearBoardBackground() async {
+    return _withBoardMutation(() async {
     if (board == null || activeProjectId == null) return;
     final previousId = projectSettings.backgroundAttachmentId;
     if (previousId.isEmpty) return;
@@ -1232,10 +1300,12 @@ class BoardController extends ChangeNotifier {
       );
     }
     await refreshMissingAttachments();
+      });
   }
 
   /// 调整背景遮罩强度（立即落盘并调度同步）
   Future<void> setBoardBackgroundOverlayOpacity(double opacity) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final next = ProjectSettings.clampOverlayOpacity(opacity);
     if ((projectSettings.backgroundOverlayOpacity - next).abs() < 0.001) {
@@ -1249,10 +1319,12 @@ class BoardController extends ChangeNotifier {
           )
           .bump(),
     );
+      });
   }
 
   /// 调整看板卡片表面不透明度（立即落盘并调度同步）
   Future<void> setCardSurfaceOpacity(double opacity) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final next = ProjectSettings.clampCardSurfaceOpacity(opacity);
     if ((projectSettings.cardSurfaceOpacity - next).abs() < 0.001) {
@@ -1266,14 +1338,18 @@ class BoardController extends ChangeNotifier {
           )
           .bump(),
     );
+      });
   }
 
   Future<void> updateTitle(String title) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     await _persistAndSync(_bump(board!.copyWith(title: title)));
+      });
   }
 
   Future<void> addColumn(String title) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final columns = [...board!.columns];
     columns.add(
@@ -1285,18 +1361,22 @@ class BoardController extends ChangeNotifier {
       ),
     );
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      });
   }
 
   Future<void> renameColumn(String columnId, String title) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final columns = board!.columns.map((col) {
       if (col.id != columnId) return col;
       return col.copyWith(title: title);
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      });
   }
 
   Future<void> reorderColumn(int oldIndex, int newIndex) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final columns = [...board!.columns];
     if (oldIndex < 0 ||
@@ -1316,15 +1396,18 @@ class BoardController extends ChangeNotifier {
       for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
     ];
     await _persistAndSync(_bump(board!.copyWith(columns: reordered)));
+      });
   }
 
   Future<void> updateColumnColor(String columnId, int? colorValue) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final columns = board!.columns.map((col) {
       if (col.id != columnId) return col;
       return col.copyWith(colorValue: colorValue);
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      });
   }
 
   Future<void> saveAppSettings(AppSettings settings) async {
@@ -1339,6 +1422,7 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<String> addCustomLabel(String name, int colorValue) async {
+    return _withBoardMutation(() async {
     final key = const Uuid().v4();
     final now = DateTime.now().millisecondsSinceEpoch;
     final label = SharedLabel(
@@ -1351,6 +1435,7 @@ class BoardController extends ChangeNotifier {
       sharedContent.copyWith(labels: [...sharedContent.labels, label]),
     );
     return key;
+      });
   }
 
   /// 修改自定义标签名称或颜色；标签 key 不变，已有卡片引用无需迁移。
@@ -1359,6 +1444,7 @@ class BoardController extends ChangeNotifier {
     required String name,
     required int colorValue,
   }) async {
+    return _withBoardMutation(() async {
     final normalized = name.trim();
     if (normalized.isEmpty) return false;
     final index =
@@ -1376,9 +1462,11 @@ class BoardController extends ChangeNotifier {
     );
     await _persistSharedContent(sharedContent.copyWith(labels: labels));
     return true;
+      });
   }
 
   Future<void> removeCustomLabel(String key) async {
+    return _withBoardMutation(() async {
     final label = appSettings.customLabels.cast<KanbanLabel?>().firstWhere(
           (item) => item!.key == key,
           orElse: () => null,
@@ -1401,6 +1489,7 @@ class BoardController extends ChangeNotifier {
         labels: sharedContent.labels.where((label) => label.id != key).toList(),
       ),
     );
+      });
   }
 
   Future<void> setProjectSortMode(ProjectSortMode mode) async {
@@ -1427,6 +1516,7 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> deleteColumn(String columnId) async {
+    return _withBoardMutation(() async {
     if (board == null || activeProjectId == null) return;
     final column = board!.columns.cast<KanbanColumn?>().firstWhere(
           (col) => col!.id == columnId,
@@ -1447,9 +1537,11 @@ class BoardController extends ChangeNotifier {
 
     final columns = board!.columns.where((col) => col.id != columnId).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      });
   }
 
   Future<bool> deleteProject(String projectId) async {
+    return _withBoardMutation(() async {
     if (manifest == null || manifest!.projects.length <= 1) return false;
 
     final entry = manifest!.findById(projectId);
@@ -1499,6 +1591,7 @@ class BoardController extends ChangeNotifier {
     await _persistAppTrash();
     notifyListeners();
     return true;
+      });
   }
 
   Future<String?> addCard(
@@ -1511,6 +1604,7 @@ class BoardController extends ChangeNotifier {
     CardPriority priority = CardPriority.none,
     List<String> labels = const [],
   }) async {
+    return _withBoardMutation(() async {
     if (board == null) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
     final cardId = const Uuid().v4();
@@ -1565,6 +1659,7 @@ class BoardController extends ChangeNotifier {
       ),
     );
     return cardId;
+      });
   }
 
   Future<void> updateCard(
@@ -1603,6 +1698,7 @@ class BoardController extends ChangeNotifier {
     int? colorValue,
     bool clearColor = false,
   }) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     final original = board!.columns
@@ -1708,6 +1804,7 @@ class BoardController extends ChangeNotifier {
         }
       }
     }
+      });
   }
 
   /// 按卡片 id 查找所属列。
@@ -1812,6 +1909,7 @@ class BoardController extends ChangeNotifier {
     String cardId,
     CardImageAddSource source,
   ) async {
+    return _withBoardMutation(() async {
     final picked = await pickImagesForSource(source);
     if (picked.isEmpty) {
       return switch (source) {
@@ -1824,6 +1922,7 @@ class BoardController extends ChangeNotifier {
       cardId,
       pickImages: () async => picked,
     );
+      });
   }
 
   Future<String?> addCardAttachments(
@@ -1831,6 +1930,7 @@ class BoardController extends ChangeNotifier {
     String cardId, {
     Future<List<PickedImageBytes>> Function()? pickImages,
   }) async {
+    return _withBoardMutation(() async {
     if (board == null || activeProjectId == null) return '看板未就绪';
 
     KanbanCard? target;
@@ -1885,6 +1985,7 @@ class BoardController extends ChangeNotifier {
     );
     await refreshMissingAttachments();
     return null;
+      });
   }
 
   Future<void> reorderCardAttachments(
@@ -1892,11 +1993,13 @@ class BoardController extends ChangeNotifier {
     String cardId,
     List<CardAttachment> ordered,
   ) async {
+    return _withBoardMutation(() async {
     await updateCardFull(
       columnId,
       cardId,
       attachments: _reindexAttachments(ordered),
     );
+      });
   }
 
   Future<void> removeCardAttachment(
@@ -1904,6 +2007,7 @@ class BoardController extends ChangeNotifier {
     String cardId,
     String attachmentId,
   ) async {
+    return _withBoardMutation(() async {
     if (board == null || activeProjectId == null) return;
 
     KanbanCard? target;
@@ -1934,6 +2038,7 @@ class BoardController extends ChangeNotifier {
     );
     await refreshMissingAttachments();
     _syncService.schedulePush();
+      });
   }
 
   Future<void> setCardAttachmentCover(
@@ -1941,6 +2046,7 @@ class BoardController extends ChangeNotifier {
     String cardId,
     String attachmentId,
   ) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
 
     KanbanCard? target;
@@ -1975,6 +2081,7 @@ class BoardController extends ChangeNotifier {
       cardId,
       attachments: nextAttachments,
     );
+      });
   }
 
   List<CardAttachment> _reindexAttachments(List<CardAttachment> attachments) {
@@ -1985,6 +2092,7 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> toggleCardCompleted(String columnId, String cardId) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
     final current = board!;
     KanbanCard? target;
@@ -2049,6 +2157,7 @@ class BoardController extends ChangeNotifier {
       sourceColumnId: columnId,
       completed: nextCompleted,
     );
+      });
   }
 
   Future<void> _afterCompletionChanged(
@@ -2093,6 +2202,7 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> deleteCard(String columnId, String cardId) async {
+    return _withBoardMutation(() async {
     if (board == null || activeProjectId == null) return;
 
     KanbanCard? target;
@@ -2148,11 +2258,13 @@ class BoardController extends ChangeNotifier {
         action: ActivityAction.deleted,
       ),
     );
+      });
   }
 
   /// 清空已完成列中的全部卡片（移入回收站）。仅当 [columnId] 为当前项目的已完成列时生效。
   /// 返回实际清空的卡片数量。
   Future<int> clearDoneColumnCards(String columnId) async {
+    return _withBoardMutation(() async {
     if (board == null || activeProjectId == null) return 0;
 
     final doneColumn = _findDoneColumn(board!);
@@ -2217,6 +2329,7 @@ class BoardController extends ChangeNotifier {
       );
     }
     return count;
+      });
   }
 
   Future<void> moveCard({
@@ -2227,6 +2340,7 @@ class BoardController extends ChangeNotifier {
     bool? completed,
     int? completedAt,
   }) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -2396,9 +2510,11 @@ class BoardController extends ChangeNotifier {
         }
       }
     }
+      });
   }
 
   Future<String?> restoreTrashItem(String trashItemId) async {
+    return _withBoardMutation(() async {
     final labelIndex = labelTrash.indexWhere((item) => item.id == trashItemId);
     if (labelIndex >= 0) {
       return _restoreLabel(labelTrash[labelIndex]);
@@ -2419,9 +2535,11 @@ class BoardController extends ChangeNotifier {
     }
 
     return '未找到该回收项';
+      });
   }
 
   Future<void> permanentlyDeleteTrashItem(String trashItemId) async {
+    return _withBoardMutation(() async {
     TrashItem? target;
     for (final item in allTrashItems) {
       if (item.id == trashItemId) {
@@ -2468,9 +2586,11 @@ class BoardController extends ChangeNotifier {
       _syncService.schedulePush();
       return;
     }
+      });
   }
 
   Future<void> emptyTrash() async {
+    return _withBoardMutation(() async {
     for (final item in allTrashItems) {
       await _deleteTrashItemAttachments(item);
     }
@@ -2489,6 +2609,7 @@ class BoardController extends ChangeNotifier {
     await _persistLabelTrash();
     notifyListeners();
     _syncService.schedulePush();
+      });
   }
 
   Future<String?> _restoreLabel(TrashItem item) async {
@@ -2643,13 +2764,15 @@ class BoardController extends ChangeNotifier {
     KanbanBoard next,
     bool isActive,
   ) async {
-    await _repository.saveBoard(projectId, next);
-    if (isActive) {
-      board = next;
-      await _updateManifestEntry(title: next.title);
-    }
-    notifyListeners();
-    _syncService.schedulePush();
+    return _withBoardMutation(() async {
+      await _repository.saveBoard(projectId, next);
+      if (isActive) {
+        board = next;
+        await _updateManifestEntry(title: next.title);
+      }
+      notifyListeners();
+      _syncService.schedulePush();
+    });
   }
 
   Future<void> _deleteTrashItemAttachments(TrashItem item) async {
@@ -2748,6 +2871,7 @@ class BoardController extends ChangeNotifier {
     String cardId,
     CardConflictResolution resolution,
   ) async {
+    return _withBoardMutation(() async {
     if (board == null) return;
 
     KanbanCard? target;
@@ -2809,19 +2933,23 @@ class BoardController extends ChangeNotifier {
     }
 
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      });
   }
 
   Future<void> resolveSettingsConflict({required bool keepPrimary}) async {
+    return _withBoardMutation(() async {
     if (!projectSettings.hasConflict) return;
     final next = keepPrimary
         ? projectSettings.copyWith(clearConflictSide: true)
         : (projectSettings.conflictSide ?? projectSettings)
             .copyWith(clearConflictSide: true);
     await _persistProjectSettings(next.bump());
+      });
   }
 
   /// 解决当前看板的标题冲突。
   Future<void> resolveBoardTitleConflict({required bool keepPrimary}) async {
+    return _withBoardMutation(() async {
     final current = board;
     if (current == null || current.conflictTitle == null) return;
     final title = keepPrimary ? current.title : current.conflictTitle!;
@@ -2833,6 +2961,7 @@ class BoardController extends ChangeNotifier {
         ),
       ),
     );
+      });
   }
 
   /// 解决项目清单条目的标题冲突。
@@ -2840,6 +2969,7 @@ class BoardController extends ChangeNotifier {
     String projectId, {
     required bool keepPrimary,
   }) async {
+    return _withBoardMutation(() async {
     final entry = manifest?.findById(projectId);
     if (entry == null || entry.conflictTitle == null) return;
 
@@ -2858,6 +2988,7 @@ class BoardController extends ChangeNotifier {
     await _repository.saveManifest(manifest!);
     notifyListeners();
     _syncService.schedulePush();
+      });
   }
 
   /// 解决项目删改冲突：保留项目或确认删除
@@ -2865,6 +2996,7 @@ class BoardController extends ChangeNotifier {
     String projectId, {
     required bool keepProject,
   }) async {
+    return _withBoardMutation(() async {
     if (manifest == null) return;
     final entry = manifest!.findById(projectId);
     if (entry == null || !entry.conflictDeleted) return;
@@ -2887,6 +3019,7 @@ class BoardController extends ChangeNotifier {
     await _repository.saveManifest(manifest!);
     notifyListeners();
     _syncService.schedulePush();
+      });
   }
 
   @override

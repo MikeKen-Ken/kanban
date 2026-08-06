@@ -1,4 +1,4 @@
-# WebDAV 同步与冲突处理
+﻿# WebDAV 同步与冲突处理
 
 ## 触发
 
@@ -61,3 +61,11 @@
 - 附件二进制内容冲突副本
 - AppSettings / 标签回收站上云
 - CRDT
+
+## 本地并发写入
+
+- 磁盘与远端均按项目分文件：`projects/{projectId}/board.json` 等；共享面仅 `projects.json` / `shared_content.json` / `app_trash.json`。
+- 进程内看板突变经 `BoardController` 的可重入 `AsyncMutex` 串行，避免 MCP `runOnProject` 临时切换内存上下文时与 UI 写交错导致写错项目或丢更新。
+- 对外项目写操作期间不入撤销栈；同项目并发写为串行 last-writer 语义（无 CRDT）。
+- 多设备远端仍依赖三路合并；未使用 WebDAV If-Match/ETag。
+
