@@ -15,6 +15,7 @@ import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
 import 'description_expand_dialog.dart';
 import 'description_markdown_preview.dart';
+import 'discard_blank_card.dart';
 import 'due_date_shortcuts.dart';
 import 'kanban_labels.dart';
 
@@ -201,9 +202,39 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     return true;
   }
 
+  /// 当前编辑态是否含标题/备注以外的可感知内容（清单、标签、日期等）。
+  bool _hasOtherMetadata() {
+    if (_completed) return true;
+    if (_dueDate != null) return true;
+    if (_reminderAt != null) return true;
+    if (_recurrence != CardRecurrence.none) return true;
+    if (_priority != CardPriority.none) return true;
+    if (_labels.isNotEmpty) return true;
+    if (_checklist.isNotEmpty) return true;
+    if (_attachments.isNotEmpty) return true;
+    if (_links.isNotEmpty) return true;
+    if (_blockedByIds.isNotEmpty || _relatedIds.isNotEmpty) return true;
+    if (_colorValue != null) return true;
+    return false;
+  }
+
   /// 持久化当前编辑；点击周边/关闭/返回时也会调用。
   Future<void> _persist() async {
     if (_persisted || _skipPersist) return;
+
+    // 新建空白卡关闭时：标题与备注皆空则删除，避免留下空壳卡。
+    if (shouldDiscardBlankCard(
+      editedTitle: _titleController.text,
+      originalTitle: widget.card.title,
+      editedDescription: _descController.text,
+      hasOtherMetadata: _hasOtherMetadata(),
+    )) {
+      _persisted = true;
+      _skipPersist = true;
+      await _boardController.deleteCard(widget.columnId, widget.card.id);
+      return;
+    }
+
     if (!_isDirty()) {
       _persisted = true;
       return;
