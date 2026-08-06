@@ -30,7 +30,7 @@ Future<int?> showColumnColorPicker({
   );
 }
 
-/// 一行快捷色点选；选中当前色时显示描边高亮。
+/// 单行快捷色点选；选中当前色时显示描边高亮。
 class ColorQuickSwatches extends StatelessWidget {
   const ColorQuickSwatches({
     super.key,
@@ -49,19 +49,21 @@ class ColorQuickSwatches extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    // 固定单行，供卡片详情等与尾部入口横向拼排。
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        for (final color in presets)
+        for (var i = 0; i < presets.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
           _QuickColorDot(
-            color: color,
+            color: presets[i],
             size: size,
-            selected: selectedColorValue == color.toARGB32(),
+            selected: selectedColorValue == presets[i].toARGB32(),
             borderColor: scheme.outlineVariant,
             selectedBorderColor: scheme.onSurface,
-            onTap: () => onSelected(color.toARGB32()),
+            onTap: () => onSelected(presets[i].toARGB32()),
           ),
+        ],
       ],
     );
   }

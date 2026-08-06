@@ -367,20 +367,42 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _safeSetState(() => _dueDate = shortcut.resolve(DateTime.now()));
   }
 
-  Widget _buildDueDateShortcuts() {
+  /// 截止日期快捷预设与「设置日期」同一行；小屏可横向滚动。
+  Widget _buildDueDateRow() {
     final now = DateTime.now();
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final shortcut in DueDateShortcut.values)
-          FilterChip(
-            label: Text(shortcut.label),
-            selected: isSameLocalDay(_dueDate, shortcut.resolve(now)),
-            showCheckmark: false,
-            onSelected: (_) => _applyDueDateShortcut(shortcut),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final shortcut in DueDateShortcut.values) ...[
+            FilterChip(
+              label: Text(shortcut.label),
+              selected: isSameLocalDay(_dueDate, shortcut.resolve(now)),
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onSelected: (_) => _applyDueDateShortcut(shortcut),
+            ),
+            const SizedBox(width: 8),
+          ],
+          FilledButton.tonalIcon(
+            onPressed: _pickDueDate,
+            icon: const Icon(Icons.event, size: 18),
+            label: Text(
+              _dueDate == null
+                  ? '设置日期'
+                  : DateFormat.yMMMd('zh_CN').format(_dueDate!),
+            ),
           ),
-      ],
+          if (_dueDate != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _safeSetState(() => _dueDate = null),
+              child: const Text('清除'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -991,46 +1013,54 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
-                        ColorQuickSwatches(
-                          selectedColorValue: _colorValue,
-                          onSelected: (value) {
-                            if (value == _colorValue) return;
-                            _safeSetState(() => _colorValue = value);
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _pickCardColor,
-                              icon:
-                                  const Icon(Icons.palette_outlined, size: 18),
-                              label: Text(
-                                _isCustomCardColor ? '自定义…' : '更多颜色…',
+                        // 快捷色与「更多颜色」同一行；小屏可横向滚动。
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ColorQuickSwatches(
+                                selectedColorValue: _colorValue,
+                                onSelected: (value) {
+                                  if (value == _colorValue) return;
+                                  _safeSetState(() => _colorValue = value);
+                                },
                               ),
-                            ),
-                            if (_colorValue != null) ...[
                               const SizedBox(width: 8),
-                              if (_isCustomCardColor)
-                                Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: Color(_colorValue!),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: theme.colorScheme.outlineVariant,
+                              FilledButton.tonalIcon(
+                                onPressed: _pickCardColor,
+                                icon: const Icon(
+                                  Icons.palette_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  _isCustomCardColor ? '自定义…' : '更多颜色…',
+                                ),
+                              ),
+                              if (_colorValue != null) ...[
+                                const SizedBox(width: 8),
+                                if (_isCustomCardColor)
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: Color(_colorValue!),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color:
+                                            theme.colorScheme.outlineVariant,
+                                      ),
                                     ),
                                   ),
+                                if (_isCustomCardColor)
+                                  const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: () =>
+                                      _safeSetState(() => _colorValue = null),
+                                  child: const Text('清除'),
                                 ),
-                              if (_isCustomCardColor) const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () =>
-                                    _safeSetState(() => _colorValue = null),
-                                child: const Text('清除'),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                         const SizedBox(height: 20),
                         Row(
@@ -1243,30 +1273,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         const SizedBox(height: 20),
                         Text('截止日期', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _pickDueDate,
-                              icon: const Icon(Icons.event, size: 18),
-                              label: Text(
-                                _dueDate == null
-                                    ? '设置日期'
-                                    : DateFormat.yMMMd('zh_CN')
-                                        .format(_dueDate!),
-                              ),
-                            ),
-                            if (_dueDate != null) ...[
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () =>
-                                    _safeSetState(() => _dueDate = null),
-                                child: const Text('清除'),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _buildDueDateShortcuts(),
+                        _buildDueDateRow(),
                         const SizedBox(height: 20),
                         Text('提醒', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
