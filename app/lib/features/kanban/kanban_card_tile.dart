@@ -11,6 +11,7 @@ import '../attachments/card_attachment_viewer.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
 import 'kanban_labels.dart';
+import 'markdown_plain_text.dart';
 
 /// 单张看板卡片：勾选完成、拖拽、置顶、元数据展示
 class KanbanCardTile extends StatefulWidget {
@@ -207,6 +208,9 @@ class _CardContent extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final themePreset = projectThemeForId(themeId);
     final dueInfo = _dueDateInfo(card.dueDate, colorScheme);
+    final plainDescription = markdownToPlainText(card.description ?? '');
+    final descriptionSummary =
+        plainDescription.isEmpty ? null : plainDescription;
     final cover = card.coverAttachment;
     final extraImageCount =
         card.attachments.length > 1 ? card.attachments.length - 1 : 0;
@@ -318,7 +322,7 @@ class _CardContent extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
               child: Row(
                 // note: 仅标题时与勾选框垂直居中；有标签/描述等时仍顶对齐
-                crossAxisAlignment: _isTitleOnlyContent(dueInfo)
+                crossAxisAlignment: _isTitleOnlyContent(dueInfo, descriptionSummary)
                     ? CrossAxisAlignment.center
                     : CrossAxisAlignment.start,
                 children: [
@@ -405,13 +409,13 @@ class _CardContent extends StatelessWidget {
                                 : null,
                           ),
                         ),
-                        if (card.description != null &&
-                            card.description!.isNotEmpty) ...[
+                        if (descriptionSummary != null) ...[
                           const SizedBox(height: 4),
                           Text(
-                            card.description!,
+                            descriptionSummary,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
+                            softWrap: true,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -529,9 +533,8 @@ class _CardContent extends StatelessWidget {
   }
 
   /// 仅标题（无置顶徽标/标签/描述/元信息）时，与勾选框垂直居中
-  bool _isTitleOnlyContent(Widget? dueInfo) {
-    final hasDescription =
-        card.description != null && card.description!.isNotEmpty;
+  bool _isTitleOnlyContent(Widget? dueInfo, String? descriptionSummary) {
+    final hasDescription = descriptionSummary != null;
     return !isPinned &&
         card.labels.isEmpty &&
         !hasDescription &&

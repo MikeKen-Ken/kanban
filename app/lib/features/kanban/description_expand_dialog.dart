@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:url_launcher/url_launcher.dart';
+
+import 'description_markdown_preview.dart';
 
 /// 全屏备注编辑/预览，复用外部 [controller]，关闭后内容自动同步回详情页。
 Future<void> showDescriptionExpandDialog({
@@ -44,8 +44,6 @@ class _DescriptionExpandDialogState extends State<DescriptionExpandDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Dialog.fullscreen(
       child: Scaffold(
         appBar: AppBar(
@@ -67,28 +65,10 @@ class _DescriptionExpandDialogState extends State<DescriptionExpandDialog> {
         body: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: _previewMarkdown
-              ? DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
-                    child: MarkdownBody(
-                      data: widget.controller.text.isEmpty
-                          ? '_暂无备注_'
-                          : widget.controller.text,
-                      onTapLink: (text, href, title) {
-                        if (href == null) return;
-                        launchUrl(
-                          Uri.parse(href),
-                          mode: LaunchMode.externalApplication,
-                        );
-                      },
-                    ),
-                  ),
+              ? DescriptionMarkdownPreview(
+                  data: widget.controller.text,
+                  scrollable: true,
+                  expand: true,
                 )
               : TextField(
                   key: const ValueKey('card-detail-desc-expanded'),

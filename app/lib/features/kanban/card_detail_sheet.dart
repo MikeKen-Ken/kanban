@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,6 +14,7 @@ import '../attachments/card_attachment_viewer.dart';
 import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
 import 'description_expand_dialog.dart';
+import 'description_markdown_preview.dart';
 import 'kanban_labels.dart';
 
 /// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
@@ -885,28 +885,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         ),
                         const SizedBox(height: 8),
                         if (_previewMarkdown)
-                          Container(
-                            width: double.infinity,
-                            constraints: const BoxConstraints(minHeight: 120),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: theme.colorScheme.outlineVariant,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: MarkdownBody(
-                              data: _descController.text.isEmpty
-                                  ? '_暂无备注_'
-                                  : _descController.text,
-                              onTapLink: (text, href, title) {
-                                if (href == null) return;
-                                launchUrl(
-                                  Uri.parse(href),
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              },
-                            ),
+                          DescriptionMarkdownPreview(
+                            data: _descController.text,
+                            minHeight: 120,
                           )
                         else if (_descriptionExpanded)
                           Container(
