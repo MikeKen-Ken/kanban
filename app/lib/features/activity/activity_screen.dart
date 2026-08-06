@@ -48,6 +48,6 @@ class ActivityScreen extends StatelessWidget {
   static IconData _iconFor(ActivitySource source) => switch (source) {
         ActivitySource.user => Icons.history,
         ActivitySource.mcp => Icons.smart_toy_outlined,
-        ActivitySource.automation => Icons.auto_fix_outlined,
+        ActivitySource.automation => Icons.auto_fix_high_outlined,
       };
 }
