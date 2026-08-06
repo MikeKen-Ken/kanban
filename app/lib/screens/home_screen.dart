@@ -14,6 +14,7 @@ import '../features/sync_conflict/conflict_center_screen.dart';
 import '../features/trash/trash_screen.dart';
 import '../features/views/filter_sheet.dart';
 import '../features/views/views.dart';
+import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
 import '../features/kanban/swimlane_board.dart';
 import '../main.dart';
@@ -912,48 +913,51 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
           );
         }
 
-        return Scrollbar(
-          child: ReorderableListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(16),
-            buildDefaultDragHandles: false,
-            proxyDecorator: (child, index, animation) {
-              return AnimatedBuilder(
-                animation: animation,
-                builder: (context, child) {
-                  final t = Curves.easeInOut.transform(animation.value);
-                  return Material(
-                    elevation: 8 * t,
-                    borderRadius: BorderRadius.circular(12),
-                    clipBehavior: Clip.antiAlias,
-                    child: child,
-                  );
-                },
-                child: child,
-              );
-            },
-            itemCount: board.columns.length,
-            onReorderItem: (oldIndex, adjustedNewIndex) {
-              final legacyNewIndex = adjustedNewIndex > oldIndex
-                  ? adjustedNewIndex + 1
-                  : adjustedNewIndex;
-              controller.reorderColumn(oldIndex, legacyNewIndex);
-            },
-            itemBuilder: (context, index) {
-              final column = board.columns[index];
-              return Padding(
-                key: ValueKey(column.id),
-                padding: EdgeInsets.only(
-                  right: index < board.columns.length - 1 ? 12 : 0,
-                ),
-                child: KanbanColumnWidget(
-                  column: column,
-                  columnIndex: index,
-                  visibleCardIds: visibleIds,
-                ),
-              );
-            },
-          ),
+        return BoardHorizontalScroll(
+          builder: (context, scrollController) {
+            return ReorderableListView.builder(
+              scrollDirection: Axis.horizontal,
+              scrollController: scrollController,
+              padding: const EdgeInsets.all(16),
+              buildDefaultDragHandles: false,
+              proxyDecorator: (child, index, animation) {
+                return AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, child) {
+                    final t = Curves.easeInOut.transform(animation.value);
+                    return Material(
+                      elevation: 8 * t,
+                      borderRadius: BorderRadius.circular(12),
+                      clipBehavior: Clip.antiAlias,
+                      child: child,
+                    );
+                  },
+                  child: child,
+                );
+              },
+              itemCount: board.columns.length,
+              onReorderItem: (oldIndex, adjustedNewIndex) {
+                final legacyNewIndex = adjustedNewIndex > oldIndex
+                    ? adjustedNewIndex + 1
+                    : adjustedNewIndex;
+                controller.reorderColumn(oldIndex, legacyNewIndex);
+              },
+              itemBuilder: (context, index) {
+                final column = board.columns[index];
+                return Padding(
+                  key: ValueKey(column.id),
+                  padding: EdgeInsets.only(
+                    right: index < board.columns.length - 1 ? 12 : 0,
+                  ),
+                  child: KanbanColumnWidget(
+                    column: column,
+                    columnIndex: index,
+                    visibleCardIds: visibleIds,
+                  ),
+                );
+              },
+            );
+          },
         );
       },
     );
