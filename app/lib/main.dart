@@ -16,8 +16,7 @@ Future<void> main() async {
   // 卡片/详情里的 DateFormat.*('zh_CN') 依赖 locale 数据；未初始化会变成超高 ErrorWidget
   await initializeDateFormatting('zh_CN');
   final controller = await BoardController.create();
-  // 先初始化渠道与调度；权限申请需等 Activity 就绪后再做
-  await controller.initializeReminders();
+  // 先出首帧再初始化提醒：Windows 上通知插件在 runApp 前 await 会挂起，窗口永不 Show
   runApp(KanbanApp(controller: controller));
   // 修复 Windows Win+V 剪贴板历史无法粘贴到输入框（flutter#143997）
   installWindowsClipboardHistoryPasteFix();
@@ -36,8 +35,9 @@ class _KanbanAppState extends State<KanbanApp> {
   @override
   void initState() {
     super.initState();
-    // Activity 就绪后首次申请通知权限（Android 13+）
+    // 首帧后再初始化通知插件并申请权限，避免阻塞窗口显示
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(widget.controller.initializeReminders());
       unawaited(widget.controller.ensureNotificationPermissionOnFirstLaunch());
     });
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -17,16 +19,19 @@ class ReminderScheduler {
   static const _settingsChannel = MethodChannel(
     'com.mikeken.kanban/notifications',
   );
+  static const _initializeTimeout = Duration(seconds: 8);
 
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
+  bool _initializeAttempted = false;
 
   AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
 
   Future<void> initialize() async {
-    if (_initialized) return;
+    if (_initialized || _initializeAttempted) return;
+    _initializeAttempted = true;
     tz_data.initializeTimeZones();
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -36,9 +41,17 @@ class ReminderScheduler {
         guid: 'e44f9286-a41f-4bbd-a987-a038f9ab63ca',
       ),
     );
-    await _plugin.initialize(settings: settings);
-    await _ensureAndroidChannel();
-    _initialized = true;
+    try {
+      await _plugin
+          .initialize(settings: settings)
+          .timeout(_initializeTimeout);
+      await _ensureAndroidChannel();
+      _initialized = true;
+    } on TimeoutException {
+      debugPrint('初始化本地通知超时（已跳过，不影响启动）');
+    } catch (error) {
+      debugPrint('初始化本地通知失败：$error');
+    }
   }
 
   /// 提前创建渠道，让系统设置页能显示「任务提醒」分类。
@@ -83,6 +96,7 @@ class ReminderScheduler {
 
   Future<void> rescheduleAll(Map<String, KanbanBoard> boards) async {
     await initialize();
+    if (!_initialized) return;
     await _plugin.cancelAll();
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final entry in boards.entries) {
@@ -110,6 +124,7 @@ class ReminderScheduler {
     final reminderAt = card.reminderAt;
     if (reminderAt == null || card.completed) return;
     await initialize();
+    if (!_initialized) return;
     final instant = DateTime.fromMillisecondsSinceEpoch(
       reminderAt,
       isUtc: true,
@@ -136,6 +151,7 @@ class ReminderScheduler {
 
   Future<void> cancel(String cardId) async {
     await initialize();
+    if (!_initialized) return;
     await _plugin.cancel(id: notificationIdFor(cardId));
   }
 
