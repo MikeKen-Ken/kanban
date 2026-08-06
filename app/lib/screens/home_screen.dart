@@ -141,11 +141,20 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     final controller = context.read<BoardController>();
     if (controller.syncStatus == SyncStatus.syncing) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('正在同步…')),
+        const SnackBar(content: Text('正在同步…可点取消按钮')),
       );
       return;
     }
     controller.syncNow();
+  }
+
+  void _cancelSync() {
+    final controller = context.read<BoardController>();
+    final cancelled = controller.cancelSync();
+    if (!cancelled || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已取消同步')),
+    );
   }
 
   Future<void> _showFilters() async {
@@ -669,6 +678,8 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                     ),
                   );
                 },
+                onCancel:
+                    data.$1 == SyncStatus.syncing ? _cancelSync : null,
               ),
             ),
             if (!compact)
@@ -1059,6 +1070,7 @@ class _SyncIndicator extends StatelessWidget {
   const _SyncIndicator({
     required this.status,
     required this.onTap,
+    this.onCancel,
     this.error,
     this.conflictCount = 0,
     this.lastSyncedAt,
@@ -1071,6 +1083,7 @@ class _SyncIndicator extends StatelessWidget {
   final DateTime? lastSyncedAt;
   final bool compact;
   final VoidCallback onTap;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -1092,10 +1105,11 @@ class _SyncIndicator extends StatelessWidget {
         ? '尚未成功同步'
         : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
 
+    final syncing = status == SyncStatus.syncing;
     final tooltip = conflictCount > 0
         ? '有未解决的同步冲突，点击进入冲突中心'
-        : status == SyncStatus.syncing
-            ? '正在同步…'
+        : syncing
+            ? '正在同步…可点击取消'
             : error == null
                 ? '$lastSuccess\n点击立即同步'
                 : '$error\n$lastSuccess';
@@ -1105,28 +1119,50 @@ class _SyncIndicator extends StatelessWidget {
       size: 20,
     );
 
+    final syncButton = compact
+        ? IconButton(
+            onPressed: onTap,
+            icon: Badge(
+              isLabelVisible: conflictCount > 0,
+              label: Text('$conflictCount'),
+              child: icon,
+            ),
+          )
+        : TextButton.icon(
+            onPressed: onTap,
+            icon: icon,
+            label: Text(
+              label,
+              style: TextStyle(color: color, fontSize: 13),
+            ),
+          );
+
+    final cancelButton = onCancel == null
+        ? null
+        : IconButton(
+            tooltip: '取消同步',
+            onPressed: onCancel,
+            icon: Icon(
+              Icons.close,
+              color: colorScheme.onSurfaceVariant,
+              size: 20,
+            ),
+          );
+
     return Semantics(
       liveRegion: true,
-      label: label,
+      label: syncing ? '$label，可取消' : label,
       button: true,
       child: Tooltip(
         message: tooltip,
-        child: compact
-            ? IconButton(
-                onPressed: onTap,
-                icon: Badge(
-                  isLabelVisible: conflictCount > 0,
-                  label: Text('$conflictCount'),
-                  child: icon,
-                ),
-              )
-            : TextButton.icon(
-                onPressed: onTap,
-                icon: icon,
-                label: Text(
-                  label,
-                  style: TextStyle(color: color, fontSize: 13),
-                ),
+        child: cancelButton == null
+            ? syncButton
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  syncButton,
+                  cancelButton,
+                ],
               ),
       ),
     );

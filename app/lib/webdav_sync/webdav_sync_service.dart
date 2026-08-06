@@ -21,6 +21,14 @@ export '../features/sync_conflict/workspace_snapshot.dart';
 
 enum SyncStatus { idle, syncing, success, error }
 
+/// 用户取消同步时抛出，用于协作式中止进行中的推送/拉取
+class SyncCancelledException implements Exception {
+  const SyncCancelledException();
+
+  @override
+  String toString() => 'SyncCancelledException';
+}
+
 /// 自动 WebDAV 同步：本地变更后防抖上传，启动/轮询时拉取合并
 class WebDavSyncService {
   WebDavSyncService({
@@ -63,6 +71,12 @@ class WebDavSyncService {
   bool _pullPending = false;
   bool _pullPendingUserInitiated = false;
 
+  /// 当前同步世代：每次开跑或取消时递增，用于丢弃已取消回合的结果
+  int _syncRunId = 0;
+
+  /// 用户已请求取消；I/O 检查点协作中止，不强制掐断底层 HTTP
+  bool _cancelRequested = false;
+
   /// 上次开始同步尝试的时间（成功/失败都更新，用于节流）
   DateTime? _lastAttemptAt;
 
@@ -103,7 +117,9 @@ class WebDavSyncService {
   }
 
   Future<List<File>> _readDirWithFallback(Client client, String dir) async {
+    _ensureNotCancelled();
     for (final path in _directoryPathCandidates(dir)) {
+      _ensureNotCancelled();
       try {
         return await client.readDir(path);
       } catch (_) {
@@ -182,6 +198,49 @@ class WebDavSyncService {
       lastSyncedAt = DateTime.now();
     }
     _statusController.add(value);
+  }
+
+  /// 取消进行中的同步（含排队中的 pull/push）；本地防抖推送定时器不受影响
+  ///
+  /// 返回是否确实发出了取消请求。底层传输为协作式中止，当前 HTTP 可能仍跑完，
+  /// 但不会再提交成功/失败状态，并可立即再次触发同步。
+  bool cancelSync() {
+    final inFlight = _syncInFlight || _pushInFlight;
+    final hasPending = _pullPending || _pushPending;
+    if (status != SyncStatus.syncing && !inFlight && !hasPending) {
+      return false;
+    }
+
+    _pullPending = false;
+    _pullPendingUserInitiated = false;
+    _pushPending = false;
+    _pushPendingForce = false;
+
+    if (inFlight) {
+      _cancelRequested = true;
+      _syncRunId++;
+      print('已请求取消同步');
+    } else {
+      print('已取消排队中的同步');
+    }
+
+    if (status == SyncStatus.syncing) {
+      _setStatus(SyncStatus.idle);
+    }
+    return true;
+  }
+
+  void _ensureNotCancelled([int? runId]) {
+    if (_cancelRequested || (runId != null && runId != _syncRunId)) {
+      throw const SyncCancelledException();
+    }
+  }
+
+  bool _shouldCommit(int runId) =>
+      !_cancelRequested && runId == _syncRunId;
+
+  void _clearCancelFlag() {
+    _cancelRequested = false;
   }
 
   bool _isRateLimitedError(Object error) {
@@ -273,7 +332,9 @@ class WebDavSyncService {
   }
 
   Future<void> _writeJson(Client client, String path, Object data) async {
+    _ensureNotCancelled();
     await _ensureParentDir(client, path);
+    _ensureNotCancelled();
     final bytes = Uint8List.fromList(
       utf8.encode(const JsonEncoder.withIndent('  ').convert(data)),
     );
@@ -284,12 +345,16 @@ class WebDavSyncService {
     Client client,
     String path,
   ) async {
+    _ensureNotCancelled();
     try {
       final data = await client.read(path);
+      _ensureNotCancelled();
       final json = tryDecodeJsonBytes(data, path: path);
       if (json != null) return json;
       // note: 远端个别文件损坏时不拖垮整次同步；由调用方处理 null
       return null;
+    } on SyncCancelledException {
+      rethrow;
     } on Object catch (e) {
       if (_isRemoteNotFound(e)) {
         return null;
@@ -302,6 +367,7 @@ class WebDavSyncService {
   }
 
   Future<void> _writeBytes(Client client, String path, Uint8List bytes) async {
+    _ensureNotCancelled();
     await _ensureParentDir(client, path);
     // note: webdav_client.write() 会把字节拆成「每字节一个 chunk」的 Stream，
     // 截图 JPEG 体积稍大时极易超时；改走临时文件 + writeFromFile（按块流式上传）。
@@ -310,7 +376,9 @@ class WebDavSyncService {
       'kanban_webdav_${DateTime.now().microsecondsSinceEpoch}.bin',
     );
     try {
+      _ensureNotCancelled();
       await tmp.writeAsBytes(bytes, flush: true);
+      _ensureNotCancelled();
       await client.writeFromFile(tmp.path, path);
     } finally {
       try {
@@ -328,16 +396,23 @@ class WebDavSyncService {
   ) async {
     try {
       await _writeBytes(client, path, bytes);
+    } on SyncCancelledException {
+      rethrow;
     } catch (_) {
       await Future<void>.delayed(const Duration(milliseconds: 400));
+      _ensureNotCancelled();
       await _writeBytes(client, path, bytes);
     }
   }
 
   Future<Uint8List?> _readBytes(Client client, String path) async {
+    _ensureNotCancelled();
     try {
       final data = await client.read(path);
+      _ensureNotCancelled();
       return Uint8List.fromList(data);
+    } on SyncCancelledException {
+      rethrow;
     } on Object catch (e) {
       if (_isRemoteNotFound(e)) {
         return null;
@@ -429,6 +504,7 @@ class WebDavSyncService {
         await _listRemoteAttachmentNames(client, attachmentsDir);
 
     for (final id in keepIds) {
+      _ensureNotCancelled();
       for (final thumb in const [false, true]) {
         final localExists = await _attachmentSync.exists(
           projectId,
@@ -509,6 +585,7 @@ class WebDavSyncService {
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
     for (final id in keepIds) {
+      _ensureNotCancelled();
       for (final thumb in const [false, true]) {
         await _downloadRemoteAttachment(
           client,
@@ -567,6 +644,7 @@ class WebDavSyncService {
     }
     // note: 先写列文件、再写 board 元数据，避免其他端拉取时元数据已列出列 id 但列文件尚未上传
     for (final column in board.columns) {
+      _ensureNotCancelled();
       await _writeJson(
         client,
         KanbanPaths.remoteProjectColumnPath(base, projectId, column.id),
@@ -645,12 +723,21 @@ class WebDavSyncService {
     final client = _client(config);
     if (client == null) return;
 
+    // 用户刚取消时勿清标志开跑（例如 pull 交接 push 之间的窗口）
+    if (_cancelRequested) {
+      print('跳过推送：同步已取消');
+      _clearCancelFlag();
+      return;
+    }
+
+    final runId = _syncRunId;
     _pushInFlight = true;
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
 
     try {
+      _ensureNotCancelled(runId);
       final workspace = await _loadWorkspace();
       final base = _remoteBase(config);
       var attachmentFailures = 0;
@@ -675,6 +762,7 @@ class WebDavSyncService {
       }
 
       for (final entry in workspace.manifest.projects) {
+        _ensureNotCancelled(runId);
         final board = workspace.boards[entry.id];
         final settings = workspace.settings[entry.id];
         final trash = workspace.projectTrash[entry.id] ?? TrashBin.empty;
@@ -689,21 +777,37 @@ class WebDavSyncService {
         );
       }
 
+      _ensureNotCancelled(runId);
       await _cleanupRemoteProjects(
         client,
         KanbanPaths.remoteProjectsDir(base),
         workspace.manifest.projects.map((p) => p.id).toSet(),
       );
 
+      if (!_shouldCommit(runId)) {
+        throw const SyncCancelledException();
+      }
       await _syncBaseStore.save(workspace);
       _applyAttachmentSyncWarning(attachmentFailures);
       _noteSuccess();
       _setStatus(SyncStatus.success);
+    } on SyncCancelledException {
+      print('推送同步已中止');
+      if (status == SyncStatus.syncing) {
+        _setStatus(SyncStatus.idle);
+      }
     } catch (e) {
-      _noteFailure(e);
-      _setStatus(SyncStatus.error, error: e.toString());
+      if (!_shouldCommit(runId)) {
+        print('推送同步已取消，忽略错误：$e');
+      } else {
+        _noteFailure(e);
+        _setStatus(SyncStatus.error, error: e.toString());
+      }
     } finally {
       _pushInFlight = false;
+      if (_cancelRequested) {
+        _clearCancelFlag();
+      }
       _drainPendingWork(forceFallback: force);
     }
   }
@@ -874,6 +978,8 @@ class WebDavSyncService {
         appTrash: appTrash,
         sharedContent: sharedContent,
       );
+    } on SyncCancelledException {
+      rethrow;
     } on Object catch (e) {
       final message = e.toString().toLowerCase();
       if (message.contains('404') || message.contains('not found')) {
@@ -911,13 +1017,22 @@ class WebDavSyncService {
 
     // note: 手动同步不受自动节流/冷却限制，由用户主动触发
 
+    if (_cancelRequested) {
+      print('跳过拉取：同步已取消');
+      _clearCancelFlag();
+      return;
+    }
+
+    final runId = _syncRunId;
     _syncInFlight = true;
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
     try {
+      _ensureNotCancelled(runId);
       final local = await _loadWorkspace();
       final remote = await pullRemote();
+      _ensureNotCancelled(runId);
       if (remote == null) {
         // note: 远端为空时上传本地；先释放锁再 push
         _syncInFlight = false;
@@ -927,6 +1042,7 @@ class WebDavSyncService {
 
       final syncBase = await _syncBaseStore.load();
       final merged = _mergeWorkspaces(local, remote, syncBase);
+      _ensureNotCancelled(runId);
       await _saveWorkspace(merged);
       await _syncBaseStore.save(merged);
 
@@ -935,6 +1051,7 @@ class WebDavSyncService {
       if (client != null) {
         final base = _remoteBase(config);
         for (final entry in merged.manifest.projects) {
+          _ensureNotCancelled(runId);
           final board = merged.boards[entry.id];
           if (board == null) continue;
           final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
@@ -961,6 +1078,7 @@ class WebDavSyncService {
             client != null) {
           final base = _remoteBase(config);
           for (final entry in merged.manifest.projects) {
+            _ensureNotCancelled(runId);
             final board = merged.boards[entry.id];
             if (board == null) continue;
             final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
@@ -977,19 +1095,35 @@ class WebDavSyncService {
           }
           _applyAttachmentSyncWarning(attachmentFailures);
         }
+        if (!_shouldCommit(runId)) {
+          throw const SyncCancelledException();
+        }
         _noteSuccess();
         _setStatus(SyncStatus.success);
         return;
       }
 
       // note: 合并后回推，避免本地并集结果只留本机
+      _ensureNotCancelled(runId);
       _syncInFlight = false;
       await pushNow(force: true);
+    } on SyncCancelledException {
+      print('拉取同步已中止');
+      if (status == SyncStatus.syncing) {
+        _setStatus(SyncStatus.idle);
+      }
     } catch (e) {
-      _noteFailure(e);
-      _setStatus(SyncStatus.error, error: e.toString());
+      if (!_shouldCommit(runId)) {
+        print('拉取同步已取消，忽略错误：$e');
+      } else {
+        _noteFailure(e);
+        _setStatus(SyncStatus.error, error: e.toString());
+      }
     } finally {
       _syncInFlight = false;
+      if (_cancelRequested) {
+        _clearCancelFlag();
+      }
       _drainPendingWork();
     }
   }

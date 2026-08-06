@@ -2865,6 +2865,11 @@ class BoardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 取消进行中的 WebDAV 同步，恢复可继续操作
+  bool cancelSync() {
+    return _syncService.cancelSync();
+  }
+
   /// 解决单卡冲突：保留主副本或另一侧
   Future<void> resolveCardConflict(
     String columnId,
