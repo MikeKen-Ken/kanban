@@ -27,6 +27,33 @@ enum ActivityAction {
   }
 }
 
+/// 活动来源：用于区分本机操作、MCP 与自动化。
+enum ActivitySource {
+  user,
+  mcp,
+  automation;
+
+  String get label => switch (this) {
+        ActivitySource.user => '本机',
+        ActivitySource.mcp => 'MCP',
+        ActivitySource.automation => '自动化',
+      };
+
+  /// 活动列表副文案：提示如何恢复。
+  String get recoveryHint => switch (this) {
+        ActivitySource.user => '',
+        ActivitySource.mcp => '可由工具栏「撤销」或回收站恢复（视操作类型）',
+        ActivitySource.automation => '规则触发；可用「撤销」回退上一本机/MCP 操作',
+      };
+
+  static ActivitySource fromString(String? value) {
+    return ActivitySource.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => ActivitySource.user,
+    );
+  }
+}
+
 /// 项目内不可变的追加型活动事件。
 class ActivityEvent {
   const ActivityEvent({
@@ -37,6 +64,7 @@ class ActivityEvent {
     required this.entityTitle,
     required this.action,
     required this.occurredAt,
+    this.source = ActivitySource.user,
     this.details = const {},
   });
 
@@ -47,6 +75,7 @@ class ActivityEvent {
   final String entityTitle;
   final ActivityAction action;
   final int occurredAt;
+  final ActivitySource source;
   final Map<String, String> details;
 
   Map<String, dynamic> toJson() => {
@@ -57,6 +86,7 @@ class ActivityEvent {
         'entityTitle': entityTitle,
         'action': action.name,
         'occurredAt': occurredAt,
+        if (source != ActivitySource.user) 'source': source.name,
         if (details.isNotEmpty) 'details': details,
       };
 
@@ -70,6 +100,7 @@ class ActivityEvent {
       entityTitle: json['entityTitle'] as String? ?? '',
       action: ActivityAction.fromString(json['action'] as String?),
       occurredAt: json['occurredAt'] as int? ?? 0,
+      source: ActivitySource.fromString(json['source'] as String?),
       details: details == null
           ? const {}
           : details.map((key, value) => MapEntry(key, value.toString())),
@@ -87,8 +118,10 @@ class ActivityLog {
   ActivityLog mergeWith(ActivityLog other) {
     final byId = <String, ActivityEvent>{
       for (final event in events) event.id: event,
-      for (final event in other.events) event.id: event,
     };
+    for (final event in other.events) {
+      byId[event.id] = event;
+    }
     final merged = byId.values.toList()
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
     return ActivityLog(

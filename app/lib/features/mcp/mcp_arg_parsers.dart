@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
+import '../activity/activity_models.dart';
 import '../kanban/kanban_labels.dart';
 import '../views/filter_spec.dart';
 import 'mcp_tool_results.dart';
@@ -255,7 +256,13 @@ Future<CallToolResult> runMcpForProject(
   final resolved = resolveMcpProjectId(controller, projectId);
   if (resolved.error != null) return resolved.error!;
   final id = resolved.projectId!;
-  return controller.runOnProject(id, () => action(id));
+  return controller.runOnProject(
+    id,
+    () => controller.runWithActivitySource(
+      ActivitySource.mcp,
+      () => action(id),
+    ),
+  );
 }
 
 /// 卡片摘要（用于 list_board，备注截断）。

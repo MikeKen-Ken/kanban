@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
+import 'activity_models.dart';
 
 class ActivityScreen extends StatelessWidget {
   const ActivityScreen({super.key});
@@ -22,13 +23,31 @@ class ActivityScreen extends StatelessWidget {
                 final event = events[index];
                 final time =
                     DateTime.fromMillisecondsSinceEpoch(event.occurredAt);
+                final source = event.source;
+                final subtitle = StringBuffer(
+                  DateFormat('yyyy-MM-dd HH:mm').format(time),
+                );
+                if (source != ActivitySource.user) {
+                  subtitle.write(' · ${source.label}');
+                  final hint = source.recoveryHint;
+                  if (hint.isNotEmpty) {
+                    subtitle.write('\n$hint');
+                  }
+                }
                 return ListTile(
-                  leading: const Icon(Icons.history),
+                  leading: Icon(_iconFor(source)),
                   title: Text('${event.action.label}「${event.entityTitle}」'),
-                  subtitle: Text(DateFormat('yyyy-MM-dd HH:mm').format(time)),
+                  subtitle: Text(subtitle.toString()),
+                  isThreeLine: source != ActivitySource.user,
                 );
               },
             ),
     );
   }
+
+  static IconData _iconFor(ActivitySource source) => switch (source) {
+        ActivitySource.user => Icons.history,
+        ActivitySource.mcp => Icons.smart_toy_outlined,
+        ActivitySource.automation => Icons.auto_fix_outlined,
+      };
 }

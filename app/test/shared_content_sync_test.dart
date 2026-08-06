@@ -65,7 +65,20 @@ void main() {
         ),
       ],
       activity: {
-        'p1': ActivityLog(events: [_event('e1', 5)]),
+        'p1': ActivityLog(
+          events: [
+            ActivityEvent(
+              id: 'e1',
+              projectId: 'p1',
+              entityType: 'card',
+              entityId: 'c1',
+              entityTitle: '卡片',
+              action: ActivityAction.updated,
+              occurredAt: 5,
+              source: ActivitySource.mcp,
+            ),
+          ],
+        ),
       },
       revision: 5,
       updatedAt: 6,
@@ -77,6 +90,10 @@ void main() {
     expect(restored.savedViews.single.filter.labelIds, ['l1']);
     expect(restored.cardTemplates.single.title, '填写周报');
     expect(restored.activityByProject['p1']?.events.single.id, 'e1');
+    expect(
+      restored.activityByProject['p1']?.events.single.source,
+      ActivitySource.mcp,
+    );
     expect(restored.revision, 5);
   });
 

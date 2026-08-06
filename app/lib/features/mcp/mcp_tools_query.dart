@@ -266,7 +266,8 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'list_activity',
-    description: '列出当前项目活动历史（新到旧）',
+    description:
+        '列出项目活动历史（新到旧）；含 source=user|mcp|automation，便于区分 MCP 改动',
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(description: '省略则用当前项目'),

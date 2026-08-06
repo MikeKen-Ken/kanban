@@ -65,6 +65,9 @@ class BoardController extends ChangeNotifier {
   bool _mutatingForeignProject = false;
   bool _pendingNotifyAfterScope = false;
 
+  /// 当前突变来源（MCP 经 [runWithActivitySource] 置位）。
+  ActivitySource _mutationOrigin = ActivitySource.user;
+
   /// 串行化看板/清单突变，避免 MCP runOnProject 与 UI 写交错。
   final AsyncMutex _boardMutationMutex = AsyncMutex();
   bool _inBoardMutation = false;
@@ -490,6 +493,17 @@ class BoardController extends ChangeNotifier {
       );
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    _pushUndo(
+      '新建「${card.title}」',
+      () => deleteCard(columnId, cardId),
+    );
+    unawaited(
+      _recordActivity(
+        entityId: cardId,
+        entityTitle: card.title,
+        action: ActivityAction.created,
+      ),
+    );
     return cardId;
       });
   }
@@ -630,6 +644,45 @@ class BoardController extends ChangeNotifier {
         _inBoardMutation = false;
       }
     });
+  }
+
+  /// 以指定活动来源执行操作（供 MCP 等外部写入标注来源）。
+  Future<T> runWithActivitySource<T>(
+    ActivitySource source,
+    Future<T> Function() action,
+  ) async {
+    final previous = _mutationOrigin;
+    _mutationOrigin = source;
+    try {
+      return await action();
+    } finally {
+      _mutationOrigin = previous;
+    }
+  }
+
+  ActivitySource get _currentActivitySource {
+    if (_applyingAutomation) return ActivitySource.automation;
+    return _mutationOrigin;
+  }
+
+  /// 推入撤销项；自动化不入栈。跨项目 MCP 写入时用 [runOnProject] 包一层以便恢复。
+  void _pushUndo(String label, UndoCallback undo) {
+    if (_applyingAutomation) return;
+    final source = _mutationOrigin;
+    final displayLabel =
+        source == ActivitySource.mcp ? 'MCP：$label' : label;
+    final scopedProjectId =
+        _mutatingForeignProject ? activeProjectId : null;
+    if (scopedProjectId != null) {
+      _undoStack.push(
+        UndoEntry(
+          label: displayLabel,
+          undo: () => runOnProject(scopedProjectId, undo),
+        ),
+      );
+      return;
+    }
+    _undoStack.push(UndoEntry(label: displayLabel, undo: undo));
   }
 
   /// 在指定项目上下文中执行操作：不修改已持久化的 active 项目，也不把 UI 切走。
@@ -909,9 +962,11 @@ class BoardController extends ChangeNotifier {
     required ActivityAction action,
     String entityType = 'card',
     Map<String, String> details = const {},
+    ActivitySource? source,
   }) async {
     final projectId = activeProjectId;
     if (projectId == null) return;
+    final resolvedSource = source ?? _currentActivitySource;
     final logs = Map<String, ActivityLog>.from(sharedContent.activityByProject);
     final current = logs[projectId] ?? const ActivityLog();
     logs[projectId] = current.add(
@@ -923,6 +978,7 @@ class BoardController extends ChangeNotifier {
         entityTitle: entityTitle,
         action: action,
         occurredAt: DateTime.now().millisecondsSinceEpoch,
+        source: resolvedSource,
         details: details,
       ),
     );
@@ -1633,14 +1689,10 @@ class BoardController extends ChangeNotifier {
     }).toList();
     if (!added) return null;
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-    if (!_mutatingForeignProject) {
-      _undoStack.push(
-        UndoEntry(
-          label: '新建「$title」',
-          undo: () => deleteCard(columnId, cardId),
-        ),
-      );
-    }
+    _pushUndo(
+      '新建「$title」',
+      () => deleteCard(columnId, cardId),
+    );
     if (reminderAt != null && activeProjectId != null) {
       await _scheduleCardReminder(
         projectId: activeProjectId!,
@@ -1736,11 +1788,11 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(
       _bump(board!.copyWith(columns: _normalizeOrders(columns))),
     );
-    if (original != null && !_applyingAutomation && !_mutatingForeignProject) {
-      _undoStack.push(
-        UndoEntry(
-          label: '编辑「${original.title}」',
-          undo: () => updateCardFull(
+    if (original != null) {
+      if (!_applyingAutomation) {
+        _pushUndo(
+          '编辑「${original.title}」',
+          () => updateCardFull(
             columnId,
             cardId,
             title: original.title,
@@ -1762,8 +1814,8 @@ class BoardController extends ChangeNotifier {
             colorValue: original.colorValue,
             clearColor: original.colorValue == null,
           ),
-        ),
-      );
+        );
+      }
       unawaited(
         _recordActivity(
           entityId: cardId,
@@ -2240,17 +2292,13 @@ class BoardController extends ChangeNotifier {
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
     await _reminderScheduler.cancel(cardId);
-    if (!_mutatingForeignProject) {
-      _undoStack.push(
-        UndoEntry(
-          label: '删除「${target.title}」',
-          undo: () async {
-            final error = await restoreTrashItem(trashId);
-            if (error != null) throw StateError(error);
-          },
-        ),
-      );
-    }
+    _pushUndo(
+      '删除「${target.title}」',
+      () async {
+        final error = await restoreTrashItem(trashId);
+        if (error != null) throw StateError(error);
+      },
+    );
     unawaited(
       _recordActivity(
         entityId: cardId,
@@ -2315,19 +2363,15 @@ class BoardController extends ChangeNotifier {
     }
 
     final count = clearedCards.length;
-    if (!_mutatingForeignProject) {
-      _undoStack.push(
-        UndoEntry(
-          label: '清空「${doneColumn.title}」($count)',
-          undo: () async {
-            for (final trashId in trashIds.reversed) {
-              final error = await restoreTrashItem(trashId);
-              if (error != null) throw StateError(error);
-            }
-          },
-        ),
-      );
-    }
+    _pushUndo(
+      '清空「${doneColumn.title}」($count)',
+      () async {
+        for (final trashId in trashIds.reversed) {
+          final error = await restoreTrashItem(trashId);
+          if (error != null) throw StateError(error);
+        }
+      },
+    );
     return count;
       });
   }
@@ -2471,30 +2515,28 @@ class BoardController extends ChangeNotifier {
     );
     if (fromColumnId != toColumnId) {
       final originalIndex = moving!.order;
-      if (!_applyingAutomation && !_mutatingForeignProject) {
-        _undoStack.push(
-          UndoEntry(
-            label: '移动「${moving!.title}」',
-            undo: () => moveCard(
-              cardId: cardId,
-              fromColumnId: toColumnId,
-              toColumnId: fromColumnId,
-              toDisplayIndex: originalIndex,
-            ),
-          ),
-        );
-        unawaited(
-          _recordActivity(
-            entityId: cardId,
-            entityTitle: moving!.title,
-            action: ActivityAction.moved,
-            details: {
-              'fromColumnId': fromColumnId,
-              'toColumnId': toColumnId,
-            },
+      if (!_applyingAutomation) {
+        _pushUndo(
+          '移动「${moving!.title}」',
+          () => moveCard(
+            cardId: cardId,
+            fromColumnId: toColumnId,
+            toColumnId: fromColumnId,
+            toDisplayIndex: originalIndex,
           ),
         );
       }
+      unawaited(
+        _recordActivity(
+          entityId: cardId,
+          entityTitle: moving!.title,
+          action: ActivityAction.moved,
+          details: {
+            'fromColumnId': fromColumnId,
+            'toColumnId': toColumnId,
+          },
+        ),
+      );
       if (!_applyingAutomation) {
         final card = findCardById(cardId);
         if (card != null) {
