@@ -22,20 +22,30 @@ Future<void> showCardDetailSheet({
   required BuildContext context,
   required String columnId,
   required KanbanCard card,
+  bool autofocusTitle = false,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (ctx) => _CardDetailSheet(columnId: columnId, card: card),
+    builder: (ctx) => _CardDetailSheet(
+      columnId: columnId,
+      card: card,
+      autofocusTitle: autofocusTitle,
+    ),
   );
 }
 
 class _CardDetailSheet extends StatefulWidget {
-  const _CardDetailSheet({required this.columnId, required this.card});
+  const _CardDetailSheet({
+    required this.columnId,
+    required this.card,
+    this.autofocusTitle = false,
+  });
 
   final String columnId;
   final KanbanCard card;
+  final bool autofocusTitle;
 
   @override
   State<_CardDetailSheet> createState() => _CardDetailSheetState();
@@ -778,6 +788,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           child: TextField(
                             key: const ValueKey('card-detail-title'),
                             controller: _titleController,
+                            autofocus: widget.autofocusTitle,
                             style: theme.textTheme.titleLarge?.copyWith(
                               decoration: _completed
                                   ? TextDecoration.lineThrough
