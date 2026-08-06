@@ -231,7 +231,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     )) {
       _persisted = true;
       _skipPersist = true;
-      await _boardController.deleteCard(widget.columnId, widget.card.id);
+      try {
+        await _boardController.deleteCard(widget.columnId, widget.card.id);
+      } catch (_) {
+        // 失败后允许再次保存/关闭重试，避免「已标记已保存却仍停在详情页」。
+        _persisted = false;
+        _skipPersist = false;
+        rethrow;
+      }
       return;
     }
 
@@ -259,35 +266,49 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final colorValue = _colorValue;
     final clearColor = _colorValue == null;
 
+    // 先占位防 PopScope/连点重复写入；失败时回滚以便重试。
     _persisted = true;
-    await _boardController.updateCardFull(
-      widget.columnId,
-      widget.card.id,
-      title: title,
-      description: description,
-      clearDescription: description == null,
-      completed: completed,
-      dueDate: dueDate,
-      clearDueDate: clearDueDate,
-      reminderAt: reminderAt,
-      clearReminder: clearReminder,
-      recurrence: recurrence,
-      priority: priority,
-      labels: labels,
-      checklist: checklist,
-      attachments: attachments,
-      links: links,
-      blockedByIds: blockedByIds,
-      relatedIds: relatedIds,
-      colorValue: colorValue,
-      clearColor: clearColor,
-    );
+    try {
+      await _boardController.updateCardFull(
+        widget.columnId,
+        widget.card.id,
+        title: title,
+        description: description,
+        clearDescription: description == null,
+        completed: completed,
+        dueDate: dueDate,
+        clearDueDate: clearDueDate,
+        reminderAt: reminderAt,
+        clearReminder: clearReminder,
+        recurrence: recurrence,
+        priority: priority,
+        labels: labels,
+        checklist: checklist,
+        attachments: attachments,
+        links: links,
+        blockedByIds: blockedByIds,
+        relatedIds: relatedIds,
+        colorValue: colorValue,
+        clearColor: clearColor,
+      );
+    } catch (_) {
+      _persisted = false;
+      rethrow;
+    }
   }
 
+  /// 保存并关闭。与遮罩关闭共用 [_persist]：空标题回退原标题；空白新建卡则丢弃。
+  /// 不再因标题框为空静默 return（新建空白卡点保存会表现为「有时关不掉」）。
   Future<void> _save() async {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) return;
-    await _persist();
+    try {
+      await _persist();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('保存失败：$error')),
+      );
+      return;
+    }
     if (mounted) Navigator.pop(context);
   }
 
