@@ -119,9 +119,19 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           customLabels: customLabels,
           themeId: themeId,
           surfaceOpacity: cardSurfaceOpacity,
-          // 延迟拖拽时关掉按下水波，避免「填充动画」误导成已可拖
-          suppressInk: !immediateDrag,
+          // 关掉按下水波/高亮：半透明卡面下 ink 会像「下方多一层」；
+          // 延迟拖拽时也避免「填充动画」误导成已可拖
+          suppressInk: true,
           onOpenDetail: _openDetail,
+        );
+
+        // 拖起后原位只保留占位尺寸，不绘制幽灵卡面，避免与反馈层叠成两层
+        final childWhenDragging = Visibility(
+          visible: false,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
+          child: content,
         );
 
         Offset anchorStrategy(
@@ -146,10 +156,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
                 onDragStarted: _onDragStarted,
                 onDragEnd: (_) => _onDragEnded(),
                 feedback: feedback,
-                childWhenDragging: Opacity(
-                  opacity: 0.25,
-                  child: content,
-                ),
+                childWhenDragging: childWhenDragging,
                 child: content,
               )
             : CardLongPressDraggable<KanbanCard>(
@@ -160,10 +167,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
                 onDragStarted: _onDragStarted,
                 onDragEnd: (_) => _onDragEnded(),
                 feedback: feedback,
-                childWhenDragging: Opacity(
-                  opacity: 0.25,
-                  child: content,
-                ),
+                childWhenDragging: childWhenDragging,
                 child: content,
               );
 
@@ -241,7 +245,9 @@ class _CardContent extends StatelessWidget {
           : const EdgeInsets.only(bottom: 8),
       color: cardBackground,
       surfaceTintColor: Colors.transparent,
-      elevation: 0,
+      // 仅反馈层抬升阴影；列表态 elevation 0，避免本体再垫一层阴影板
+      elevation: dragging ? 6 : 0,
+      shadowColor: Colors.black54,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: cardOutline,
@@ -252,6 +258,8 @@ class _CardContent extends StatelessWidget {
         splashFactory: suppressInk ? NoSplash.splashFactory : null,
         highlightColor: suppressInk ? Colors.transparent : null,
         splashColor: suppressInk ? Colors.transparent : null,
+        hoverColor: suppressInk ? Colors.transparent : null,
+        focusColor: suppressInk ? Colors.transparent : null,
         onTap: dragging || columnId == null || onOpenDetail == null
             ? null
             : onOpenDetail,
