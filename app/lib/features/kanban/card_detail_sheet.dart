@@ -14,6 +14,7 @@ import '../attachments/card_attachment_reorder_grid.dart';
 import '../attachments/card_attachment_viewer.dart';
 import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
+import 'description_expand_dialog.dart';
 import 'kanban_labels.dart';
 
 /// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
@@ -60,6 +61,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   bool _persisted = false;
   bool _skipPersist = false;
   bool _previewMarkdown = false;
+  /// 备注全屏放大打开时，详情页暂不挂载备注 TextField，避免双绑定同一 controller。
+  bool _descriptionExpanded = false;
 
   Iterable<TextEditingController> get _textControllers =>
       [_titleController, _descController, _checklistInput];
@@ -290,6 +293,18 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void _closeWithoutPersist() {
     _skipPersist = true;
     Navigator.pop(context);
+  }
+
+  Future<void> _openDescriptionExpanded() async {
+    _safeSetState(() => _descriptionExpanded = true);
+    await showDescriptionExpandDialog(
+      context: context,
+      controller: _descController,
+      initialPreview: _previewMarkdown,
+    );
+    if (mounted) {
+      _safeSetState(() => _descriptionExpanded = false);
+    }
   }
 
   Future<void> _pickDueDate() async {
@@ -854,6 +869,12 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           children: [
                             Text('备注', style: theme.textTheme.titleSmall),
                             const Spacer(),
+                            IconButton(
+                              tooltip: '放大编辑',
+                              onPressed: _openDescriptionExpanded,
+                              icon: const Icon(Icons.open_in_full, size: 20),
+                              visualDensity: VisualDensity.compact,
+                            ),
                             TextButton(
                               onPressed: () => _safeSetState(
                                 () => _previewMarkdown = !_previewMarkdown,
@@ -885,6 +906,24 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                   mode: LaunchMode.externalApplication,
                                 );
                               },
+                            ),
+                          )
+                        else if (_descriptionExpanded)
+                          Container(
+                            width: double.infinity,
+                            constraints: const BoxConstraints(minHeight: 120),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: theme.colorScheme.outlineVariant,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '正在放大编辑…',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           )
                         else
