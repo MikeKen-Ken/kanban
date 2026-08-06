@@ -423,10 +423,10 @@ class KanbanCard {
   /// 外链书签
   final List<CardLink> links;
 
-  /// 阻塞本卡的卡片 id（依赖）
+  /// 阻塞本卡的前置卡片 id（依赖）；前置未完成时本卡应视为被阻塞
   final List<String> blockedByIds;
 
-  /// 相关卡片 id（双向链接的本侧引用）
+  /// 关联卡片 id（无先后关系，仅追溯/导航；写入本侧，不会自动回链）
   final List<String> relatedIds;
 
   /// 卡片背景色 ARGB；null 使用默认 Card 样式

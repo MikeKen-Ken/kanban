@@ -1172,7 +1172,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         ),
                         if (_links.isEmpty)
                           Text(
-                            '可添加网页书签',
+                            '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -1206,14 +1206,29 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           ],
                         const SizedBox(height: 20),
                         Text('依赖与关联', style: theme.textTheme.titleSmall),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
                         Text(
-                          '阻塞本卡',
+                          '连接本看板内的其他卡片。与上方「链接」网页书签不同。',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '依赖（阻塞本卡）',
                           style: theme.textTheme.labelLarge,
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         ..._relationTiles(
                           ids: _blockedByIds,
-                          emptyText: '暂无阻塞依赖',
+                          emptyText: '暂无依赖',
                           onRemove: (id) => _safeSetState(
                             () => _blockedByIds =
                                 _blockedByIds.where((item) => item != id).toList(),
@@ -1223,7 +1238,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           alignment: Alignment.centerLeft,
                           child: TextButton.icon(
                             onPressed: () => _pickRelatedCard(
-                              title: '选择阻塞本卡的任务',
+                              title: '选择阻塞本卡的前置任务',
                               onPicked: (id) {
                                 if (_blockedByIds.contains(id) ||
                                     id == widget.card.id) {
@@ -1235,17 +1250,25 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               },
                             ),
                             icon: const Icon(Icons.add, size: 18),
-                            label: const Text('添加阻塞依赖'),
+                            label: const Text('添加依赖'),
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '相关卡片',
+                          '关联（相关卡片）',
                           style: theme.textTheme.labelLarge,
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '无先后关系，仅便于跳转与追溯；不会阻塞本卡。',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         ..._relationTiles(
                           ids: _relatedIds,
-                          emptyText: '暂无相关卡片',
+                          emptyText: '暂无关联',
                           onRemove: (id) => _safeSetState(
                             () => _relatedIds =
                                 _relatedIds.where((item) => item != id).toList(),
@@ -1255,7 +1278,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           alignment: Alignment.centerLeft,
                           child: TextButton.icon(
                             onPressed: () => _pickRelatedCard(
-                              title: '选择相关卡片',
+                              title: '选择关联卡片',
                               onPicked: (id) {
                                 if (_relatedIds.contains(id) ||
                                     id == widget.card.id) {
@@ -1267,7 +1290,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               },
                             ),
                             icon: const Icon(Icons.add, size: 18),
-                            label: const Text('添加相关卡片'),
+                            label: const Text('添加关联'),
                           ),
                         ),
                         const SizedBox(height: 20),
