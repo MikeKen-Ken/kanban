@@ -116,6 +116,11 @@ void main() {
       title: '任务',
       source: source,
       labelIds: const ['urgent'],
+      blockedByIds: const ['b1'],
+      relatedIds: const ['r1'],
+      links: const [
+        {'id': 'l1', 'url': 'https://example.com', 'title': '文档'},
+      ],
     );
 
     final json = reference.toJson();
@@ -129,6 +134,11 @@ void main() {
     expect(restored.projectName, '工作');
     expect(restored.columnName, '待办');
     expect(restored.labelIds, ['urgent']);
+    expect(restored.blockedByIds, ['b1']);
+    expect(restored.relatedIds, ['r1']);
+    expect(restored.links, [
+      {'id': 'l1', 'url': 'https://example.com', 'title': '文档'},
+    ]);
     expect(restored.source, isNull);
   });
 }

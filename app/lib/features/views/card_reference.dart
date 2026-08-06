@@ -19,6 +19,9 @@ class CardReference {
     this.createdAt = 0,
     this.updatedAt = 0,
     this.order = 0,
+    this.blockedByIds = const [],
+    this.relatedIds = const [],
+    this.links = const [],
     this.source,
   });
 
@@ -38,6 +41,11 @@ class CardReference {
   final int createdAt;
   final int updatedAt;
   final int order;
+  final List<String> blockedByIds;
+  final List<String> relatedIds;
+
+  /// 外链摘要：`{id, url, title?}`
+  final List<Map<String, dynamic>> links;
   final Object? source;
 
   Map<String, dynamic> toJson() => {
@@ -57,6 +65,9 @@ class CardReference {
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'order': order,
+        if (blockedByIds.isNotEmpty) 'blockedByIds': blockedByIds,
+        if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
+        if (links.isNotEmpty) 'links': links,
       };
 
   factory CardReference.fromJson(Map<String, dynamic> json) {
@@ -78,6 +89,9 @@ class CardReference {
       createdAt: _int(json['createdAt']),
       updatedAt: _int(json['updatedAt'] ?? json['createdAt']),
       order: _int(json['order']),
+      blockedByIds: _strings(json['blockedByIds']),
+      relatedIds: _strings(json['relatedIds']),
+      links: _linkMaps(json['links']),
     );
   }
 }
@@ -94,3 +108,20 @@ List<String> _strings(Object? value) {
 int _int(Object? value) => value is num ? value.toInt() : 0;
 
 int? _nullableInt(Object? value) => value is num ? value.toInt() : null;
+
+List<Map<String, dynamic>> _linkMaps(Object? value) {
+  if (value is! List) return const [];
+  final links = <Map<String, dynamic>>[];
+  for (final entry in value) {
+    if (entry is! Map) continue;
+    final map = Map<String, dynamic>.from(entry);
+    final url = _string(map['url']);
+    if (url.isEmpty) continue;
+    links.add({
+      'id': _string(map['id']),
+      'url': url,
+      if (_string(map['title']).isNotEmpty) 'title': _string(map['title']),
+    });
+  }
+  return links;
+}

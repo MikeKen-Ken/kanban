@@ -1,6 +1,7 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import 'mcp_tools_automations.dart';
 import 'mcp_tools_cards.dart';
 import 'mcp_tools_labels.dart';
 import 'mcp_tools_productivity.dart';
@@ -14,4 +15,5 @@ void registerKanbanMcpTools(McpServer server, BoardController controller) {
   registerKanbanMcpQueryTools(server, controller);
   registerKanbanMcpLabelTools(server, controller);
   registerKanbanMcpProductivityTools(server, controller);
+  registerKanbanMcpAutomationTools(server, controller);
 }

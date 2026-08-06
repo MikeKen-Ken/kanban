@@ -40,6 +40,16 @@ List<CardReference> buildCardReferences({
             createdAt: card.createdAt,
             updatedAt: card.updatedAt,
             order: card.order,
+            blockedByIds: [...card.blockedByIds],
+            relatedIds: [...card.relatedIds],
+            links: [
+              for (final link in card.sortedLinks)
+                {
+                  'id': link.id,
+                  'url': link.url,
+                  if (link.title.isNotEmpty) 'title': link.title,
+                },
+            ],
             source: card,
           ),
         );
