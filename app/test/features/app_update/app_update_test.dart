@@ -238,14 +238,102 @@ void main() {
     });
   });
 
-  group('windowsUpdaterScript 短路径覆盖', () {
+  group('windowsUpdaterScript', () {
+    test('脚本主体保持 ASCII，避免 PS 5.1 解析中文失败', () {
+      final nonAscii = windowsUpdaterScript.runes
+          .where((r) => r > 0x7F)
+          .toList(growable: false);
+      expect(
+        nonAscii,
+        isEmpty,
+        reason: 'updater .ps1 含非 ASCII 时，Windows PowerShell 5.1 可能 ParserError',
+      );
+    });
+
+    test('UTF-8 无 BOM 写入后仍能覆盖安装目录并成功退出', () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+
+      final temp = Directory.systemTemp.path;
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final installDir = Directory(p.join(temp, 'kanban_upd_install_$stamp'));
+      final sourceDir = Directory(p.join(temp, 'kanban_upd_source_$stamp'));
+      final scriptFile = File(p.join(temp, 'kanban_upd_script_$stamp.ps1'));
+      final logFile = File(p.join(temp, 'kanban_updater_1.log'));
+
+      await installDir.create(recursive: true);
+      await sourceDir.create(recursive: true);
+      await Directory(p.join(sourceDir.path, 'data')).create();
+
+      final oldExe = File(p.join(installDir.path, 'kanban.exe'));
+      final newExe = File(p.join(sourceDir.path, 'kanban.exe'));
+      await oldExe.writeAsString('OLD');
+      await newExe.writeAsString('NEW');
+      await File(p.join(sourceDir.path, 'data', 'app.so')).writeAsString('so');
+      // 模拟 Dart writeAsString 默认：UTF-8 无 BOM
+      await scriptFile.writeAsString(windowsUpdaterScript, flush: true);
+
+      try {
+        final result = await Process.run(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            scriptFile.path,
+            '-InstallDir',
+            installDir.path,
+            '-SourceDir',
+            sourceDir.path,
+            '-ExePath',
+            oldExe.path,
+            '-TargetPid',
+            '1',
+            '-SkipLaunch',
+          ],
+        );
+        expect(
+          result.exitCode,
+          0,
+          reason: 'stdout=${result.stdout}\nstderr=${result.stderr}',
+        );
+
+        expect(await oldExe.readAsString(), 'NEW');
+        expect(
+          await File(p.join(installDir.path, 'data', 'app.so')).readAsString(),
+          'so',
+        );
+
+        final topNames = installDir
+            .listSync()
+            .map((e) => p.basename(e.path).toLowerCase())
+            .toSet();
+        expect(topNames, equals({'kanban.exe', 'data'}));
+      } finally {
+        if (await installDir.exists()) {
+          await installDir.delete(recursive: true);
+        }
+        if (await sourceDir.exists()) {
+          await sourceDir.delete(recursive: true);
+        }
+        if (await scriptFile.exists()) {
+          await scriptFile.delete();
+        }
+        if (await logFile.exists()) {
+          await logFile.delete();
+        }
+      }
+    });
+
     test('TEMP 为 8.3 短路径时仍覆盖安装目录根文件', () async {
       if (!Platform.isWindows) {
         return;
       }
 
       final temp = Directory.systemTemp.path;
-      // 本机常见：TEMP 已是 KEN-NA~1 形式；若无波浪号则无法复现该 bug，直接跳过。
+      // 本机常见：TEMP 已是 ADMINI~1 形式；若无波浪号则无法复现该 bug，直接跳过。
       if (!temp.contains('~')) {
         return;
       }
@@ -317,6 +405,30 @@ void main() {
         }
         if (await logFile.exists()) {
           await logFile.delete();
+        }
+      }
+    });
+  });
+
+  group('resolveWindowsPayloadRoot', () {
+    test('单层嵌套目录时定位到含 exe 的根', () async {
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final root = Directory(
+        p.join(Directory.systemTemp.path, 'kanban_payload_$stamp'),
+      );
+      final nested = Directory(p.join(root.path, 'Release'));
+      await nested.create(recursive: true);
+      await File(p.join(nested.path, 'kanban.exe')).writeAsString('x');
+
+      try {
+        final resolved = await AppUpdateInstaller.resolveWindowsPayloadRoot(
+          root,
+          exeFileName: 'kanban.exe',
+        );
+        expect(p.normalize(resolved.path), p.normalize(nested.path));
+      } finally {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
         }
       }
     });

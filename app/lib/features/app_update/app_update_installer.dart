@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
@@ -19,7 +20,7 @@ class AppUpdateInstaller {
     return Platform.isAndroid || Platform.isWindows;
   }
 
-  /// 将 [zipFile] 解压到临时目录并返回该目录。
+  /// 将 [zipFile] 解压到临时目录并返回有效载荷根目录。
   Future<Directory> extractZip(File zipFile) async {
     final tempRoot = await getTemporaryDirectory();
     final out = Directory(
@@ -33,7 +34,35 @@ class AppUpdateInstaller {
     }
     await out.create(recursive: true);
     await extractFileToDisk(zipFile.path, out.path);
-    return out;
+    return resolveWindowsPayloadRoot(out);
+  }
+
+  /// 若 zip 多包了一层目录，定位含可执行文件的实际根目录。
+  @visibleForTesting
+  static Future<Directory> resolveWindowsPayloadRoot(
+    Directory extracted, {
+    String? exeFileName,
+  }) async {
+    final exeName = exeFileName ??
+        (Platform.isWindows
+            ? p.basename(Platform.resolvedExecutable)
+            : 'kanban.exe');
+    final direct = File(p.join(extracted.path, exeName));
+    if (await direct.exists()) return extracted;
+
+    final children = await extracted.list().toList();
+    final dirs = children.whereType<Directory>().toList();
+    if (dirs.length == 1) {
+      final nested = File(p.join(dirs.first.path, exeName));
+      if (await nested.exists()) return dirs.first;
+    }
+
+    // 回退：任意一层子目录中找到同名 exe
+    for (final dir in dirs) {
+      final nested = File(p.join(dir.path, exeName));
+      if (await nested.exists()) return dir;
+    }
+    return extracted;
   }
 
   Future<bool> canRequestPackageInstalls() async {
@@ -69,17 +98,28 @@ class AppUpdateInstaller {
     }
     final exePath = Platform.resolvedExecutable;
     final installDir = File(exePath).parent.path;
+    final payloadDir = await resolveWindowsPayloadRoot(extractedDir);
     final scriptFile = File(
       p.join(
         Directory.systemTemp.path,
         'kanban_updater_$pid.ps1',
       ),
     );
-    await scriptFile.writeAsString(windowsUpdaterScript, flush: true);
+    // UTF-8 BOM：降低 PS 5.1 误用系统 ANSI 码页的风险；脚本本身保持 ASCII。
+    await scriptFile.writeAsBytes(
+      utf8.encode('\uFEFF$windowsUpdaterScript'),
+      flush: true,
+    );
 
+    // 经 cmd start 拉起，避免随本进程 Job 对象一起被结束。
     await Process.start(
-      'powershell.exe',
+      'cmd.exe',
       [
+        '/c',
+        'start',
+        '',
+        '/min',
+        'powershell.exe',
         '-NoProfile',
         '-ExecutionPolicy',
         'Bypass',
@@ -90,7 +130,7 @@ class AppUpdateInstaller {
         '-InstallDir',
         installDir,
         '-SourceDir',
-        extractedDir.path,
+        payloadDir.path,
         '-ExePath',
         exePath,
         '-TargetPid',
@@ -101,12 +141,15 @@ class AppUpdateInstaller {
     );
 
     // 给 updater 一点启动时间，再退出以释放文件锁
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
     exit(0);
   }
 }
 
 /// Windows 自更新脚本（供单测在短路径 TEMP 下复现覆盖逻辑）。
+///
+/// **必须保持 ASCII**：Windows PowerShell 5.1 在 UTF-8（无/有 BOM）下解析含中文的
+/// `.ps1` 可能直接 ParserError，导致不覆盖、不重启，且用户手动启动仍是旧版。
 ///
 /// 安装目录 / 可执行文件路径均由调用方传入（当前进程的 exe 所在目录），
 /// 不绑定固定盘符或用户目录。
@@ -125,7 +168,6 @@ function Write-Log([string]$msg) {
   $line = ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg)
   Add-Content -LiteralPath $log -Value $line -Encoding UTF8
 }
-# 统一成同一套规范路径，避免 8.3 短路径与长路径混用导致相对路径算错。
 function Get-CanonicalPath([string]$Path) {
   return (Get-Item -LiteralPath $Path).FullName.TrimEnd('\')
 }
@@ -133,51 +175,72 @@ function Get-RelativePathFrom([string]$Root, [string]$FullPath) {
   $rootUri = New-Object System.Uri (($Root.TrimEnd('\') + '\'))
   $fileUri = New-Object System.Uri $FullPath
   if (-not $rootUri.IsBaseOf($fileUri)) {
-    throw "文件不在源目录内: $FullPath"
+    throw "File not under source dir: $FullPath"
   }
   return [Uri]::UnescapeDataString($rootUri.MakeRelativeUri($fileUri).ToString()).Replace('/', '\')
 }
+function Copy-FileWithRetry([string]$From, [string]$To) {
+  $attempt = 0
+  while ($true) {
+    try {
+      Copy-Item -LiteralPath $From -Destination $To -Force
+      return
+    } catch {
+      $attempt++
+      if ($attempt -ge 10) { throw }
+      Start-Sleep -Milliseconds 500
+    }
+  }
+}
 try {
-  Write-Log "等待进程退出 PID=$TargetPid"
+  Write-Log "Waiting for process exit PID=$TargetPid"
   $deadline = (Get-Date).AddSeconds(90)
   while ((Get-Date) -lt $deadline) {
     $proc = Get-Process -Id $TargetPid -ErrorAction SilentlyContinue
     if (-not $proc) { break }
     Start-Sleep -Milliseconds 400
   }
-  Start-Sleep -Seconds 1
+  Start-Sleep -Seconds 2
   if (-not (Test-Path -LiteralPath $SourceDir)) {
-    throw "源目录不存在: $SourceDir"
+    throw "Source dir missing: $SourceDir"
   }
   $InstallDir = Get-CanonicalPath $InstallDir
   $SourceDir = Get-CanonicalPath $SourceDir
   $ExePath = (Get-Item -LiteralPath $ExePath).FullName
-  Write-Log "规范化 InstallDir=$InstallDir"
-  Write-Log "规范化 SourceDir=$SourceDir"
-  Write-Log "规范化 ExePath=$ExePath"
-  Write-Log "开始复制到 $InstallDir"
+  Write-Log "InstallDir=$InstallDir"
+  Write-Log "SourceDir=$SourceDir"
+  Write-Log "ExePath=$ExePath"
+  Write-Log "Copy start"
+  $copied = 0
   Get-ChildItem -LiteralPath $SourceDir -Recurse -File | ForEach-Object {
     $rel = Get-RelativePathFrom $SourceDir $_.FullName
     if ([string]::IsNullOrWhiteSpace($rel)) { return }
-    # 不覆盖本机旁路文件（若有）
     if ($rel -ieq 'settings.json') { return }
     $dest = Join-Path $InstallDir $rel
     $destParent = Split-Path -Parent $dest
     if (-not (Test-Path -LiteralPath $destParent)) {
       New-Item -ItemType Directory -Path $destParent -Force | Out-Null
     }
-    Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
+    Copy-FileWithRetry $_.FullName $dest
+    $copied++
   }
+  if ($copied -le 0) {
+    throw "No files copied from source dir"
+  }
+  if (-not (Test-Path -LiteralPath $ExePath)) {
+    throw "Exe missing after copy: $ExePath"
+  }
+  Write-Log "Copied $copied files"
   if (-not $SkipLaunch) {
-    Write-Log "启动 $ExePath (WorkingDirectory=$InstallDir)"
+    Write-Log "Launch $ExePath cwd=$InstallDir"
     Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir
   } else {
-    Write-Log "SkipLaunch：跳过启动"
+    Write-Log "SkipLaunch"
   }
-  Write-Log "清理临时文件"
+  Write-Log "Cleanup"
   Remove-Item -LiteralPath $SourceDir -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
-  Write-Log ("更新失败: " + $_.Exception.Message)
+  Write-Log ("Update failed: " + $_.Exception.Message)
   exit 1
 } finally {
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
