@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +69,27 @@ void main() {
     });
     expect(controller.activeProjectId, projectA);
     expect(controller.uiActiveProjectId, projectA);
+  });
+
+  test('MCP 项目作用域不会向界面暴露临时项目状态', () async {
+    final boardA = controller.board;
+    final entered = Completer<void>();
+    final release = Completer<void>();
+
+    final mutation = controller.runOnProject(projectB, () async {
+      expect(controller.activeProjectId, projectB);
+      expect(controller.board?.id, projectB);
+      entered.complete();
+      await release.future;
+    });
+
+    await entered.future;
+    expect(controller.activeProjectId, projectA);
+    expect(controller.uiActiveProjectId, projectA);
+    expect(controller.board, same(boardA));
+
+    release.complete();
+    await mutation;
   });
 
   test('按 cardId 定位项目，不依赖当前激活项目', () async {

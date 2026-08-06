@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+int _atomicWriteSequence = 0;
+
 /// 判断字节是否像 JSON 对象/数组（排除全 0、空文件、明显二进制）
 bool looksLikeJsonBytes(List<int> bytes) {
   if (bytes.isEmpty) return false;
@@ -45,6 +47,22 @@ bool looksLikeJsonBytes(List<int> bytes) {
 
 /// 安全解析本地 JSON 文件；损坏时返回 null
 Future<Map<String, dynamic>?> readJsonFile(File file) async {
+  final primary = await _readJsonCandidate(file);
+  if (primary != null) return primary;
+
+  final backup = File('${file.path}.bak');
+  final recovered = await _readJsonCandidate(backup);
+  if (recovered == null) return null;
+
+  // 上次替换若在删除/改名窗口中断，恢复最后一个完整版本。
+  if (await file.exists()) {
+    await file.delete();
+  }
+  await backup.rename(file.path);
+  return recovered;
+}
+
+Future<Map<String, dynamic>?> _readJsonCandidate(File file) async {
   if (!await file.exists()) return null;
   final bytes = await file.readAsBytes();
   if (!looksLikeJsonBytes(bytes)) return null;
@@ -64,14 +82,33 @@ Future<void> writeJsonFileAtomic(File file, Object data) async {
     await parent.create(recursive: true);
   }
   final content = const JsonEncoder.withIndent('  ').convert(data);
-  final tmp = File('${file.path}.tmp');
+  final nonce =
+      '${DateTime.now().microsecondsSinceEpoch}.$pid.${_atomicWriteSequence++}';
+  final tmp = File('${file.path}.tmp.$nonce');
+  final backup = File('${file.path}.bak');
   await tmp.writeAsString(content, flush: true);
 
-  // note: Windows 上目标存在时 rename 可能失败，先删再改名
-  if (await file.exists()) {
-    await file.delete();
+  try {
+    if (await file.exists()) {
+      if (await backup.exists()) {
+        await backup.delete();
+      }
+      await file.rename(backup.path);
+    }
+    await tmp.rename(file.path);
+    if (await backup.exists()) {
+      await backup.delete();
+    }
+  } catch (_) {
+    if (!await file.exists() && await backup.exists()) {
+      await backup.rename(file.path);
+    }
+    rethrow;
+  } finally {
+    if (await tmp.exists()) {
+      await tmp.delete();
+    }
   }
-  await tmp.rename(file.path);
 }
 
 /// 将远端/任意字节解析为 JSON Map；非 JSON 时返回 null

@@ -13,6 +13,8 @@ class KanbanPaths {
   static const trashFileName = 'trash.json';
   static const appTrashFileName = 'app_trash.json';
   static const sharedContentFileName = 'shared_content.json';
+  static const backupsDirName = 'backups';
+  static const backupFileExtension = '.kanban-backup';
 
   /// 远端根目录；兼容旧配置 `/KanbanApp/board.json`
   static String remoteBaseDir(String remotePath) {
@@ -108,6 +110,18 @@ class KanbanPaths {
 
   static String remoteSharedContentPath(String baseDir) =>
       '$baseDir/$sharedContentFileName';
+
+  static String remoteBackupsDir(String baseDir) =>
+      '$baseDir/$backupsDirName';
+
+  static String remoteBackupDir(String baseDir, String backupId) =>
+      '${remoteBackupsDir(baseDir)}/$backupId';
+
+  static String remoteBackupArchivePath(String baseDir, String backupId) =>
+      '${remoteBackupDir(baseDir, backupId)}/archive$backupFileExtension';
+
+  static String remoteBackupMarkerPath(String baseDir, String backupId) =>
+      '${remoteBackupDir(baseDir, backupId)}/complete.json';
 
   static String? columnIdFromRemoteFile(String filePath) {
     final name = filePath.split('/').last;

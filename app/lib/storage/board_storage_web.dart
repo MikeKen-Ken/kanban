@@ -139,6 +139,19 @@ class BoardStorageWeb implements BoardStorage {
   }
 
   @override
+  Future<void> deleteProjectData(String projectId) async {
+    final columnIds =
+        _prefs.getStringList(_projectColumnIndexKey(projectId)) ?? const [];
+    for (final columnId in columnIds) {
+      await _prefs.remove(_projectColumnKey(projectId, columnId));
+    }
+    await _prefs.remove(_projectColumnIndexKey(projectId));
+    await _prefs.remove(_projectMetaKey(projectId));
+    await _prefs.remove(_projectSettingsKey(projectId));
+    await _prefs.remove(_projectTrashKey(projectId));
+  }
+
+  @override
   Future<TrashBin> loadProjectTrash(String projectId) async {
     final raw = _prefs.getString(_projectTrashKey(projectId));
     if (raw == null) return TrashBin.empty;

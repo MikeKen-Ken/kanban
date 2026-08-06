@@ -137,6 +137,7 @@ class BoardRepository {
   static const _activeProjectKey = 'kanban_active_project_id';
   static const _webdavKey = 'webdav_config';
   static const _labelTrashKey = 'kanban_label_trash';
+  static const _pendingRestoreBackupKey = 'kanban_pending_restore_backup_id';
 
   BoardStorage get storage => _storage;
 
@@ -210,6 +211,15 @@ class BoardRepository {
   Future<void> saveActiveProjectId(String projectId) async {
     await _prefs.setString(_activeProjectKey, projectId);
   }
+
+  String? loadPendingRestoreBackupId() =>
+      _prefs.getString(_pendingRestoreBackupKey);
+
+  Future<void> savePendingRestoreBackupId(String backupId) =>
+      _prefs.setString(_pendingRestoreBackupKey, backupId);
+
+  Future<void> clearPendingRestoreBackupId() =>
+      _prefs.remove(_pendingRestoreBackupKey);
 
   Future<KanbanBoard> loadBoard(String projectId) =>
       _storage.loadBoard(projectId);

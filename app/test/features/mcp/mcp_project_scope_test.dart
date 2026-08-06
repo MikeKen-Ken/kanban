@@ -107,4 +107,16 @@ void main() {
     await controller.switchProject(projectA);
     expect(controller.activeProjectId, projectA);
   });
+
+  test('MCP 创建项目数据不会切换界面当前项目', () async {
+    final beforeBoard = controller.board;
+
+    final projectC = await controller.createProjectData('项目C');
+
+    expect(controller.activeProjectId, projectA);
+    expect(controller.uiActiveProjectId, projectA);
+    expect(controller.board, same(beforeBoard));
+    expect(controller.projects.any((project) => project.id == projectC), isTrue);
+    expect((await controller.loadBoardSnapshot(projectC))?.title, '项目C');
+  });
 }

@@ -28,4 +28,20 @@ void main() {
     expect(json?['hello'], '世界');
     expect(json?['n'], 1);
   });
+
+  test('正式文件替换中断时从完整备份恢复', () async {
+    final dir = await Directory.systemTemp.createTemp('kanban_json_recovery_');
+    addTearDown(() async {
+      if (await dir.exists()) await dir.delete(recursive: true);
+    });
+    final file = File('${dir.path}/sample.json');
+    final backup = File('${file.path}.bak');
+    await backup.writeAsString('{"revision":7}', flush: true);
+
+    final json = await readJsonFile(file);
+
+    expect(json?['revision'], 7);
+    expect(await file.exists(), isTrue);
+    expect(await backup.exists(), isFalse);
+  });
 }

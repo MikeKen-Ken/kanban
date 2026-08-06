@@ -5,6 +5,7 @@ import '../controllers/board_controller.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/app_update/app_update_screen.dart';
 import '../features/import_export/backup_file_picker.dart';
+import '../features/import_export/backup_history_screen.dart';
 import '../features/labels/label_management_screen.dart';
 import '../features/mcp/kanban_mcp_host.dart';
 import '../features/mcp/mcp_constants.dart';
@@ -65,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('恢复完整备份？'),
-        content: const Text('当前工作区会被备份内容替换。建议先导出当前数据。'),
+        content: const Text('当前工作区会被备份内容替换，恢复前将自动创建时间点备份。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -232,6 +233,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: '导入与导出',
             subtitle: '包含全部项目、设置、共享内容和附件',
             children: [
+              if (context.read<BoardController>().backupHistorySupported)
+                SettingsNavigationTile(
+                  icon: Icons.history_toggle_off,
+                  title: '时间点备份',
+                  subtitle: '每 10 分钟自动备份 · 保留最近 7 天',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const BackupHistoryScreen(),
+                      ),
+                    );
+                  },
+                ),
               SettingsNavigationTile(
                 icon: Icons.file_upload_outlined,
                 title: '导出完整备份',

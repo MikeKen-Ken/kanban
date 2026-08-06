@@ -83,4 +83,41 @@ void main() {
 
     service.dispose();
   });
+
+  test('拉取合并整个过程进入工作区事务闸门', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final gate = Completer<ProjectWorkspaceSnapshot>();
+    var transactionActive = false;
+    var loadedInsideTransaction = false;
+    final service = WebDavSyncService(
+      loadConfig: () async => _configured(),
+      loadWorkspace: () {
+        loadedInsideTransaction = transactionActive;
+        return gate.future;
+      },
+      saveWorkspace: (_) async {},
+      syncBaseStore: SyncBaseStore(prefs),
+      runWorkspaceTransaction: <T>(action) async {
+        transactionActive = true;
+        try {
+          return await action();
+        } finally {
+          transactionActive = false;
+        }
+      },
+    );
+
+    final pull = service.pullAndMerge(userInitiated: true);
+    for (var i = 0; i < 50 && !loadedInsideTransaction; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(loadedInsideTransaction, isTrue);
+    expect(transactionActive, isTrue);
+
+    service.cancelSync();
+    gate.complete(_emptyWorkspace());
+    await pull;
+    expect(transactionActive, isFalse);
+    service.dispose();
+  });
 }

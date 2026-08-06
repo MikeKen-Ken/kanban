@@ -97,4 +97,39 @@ void main() {
     });
     expect(controller.canUndo, isFalse);
   });
+
+  test('多个 MCP 与界面连续并发写入后磁盘项目仍保持隔离', () async {
+    for (var i = 0; i < 50; i++) {
+      await Future.wait([
+        controller.addCard('todo', 'UI-A-$i'),
+        controller.runOnProject(projectB, () => controller.addCard(
+              'todo',
+              'MCP-B-$i',
+            )),
+      ]);
+    }
+
+    await Future.wait([
+      controller.renameProject(projectA, '项目A-最终'),
+      controller.runOnProject(
+        projectB,
+        () => controller.renameProject(projectB, '项目B-最终'),
+      ),
+    ]);
+
+    final boardA = await controller.loadBoardSnapshot(projectA);
+    final boardB = await controller.loadBoardSnapshot(projectB);
+    final titlesA =
+        boardA!.columns.expand((column) => column.cards).map((card) => card.title);
+    final titlesB =
+        boardB!.columns.expand((column) => column.cards).map((card) => card.title);
+
+    expect(boardA.title, '项目A-最终');
+    expect(boardB.title, '项目B-最终');
+    expect(titlesA.where((title) => title.startsWith('UI-A-')).length, 50);
+    expect(titlesA.any((title) => title.startsWith('MCP-B-')), isFalse);
+    expect(titlesB.where((title) => title.startsWith('MCP-B-')).length, 50);
+    expect(titlesB.any((title) => title.startsWith('UI-A-')), isFalse);
+    expect(controller.activeProjectId, projectA);
+  });
 }

@@ -34,7 +34,7 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'create_project',
-    description: '创建新看板项目并切换为当前项目',
+    description: '创建新看板项目但不切换界面当前项目',
     inputSchema: JsonSchema.object(
       properties: {
         'title': JsonSchema.string(description: '项目标题'),
@@ -49,10 +49,10 @@ void registerKanbanMcpStructureTools(
     callback: (args, extra) async {
       final title = mcpTrimmedString(args['title']) ?? '';
       if (title.isEmpty) return mcpErrorResult('title 不能为空');
-      await controller.createProject(title);
+      final projectId = await controller.createProjectData(title);
       return mcpJsonResult({
         'ok': true,
-        'projectId': controller.activeProjectId,
+        'projectId': projectId,
         'title': title,
       });
     },
@@ -100,7 +100,7 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'switch_project',
-    description: '切换当前激活项目',
+    description: '校验目标项目；不会切换界面，后续操作仍需显式传 projectId',
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(),
@@ -108,7 +108,7 @@ void registerKanbanMcpStructureTools(
       required: ['projectId'],
     ),
     annotations: const ToolAnnotations(
-      readOnlyHint: false,
+      readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: false,
     ),
@@ -117,10 +117,11 @@ void registerKanbanMcpStructureTools(
       if (projectId.isEmpty) return mcpErrorResult('projectId 不能为空');
       final switchError = await ensureMcpProject(controller, projectId);
       if (switchError != null) return switchError;
-      await controller.switchProject(projectId);
       return mcpJsonResult({
         'ok': true,
-        'projectId': controller.activeProjectId,
+        'projectId': projectId,
+        'uiActiveProjectId': controller.uiActiveProjectId,
+        'message': '界面未切换；请在后续工具调用中继续显式传入 projectId',
       });
     },
   );
@@ -142,8 +143,13 @@ void registerKanbanMcpStructureTools(
     callback: (args, extra) async {
       final projectId = mcpTrimmedString(args['projectId']) ?? '';
       if (projectId.isEmpty) return mcpErrorResult('projectId 不能为空');
-      final ok = await controller.deleteProject(projectId);
-      if (!ok) return mcpErrorResult('删除失败：项目不存在或无法删除');
+      if (projectId == controller.uiActiveProjectId) {
+        return mcpErrorResult('MCP 不能删除界面当前项目，请先由用户在界面切换项目');
+      }
+      final ok = await controller.deleteProjectInBackground(projectId);
+      if (!ok) {
+        return mcpErrorResult('删除失败：项目不存在、无法删除或已成为界面当前项目');
+      }
       return mcpJsonResult({'ok': true, 'projectId': projectId});
     },
   );

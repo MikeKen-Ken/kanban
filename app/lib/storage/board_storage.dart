@@ -21,6 +21,7 @@ abstract class BoardStorage {
 
   Future<ProjectSettings> loadProjectSettings(String projectId);
   Future<void> saveProjectSettings(String projectId, ProjectSettings settings);
+  Future<void> deleteProjectData(String projectId);
 
   Future<TrashBin> loadProjectTrash(String projectId);
   Future<void> saveProjectTrash(String projectId, TrashBin trash);

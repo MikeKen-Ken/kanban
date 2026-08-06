@@ -170,6 +170,15 @@ class BoardStorageIo implements BoardStorage {
   }
 
   @override
+  Future<void> deleteProjectData(String projectId) async {
+    final dir = await _dataDir();
+    final projectDir = KanbanPathsIo.projectDirectory(dir, projectId);
+    if (await projectDir.exists()) {
+      await projectDir.delete(recursive: true);
+    }
+  }
+
+  @override
   Future<TrashBin> loadProjectTrash(String projectId) async {
     final dir = await _dataDir();
     final file = KanbanPathsIo.projectTrashFile(dir, projectId);

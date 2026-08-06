@@ -5,24 +5,28 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 
 import '../sync_conflict/workspace_snapshot.dart';
+import '../trash/trash_models.dart';
 
 class BackupPackage {
   const BackupPackage({
     required this.workspace,
     this.attachments = const {},
+    this.labelTrash = const [],
   });
 
   final ProjectWorkspaceSnapshot workspace;
 
   /// 相对路径到附件字节，路径格式为 attachments/{projectId}/{fileName}
   final Map<String, Uint8List> attachments;
+  final List<TrashItem> labelTrash;
 }
 
 class BackupArchiveService {
   const BackupArchiveService();
 
-  static const formatVersion = 1;
+  static const formatVersion = 2;
   static const _workspacePath = 'workspace.json';
+  static const _labelTrashPath = 'label_trash.json';
   static const _manifestPath = 'backup_manifest.json';
 
   Uint8List encode(BackupPackage package, {DateTime? createdAt}) {
@@ -35,6 +39,16 @@ class BackupArchiveService {
     final checksums = <String, String>{
       _workspacePath: sha256.convert(workspaceBytes).toString(),
     };
+    final labelTrashBytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'items': package.labelTrash.map((item) => item.toJson()).toList(),
+        }),
+      ),
+    );
+    archive.addFile(ArchiveFile.bytes(_labelTrashPath, labelTrashBytes));
+    checksums[_labelTrashPath] =
+        sha256.convert(labelTrashBytes).toString();
     for (final entry in package.attachments.entries) {
       final path = _safeAttachmentPath(entry.key);
       archive.addFile(ArchiveFile.bytes(path, entry.value));
@@ -71,20 +85,32 @@ class BackupArchiveService {
     }
     final manifest =
         jsonDecode(utf8.decode(manifestBytes)) as Map<String, dynamic>;
-    if (manifest['version'] != formatVersion) {
+    final version = manifest['version'] as int?;
+    if (version != 1 && version != formatVersion) {
       throw FormatException('不支持的备份版本：${manifest['version']}');
     }
     final checksumsRaw = manifest['checksums'];
     if (checksumsRaw is! Map) {
       throw const FormatException('备份校验信息无效');
     }
+    final declaredPaths = <String>{};
     for (final entry in checksumsRaw.entries) {
       final path = _safeArchivePath(entry.key.toString());
+      declaredPaths.add(path);
       final content = files[path];
       if (content == null ||
           sha256.convert(content).toString() != entry.value.toString()) {
         throw FormatException('备份文件校验失败：$path');
       }
+    }
+    final actualPaths = files.keys.where((path) => path != _manifestPath).toSet();
+    if (actualPaths.length != declaredPaths.length ||
+        !actualPaths.containsAll(declaredPaths)) {
+      throw const FormatException('备份包含未声明文件或校验清单不完整');
+    }
+    if (version == formatVersion &&
+        !declaredPaths.contains(_labelTrashPath)) {
+      throw const FormatException('备份缺少标签回收站数据');
     }
 
     final workspaceBytes = files[_workspacePath];
@@ -95,6 +121,15 @@ class BackupArchiveService {
         jsonDecode(utf8.decode(workspaceBytes)) as Map<String, dynamic>;
     return BackupPackage(
       workspace: ProjectWorkspaceSnapshot.fromJson(workspaceJson),
+      labelTrash: version == 1
+          ? const []
+          : [
+              for (final item in ((jsonDecode(
+                        utf8.decode(files[_labelTrashPath]!),
+                      ) as Map<String, dynamic>)['items'] as List<dynamic>? ??
+                  const []))
+                TrashItem.fromJson(item as Map<String, dynamic>),
+            ],
       attachments: {
         for (final entry in files.entries)
           if (entry.key.startsWith('attachments/')) entry.key: entry.value,

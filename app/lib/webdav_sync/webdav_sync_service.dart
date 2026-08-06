@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:webdav_client/webdav_client.dart';
 
+import '../common/async_mutex.dart';
 import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/attachments/attachment_sync_plan.dart';
+import '../features/import_export/backup_history_store.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
 import '../features/shared_content/shared_content.dart';
@@ -20,6 +23,13 @@ import 'webdav_config.dart';
 export '../features/sync_conflict/workspace_snapshot.dart';
 
 enum SyncStatus { idle, syncing, success, error }
+
+typedef WorkspaceTransactionRunner = Future<T> Function<T>(
+  Future<T> Function() action,
+);
+
+Future<T> _runWorkspaceActionDirectly<T>(Future<T> Function() action) =>
+    action();
 
 /// 用户取消同步时抛出，用于协作式中止进行中的推送/拉取
 class SyncCancelledException implements Exception {
@@ -38,11 +48,14 @@ class WebDavSyncService {
         saveWorkspace,
     required SyncBaseStore syncBaseStore,
     AttachmentSyncAdapter? attachmentSync,
+    WorkspaceTransactionRunner? runWorkspaceTransaction,
   })  : _loadConfig = loadConfig,
         _loadWorkspace = loadWorkspace,
         _saveWorkspace = saveWorkspace,
         _syncBaseStore = syncBaseStore,
-        _attachmentSync = attachmentSync ?? AttachmentSyncAdapter(null);
+        _attachmentSync = attachmentSync ?? AttachmentSyncAdapter(null),
+        _runWorkspaceTransaction =
+            runWorkspaceTransaction ?? _runWorkspaceActionDirectly;
 
   final Future<WebDavConfig> Function() _loadConfig;
   final Future<ProjectWorkspaceSnapshot> Function() _loadWorkspace;
@@ -50,6 +63,8 @@ class WebDavSyncService {
       _saveWorkspace;
   final SyncBaseStore _syncBaseStore;
   final AttachmentSyncAdapter _attachmentSync;
+  final AsyncMutex _backupMutex = AsyncMutex();
+  final WorkspaceTransactionRunner _runWorkspaceTransaction;
 
   SyncStatus status = SyncStatus.idle;
   String? lastError;
@@ -694,7 +709,11 @@ class WebDavSyncService {
     }
   }
 
-  Future<void> pushNow({bool force = false}) async {
+  Future<void> pushNow({bool force = false}) {
+    return _runWorkspaceTransaction(() => _pushNow(force: force));
+  }
+
+  Future<void> _pushNow({bool force = false}) async {
     if (_syncInFlight) {
       _pushPending = true;
       _pushPendingForce = force || _pushPendingForce;
@@ -998,7 +1017,13 @@ class WebDavSyncService {
     return mergeWorkspaces(local: local, remote: remote, base: base);
   }
 
-  Future<void> pullAndMerge({bool userInitiated = false}) async {
+  Future<void> pullAndMerge({bool userInitiated = false}) {
+    return _runWorkspaceTransaction(
+      () => _pullAndMerge(userInitiated: userInitiated),
+    );
+  }
+
+  Future<void> _pullAndMerge({bool userInitiated = false}) async {
     if (_syncInFlight || _pushInFlight) {
       // 仅用户手动同步才排队；自动轮询重叠直接丢弃，避免失败后立即连环重试
       if (userInitiated) {
@@ -1154,8 +1179,173 @@ class WebDavSyncService {
       _scheduleAfterCooldown(run);
       return;
     }
-    run();
+    Timer.run(run);
   }
+
+  /// 将本地时间点备份镜像到 WebDAV；未启用 WebDAV 时仅保留本地副本。
+  Future<void> writeBackupSnapshot(
+    BackupSnapshotInfo snapshot,
+    Uint8List bytes,
+  ) {
+    return _backupMutex.guard(() async {
+      final config = await _loadConfig();
+      if (!config.enabled || !config.isConfigured) return;
+      final client = _client(config);
+      if (client == null) return;
+      final base = _remoteBase(config);
+      final backupDir = KanbanPaths.remoteBackupDir(base, snapshot.id);
+      final archivePath =
+          KanbanPaths.remoteBackupArchivePath(base, snapshot.id);
+      final markerPath = KanbanPaths.remoteBackupMarkerPath(base, snapshot.id);
+      await client.mkdirAll(backupDir);
+      try {
+        await client.remove(markerPath);
+      } catch (_) {
+        // 不存在完成标记时继续上传。
+      }
+      final temporary = io.File(
+        '${io.Directory.systemTemp.path}${io.Platform.pathSeparator}'
+        'kanban_backup_${snapshot.id}.bin',
+      );
+      try {
+        await temporary.writeAsBytes(bytes, flush: true);
+        await client.writeFromFile(temporary.path, archivePath);
+        final checksum = sha256.convert(bytes).toString();
+        final markerBytes = Uint8List.fromList(
+          utf8.encode(
+            jsonEncode({
+              'id': snapshot.id,
+              'createdAt': snapshot.createdAt.toUtc().toIso8601String(),
+              'sizeBytes': bytes.length,
+              'sha256': checksum,
+            }),
+          ),
+        );
+        // 完成标记最后写入；没有标记的中断上传不会出现在恢复列表。
+        await client.write(markerPath, markerBytes);
+      } finally {
+        if (await temporary.exists()) await temporary.delete();
+      }
+    });
+  }
+
+  Future<List<BackupSnapshotInfo>> listRemoteBackupSnapshots() {
+    return _backupMutex.guard(() async {
+      final config = await _loadConfig();
+      if (!config.enabled || !config.isConfigured) return const [];
+      final client = _client(config);
+      if (client == null) return const [];
+      final directory = KanbanPaths.remoteBackupsDir(_remoteBase(config));
+      final result = <BackupSnapshotInfo>[];
+      List<File> entries;
+      try {
+        entries = await client.readDir(directory);
+      } catch (error) {
+        if (_isRemoteNotFound(error)) return const [];
+        rethrow;
+      }
+      for (final file in entries) {
+        if (file.isDir != true) continue;
+        final name = file.name ?? file.path?.split('/').last ?? '';
+        final id = name;
+        if (!_isSafeBackupId(id)) continue;
+        final timestamp = int.tryParse(id.split('-').first);
+        if (timestamp == null) continue;
+        try {
+          final markerBytes = await client.read(
+            KanbanPaths.remoteBackupMarkerPath(_remoteBase(config), id),
+          );
+          final marker = tryDecodeJsonBytes(markerBytes);
+          if (marker == null || marker['id'] != id) continue;
+          result.add(
+            BackupSnapshotInfo(
+              id: id,
+              createdAt: DateTime.fromMillisecondsSinceEpoch(
+                timestamp,
+                isUtc: true,
+              ),
+              sizeBytes: (marker['sizeBytes'] as num?)?.toInt() ?? 0,
+            ),
+          );
+        } catch (error) {
+          if (_isRemoteNotFound(error)) continue;
+          rethrow;
+        }
+      }
+      result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return result;
+    });
+  }
+
+  Future<Uint8List?> readRemoteBackupSnapshot(String id) {
+    return _backupMutex.guard(() async {
+      if (!_isSafeBackupId(id)) throw const FormatException('备份标识无效');
+      final config = await _loadConfig();
+      if (!config.enabled || !config.isConfigured) return null;
+      final client = _client(config);
+      if (client == null) return null;
+      final base = _remoteBase(config);
+      final markerPath = KanbanPaths.remoteBackupMarkerPath(base, id);
+      final markerBytes = await client.read(markerPath);
+      final marker = tryDecodeJsonBytes(markerBytes);
+      if (marker == null || marker['id'] != id) return null;
+      final bytes = Uint8List.fromList(
+        await client.read(KanbanPaths.remoteBackupArchivePath(base, id)),
+      );
+      final expectedSize = (marker['sizeBytes'] as num?)?.toInt();
+      final expectedHash = marker['sha256'] as String?;
+      if (expectedSize != bytes.length ||
+          expectedHash == null ||
+          sha256.convert(bytes).toString() != expectedHash) {
+        try {
+          await client.remove(markerPath);
+        } catch (_) {
+          // 移除失败时仍报告校验错误。
+        }
+        throw const FormatException('WebDAV 备份校验失败');
+      }
+      return bytes;
+    });
+  }
+
+  Future<void> deleteRemoteBackupsOlderThan(DateTime cutoff) {
+    return _backupMutex.guard(() async {
+      final config = await _loadConfig();
+      if (!config.enabled || !config.isConfigured) return;
+      final client = _client(config);
+      if (client == null) return;
+      final directory = KanbanPaths.remoteBackupsDir(_remoteBase(config));
+      List<File> entries;
+      try {
+        entries = await client.readDir(directory);
+      } catch (error) {
+        if (_isRemoteNotFound(error)) return;
+        rethrow;
+      }
+      for (final file in entries) {
+        if (file.isDir != true) continue;
+        final name = file.name ?? file.path?.split('/').last ?? '';
+        final id = name;
+        if (!_isSafeBackupId(id)) continue;
+        final timestamp = int.tryParse(id.split('-').first);
+        if (timestamp == null) continue;
+        final createdAt = DateTime.fromMillisecondsSinceEpoch(
+          timestamp,
+          isUtc: true,
+        );
+        if (!createdAt.isBefore(cutoff.toUtc())) continue;
+        await client.remove(
+          KanbanPaths.remoteBackupDir(_remoteBase(config), id),
+        );
+      }
+    });
+  }
+
+  bool _isSafeBackupId(String id) =>
+      id.isNotEmpty &&
+      !id.contains('/') &&
+      !id.contains('\\') &&
+      !id.contains('..');
 
   Future<bool> testConnection(WebDavConfig config) async {
     final client = _client(config);
