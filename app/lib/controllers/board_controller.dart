@@ -65,6 +65,11 @@ class BoardController extends ChangeNotifier {
   bool _mutatingForeignProject = false;
   bool _pendingNotifyAfterScope = false;
 
+  /// [runOnProject] 对外项目写入时，界面真实当前项目 id（不受临时 active 切换影响）。
+  ///
+  /// MCP 省略 projectId 时必须用此值回退，避免并发作用域把写操作绑到错误项目。
+  String? _uiActiveProjectIdDuringScope;
+
   /// 当前突变来源（MCP 经 [runWithActivitySource] 置位）。
   ActivitySource _mutationOrigin = ActivitySource.user;
 
@@ -97,6 +102,10 @@ class BoardController extends ChangeNotifier {
   Stream<SyncStatus> get syncStatusStream => _syncService.statusStream;
   bool get canUndo => _undoStack.canUndo;
   String? get undoLabel => _undoStack.nextLabel;
+
+  /// 界面当前项目 id：跨项目 [runOnProject] 期间仍返回用户看到的项目，而非临时作用域。
+  String? get uiActiveProjectId =>
+      _uiActiveProjectIdDuringScope ?? activeProjectId;
 
   Future<void> initializeReminders({bool requestPermission = false}) async {
     try {
@@ -711,6 +720,7 @@ class BoardController extends ChangeNotifier {
 
       _mutatingForeignProject = true;
       _pendingNotifyAfterScope = false;
+      _uiActiveProjectIdDuringScope = savedActiveId;
       // 仅内存切换，不调用 saveActiveProjectId
       activeProjectId = projectId;
       board = await _repository.loadBoard(projectId);
@@ -728,6 +738,7 @@ class BoardController extends ChangeNotifier {
         projectSettings = savedSettings;
         activeProjectTrash = savedTrash;
         _mutatingForeignProject = false;
+        _uiActiveProjectIdDuringScope = null;
 
         if (_pendingNotifyAfterScope) {
           _pendingNotifyAfterScope = false;

@@ -13,14 +13,14 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     description: '列出指定项目整板快照（列 + 卡片摘要）',
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(description: '省略则用当前项目'),
+        'projectId': JsonSchema.string(description: '省略则用界面当前项目'),
       },
     ),
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
       final projectId =
-          mcpTrimmedString(args['projectId']) ?? controller.activeProjectId;
+          mcpTrimmedString(args['projectId']) ?? controller.uiActiveProjectId;
       if (projectId == null) return mcpErrorResult('没有可用项目');
       final board = await controller.loadBoardSnapshot(projectId);
       if (board == null) {

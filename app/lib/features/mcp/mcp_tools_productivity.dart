@@ -33,7 +33,14 @@ void registerKanbanMcpProductivityTools(
       if (cardId.isEmpty || columnId.isEmpty) {
         return mcpErrorResult('cardId 与 columnId 均不能为空');
       }
-      return runMcpForProject(controller, args['projectId'] as String?,
+      final located = await resolveMcpProjectIdForCard(
+        controller,
+        cardId: cardId,
+        projectId: args['projectId'] as String?,
+        expectedColumnId: columnId,
+      );
+      if (located.error != null) return located.error!;
+      return runMcpForProject(controller, located.projectId,
           (projectId) async {
         await controller.toggleCardPin(columnId, cardId);
         return mcpJsonResult({
@@ -50,11 +57,12 @@ void registerKanbanMcpProductivityTools(
   server.registerTool(
     'quick_capture',
     description:
-        '快速录入一行文本（支持 #标签 !优先级 @列名 今天/明天 等指令）并创建卡片',
+        '快速录入一行文本（支持 #标签 !优先级 @列名 今天/明天 等指令）并创建卡片；'
+        '多项目时必须传 projectId',
     inputSchema: JsonSchema.object(
       properties: {
         'text': JsonSchema.string(),
-        'projectId': JsonSchema.string(),
+        'projectId': JsonSchema.string(description: '多项目时必填'),
       },
       required: ['text'],
     ),
@@ -66,8 +74,10 @@ void registerKanbanMcpProductivityTools(
     callback: (args, extra) async {
       final text = mcpTrimmedString(args['text']) ?? '';
       if (text.isEmpty) return mcpErrorResult('text 不能为空');
-      return runMcpForProject(controller, args['projectId'] as String?,
-          (projectId) async {
+      return runMcpForProject(
+        controller,
+        args['projectId'] as String?,
+        (projectId) async {
         final draft = parseQuickCapture(text);
         final cardId = await controller.quickCapture(draft);
         if (cardId == null) {
@@ -85,7 +95,9 @@ void registerKanbanMcpProductivityTools(
               'dueDate': draft.dueDate!.millisecondsSinceEpoch,
           },
         });
-      });
+      },
+        requireExplicitWhenMultiple: true,
+      );
     },
   );
 
@@ -128,7 +140,14 @@ void registerKanbanMcpProductivityTools(
       if (cardId.isEmpty || columnId.isEmpty || name.isEmpty) {
         return mcpErrorResult('cardId / columnId / name 均不能为空');
       }
-      return runMcpForProject(controller, args['projectId'] as String?,
+      final located = await resolveMcpProjectIdForCard(
+        controller,
+        cardId: cardId,
+        projectId: args['projectId'] as String?,
+        expectedColumnId: columnId,
+      );
+      if (located.error != null) return located.error!;
+      return runMcpForProject(controller, located.projectId,
           (projectId) async {
         final board = controller.board;
         if (board == null) return mcpErrorResult('看板未就绪');
@@ -159,12 +178,12 @@ void registerKanbanMcpProductivityTools(
 
   server.registerTool(
     'create_card_from_template',
-    description: '从模板在指定列创建卡片',
+    description: '从模板在指定列创建卡片；多项目时必须传 projectId',
     inputSchema: JsonSchema.object(
       properties: {
         'templateId': JsonSchema.string(),
         'columnId': JsonSchema.string(),
-        'projectId': JsonSchema.string(),
+        'projectId': JsonSchema.string(description: '多项目时必填'),
       },
       required: ['templateId', 'columnId'],
     ),
@@ -179,8 +198,10 @@ void registerKanbanMcpProductivityTools(
       if (templateId.isEmpty || columnId.isEmpty) {
         return mcpErrorResult('templateId 与 columnId 均不能为空');
       }
-      return runMcpForProject(controller, args['projectId'] as String?,
-          (projectId) async {
+      return runMcpForProject(
+        controller,
+        args['projectId'] as String?,
+        (projectId) async {
         final cardId = await controller.createCardFromTemplate(
           templateId: templateId,
           columnId: columnId,
@@ -195,7 +216,9 @@ void registerKanbanMcpProductivityTools(
           'templateId': templateId,
           'projectId': projectId,
         });
-      });
+      },
+        requireExplicitWhenMultiple: true,
+      );
     },
   );
 

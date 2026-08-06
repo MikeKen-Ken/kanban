@@ -1,6 +1,7 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import '../activity/activity_models.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_tool_results.dart';
 
@@ -21,11 +22,11 @@ void registerKanbanMcpStructureTools(
           {
             'id': project.id,
             'title': project.title,
-            'active': project.id == controller.activeProjectId,
+            'active': project.id == controller.uiActiveProjectId,
           },
       ];
       return mcpJsonResult({
-        'activeProjectId': controller.activeProjectId,
+        'activeProjectId': controller.uiActiveProjectId,
         'projects': projects,
       });
     },
@@ -59,11 +60,14 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'rename_project',
-    description: '重命名指定项目（默认当前项目）',
+    description:
+        '重命名指定项目。多项目时必须传 projectId，避免改到界面当前项目',
     inputSchema: JsonSchema.object(
       properties: {
         'title': JsonSchema.string(),
-        'projectId': JsonSchema.string(description: '省略则重命名当前项目'),
+        'projectId': JsonSchema.string(
+          description: '多项目时必填；单项目可省略（重命名唯一项目）',
+        ),
       },
       required: ['title'],
     ),
@@ -75,10 +79,17 @@ void registerKanbanMcpStructureTools(
     callback: (args, extra) async {
       final title = mcpTrimmedString(args['title']) ?? '';
       if (title.isEmpty) return mcpErrorResult('title 不能为空');
-      final projectId =
-          mcpTrimmedString(args['projectId']) ?? controller.activeProjectId;
-      if (projectId == null) return mcpErrorResult('没有可用项目');
-      await controller.renameProject(projectId, title);
+      final resolved = resolveMcpProjectId(
+        controller,
+        args['projectId'] as String?,
+        requireExplicitWhenMultiple: true,
+      );
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId!;
+      await controller.runWithActivitySource(
+        ActivitySource.mcp,
+        () => controller.renameProject(projectId, title),
+      );
       return mcpJsonResult({
         'ok': true,
         'projectId': projectId,
@@ -139,17 +150,19 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'list_columns',
-    description: '列出指定项目（默认当前项目）的列',
+    description: '列出指定项目（默认界面当前项目）的列',
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(description: '项目 id，省略则用当前项目'),
+        'projectId': JsonSchema.string(
+          description: '项目 id；省略则用界面当前项目（非 runOnProject 临时作用域）',
+        ),
       },
     ),
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
       final projectId = mcpTrimmedString(args['projectId']) ??
-          controller.activeProjectId;
+          controller.uiActiveProjectId;
       if (projectId == null) return mcpErrorResult('没有可用项目');
       final board = await controller.loadBoardSnapshot(projectId);
       if (board == null) {
@@ -172,11 +185,13 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'add_column',
-    description: '在当前项目新增列',
+    description: '在指定项目新增列；多项目时必须传 projectId',
     inputSchema: JsonSchema.object(
       properties: {
         'title': JsonSchema.string(),
-        'projectId': JsonSchema.string(),
+        'projectId': JsonSchema.string(
+          description: '项目 id；多项目时必填',
+        ),
       },
       required: ['title'],
     ),
@@ -188,8 +203,10 @@ void registerKanbanMcpStructureTools(
     callback: (args, extra) async {
       final title = mcpTrimmedString(args['title']) ?? '';
       if (title.isEmpty) return mcpErrorResult('title 不能为空');
-      return runMcpForProject(controller, args['projectId'] as String?,
-          (projectId) async {
+      return runMcpForProject(
+        controller,
+        args['projectId'] as String?,
+        (projectId) async {
         await controller.addColumn(title);
         final columnId = controller.board?.columns.isNotEmpty == true
             ? controller.board!.columns.last.id
@@ -200,7 +217,9 @@ void registerKanbanMcpStructureTools(
           if (columnId != null) 'columnId': columnId,
           'title': title,
         });
-      });
+      },
+        requireExplicitWhenMultiple: true,
+      );
     },
   );
 
@@ -235,7 +254,7 @@ void registerKanbanMcpStructureTools(
           'title': title,
           'projectId': projectId,
         });
-      });
+      }, requireExplicitWhenMultiple: true);
     },
   );
 
@@ -265,7 +284,7 @@ void registerKanbanMcpStructureTools(
           'columnId': columnId,
           'projectId': projectId,
         });
-      });
+      }, requireExplicitWhenMultiple: true);
     },
   );
 
@@ -300,7 +319,7 @@ void registerKanbanMcpStructureTools(
           'newIndex': newIndex,
           'projectId': projectId,
         });
-      });
+      }, requireExplicitWhenMultiple: true);
     },
   );
 
@@ -336,7 +355,7 @@ void registerKanbanMcpStructureTools(
           'colorValue': colorValue,
           'projectId': projectId,
         });
-      });
+      }, requireExplicitWhenMultiple: true);
     },
   );
 }

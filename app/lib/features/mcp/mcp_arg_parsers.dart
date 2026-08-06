@@ -231,12 +231,30 @@ Future<CallToolResult?> ensureMcpProject(
   return null;
 }
 
-/// 解析 MCP 目标项目（省略则当前项目）；不切换 UI。
+/// 多项目且省略 projectId 时的统一错误（默认列 id 跨项目相同）。
+CallToolResult mcpMissingProjectIdError() => mcpErrorResult(
+      '存在多个项目时必须显式传入 projectId'
+      '（默认列 id 如 todo/doing 跨项目相同，省略会写到错误项目）',
+    );
+
+/// 解析 MCP 目标项目（省略则界面当前项目）；不切换 UI。
+///
+/// 回退使用 [BoardController.uiActiveProjectId]，避免 [BoardController.runOnProject]
+/// 临时切换 active 时把并发/缺省写操作绑错项目。
+///
+/// [requireExplicitWhenMultiple]：多项目且未传 projectId 时直接报错（用于按列 id 创建等写路径）。
 ({String? projectId, CallToolResult? error}) resolveMcpProjectId(
   BoardController controller,
-  String? projectId,
-) {
-  final id = mcpTrimmedString(projectId) ?? controller.activeProjectId;
+  String? projectId, {
+  bool requireExplicitWhenMultiple = false,
+}) {
+  final explicit = mcpTrimmedString(projectId);
+  if (explicit == null &&
+      requireExplicitWhenMultiple &&
+      controller.projects.length > 1) {
+    return (projectId: null, error: mcpMissingProjectIdError());
+  }
+  final id = explicit ?? controller.uiActiveProjectId;
   if (id == null) {
     return (projectId: null, error: mcpErrorResult('没有可用项目'));
   }
@@ -247,13 +265,73 @@ Future<CallToolResult?> ensureMcpProject(
   return (projectId: id, error: null);
 }
 
+/// 按 cardId 定位所属项目；显式 [projectId] 时校验卡片确在该项目。
+///
+/// 用于 update/move/complete/delete 等：省略 projectId 时不依赖「当前激活项目」，
+/// 避免列 id 跨项目相同导致写错板。
+Future<({String? projectId, String? columnId, CallToolResult? error})>
+    resolveMcpProjectIdForCard(
+  BoardController controller, {
+  required String cardId,
+  String? projectId,
+  String? expectedColumnId,
+}) async {
+  final explicit = mcpTrimmedString(projectId);
+  final expectedColumn = mcpTrimmedString(expectedColumnId);
+  final refs = await controller.loadAllCardReferences();
+  final matches = [
+    for (final ref in refs)
+      if (ref.cardId == cardId &&
+          (explicit == null || ref.projectId == explicit))
+        ref,
+  ];
+  if (matches.isEmpty) {
+    if (explicit != null) {
+      return (
+        projectId: null,
+        columnId: null,
+        error: mcpErrorResult('项目 $explicit 中未找到卡片：$cardId'),
+      );
+    }
+    return (
+      projectId: null,
+      columnId: null,
+      error: mcpErrorResult('未找到卡片：$cardId'),
+    );
+  }
+  if (matches.length > 1) {
+    return (
+      projectId: null,
+      columnId: null,
+      error: mcpErrorResult('卡片 $cardId 匹配多个项目，请显式传入 projectId'),
+    );
+  }
+  final match = matches.first;
+  if (expectedColumn != null && match.columnId != expectedColumn) {
+    return (
+      projectId: null,
+      columnId: null,
+      error: mcpErrorResult(
+        '卡片 $cardId 不在列 $expectedColumn'
+        '（实际列 ${match.columnId}，项目 ${match.projectId}）',
+      ),
+    );
+  }
+  return (projectId: match.projectId, columnId: match.columnId, error: null);
+}
+
 /// 在目标项目上下文中执行 MCP 操作（不切换 UI active 项目）。
 Future<CallToolResult> runMcpForProject(
   BoardController controller,
   String? projectId,
-  Future<CallToolResult> Function(String projectId) action,
-) async {
-  final resolved = resolveMcpProjectId(controller, projectId);
+  Future<CallToolResult> Function(String projectId) action, {
+  bool requireExplicitWhenMultiple = false,
+}) async {
+  final resolved = resolveMcpProjectId(
+    controller,
+    projectId,
+    requireExplicitWhenMultiple: requireExplicitWhenMultiple,
+  );
   if (resolved.error != null) return resolved.error!;
   final id = resolved.projectId!;
   return controller.runOnProject(

@@ -19,7 +19,7 @@ void registerKanbanMcpLabelTools(McpServer server, BoardController controller) {
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
       final projectId = mcpTrimmedString(args['projectId']) ??
-          controller.activeProjectId;
+          controller.uiActiveProjectId;
       final themeId =
           projectId == null ? '' : controller.themeIdForProject(projectId);
       final labels = allKanbanLabels(

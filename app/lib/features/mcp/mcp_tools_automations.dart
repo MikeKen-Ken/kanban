@@ -173,7 +173,7 @@ void registerKanbanMcpAutomationTools(
           'projectId': projectId,
           'rule': rule.toJson(),
         });
-      });
+      }, requireExplicitWhenMultiple: true);
     },
   );
 
@@ -214,7 +214,7 @@ void registerKanbanMcpAutomationTools(
           'id': id,
           'projectId': projectId,
         });
-      });
+      }, requireExplicitWhenMultiple: true);
     },
   );
 }
