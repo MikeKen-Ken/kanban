@@ -15,6 +15,7 @@ import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
 import 'description_expand_dialog.dart';
 import 'description_markdown_preview.dart';
+import 'due_date_shortcuts.dart';
 import 'kanban_labels.dart';
 
 /// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
@@ -329,6 +330,27 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (picked != null && mounted) {
       _safeSetState(() => _dueDate = picked);
     }
+  }
+
+  void _applyDueDateShortcut(DueDateShortcut shortcut) {
+    _safeSetState(() => _dueDate = shortcut.resolve(DateTime.now()));
+  }
+
+  Widget _buildDueDateShortcuts() {
+    final now = DateTime.now();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final shortcut in DueDateShortcut.values)
+          FilterChip(
+            label: Text(shortcut.label),
+            selected: isSameLocalDay(_dueDate, shortcut.resolve(now)),
+            showCheckmark: false,
+            onSelected: (_) => _applyDueDateShortcut(shortcut),
+          ),
+      ],
+    );
   }
 
   Future<void> _pickReminder() async {
@@ -1212,6 +1234,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ],
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        _buildDueDateShortcuts(),
                         const SizedBox(height: 20),
                         Text('提醒', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
