@@ -1,5 +1,18 @@
 import 'package:flutter/material.dart';
 
+/// 卡片/列等场景的快捷预设色（柔和且区分度足够）。
+const List<Color> kQuickColorPresets = [
+  Color(0xFFE05252), // 红
+  Color(0xFFE07A3A), // 橙
+  Color(0xFFE0B030), // 黄
+  Color(0xFF2E9E6A), // 绿
+  Color(0xFF1A8FAD), // 青
+  Color(0xFF4F6BED), // 蓝
+  Color(0xFF7B5EA7), // 紫
+  Color(0xFFC45B7A), // 玫红
+  Color(0xFF5C6B7A), // 灰蓝
+];
+
 /// 无极颜色选择对话框，返回 [Color.toARGB32]；选「默认」返回 null。
 Future<int?> showColumnColorPicker({
   required BuildContext context,
@@ -15,6 +28,97 @@ Future<int?> showColumnColorPicker({
       allowDefault: allowDefault,
     ),
   );
+}
+
+/// 一行快捷色点选；选中当前色时显示描边高亮。
+class ColorQuickSwatches extends StatelessWidget {
+  const ColorQuickSwatches({
+    super.key,
+    required this.selectedColorValue,
+    required this.onSelected,
+    this.presets = kQuickColorPresets,
+    this.size = 28,
+  });
+
+  final int? selectedColorValue;
+  final ValueChanged<int> onSelected;
+  final List<Color> presets;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final color in presets)
+          _QuickColorDot(
+            color: color,
+            size: size,
+            selected: selectedColorValue == color.toARGB32(),
+            borderColor: scheme.outlineVariant,
+            selectedBorderColor: scheme.onSurface,
+            onTap: () => onSelected(color.toARGB32()),
+          ),
+      ],
+    );
+  }
+}
+
+class _QuickColorDot extends StatelessWidget {
+  const _QuickColorDot({
+    required this.color,
+    required this.size,
+    required this.selected,
+    required this.borderColor,
+    required this.selectedBorderColor,
+    required this.onTap,
+  });
+
+  final Color color;
+  final double size;
+  final bool selected;
+  final Color borderColor;
+  final Color selectedBorderColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? selectedBorderColor : borderColor,
+              width: selected ? 2.5 : 1,
+            ),
+          ),
+          child: selected
+              ? Icon(
+                  Icons.check,
+                  size: size * 0.55,
+                  color: _contrastOn(color),
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// 在浅/深底色上选可读的勾选图标色。
+Color _contrastOn(Color background) {
+  return background.computeLuminance() > 0.55 ? Colors.black87 : Colors.white;
 }
 
 class _ColorPickerDialog extends StatefulWidget {

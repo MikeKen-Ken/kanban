@@ -349,6 +349,13 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     );
   }
 
+  /// 当前色不在快捷预设中时，视为自定义色。
+  bool get _isCustomCardColor {
+    final value = _colorValue;
+    if (value == null) return false;
+    return !kQuickColorPresets.any((c) => c.toARGB32() == value);
+  }
+
   Future<void> _pickCardColor() async {
     final picked = await showColumnColorPicker(
       context: context,
@@ -920,6 +927,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
+                        ColorQuickSwatches(
+                          selectedColorValue: _colorValue,
+                          onSelected: (value) {
+                            if (value == _colorValue) return;
+                            _safeSetState(() => _colorValue = value);
+                          },
+                        ),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
                             FilledButton.tonalIcon(
@@ -927,23 +942,24 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               icon:
                                   const Icon(Icons.palette_outlined, size: 18),
                               label: Text(
-                                _colorValue == null ? '设置颜色' : '已设置',
+                                _isCustomCardColor ? '自定义…' : '更多颜色…',
                               ),
                             ),
                             if (_colorValue != null) ...[
                               const SizedBox(width: 8),
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: Color(_colorValue!),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: theme.colorScheme.outlineVariant,
+                              if (_isCustomCardColor)
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: Color(_colorValue!),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: theme.colorScheme.outlineVariant,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
+                              if (_isCustomCardColor) const SizedBox(width: 8),
                               TextButton(
                                 onPressed: () =>
                                     _safeSetState(() => _colorValue = null),
