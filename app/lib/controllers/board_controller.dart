@@ -32,6 +32,7 @@ import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_labels.dart';
 import '../features/trash/trash_models.dart';
 import '../settings/app_settings.dart';
+import '../storage/board_storage.dart';
 import '../webdav_sync/webdav_config.dart';
 import '../webdav_sync/webdav_sync_service.dart';
 
@@ -58,6 +59,10 @@ class BoardController extends ChangeNotifier {
   static const RecurrenceService _recurrenceService = RecurrenceService();
   static const AutomationEngine _automationEngine = AutomationEngine();
   bool _applyingAutomation = false;
+
+  /// MCP 等场景下对非当前项目做变更时置位：不切换 UI，并抑制中间态通知。
+  bool _mutatingForeignProject = false;
+  bool _pendingNotifyAfterScope = false;
 
   KanbanBoard? board;
   ProjectsManifest? manifest;
@@ -353,13 +358,24 @@ class BoardController extends ChangeNotifier {
 
   List<SavedView> get savedViews => sharedContent.savedViews;
   List<CardTemplate> get cardTemplates => sharedContent.cardTemplates;
-  List<ActivityEvent> get activeProjectActivity {
+  List<ActivityEvent> get activeProjectActivity =>
+      activityForProject(activeProjectId);
+
+  /// 按项目读取活动历史（不切换当前项目）。
+  List<ActivityEvent> activityForProject(String? projectId) {
     final events = [
-      ...(sharedContent.activityByProject[activeProjectId]?.events ??
+      ...(sharedContent.activityByProject[projectId]?.events ??
           const <ActivityEvent>[]),
     ];
     events.sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
     return events;
+  }
+
+  /// 只读加载某项目设置快照（不切换当前项目）。
+  Future<ProjectSettings?> loadProjectSettingsSnapshot(String projectId) async {
+    if (projectId == activeProjectId) return projectSettings;
+    if (manifest?.findById(projectId) == null) return null;
+    return _repository.loadProjectSettings(projectId);
   }
 
   Future<List<CardReference>> loadAllCardReferences() async {
@@ -542,7 +558,16 @@ class BoardController extends ChangeNotifier {
 
   static Future<BoardController> create() async {
     final prefs = await SharedPreferences.getInstance();
-    final repository = BoardRepository(prefs);
+    return createForTest(prefs: prefs);
+  }
+
+  /// 测试用：可注入 prefs / 存储根目录，便于隔离。
+  @visibleForTesting
+  static Future<BoardController> createForTest({
+    required SharedPreferences prefs,
+    BoardStorage? storage,
+  }) async {
+    final repository = BoardRepository(prefs, storage);
     final attachmentSync = AttachmentSyncAdapter(repository.attachmentStore);
     late BoardController controller;
     final syncService = WebDavSyncService(
@@ -559,6 +584,65 @@ class BoardController extends ChangeNotifier {
     );
     await controller._init();
     return controller;
+  }
+
+  @override
+  void notifyListeners() {
+    if (_mutatingForeignProject) {
+      _pendingNotifyAfterScope = true;
+      return;
+    }
+    super.notifyListeners();
+  }
+
+  /// 在指定项目上下文中执行操作：不修改已持久化的 active 项目，也不把 UI 切走。
+  ///
+  /// 若 [projectId] 即为当前项目，直接执行 [action]。
+  /// 对外项目：仅在内存中临时切换 board/settings，落盘到目标项目后恢复。
+  Future<T> runOnProject<T>(
+    String projectId,
+    Future<T> Function() action,
+  ) async {
+    if (manifest?.findById(projectId) == null) {
+      throw StateError('项目不存在：$projectId');
+    }
+    if (projectId == activeProjectId) {
+      return action();
+    }
+    if (_mutatingForeignProject) {
+      throw StateError('不可嵌套 runOnProject');
+    }
+
+    final savedActiveId = activeProjectId;
+    final savedBoard = board;
+    final savedSettings = projectSettings;
+    final savedTrash = activeProjectTrash;
+
+    _mutatingForeignProject = true;
+    _pendingNotifyAfterScope = false;
+    // 仅内存切换，不调用 saveActiveProjectId
+    activeProjectId = projectId;
+    board = await _repository.loadBoard(projectId);
+    projectSettings = await _repository.loadProjectSettings(projectId);
+    activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
+
+    try {
+      return await action();
+    } finally {
+      projectTrashes[projectId] = activeProjectTrash;
+      projectThemeIds[projectId] = projectSettings.themeId;
+
+      activeProjectId = savedActiveId;
+      board = savedBoard;
+      projectSettings = savedSettings;
+      activeProjectTrash = savedTrash;
+      _mutatingForeignProject = false;
+
+      if (_pendingNotifyAfterScope) {
+        _pendingNotifyAfterScope = false;
+        notifyListeners();
+      }
+    }
   }
 
   Future<ProjectWorkspaceSnapshot> _loadWorkspaceSnapshot() async {
@@ -1455,12 +1539,14 @@ class BoardController extends ChangeNotifier {
     }).toList();
     if (!added) return null;
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-    _undoStack.push(
-      UndoEntry(
-        label: '新建「$title」',
-        undo: () => deleteCard(columnId, cardId),
-      ),
-    );
+    if (!_mutatingForeignProject) {
+      _undoStack.push(
+        UndoEntry(
+          label: '新建「$title」',
+          undo: () => deleteCard(columnId, cardId),
+        ),
+      );
+    }
     if (reminderAt != null && activeProjectId != null) {
       await _scheduleCardReminder(
         projectId: activeProjectId!,
@@ -1554,7 +1640,7 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(
       _bump(board!.copyWith(columns: _normalizeOrders(columns))),
     );
-    if (original != null && !_applyingAutomation) {
+    if (original != null && !_applyingAutomation && !_mutatingForeignProject) {
       _undoStack.push(
         UndoEntry(
           label: '编辑「${original.title}」',
@@ -2044,15 +2130,17 @@ class BoardController extends ChangeNotifier {
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
     await _reminderScheduler.cancel(cardId);
-    _undoStack.push(
-      UndoEntry(
-        label: '删除「${target.title}」',
-        undo: () async {
-          final error = await restoreTrashItem(trashId);
-          if (error != null) throw StateError(error);
-        },
-      ),
-    );
+    if (!_mutatingForeignProject) {
+      _undoStack.push(
+        UndoEntry(
+          label: '删除「${target.title}」',
+          undo: () async {
+            final error = await restoreTrashItem(trashId);
+            if (error != null) throw StateError(error);
+          },
+        ),
+      );
+    }
     unawaited(
       _recordActivity(
         entityId: cardId,
@@ -2115,17 +2203,19 @@ class BoardController extends ChangeNotifier {
     }
 
     final count = clearedCards.length;
-    _undoStack.push(
-      UndoEntry(
-        label: '清空「${doneColumn.title}」($count)',
-        undo: () async {
-          for (final trashId in trashIds.reversed) {
-            final error = await restoreTrashItem(trashId);
-            if (error != null) throw StateError(error);
-          }
-        },
-      ),
-    );
+    if (!_mutatingForeignProject) {
+      _undoStack.push(
+        UndoEntry(
+          label: '清空「${doneColumn.title}」($count)',
+          undo: () async {
+            for (final trashId in trashIds.reversed) {
+              final error = await restoreTrashItem(trashId);
+              if (error != null) throw StateError(error);
+            }
+          },
+        ),
+      );
+    }
     return count;
   }
 
@@ -2267,7 +2357,7 @@ class BoardController extends ChangeNotifier {
     );
     if (fromColumnId != toColumnId) {
       final originalIndex = moving!.order;
-      if (!_applyingAutomation) {
+      if (!_applyingAutomation && !_mutatingForeignProject) {
         _undoStack.push(
           UndoEntry(
             label: '移动「${moving!.title}」',

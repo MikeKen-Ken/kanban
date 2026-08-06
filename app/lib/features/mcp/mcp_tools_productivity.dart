@@ -33,15 +33,16 @@ void registerKanbanMcpProductivityTools(
       if (cardId.isEmpty || columnId.isEmpty) {
         return mcpErrorResult('cardId 与 columnId 均不能为空');
       }
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      await controller.toggleCardPin(columnId, cardId);
-      return mcpJsonResult({
-        'ok': true,
-        'cardId': cardId,
-        'columnId': columnId,
-        'pinned': controller.isCardPinned(columnId, cardId),
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        await controller.toggleCardPin(columnId, cardId);
+        return mcpJsonResult({
+          'ok': true,
+          'cardId': cardId,
+          'columnId': columnId,
+          'projectId': projectId,
+          'pinned': controller.isCardPinned(columnId, cardId),
+        });
       });
     },
   );
@@ -65,25 +66,25 @@ void registerKanbanMcpProductivityTools(
     callback: (args, extra) async {
       final text = mcpTrimmedString(args['text']) ?? '';
       if (text.isEmpty) return mcpErrorResult('text 不能为空');
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      final draft = parseQuickCapture(text);
-      final cardId = await controller.quickCapture(draft);
-      if (cardId == null) {
-        return mcpErrorResult('录入失败：请确认标题非空且看板已就绪');
-      }
-      return mcpJsonResult({
-        'cardId': cardId,
-        'projectId': controller.activeProjectId,
-        'draft': {
-          'title': draft.title,
-          'labels': draft.labels,
-          if (draft.priority != null) 'priority': draft.priority!.name,
-          if (draft.columnName != null) 'columnName': draft.columnName,
-          if (draft.dueDate != null)
-            'dueDate': draft.dueDate!.millisecondsSinceEpoch,
-        },
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        final draft = parseQuickCapture(text);
+        final cardId = await controller.quickCapture(draft);
+        if (cardId == null) {
+          return mcpErrorResult('录入失败：请确认标题非空且看板已就绪');
+        }
+        return mcpJsonResult({
+          'cardId': cardId,
+          'projectId': projectId,
+          'draft': {
+            'title': draft.title,
+            'labels': draft.labels,
+            if (draft.priority != null) 'priority': draft.priority!.name,
+            if (draft.columnName != null) 'columnName': draft.columnName,
+            if (draft.dueDate != null)
+              'dueDate': draft.dueDate!.millisecondsSinceEpoch,
+          },
+        });
       });
     },
   );
@@ -127,30 +128,31 @@ void registerKanbanMcpProductivityTools(
       if (cardId.isEmpty || columnId.isEmpty || name.isEmpty) {
         return mcpErrorResult('cardId / columnId / name 均不能为空');
       }
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      final board = controller.board;
-      if (board == null) return mcpErrorResult('看板未就绪');
-      KanbanCard? card;
-      for (final column in board.columns) {
-        if (column.id != columnId) continue;
-        for (final item in column.cards) {
-          if (item.id == cardId) {
-            card = item;
-            break;
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        final board = controller.board;
+        if (board == null) return mcpErrorResult('看板未就绪');
+        KanbanCard? card;
+        for (final column in board.columns) {
+          if (column.id != columnId) continue;
+          for (final item in column.cards) {
+            if (item.id == cardId) {
+              card = item;
+              break;
+            }
           }
         }
-      }
-      if (card == null) return mcpErrorResult('未找到卡片');
-      final templateId = await controller.saveCardAsTemplate(
-        card: card,
-        name: name,
-      );
-      return mcpJsonResult({
-        'ok': true,
-        'templateId': templateId,
-        'name': name,
+        if (card == null) return mcpErrorResult('未找到卡片');
+        final templateId = await controller.saveCardAsTemplate(
+          card: card,
+          name: name,
+        );
+        return mcpJsonResult({
+          'ok': true,
+          'templateId': templateId,
+          'name': name,
+          'projectId': projectId,
+        });
       });
     },
   );
@@ -177,21 +179,22 @@ void registerKanbanMcpProductivityTools(
       if (templateId.isEmpty || columnId.isEmpty) {
         return mcpErrorResult('templateId 与 columnId 均不能为空');
       }
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      final cardId = await controller.createCardFromTemplate(
-        templateId: templateId,
-        columnId: columnId,
-      );
-      if (cardId == null) {
-        return mcpErrorResult('创建失败：模板或列无效');
-      }
-      return mcpJsonResult({
-        'ok': true,
-        'cardId': cardId,
-        'columnId': columnId,
-        'templateId': templateId,
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        final cardId = await controller.createCardFromTemplate(
+          templateId: templateId,
+          columnId: columnId,
+        );
+        if (cardId == null) {
+          return mcpErrorResult('创建失败：模板或列无效');
+        }
+        return mcpJsonResult({
+          'ok': true,
+          'cardId': cardId,
+          'columnId': columnId,
+          'templateId': templateId,
+          'projectId': projectId,
+        });
       });
     },
   );

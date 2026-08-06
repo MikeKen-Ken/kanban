@@ -78,6 +78,60 @@ List<ChecklistItem>? parseMcpChecklist(Object? raw) {
   return items;
 }
 
+/// 解析非空字符串 id 列表；[raw] 为 null 时返回 null（表示未传该字段）。
+List<String>? parseMcpIdList(Object? raw) {
+  if (raw == null) return null;
+  if (raw is! List) return const [];
+  return raw
+      .whereType<String>()
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList();
+}
+
+/// 从 MCP 参数解析外链；支持 URL 字符串或 `{url, title?, id?}` 对象。
+///
+/// [raw] 为 null 时返回 null（表示未传该字段）；空数组表示清空。
+List<CardLink>? parseMcpLinks(Object? raw) {
+  if (raw == null) return null;
+  if (raw is! List) return const [];
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final links = <CardLink>[];
+  for (var i = 0; i < raw.length; i++) {
+    final entry = raw[i];
+    if (entry is String) {
+      final url = entry.trim();
+      if (url.isEmpty) continue;
+      links.add(
+        CardLink(
+          id: const Uuid().v4(),
+          url: url,
+          order: i,
+          createdAt: now,
+        ),
+      );
+      continue;
+    }
+    if (entry is Map) {
+      final map = Map<String, dynamic>.from(entry);
+      final url = (map['url'] as String?)?.trim() ?? '';
+      if (url.isEmpty) continue;
+      final id = (map['id'] as String?)?.trim();
+      final title = (map['title'] as String?)?.trim() ?? '';
+      links.add(
+        CardLink(
+          id: (id == null || id.isEmpty) ? const Uuid().v4() : id,
+          url: url,
+          title: title,
+          order: (map['order'] as num?)?.toInt() ?? i,
+          createdAt: (map['createdAt'] as num?)?.toInt() ?? now,
+        ),
+      );
+    }
+  }
+  return links;
+}
+
 List<String> _readStringList(Object? value) {
   if (value is String) return value.isEmpty ? const [] : [value];
   if (value is! List) return const [];
@@ -163,18 +217,45 @@ int mcpLimit(Object? raw, {int fallback = 30, int max = 100}) {
   return ((raw as num?)?.toInt() ?? fallback).clamp(1, max);
 }
 
-/// 若指定了非当前项目则切换；项目不存在时返回错误结果。
+/// 若指定了项目 id，仅校验存在；不切换 UI 当前项目。
+/// 项目不存在时返回错误结果；未指定或已是当前项目时返回 null。
 Future<CallToolResult?> ensureMcpProject(
   BoardController controller,
   String? projectId,
 ) async {
   final id = mcpTrimmedString(projectId);
   if (id == null) return null;
-  if (id == controller.activeProjectId) return null;
   final exists = controller.projects.any((project) => project.id == id);
   if (!exists) return mcpErrorResult('项目不存在：$id');
-  await controller.switchProject(id);
   return null;
+}
+
+/// 解析 MCP 目标项目（省略则当前项目）；不切换 UI。
+({String? projectId, CallToolResult? error}) resolveMcpProjectId(
+  BoardController controller,
+  String? projectId,
+) {
+  final id = mcpTrimmedString(projectId) ?? controller.activeProjectId;
+  if (id == null) {
+    return (projectId: null, error: mcpErrorResult('没有可用项目'));
+  }
+  final exists = controller.projects.any((project) => project.id == id);
+  if (!exists) {
+    return (projectId: null, error: mcpErrorResult('项目不存在：$id'));
+  }
+  return (projectId: id, error: null);
+}
+
+/// 在目标项目上下文中执行 MCP 操作（不切换 UI active 项目）。
+Future<CallToolResult> runMcpForProject(
+  BoardController controller,
+  String? projectId,
+  Future<CallToolResult> Function(String projectId) action,
+) async {
+  final resolved = resolveMcpProjectId(controller, projectId);
+  if (resolved.error != null) return resolved.error!;
+  final id = resolved.projectId!;
+  return controller.runOnProject(id, () => action(id));
 }
 
 /// 卡片摘要（用于 list_board，备注截断）。
@@ -205,5 +286,11 @@ Map<String, dynamic> mcpCardSummary(
     if (card.colorValue != null) 'colorValue': card.colorValue,
     if (card.attachments.isNotEmpty)
       'attachmentCount': card.attachments.length,
+    if (card.blockedByIds.isNotEmpty) 'blockedByIds': card.blockedByIds,
+    if (card.relatedIds.isNotEmpty) 'relatedIds': card.relatedIds,
+    if (card.links.isNotEmpty)
+      'links': [
+        for (final link in card.sortedLinks) link.toJson(),
+      ],
   };
 }

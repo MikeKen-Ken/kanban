@@ -106,6 +106,7 @@ void registerKanbanMcpStructureTools(
       if (projectId.isEmpty) return mcpErrorResult('projectId 不能为空');
       final switchError = await ensureMcpProject(controller, projectId);
       if (switchError != null) return switchError;
+      await controller.switchProject(projectId);
       return mcpJsonResult({
         'ok': true,
         'projectId': controller.activeProjectId,
@@ -187,18 +188,18 @@ void registerKanbanMcpStructureTools(
     callback: (args, extra) async {
       final title = mcpTrimmedString(args['title']) ?? '';
       if (title.isEmpty) return mcpErrorResult('title 不能为空');
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      await controller.addColumn(title);
-      final columnId = controller.board?.columns.isNotEmpty == true
-          ? controller.board!.columns.last.id
-          : null;
-      return mcpJsonResult({
-        'ok': true,
-        'projectId': controller.activeProjectId,
-        if (columnId != null) 'columnId': columnId,
-        'title': title,
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        await controller.addColumn(title);
+        final columnId = controller.board?.columns.isNotEmpty == true
+            ? controller.board!.columns.last.id
+            : null;
+        return mcpJsonResult({
+          'ok': true,
+          'projectId': projectId,
+          if (columnId != null) 'columnId': columnId,
+          'title': title,
+        });
       });
     },
   );
@@ -225,14 +226,15 @@ void registerKanbanMcpStructureTools(
       if (columnId.isEmpty || title.isEmpty) {
         return mcpErrorResult('columnId 与 title 均不能为空');
       }
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      await controller.renameColumn(columnId, title);
-      return mcpJsonResult({
-        'ok': true,
-        'columnId': columnId,
-        'title': title,
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        await controller.renameColumn(columnId, title);
+        return mcpJsonResult({
+          'ok': true,
+          'columnId': columnId,
+          'title': title,
+          'projectId': projectId,
+        });
       });
     },
   );
@@ -255,11 +257,15 @@ void registerKanbanMcpStructureTools(
     callback: (args, extra) async {
       final columnId = mcpTrimmedString(args['columnId']) ?? '';
       if (columnId.isEmpty) return mcpErrorResult('columnId 不能为空');
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      await controller.deleteColumn(columnId);
-      return mcpJsonResult({'ok': true, 'columnId': columnId});
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        await controller.deleteColumn(columnId);
+        return mcpJsonResult({
+          'ok': true,
+          'columnId': columnId,
+          'projectId': projectId,
+        });
+      });
     },
   );
 
@@ -285,14 +291,15 @@ void registerKanbanMcpStructureTools(
       if (oldIndex == null || newIndex == null) {
         return mcpErrorResult('oldIndex 与 newIndex 均不能为空');
       }
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      await controller.reorderColumn(oldIndex, newIndex);
-      return mcpJsonResult({
-        'ok': true,
-        'oldIndex': oldIndex,
-        'newIndex': newIndex,
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        await controller.reorderColumn(oldIndex, newIndex);
+        return mcpJsonResult({
+          'ok': true,
+          'oldIndex': oldIndex,
+          'newIndex': newIndex,
+          'projectId': projectId,
+        });
       });
     },
   );
@@ -317,17 +324,18 @@ void registerKanbanMcpStructureTools(
     callback: (args, extra) async {
       final columnId = mcpTrimmedString(args['columnId']) ?? '';
       if (columnId.isEmpty) return mcpErrorResult('columnId 不能为空');
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      final clear = args['clear'] == true;
-      final colorValue =
-          clear ? null : (args['colorValue'] as num?)?.toInt();
-      await controller.updateColumnColor(columnId, colorValue);
-      return mcpJsonResult({
-        'ok': true,
-        'columnId': columnId,
-        'colorValue': colorValue,
+      return runMcpForProject(controller, args['projectId'] as String?,
+          (projectId) async {
+        final clear = args['clear'] == true;
+        final colorValue =
+            clear ? null : (args['colorValue'] as num?)?.toInt();
+        await controller.updateColumnColor(columnId, colorValue);
+        return mcpJsonResult({
+          'ok': true,
+          'columnId': columnId,
+          'colorValue': colorValue,
+          'projectId': projectId,
+        });
       });
     },
   );

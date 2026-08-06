@@ -118,6 +118,30 @@ void main() {
     });
   });
 
+  group('parseMcpIdList / parseMcpLinks', () {
+    test('id 列表忽略空白', () {
+      expect(parseMcpIdList(null), isNull);
+      expect(parseMcpIdList(['a', ' ', 'b']), ['a', 'b']);
+      expect(parseMcpIdList([]), isEmpty);
+    });
+
+    test('外链支持字符串与对象', () {
+      expect(parseMcpLinks(null), isNull);
+      final links = parseMcpLinks([
+        'https://a.example',
+        {'id': 'l1', 'url': 'https://b.example', 'title': 'B'},
+        {'url': '  '},
+      ]);
+      expect(links, isNotNull);
+      expect(links!.length, 2);
+      expect(links[0].url, 'https://a.example');
+      expect(links[0].id, isNotEmpty);
+      expect(links[1].id, 'l1');
+      expect(links[1].title, 'B');
+      expect(parseMcpLinks([]), isEmpty);
+    });
+  });
+
   group('mcpCardSummary', () {
     test('截断备注并汇总清单', () {
       final card = KanbanCard(
@@ -130,10 +154,43 @@ void main() {
           ChecklistItem(id: '1', text: 'a', completed: true),
           ChecklistItem(id: '2', text: 'b'),
         ],
+        blockedByIds: const ['dep'],
+        relatedIds: const ['rel'],
+        links: [
+          CardLink(
+            id: 'l1',
+            url: 'https://example.com',
+            title: '文档',
+            order: 0,
+            createdAt: 1,
+          ),
+        ],
       );
       final summary = mcpCardSummary(card, descriptionMax: 10);
       expect(summary['description'], 'aaaaaaaaaa…');
       expect(summary['checklist'], {'done': 1, 'total': 2});
+      expect(summary['blockedByIds'], ['dep']);
+      expect(summary['relatedIds'], ['rel']);
+      expect(summary['links'], [
+        {
+          'id': 'l1',
+          'url': 'https://example.com',
+          'title': '文档',
+          'order': 0,
+          'createdAt': 1,
+        },
+      ]);
+    });
+  });
+
+  group('mcpTrimmedString / mcpLimit', () {
+    test('裁剪与 limit 边界', () {
+      expect(mcpTrimmedString(null), isNull);
+      expect(mcpTrimmedString('  '), isNull);
+      expect(mcpTrimmedString(' p1 '), 'p1');
+      expect(mcpLimit(null), 30);
+      expect(mcpLimit(0), 1);
+      expect(mcpLimit(200), 100);
     });
   });
 }

@@ -276,16 +276,14 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
-      final switchError =
-          await ensureMcpProject(controller, args['projectId'] as String?);
-      if (switchError != null) return switchError;
-      if (controller.activeProjectId == null) {
-        return mcpErrorResult('没有可用项目');
-      }
+      final resolved =
+          resolveMcpProjectId(controller, args['projectId'] as String?);
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId!;
       final limit = mcpLimit(args['limit'], fallback: 50);
-      final events = controller.activeProjectActivity.take(limit).toList();
+      final events = controller.activityForProject(projectId).take(limit).toList();
       return mcpJsonResult({
-        'projectId': controller.activeProjectId,
+        'projectId': projectId,
         'count': events.length,
         'events': [for (final event in events) event.toJson()],
       });
