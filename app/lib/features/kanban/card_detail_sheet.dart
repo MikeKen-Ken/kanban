@@ -1482,125 +1482,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           label: const Text('添加图片'),
                         ),
                         const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Text('链接', style: theme.textTheme.titleSmall),
-                            const HelpTipIcon(
-                              message:
-                                  '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: _addLink,
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('添加'),
-                            ),
-                          ],
-                        ),
-                        for (final link in _links)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.link),
-                            title: Text(link.displayTitle),
-                            subtitle: Text(
-                              link.url,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: IconButton(
-                              tooltip: '删除链接',
-                              onPressed: () => _safeSetState(
-                                () => _links = _links
-                                    .where((item) => item.id != link.id)
-                                    .toList(),
-                              ),
-                              icon: const Icon(Icons.close),
-                            ),
-                            onTap: () => launchUrl(
-                              Uri.parse(link.url),
-                              mode: LaunchMode.externalApplication,
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Text(
-                              '依赖（阻塞本卡）',
-                              style: theme.textTheme.labelLarge,
-                            ),
-                            const HelpTipIcon(
-                              message:
-                                  '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: () => _pickRelatedCard(
-                                title: '选择阻塞本卡的前置任务',
-                                onPicked: (id) {
-                                  if (_blockedByIds.contains(id) ||
-                                      id == widget.card.id) {
-                                    return;
-                                  }
-                                  _safeSetState(
-                                    () => _blockedByIds = [
-                                      ..._blockedByIds,
-                                      id,
-                                    ],
-                                  );
-                                },
-                              ),
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('添加'),
-                            ),
-                          ],
-                        ),
-                        ..._relationTiles(
-                          ids: _blockedByIds,
-                          onRemove: (id) => _safeSetState(
-                            () => _blockedByIds = _blockedByIds
-                                .where((item) => item != id)
-                                .toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              '关联（相关卡片）',
-                              style: theme.textTheme.labelLarge,
-                            ),
-                            const HelpTipIcon(
-                              message: '无先后关系，仅便于跳转与追溯；不会阻塞本卡。',
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: () => _pickRelatedCard(
-                                title: '选择关联卡片',
-                                onPicked: (id) {
-                                  if (_relatedIds.contains(id) ||
-                                      id == widget.card.id) {
-                                    return;
-                                  }
-                                  _safeSetState(
-                                    () =>
-                                        _relatedIds = [..._relatedIds, id],
-                                  );
-                                },
-                              ),
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('添加'),
-                            ),
-                          ],
-                        ),
-                        ..._relationTiles(
-                          ids: _relatedIds,
-                          onRemove: (id) => _safeSetState(
-                            () => _relatedIds = _relatedIds
-                                .where((item) => item != id)
-                                .toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
                         Text('截止日期', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         _buildDueDateRow(),
@@ -1824,6 +1705,125 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               icon: const Icon(Icons.add),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text('链接', style: theme.textTheme.titleSmall),
+                            const HelpTipIcon(
+                              message:
+                                  '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _addLink,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('添加'),
+                            ),
+                          ],
+                        ),
+                        for (final link in _links)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.link),
+                            title: Text(link.displayTitle),
+                            subtitle: Text(
+                              link.url,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: IconButton(
+                              tooltip: '删除链接',
+                              onPressed: () => _safeSetState(
+                                () => _links = _links
+                                    .where((item) => item.id != link.id)
+                                    .toList(),
+                              ),
+                              icon: const Icon(Icons.close),
+                            ),
+                            onTap: () => launchUrl(
+                              Uri.parse(link.url),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                          ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text(
+                              '依赖（阻塞本卡）',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const HelpTipIcon(
+                              message:
+                                  '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () => _pickRelatedCard(
+                                title: '选择阻塞本卡的前置任务',
+                                onPicked: (id) {
+                                  if (_blockedByIds.contains(id) ||
+                                      id == widget.card.id) {
+                                    return;
+                                  }
+                                  _safeSetState(
+                                    () => _blockedByIds = [
+                                      ..._blockedByIds,
+                                      id,
+                                    ],
+                                  );
+                                },
+                              ),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('添加'),
+                            ),
+                          ],
+                        ),
+                        ..._relationTiles(
+                          ids: _blockedByIds,
+                          onRemove: (id) => _safeSetState(
+                            () => _blockedByIds = _blockedByIds
+                                .where((item) => item != id)
+                                .toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text(
+                              '关联（相关卡片）',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const HelpTipIcon(
+                              message: '无先后关系，仅便于跳转与追溯；不会阻塞本卡。',
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () => _pickRelatedCard(
+                                title: '选择关联卡片',
+                                onPicked: (id) {
+                                  if (_relatedIds.contains(id) ||
+                                      id == widget.card.id) {
+                                    return;
+                                  }
+                                  _safeSetState(
+                                    () =>
+                                        _relatedIds = [..._relatedIds, id],
+                                  );
+                                },
+                              ),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('添加'),
+                            ),
+                          ],
+                        ),
+                        ..._relationTiles(
+                          ids: _relatedIds,
+                          onRemove: (id) => _safeSetState(
+                            () => _relatedIds = _relatedIds
+                                .where((item) => item != id)
+                                .toList(),
+                          ),
                         ),
                         Builder(
                           builder: (context) {
