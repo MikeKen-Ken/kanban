@@ -1281,7 +1281,10 @@ class BoardController extends ChangeNotifier {
   }
 
   ColumnCardPreferences columnPreferencesFor(String columnId) =>
-      projectSettings.columnPreferencesFor(columnId);
+      resolveColumnCardPreferences(
+        stored: projectSettings.columnPreferences[columnId],
+        isDoneColumn: isDoneColumn(columnId),
+      );
 
   List<KanbanCard> displayCardsForColumn(KanbanColumn column) {
     final prefs = columnPreferencesFor(column.id);

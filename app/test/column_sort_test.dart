@@ -10,6 +10,28 @@ void main() {
     expect(CardSortMode.fromName('unknown'), CardSortMode.priority);
   });
 
+  test('done column defaults to updatedAt when no preference is stored', () {
+    expect(
+      defaultSortModeForColumn(isDoneColumn: false),
+      CardSortMode.priority,
+    );
+    expect(
+      defaultSortModeForColumn(isDoneColumn: true),
+      CardSortMode.updatedAt,
+    );
+    expect(
+      resolveColumnCardPreferences(isDoneColumn: true).sortMode,
+      CardSortMode.updatedAt,
+    );
+    expect(
+      resolveColumnCardPreferences(
+        stored: const ColumnCardPreferences(sortMode: CardSortMode.priority),
+        isDoneColumn: true,
+      ).sortMode,
+      CardSortMode.priority,
+    );
+  });
+
   test('sortColumnCards keeps pinned cards on top', () {
     final cards = [
       KanbanCard(id: 'a', title: 'A', order: 0, createdAt: 1, updatedAt: 1),
@@ -69,5 +91,21 @@ void main() {
     );
 
     expect(sorted.first.id, 'b');
+  });
+
+  test('updatedAt sort puts most recently updated first', () {
+    final cards = [
+      KanbanCard(id: 'a', title: 'A', order: 0, createdAt: 1, updatedAt: 1),
+      KanbanCard(id: 'b', title: 'B', order: 1, createdAt: 2, updatedAt: 3),
+      KanbanCard(id: 'c', title: 'C', order: 2, createdAt: 3, updatedAt: 2),
+    ];
+
+    final sorted = sortColumnCards(
+      cards,
+      sortMode: CardSortMode.updatedAt,
+      pinnedCardIds: const [],
+    );
+
+    expect(sorted.map((card) => card.id).toList(), ['b', 'c', 'a']);
   });
 }

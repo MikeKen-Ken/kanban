@@ -21,6 +21,21 @@ enum CardSortMode {
   }
 }
 
+/// 未单独保存偏好时的默认排序：已完成列为按时间，其余列为紧急程度。
+CardSortMode defaultSortModeForColumn({required bool isDoneColumn}) =>
+    isDoneColumn ? CardSortMode.updatedAt : CardSortMode.priority;
+
+/// 解析列偏好：有存档用存档，否则按是否已完成列给出默认值。
+ColumnCardPreferences resolveColumnCardPreferences({
+  ColumnCardPreferences? stored,
+  required bool isDoneColumn,
+}) {
+  if (stored != null) return stored;
+  return ColumnCardPreferences(
+    sortMode: defaultSortModeForColumn(isDoneColumn: isDoneColumn),
+  );
+}
+
 /// 单列的卡片展示偏好（随项目同步）
 class ColumnCardPreferences {
   const ColumnCardPreferences({
