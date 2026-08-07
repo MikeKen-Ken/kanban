@@ -6,7 +6,7 @@ import '../quick_capture/quick_capture.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_tool_results.dart';
 
-/// 注册快速捕获、模板、回收站、撤销与置顶相关工具。
+/// 注册快速捕获、模板、回收站、撤销/重做与置顶相关工具。
 void registerKanbanMcpProductivityTools(
   McpServer server,
   BoardController controller,
@@ -349,6 +349,26 @@ void registerKanbanMcpProductivityTools(
       final ok = await controller.undoLastAction();
       if (!ok) return mcpErrorResult('撤销失败');
       return mcpJsonResult({'ok': true, 'undone': label});
+    },
+  );
+
+  server.registerTool(
+    'redo_last_action',
+    description: '重做上一次已撤销的操作',
+    inputSchema: JsonSchema.object(properties: const {}),
+    annotations: const ToolAnnotations(
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    ),
+    callback: (args, extra) async {
+      if (!controller.canRedo) {
+        return mcpErrorResult('没有可重做的操作');
+      }
+      final label = controller.redoLabel;
+      final ok = await controller.redoLastAction();
+      if (!ok) return mcpErrorResult('重做失败');
+      return mcpJsonResult({'ok': true, 'redone': label});
     },
   );
 }

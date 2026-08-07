@@ -130,6 +130,21 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     );
   }
 
+  Future<void> _redoWithFeedback() async {
+    final controller = context.read<BoardController>();
+    final label = controller.redoLabel;
+    final redone = await controller.redoLastAction();
+    if (!mounted) return;
+    showAppSnackBar(
+      context,
+      message: redone
+          ? label == null
+              ? '已重做上一项操作'
+              : '已重做：$label'
+          : '没有可重做的操作',
+    );
+  }
+
   void _requestSync() {
     final controller = context.read<BoardController>();
     if (controller.syncStatus == SyncStatus.syncing) {
@@ -442,6 +457,9 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
       case 'undo':
         _undoWithFeedback();
         break;
+      case 'redo':
+        _redoWithFeedback();
+        break;
       case 'column':
         _addColumn(context);
         break;
@@ -498,6 +516,13 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
             _undoWithFeedback,
         const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          control: true,
+          shift: true,
+        ): _redoWithFeedback,
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true):
+            _redoWithFeedback,
+        const SingleActivator(
           LogicalKeyboardKey.keyS,
           control: true,
           shift: true,
@@ -517,6 +542,14 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                     : '没有可撤销的操作',
                 icon: const Icon(Icons.undo),
                 onPressed: controller.canUndo ? _undoWithFeedback : null,
+              ),
+            if (!compact)
+              IconButton(
+                tooltip: controller.canRedo
+                    ? '重做：${controller.redoLabel ?? '上一项操作'}'
+                    : '没有可重做的操作',
+                icon: const Icon(Icons.redo),
+                onPressed: controller.canRedo ? _redoWithFeedback : null,
               ),
             if (!compact)
               IconButton(
@@ -752,6 +785,18 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                         controller.canUndo
                             ? '撤销：${controller.undoLabel ?? '上一项操作'}'
                             : '没有可撤销的操作',
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'redo',
+                    enabled: controller.canRedo,
+                    child: ListTile(
+                      leading: const Icon(Icons.redo),
+                      title: Text(
+                        controller.canRedo
+                            ? '重做：${controller.redoLabel ?? '上一项操作'}'
+                            : '没有可重做的操作',
                       ),
                     ),
                   ),

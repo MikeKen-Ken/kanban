@@ -89,13 +89,32 @@ void main() {
     expect(titles.contains('卡2'), isTrue);
   });
 
-  test('对外项目写入不进入撤销栈', () async {
+  test('对外项目写入进入撤销栈且带项目作用域', () async {
     final columnB =
         (await controller.loadBoardSnapshot(projectB))!.columns.first.id;
     await controller.runOnProject(projectB, () async {
-      await controller.addCard(columnB, '不进撤销');
+      await controller.addCard(columnB, '可撤销');
     });
-    expect(controller.canUndo, isFalse);
+    expect(controller.canUndo, isTrue);
+    expect(controller.activeProjectId, projectA);
+
+    final undone = await controller.undoLastAction();
+    expect(undone, isTrue);
+    expect(controller.canRedo, isTrue);
+
+    final bBoard = await controller.loadBoardSnapshot(projectB);
+    expect(
+      bBoard!.columns.expand((c) => c.cards).any((c) => c.title == '可撤销'),
+      isFalse,
+    );
+
+    final redone = await controller.redoLastAction();
+    expect(redone, isTrue);
+    final restored = await controller.loadBoardSnapshot(projectB);
+    expect(
+      restored!.columns.expand((c) => c.cards).any((c) => c.title == '可撤销'),
+      isTrue,
+    );
   });
 
   test('多个 MCP 与界面连续并发写入后磁盘项目仍保持隔离', () async {

@@ -158,7 +158,9 @@ class BoardController extends ChangeNotifier {
   Stream<SyncStatus> get syncStatusStream => _syncService.statusStream;
   Stream<SyncProgress?> get syncProgressStream => _syncService.progressStream;
   bool get canUndo => _undoStack.canUndo;
-  String? get undoLabel => _undoStack.nextLabel;
+  bool get canRedo => _undoStack.canRedo;
+  String? get undoLabel => _undoStack.nextUndoLabel;
+  String? get redoLabel => _undoStack.nextRedoLabel;
   bool get backupHistorySupported => _backupHistorySupported;
 
   /// 界面当前项目 id；后台项目数据作用域不会改变此值。
@@ -262,10 +264,18 @@ class BoardController extends ChangeNotifier {
 
   Future<bool> undoLastAction() async {
     return _withBoardMutation(() async {
-    final undone = await _undoStack.undo();
-    if (undone) notifyListeners();
-    return undone;
-      });
+      final undone = await _undoStack.undo();
+      if (undone) notifyListeners();
+      return undone;
+    });
+  }
+
+  Future<bool> redoLastAction() async {
+    return _withBoardMutation(() async {
+      final redone = await _undoStack.redo();
+      if (redone) notifyListeners();
+      return redone;
+    });
   }
 
   Future<Uint8List> createBackupArchive() async {
@@ -651,9 +661,18 @@ class BoardController extends ChangeNotifier {
       );
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    String? trashId;
     _pushUndo(
       '新建「${card.title}」',
-      () => deleteCard(columnId, cardId),
+      () async {
+        trashId = await deleteCard(columnId, cardId);
+      },
+      redo: () async {
+        final id = trashId;
+        if (id == null) return;
+        final error = await restoreTrashItem(id);
+        if (error != null) throw StateError(error);
+      },
     );
     await _recordActivity(
       entityId: cardId,
@@ -825,8 +844,12 @@ class BoardController extends ChangeNotifier {
     return _mutationOrigin;
   }
 
-  /// 推入撤销项；自动化不入栈。跨项目 MCP 写入时用 [runOnProject] 包一层以便恢复。
-  void _pushUndo(String label, UndoCallback undo) {
+  /// 推入撤销/重做项；自动化不入栈。跨项目 MCP 写入时用 [runOnProject] 包一层以便恢复。
+  void _pushUndo(
+    String label,
+    UndoCallback undo, {
+    required UndoCallback redo,
+  }) {
     if (_applyingAutomation) return;
     final source = _mutationOrigin;
     final displayLabel =
@@ -838,11 +861,14 @@ class BoardController extends ChangeNotifier {
         UndoEntry(
           label: displayLabel,
           undo: () => runOnProject(scopedProjectId, undo),
+          redo: () => runOnProject(scopedProjectId, redo),
         ),
       );
       return;
     }
-    _undoStack.push(UndoEntry(label: displayLabel, undo: undo));
+    _undoStack.push(
+      UndoEntry(label: displayLabel, undo: undo, redo: redo),
+    );
   }
 
   /// 在指定项目上下文中执行操作：不修改已持久化的 active 项目，也不把 UI 切走。
@@ -1949,9 +1975,18 @@ class BoardController extends ChangeNotifier {
     }).toList();
     if (!added) return null;
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    String? trashId;
     _pushUndo(
       '新建「$title」',
-      () => deleteCard(columnId, cardId),
+      () async {
+        trashId = await deleteCard(columnId, cardId);
+      },
+      redo: () async {
+        final id = trashId;
+        if (id == null) return;
+        final error = await restoreTrashItem(id);
+        if (error != null) throw StateError(error);
+      },
     );
     if (reminderAt != null && activeProjectId != null) {
       await _scheduleCardReminder(
@@ -2051,6 +2086,26 @@ class BoardController extends ChangeNotifier {
     );
     if (original != null) {
       if (!_applyingAutomation) {
+        final restoredTitle = title ?? original.title;
+        final restoredDescription =
+            clearDescription ? null : (description ?? original.description);
+        final restoredCompleted = completed ?? original.completed;
+        final restoredDueDate =
+            clearDueDate ? null : (dueDate ?? original.dueDate);
+        final restoredReminderAt =
+            clearReminder ? null : (reminderAt ?? original.reminderAt);
+        final restoredRecurrence = recurrence ?? original.recurrence;
+        final restoredPriority = priority ?? original.priority;
+        final restoredLabels = labels ?? original.labels;
+        final restoredChecklist = checklist ?? original.checklist;
+        final restoredVerification =
+            verificationFeedback ?? original.verificationFeedback;
+        final restoredAttachments = attachments ?? original.attachments;
+        final restoredLinks = links ?? original.links;
+        final restoredBlockedBy = blockedByIds ?? original.blockedByIds;
+        final restoredRelated = relatedIds ?? original.relatedIds;
+        final restoredColor =
+            clearColor ? null : (colorValue ?? original.colorValue);
         _pushUndo(
           '编辑「${original.title}」',
           () => updateCardFull(
@@ -2075,6 +2130,29 @@ class BoardController extends ChangeNotifier {
             relatedIds: original.relatedIds,
             colorValue: original.colorValue,
             clearColor: original.colorValue == null,
+          ),
+          redo: () => updateCardFull(
+            columnId,
+            cardId,
+            title: restoredTitle,
+            description: restoredDescription,
+            clearDescription: restoredDescription == null,
+            completed: restoredCompleted,
+            dueDate: restoredDueDate,
+            clearDueDate: restoredDueDate == null,
+            reminderAt: restoredReminderAt,
+            clearReminder: restoredReminderAt == null,
+            recurrence: restoredRecurrence,
+            priority: restoredPriority,
+            labels: restoredLabels,
+            checklist: restoredChecklist,
+            verificationFeedback: restoredVerification,
+            attachments: restoredAttachments,
+            links: restoredLinks,
+            blockedByIds: restoredBlockedBy,
+            relatedIds: restoredRelated,
+            colorValue: restoredColor,
+            clearColor: restoredColor == null,
           ),
         );
       }
@@ -2511,9 +2589,9 @@ class BoardController extends ChangeNotifier {
     );
   }
 
-  Future<void> deleteCard(String columnId, String cardId) async {
+  Future<String?> deleteCard(String columnId, String cardId) async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return;
+    if (board == null || activeProjectId == null) return null;
 
     KanbanCard? target;
     KanbanColumn? sourceColumn;
@@ -2527,7 +2605,7 @@ class BoardController extends ChangeNotifier {
         }
       }
     }
-    if (target == null || sourceColumn == null) return;
+    if (target == null || sourceColumn == null) return null;
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final trashId = const Uuid().v4();
@@ -2550,11 +2628,16 @@ class BoardController extends ChangeNotifier {
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
     await _reminderScheduler.cancel(cardId);
+    var currentTrashId = trashId;
     _pushUndo(
       '删除「${target.title}」',
       () async {
-        final error = await restoreTrashItem(trashId);
+        final error = await restoreTrashItem(currentTrashId);
         if (error != null) throw StateError(error);
+      },
+      redo: () async {
+        final id = await deleteCard(columnId, cardId);
+        if (id != null) currentTrashId = id;
       },
     );
     await _recordActivity(
@@ -2562,6 +2645,7 @@ class BoardController extends ChangeNotifier {
       entityTitle: target.title,
       action: ActivityAction.deleted,
     );
+    return trashId;
       });
   }
 
@@ -2744,6 +2828,16 @@ class BoardController extends ChangeNotifier {
           );
           if (error != null) throw StateError(error);
         },
+        redo: () async {
+          final error = await transferCardToProject(
+            fromColumnId: fromColumnId,
+            cardId: cardId,
+            targetProjectId: targetProjectId,
+            sourceProjectId: fromProjectId,
+            targetColumnId: resolvedTargetColumnId,
+          );
+          if (error != null) throw StateError(error);
+        },
       );
 
       return null;
@@ -2894,13 +2988,23 @@ class BoardController extends ChangeNotifier {
     }
 
     final count = clearedCards.length;
+    final clearedCardIds = [for (final card in clearedCards) card.id];
+    var currentTrashIds = List<String>.from(trashIds);
     _pushUndo(
       '清空「${doneColumn.title}」($count)',
       () async {
-        for (final trashId in trashIds.reversed) {
+        for (final trashId in currentTrashIds.reversed) {
           final error = await restoreTrashItem(trashId);
           if (error != null) throw StateError(error);
         }
+      },
+      redo: () async {
+        final nextIds = <String>[];
+        for (final cardId in clearedCardIds) {
+          final id = await deleteCard(columnId, cardId);
+          if (id != null) nextIds.add(id);
+        }
+        currentTrashIds = nextIds;
       },
     );
     return count;
@@ -3163,6 +3267,14 @@ class BoardController extends ChangeNotifier {
             fromColumnId: toColumnId,
             toColumnId: fromColumnId,
             toDisplayIndex: originalIndex,
+          ),
+          redo: () => moveCard(
+            cardId: cardId,
+            fromColumnId: fromColumnId,
+            toColumnId: toColumnId,
+            toDisplayIndex: toDisplayIndex,
+            completed: completed,
+            completedAt: completedAt,
           ),
         );
       }

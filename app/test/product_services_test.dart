@@ -63,13 +63,69 @@ void main() {
   test('撤销栈遵守容量并执行最近动作', () async {
     final values = <int>[];
     final stack = UndoStack(capacity: 2)
-      ..push(UndoEntry(label: '一', undo: () async => values.add(1)))
-      ..push(UndoEntry(label: '二', undo: () async => values.add(2)))
-      ..push(UndoEntry(label: '三', undo: () async => values.add(3)));
+      ..push(
+        UndoEntry(
+          label: '一',
+          undo: () async => values.add(1),
+          redo: () async => values.add(-1),
+        ),
+      )
+      ..push(
+        UndoEntry(
+          label: '二',
+          undo: () async => values.add(2),
+          redo: () async => values.add(-2),
+        ),
+      )
+      ..push(
+        UndoEntry(
+          label: '三',
+          undo: () async => values.add(3),
+          redo: () async => values.add(-3),
+        ),
+      );
 
     expect(await stack.undo(), isTrue);
     expect(await stack.undo(), isTrue);
     expect(await stack.undo(), isFalse);
     expect(values, [3, 2]);
+  });
+
+  test('撤销后可重做，新操作会清空重做栈', () async {
+    final values = <String>[];
+    final stack = UndoStack()
+      ..push(
+        UndoEntry(
+          label: '甲',
+          undo: () async => values.add('undo-甲'),
+          redo: () async => values.add('redo-甲'),
+        ),
+      )
+      ..push(
+        UndoEntry(
+          label: '乙',
+          undo: () async => values.add('undo-乙'),
+          redo: () async => values.add('redo-乙'),
+        ),
+      );
+
+    expect(stack.canRedo, isFalse);
+    expect(await stack.undo(), isTrue);
+    expect(stack.canRedo, isTrue);
+    expect(stack.nextRedoLabel, '乙');
+    expect(await stack.redo(), isTrue);
+    expect(stack.canRedo, isFalse);
+    expect(await stack.undo(), isTrue);
+
+    stack.push(
+      UndoEntry(
+        label: '丙',
+        undo: () async => values.add('undo-丙'),
+        redo: () async => values.add('redo-丙'),
+      ),
+    );
+    expect(stack.canRedo, isFalse);
+    expect(await stack.redo(), isFalse);
+    expect(values, ['undo-乙', 'redo-乙', 'undo-乙']);
   });
 }
