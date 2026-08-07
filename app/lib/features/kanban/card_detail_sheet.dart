@@ -58,6 +58,7 @@ class _CardDetailSheet extends StatefulWidget {
 class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
+  final FocusNode _descFocusNode = FocusNode();
   late BoardController _boardController;
   late bool _completed;
   DateTime? _dueDate;
@@ -123,9 +124,21 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _boardController.removeListener(_onBoardChanged);
     _titleController.dispose();
     _descController.dispose();
+    _descFocusNode.dispose();
     _checklistInput.dispose();
     _verificationFeedbackInput.dispose();
     super.dispose();
+  }
+
+  /// 标题框回车：切到可编辑备注并聚焦，便于连续输入。
+  void _focusDescriptionFromTitle() {
+    if (_previewMarkdown) {
+      _safeSetState(() => _previewMarkdown = false);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _descriptionExpanded) return;
+      _descFocusNode.requestFocus();
+    });
   }
 
   void _onBoardChanged() => deferRebuildIfComposing(_textControllers);
@@ -1025,6 +1038,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             key: const ValueKey('card-detail-title'),
                             controller: _titleController,
                             autofocus: widget.autofocusTitle,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) => _focusDescriptionFromTitle(),
                             style: theme.textTheme.titleLarge?.copyWith(
                               decoration: _completed
                                   ? TextDecoration.lineThrough
@@ -1163,6 +1178,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           TextField(
                             key: const ValueKey('card-detail-desc'),
                             controller: _descController,
+                            focusNode: _descFocusNode,
                             maxLines: 6,
                             decoration: const InputDecoration(
                               hintText: '支持 Markdown…',
