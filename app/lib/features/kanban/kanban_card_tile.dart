@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/project/project_settings.dart';
 import '../../features/project/project_theme.dart';
 import '../../models/kanban_models.dart';
 import '../attachments/card_attachment_image.dart';
 import '../attachments/card_attachment_viewer.dart';
+import '../completed_auto_clear/completed_auto_clear.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
 import 'confirm_delete_card.dart';
@@ -82,7 +84,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     );
   }
 
-  /// 卡片上下文菜单（转移到… / 删除）。
+  /// 卡片上下文菜单（完成 / 转移到… / 删除）。
   ///
   /// 触发方式：
   /// - 桌面：右键（secondary tap）
@@ -92,6 +94,9 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     if (!mounted || _dragStarted) return;
     final controller = context.read<BoardController>();
     final canTransfer = controller.projects.length > 1;
+    final showComplete = shouldShowCompleteInCardContextMenu(
+      isInDoneColumn: controller.isDoneColumn(widget.columnId),
+    );
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
     final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
     final selected = await showMenu<String>(
@@ -103,6 +108,11 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         overlaySize.height - globalPosition.dy,
       ),
       items: [
+        if (showComplete)
+          const PopupMenuItem<String>(
+            value: 'complete',
+            child: Text('完成'),
+          ),
         PopupMenuItem<String>(
           value: 'transfer',
           enabled: canTransfer,
@@ -118,7 +128,9 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       ],
     );
     if (!mounted) return;
-    if (selected == 'transfer') {
+    if (selected == 'complete') {
+      await _completeCardFromMenu();
+    } else if (selected == 'transfer') {
       await showTransferCardToProjectFlow(
         context: context,
         columnId: widget.columnId,
@@ -127,6 +139,45 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       );
     } else if (selected == 'delete') {
       await _confirmAndDeleteCard();
+    }
+  }
+
+  /// 与勾选框 / MCP `complete_card` / 详情「完成」一致：标记完成并移入已完成列。
+  Future<void> _completeCardFromMenu() async {
+    final controller = context.read<BoardController>();
+    final columnId = widget.columnId;
+    final cardId = widget.card.id;
+    if (controller.isDoneColumn(columnId)) return;
+
+    final live = controller.findCardById(cardId);
+    if (live == null) return;
+
+    try {
+      if (!live.completed) {
+        await controller.toggleCardCompleted(columnId, cardId);
+        return;
+      }
+      // 已勾选完成但尚未在已完成列时，补一次移入（与详情完成逻辑一致）。
+      final board = controller.board;
+      if (board == null) return;
+      final done = findDoneColumn(
+        board,
+        doneColumnName: controller.projectSettings.doneColumnName,
+      );
+      if (done != null && done.id != columnId) {
+        await controller.moveCard(
+          cardId: cardId,
+          fromColumnId: columnId,
+          toColumnId: done.id,
+          toDisplayIndex: done.cards.length,
+          completed: true,
+          completedAt: live.completedAt ??
+              DateTime.now().millisecondsSinceEpoch,
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      showAppSnackBar(context, message: '完成失败：$error');
     }
   }
 
