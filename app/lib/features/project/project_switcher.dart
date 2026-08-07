@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/project/project_list_preferences.dart';
 import '../../features/project/projects_manifest.dart';
+import 'project_quick_switch.dart';
 import 'project_settings_screen.dart';
 import 'project_theme.dart';
 
@@ -188,230 +189,242 @@ class ProjectSwitcher extends StatelessWidget {
         final projects = controller.projects;
         final sortMode = controller.appSettings.projectSortMode;
 
-        return PopupMenuButton<String>(
-          tooltip: '切换项目',
-          constraints: const BoxConstraints(
-            minWidth: _menuMinWidth,
-            maxWidth: _menuMaxWidth,
-          ),
-          onSelected: (value) async {
-            if (value == '__new__') {
-              await _createProject(context);
-            } else if (value == '__settings__') {
-              if (!context.mounted) return;
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const ProjectSettingsScreen(),
-                ),
-              );
-            } else if (value.startsWith('__sort__:')) {
-              final modeName = value.substring('__sort__:'.length);
-              await controller.setProjectSortMode(
-                ProjectSortMode.fromName(modeName),
-              );
-            } else {
-              await controller.switchProject(value);
-            }
-          },
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _titleMaxWidth),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.folder_outlined, size: 20),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      active?.title ?? '看板',
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge,
+        // 短按：完整菜单；稍长按住后上下滑动：快速切换项目
+        return ProjectQuickSwitchGesture(
+          projects: projects,
+          activeProjectId: controller.activeProjectId,
+          longPressDelay: controller.appSettings.dragDelay,
+          themeIdFor: controller.themeIdForProject,
+          onCommit: controller.switchProject,
+          child: PopupMenuButton<String>(
+            tooltip: '切换项目（短按菜单，长按滑动快速切换）',
+            constraints: const BoxConstraints(
+              minWidth: _menuMinWidth,
+              maxWidth: _menuMaxWidth,
+            ),
+            onSelected: (value) async {
+              if (value == '__new__') {
+                await _createProject(context);
+              } else if (value == '__settings__') {
+                if (!context.mounted) return;
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ProjectSettingsScreen(),
+                  ),
+                );
+              } else if (value.startsWith('__sort__:')) {
+                final modeName = value.substring('__sort__:'.length);
+                await controller.setProjectSortMode(
+                  ProjectSortMode.fromName(modeName),
+                );
+              } else {
+                await controller.switchProject(value);
+              }
+            },
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _titleMaxWidth),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.folder_outlined, size: 20),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        active?.title ?? '看板',
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
-                  ),
-                ],
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          itemBuilder: (context) {
-            final theme = Theme.of(context);
-            final brightness = theme.brightness;
-            final subtitleStyle = theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            );
+            itemBuilder: (context) {
+              final theme = Theme.of(context);
+              final brightness = theme.brightness;
+              final subtitleStyle = theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              );
 
-            final items = <PopupMenuEntry<String>>[
-              PopupMenuItem<String>(
-                enabled: false,
-                height: 32,
-                child: Text('排序方式', style: subtitleStyle),
-              ),
-              for (final mode in ProjectSortMode.values)
+              final items = <PopupMenuEntry<String>>[
                 PopupMenuItem<String>(
-                  value: '__sort__:${mode.name}',
-                  child: _sortModeTile(
-                    context,
-                    mode: mode,
-                    current: sortMode,
-                  ),
+                  enabled: false,
+                  height: 32,
+                  child: Text('排序方式', style: subtitleStyle),
                 ),
-              const PopupMenuDivider(),
-              ...projects.map((project) {
-                final isActive = project.id == controller.activeProjectId;
-                final isPinned = controller.isProjectPinned(project.id);
-                final seed = _projectSeedColor(
-                  controller.themeIdForProject(project.id),
-                  brightness,
-                );
-                final scheme = ColorScheme.fromSeed(
-                  seedColor: seed,
-                  brightness: brightness,
-                );
-                final tileBg = scheme.primaryContainer.withValues(
-                  alpha: isActive ? 0.95 : 0.45,
-                );
-                final onTile = scheme.onPrimaryContainer;
+                for (final mode in ProjectSortMode.values)
+                  PopupMenuItem<String>(
+                    value: '__sort__:${mode.name}',
+                    child: _sortModeTile(
+                      context,
+                      mode: mode,
+                      current: sortMode,
+                    ),
+                  ),
+                const PopupMenuDivider(),
+                ...projects.map((project) {
+                  final isActive = project.id == controller.activeProjectId;
+                  final isPinned = controller.isProjectPinned(project.id);
+                  final seed = _projectSeedColor(
+                    controller.themeIdForProject(project.id),
+                    brightness,
+                  );
+                  final scheme = ColorScheme.fromSeed(
+                    seedColor: seed,
+                    brightness: brightness,
+                  );
+                  final tileBg = scheme.primaryContainer.withValues(
+                    alpha: isActive ? 0.95 : 0.45,
+                  );
+                  final onTile = scheme.onPrimaryContainer;
 
-                return PopupMenuItem<String>(
-                  value: project.id,
-                  padding: EdgeInsets.zero,
-                  child: ListTile(
-                    dense: true,
-                    selected: isActive,
-                    tileColor: tileBg,
-                    selectedTileColor: tileBg,
-                    selectedColor: onTile,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    leading: Icon(
-                      isActive
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
-                      size: 18,
-                      color: scheme.primary,
-                    ),
-                    title: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            project.title,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: onTile,
-                              fontWeight:
-                                  isActive ? FontWeight.w700 : FontWeight.w500,
+                  return PopupMenuItem<String>(
+                    value: project.id,
+                    padding: EdgeInsets.zero,
+                    child: ListTile(
+                      dense: true,
+                      selected: isActive,
+                      tileColor: tileBg,
+                      selectedTileColor: tileBg,
+                      selectedColor: onTile,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                      leading: Icon(
+                        isActive
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        size: 18,
+                        color: scheme.primary,
+                      ),
+                      title: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              project.title,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: onTile,
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
                             ),
                           ),
-                        ),
-                        if (project.hasConflict) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            '冲突',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.error,
+                          if (project.hasConflict) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              '冲突',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.error,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (project.conflictDeleted)
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (project.conflictDeleted)
+                            IconButton(
+                              tooltip: '解决同步冲突',
+                              icon: Icon(
+                                Icons.error_outline,
+                                size: 18,
+                                color: theme.colorScheme.error,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                await _resolveProjectConflict(
+                                    context, project);
+                              },
+                            ),
                           IconButton(
-                            tooltip: '解决同步冲突',
+                            tooltip: '重命名项目',
                             icon: Icon(
-                              Icons.error_outline,
+                              Icons.edit_outlined,
                               size: 18,
-                              color: theme.colorScheme.error,
+                              color: onTile.withValues(alpha: 0.85),
                             ),
                             visualDensity: VisualDensity.compact,
                             onPressed: () async {
                               Navigator.pop(context);
-                              await _resolveProjectConflict(context, project);
+                              await _renameProject(context, project);
                             },
                           ),
-                        IconButton(
-                          tooltip: '重命名项目',
-                          icon: Icon(
-                            Icons.edit_outlined,
-                            size: 18,
-                            color: onTile.withValues(alpha: 0.85),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () async {
-                            Navigator.pop(context);
-                            await _renameProject(context, project);
-                          },
-                        ),
-                        IconButton(
-                          tooltip: isPinned ? '取消置顶' : '置顶',
-                          icon: Icon(
-                            isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                            size: 18,
-                            color: isPinned
-                                ? scheme.primary
-                                : onTile.withValues(alpha: 0.85),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () async {
-                            Navigator.pop(context);
-                            await controller.toggleProjectPin(project.id);
-                          },
-                        ),
-                        if (projects.length > 1)
                           IconButton(
-                            tooltip: '删除项目',
+                            tooltip: isPinned ? '取消置顶' : '置顶',
                             icon: Icon(
-                              Icons.delete_outline,
+                              isPinned
+                                  ? Icons.push_pin
+                                  : Icons.push_pin_outlined,
                               size: 18,
-                              color: theme.colorScheme.error,
+                              color: isPinned
+                                  ? scheme.primary
+                                  : onTile.withValues(alpha: 0.85),
                             ),
                             visualDensity: VisualDensity.compact,
                             onPressed: () async {
                               Navigator.pop(context);
-                              await _deleteProject(context, project);
+                              await controller.toggleProjectPin(project.id);
                             },
                           ),
-                      ],
+                          if (projects.length > 1)
+                            IconButton(
+                              tooltip: '删除项目',
+                              icon: Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: theme.colorScheme.error,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                await _deleteProject(context, project);
+                              },
+                            ),
+                        ],
+                      ),
                     ),
+                  );
+                }),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: '__new__',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.add),
+                    title: Text('新建项目'),
+                    dense: true,
                   ),
-                );
-              }),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: '__new__',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.add),
-                  title: Text('新建项目'),
-                  dense: true,
                 ),
-              ),
-              const PopupMenuItem(
-                value: '__settings__',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.tune_outlined),
-                  title: Text('当前项目设置'),
-                  dense: true,
+                const PopupMenuItem(
+                  value: '__settings__',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.tune_outlined),
+                    title: Text('当前项目设置'),
+                    dense: true,
+                  ),
                 ),
-              ),
-            ];
-            return items;
-          },
-        );
-      },
+              ];
+              return items;
+            },
+          ),
+        );      },
     );
   }
 }
