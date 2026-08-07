@@ -1419,17 +1419,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         const SizedBox(height: 20),
                         Row(
                           children: [
-                            Text('依赖与关联',
-                                style: theme.textTheme.titleSmall),
-                            const HelpTipIcon(
-                              message:
-                                  '连接本看板内的其他卡片。与上方「链接」网页书签不同。',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
                             Text(
                               '依赖（阻塞本卡）',
                               style: theme.textTheme.labelLarge,
