@@ -399,12 +399,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   }
 
   /// 待验证详情：先保存编辑，再按看板完成逻辑移入「已完成」并关闭。
+  ///
+  /// 若存在未完成验证反馈（含本次新增），待返工优先于已完成：只落「待返工」，不标记完成。
   Future<void> _completeAndClose() async {
     // 允许失败重试时再次写入编辑内容。
     _persisted = false;
     // 完成移动由 toggle/move 负责；避免 _persist 仅打勾却仍留在待验证。
     final markCompletedLocally = _completed;
     _completed = widget.card.completed;
+    final feedbackSnapshot =
+        List<ChecklistItem>.from(_verificationFeedback);
     try {
       await _persist();
     } catch (error) {
@@ -413,6 +417,20 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       showAppSnackBar(context, message: '保存失败：$error');
       return;
     }
+
+    // 未完成验证反馈时优先待返工，避免随后的「已完成」迁移盖过。
+    if (shouldPreferReworkOverComplete(nextFeedback: feedbackSnapshot)) {
+      try {
+        await _ensureInReworkForIncompleteFeedback(feedbackSnapshot);
+      } catch (error) {
+        if (!mounted) return;
+        showAppSnackBar(context, message: '移入待返工失败：$error');
+        return;
+      }
+      if (mounted) _closeWithoutPersist();
+      return;
+    }
+
     _completed = true;
 
     final columnId =
@@ -455,6 +473,31 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       return;
     }
     if (mounted) _closeWithoutPersist();
+  }
+
+  /// 存在未完成验证反馈时确保卡片在「待返工」（已在则跳过）。
+  Future<void> _ensureInReworkForIncompleteFeedback(
+    List<ChecklistItem> feedback,
+  ) async {
+    final board = _boardController.board;
+    if (board == null) return;
+    final fromColumnId =
+        _boardController.findColumnIdForCard(widget.card.id) ??
+            widget.columnId;
+    final toColumnId = targetReworkColumnIdIfIncompleteFeedback(
+      feedback: feedback,
+      currentColumnId: fromColumnId,
+      columns: board.columns,
+    );
+    if (toColumnId == null) return;
+    final rework = findReworkColumn(board.columns);
+    if (rework == null) return;
+    await _boardController.moveCard(
+      cardId: widget.card.id,
+      fromColumnId: fromColumnId,
+      toColumnId: toColumnId,
+      toDisplayIndex: rework.cards.length,
+    );
   }
 
   Future<void> _saveAsTemplate() async {

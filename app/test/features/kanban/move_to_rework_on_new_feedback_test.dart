@@ -146,4 +146,111 @@ void main() {
       );
     });
   });
+
+  group('hasIncompleteVerificationFeedback', () {
+    test('存在未勾选项为 true', () {
+      expect(
+        hasIncompleteVerificationFeedback([
+          ChecklistItem(id: 'a', text: '已改', completed: true),
+          ChecklistItem(id: 'b', text: '未改'),
+        ]),
+        isTrue,
+      );
+    });
+
+    test('全部勾选或空列表为 false', () {
+      expect(hasIncompleteVerificationFeedback(const []), isFalse);
+      expect(
+        hasIncompleteVerificationFeedback([
+          ChecklistItem(id: 'a', text: 'ok', completed: true),
+        ]),
+        isFalse,
+      );
+    });
+  });
+
+  group('targetReworkColumnIdIfIncompleteFeedback', () {
+    final columns = [
+      KanbanColumn(id: 'verify', title: '待验证', order: 0, cards: const []),
+      KanbanColumn(
+        id: KanbanBoard.defaultReworkColumnId,
+        title: KanbanBoard.defaultReworkColumnTitle,
+        order: 1,
+        cards: const [],
+      ),
+      KanbanColumn(id: 'done', title: '已完成', order: 2, cards: const []),
+    ];
+
+    test('有未完成 VF 且不在待返工 → 返回待返工列 id', () {
+      expect(
+        targetReworkColumnIdIfIncompleteFeedback(
+          feedback: [ChecklistItem(id: 'vf1', text: '请返工')],
+          currentColumnId: 'verify',
+          columns: columns,
+        ),
+        'rework',
+      );
+    });
+
+    test('已在待返工不重复移', () {
+      expect(
+        targetReworkColumnIdIfIncompleteFeedback(
+          feedback: [ChecklistItem(id: 'vf1', text: '请返工')],
+          currentColumnId: 'rework',
+          columns: columns,
+        ),
+        isNull,
+      );
+    });
+
+    test('全部已完成不触发', () {
+      expect(
+        targetReworkColumnIdIfIncompleteFeedback(
+          feedback: [
+            ChecklistItem(id: 'vf1', text: '已修', completed: true),
+          ],
+          currentColumnId: 'verify',
+          columns: columns,
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('shouldPreferReworkOverComplete', () {
+    test('新增未完成 VF 时优先待返工', () {
+      expect(
+        shouldPreferReworkOverComplete(
+          nextFeedback: [ChecklistItem(id: 'n', text: '新问题')],
+        ),
+        isTrue,
+      );
+    });
+
+    test('仍有未完成 VF 时优先待返工（即使未新增）', () {
+      expect(
+        shouldPreferReworkOverComplete(
+          nextFeedback: [
+            ChecklistItem(id: 'old', text: '旧反馈'),
+          ],
+        ),
+        isTrue,
+      );
+    });
+
+    test('无未完成 VF 时可走已完成', () {
+      expect(
+        shouldPreferReworkOverComplete(nextFeedback: const []),
+        isFalse,
+      );
+      expect(
+        shouldPreferReworkOverComplete(
+          nextFeedback: [
+            ChecklistItem(id: 'a', text: '已闭环', completed: true),
+          ],
+        ),
+        isFalse,
+      );
+    });
+  });
 }

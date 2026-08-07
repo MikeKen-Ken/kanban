@@ -22,6 +22,11 @@ KanbanColumn? findReworkColumn(Iterable<KanbanColumn> columns) {
   return null;
 }
 
+/// 是否存在未勾选完成的验证反馈项。
+bool hasIncompleteVerificationFeedback(List<ChecklistItem> feedback) {
+  return feedback.any((item) => !item.completed);
+}
+
 /// 新增了验证反馈且当前不在待返工列时，返回应移入的列 id；否则 `null`。
 String? targetReworkColumnIdIfNeeded({
   required List<ChecklistItem> originalFeedback,
@@ -38,4 +43,27 @@ String? targetReworkColumnIdIfNeeded({
   final rework = findReworkColumn(columns);
   if (rework == null || rework.id == currentColumnId) return null;
   return rework.id;
+}
+
+/// 存在未完成验证反馈且当前不在待返工列时，返回应移入的列 id；否则 `null`。
+///
+/// 用于「完成」操作：待返工优先于移入已完成。
+String? targetReworkColumnIdIfIncompleteFeedback({
+  required List<ChecklistItem> feedback,
+  required String currentColumnId,
+  required Iterable<KanbanColumn> columns,
+}) {
+  if (!hasIncompleteVerificationFeedback(feedback)) return null;
+  final rework = findReworkColumn(columns);
+  if (rework == null || rework.id == currentColumnId) return null;
+  return rework.id;
+}
+
+/// 点「完成」时是否应优先落「待返工」而非「已完成」。
+///
+/// 只要当前仍有未完成验证反馈（含本次新增），就不走已完成迁移。
+bool shouldPreferReworkOverComplete({
+  required List<ChecklistItem> nextFeedback,
+}) {
+  return hasIncompleteVerificationFeedback(nextFeedback);
 }
