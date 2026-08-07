@@ -1331,23 +1331,60 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                       controller: scrollController,
                       padding: const EdgeInsets.all(16),
                       children: [
-                        Row(
-                          children: [
-                            Text('备注', style: theme.textTheme.titleSmall),
-                            const Spacer(),
-                            IconButton(
-                              tooltip: '放大编辑',
-                              onPressed: _openDescriptionExpanded,
-                              icon: const Icon(Icons.open_in_full, size: 20),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            TextButton(
-                              onPressed: () => _safeSetState(
-                                () => _previewMarkdown = !_previewMarkdown,
-                              ),
-                              child: Text(_previewMarkdown ? '编辑' : '预览'),
-                            ),
-                          ],
+                        Builder(
+                          builder: (context) {
+                            // 时间戳紧跟「备注」标题文字后方（同一行），非整块备注控件之后。
+                            final metaCard = _liveCard ?? widget.card;
+                            final timestamps = formatCardDetailTimestamps(
+                              createdAt: metaCard.createdAt,
+                              updatedAt: metaCard.updatedAt,
+                              completedAt: metaCard.completed
+                                  ? metaCard.completedAt
+                                  : null,
+                            );
+                            return Row(
+                              children: [
+                                Text(
+                                  '备注',
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                                if (timestamps != null) ...[
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      timestamps,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color: theme
+                                            .colorScheme.onSurfaceVariant,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ] else
+                                  const Spacer(),
+                                IconButton(
+                                  tooltip: '放大编辑',
+                                  onPressed: _openDescriptionExpanded,
+                                  icon: const Icon(
+                                    Icons.open_in_full,
+                                    size: 20,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                TextButton(
+                                  onPressed: () => _safeSetState(
+                                    () => _previewMarkdown =
+                                        !_previewMarkdown,
+                                  ),
+                                  child: Text(
+                                    _previewMarkdown ? '编辑' : '预览',
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 8),
                         if (_previewMarkdown)
@@ -1384,30 +1421,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               border: OutlineInputBorder(),
                             ),
                           ),
-                        Builder(
-                          builder: (context) {
-                            final metaCard = _liveCard ?? widget.card;
-                            final line = formatCardDetailTimestamps(
-                              createdAt: metaCard.createdAt,
-                              updatedAt: metaCard.updatedAt,
-                              completedAt: metaCard.completed
-                                  ? metaCard.completedAt
-                                  : null,
-                            );
-                            if (line == null) {
-                              return const SizedBox.shrink();
-                            }
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                line,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
                         const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
