@@ -80,6 +80,60 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     );
   }
 
+  /// 桌面右键（或即时拖拽模式下的长按）弹出轻量上下文菜单。
+  Future<void> _showCardContextMenu(Offset globalPosition) async {
+    if (!mounted || _dragStarted) return;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        overlaySize.width - globalPosition.dx,
+        overlaySize.height - globalPosition.dy,
+      ),
+      items: [
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Text(
+            '删除',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      ],
+    );
+    if (selected == 'delete' && mounted) {
+      await _confirmAndDeleteCard();
+    }
+  }
+
+  /// 与详情页删除一致：确认后移入回收站。
+  Future<void> _confirmAndDeleteCard() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除卡片？'),
+        content: Text('「${widget.card.title}」将移至回收站'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      await context
+          .read<BoardController>()
+          .deleteCard(widget.columnId, widget.card.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BoardController>();
@@ -123,6 +177,9 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           // 延迟拖拽时也避免「填充动画」误导成已可拖
           suppressInk: true,
           onOpenDetail: _openDetail,
+          onContextMenu: _showCardContextMenu,
+          // 长按已用于延迟拖拽；仅即时拖拽模式才用长按作移动端菜单入口
+          enableLongPressContextMenu: immediateDrag,
         );
 
         // 拖起后原位只保留占位尺寸，不绘制幽灵卡面，避免与反馈层叠成两层
@@ -193,6 +250,8 @@ class _CardContent extends StatelessWidget {
     this.surfaceOpacity = ProjectSettings.defaultCardSurfaceOpacity,
     this.suppressInk = false,
     this.onOpenDetail,
+    this.onContextMenu,
+    this.enableLongPressContextMenu = false,
   });
 
   final KanbanCard card;
@@ -205,6 +264,8 @@ class _CardContent extends StatelessWidget {
   final double surfaceOpacity;
   final bool suppressInk;
   final VoidCallback? onOpenDetail;
+  final void Function(Offset globalPosition)? onContextMenu;
+  final bool enableLongPressContextMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +324,23 @@ class _CardContent extends StatelessWidget {
         onTap: dragging || columnId == null || onOpenDetail == null
             ? null
             : onOpenDetail,
+        onSecondaryTapDown: dragging ||
+                columnId == null ||
+                onContextMenu == null
+            ? null
+            : (details) => onContextMenu!(details.globalPosition),
+        onLongPress: dragging ||
+                columnId == null ||
+                onContextMenu == null ||
+                !enableLongPressContextMenu
+            ? null
+            : () {
+                // 长按无精确落点时，以卡片中心为菜单锚点
+                final box = context.findRenderObject() as RenderBox?;
+                if (box == null || !box.hasSize) return;
+                final center = box.size.center(Offset.zero);
+                onContextMenu!(box.localToGlobal(center));
+              },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
