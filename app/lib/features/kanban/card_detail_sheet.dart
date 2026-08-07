@@ -24,6 +24,7 @@ import 'commit_list_draft.dart';
 import 'discard_blank_card.dart';
 import 'due_date_shortcuts.dart';
 import 'kanban_labels.dart';
+import 'reminder_shortcuts.dart';
 import 'move_to_rework_on_new_feedback.dart';
 import 'transfer_card_sheet.dart';
 import 'verify_column.dart';
@@ -655,6 +656,49 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         date.day,
         time.hour,
         time.minute,
+      ),
+    );
+  }
+
+  void _applyReminderShortcut(ReminderShortcut shortcut) {
+    _safeSetState(() => _reminderAt = shortcut.resolve(DateTime.now()));
+  }
+
+  /// 提醒快捷预设与「设置提醒」同一行；小屏可横向滚动。
+  Widget _buildReminderRow() {
+    final now = DateTime.now();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final shortcut in ReminderShortcut.values) ...[
+            FilterChip(
+              label: Text(shortcut.label),
+              selected: isSameLocalMinute(_reminderAt, shortcut.resolve(now)),
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onSelected: (_) => _applyReminderShortcut(shortcut),
+            ),
+            const SizedBox(width: 8),
+          ],
+          FilledButton.tonalIcon(
+            onPressed: _pickReminder,
+            icon: const Icon(Icons.notifications_outlined, size: 18),
+            label: Text(
+              _reminderAt == null
+                  ? '设置提醒'
+                  : DateFormat('MMMd HH:mm', 'zh_CN').format(_reminderAt!),
+            ),
+          ),
+          if (_reminderAt != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _safeSetState(() => _reminderAt = null),
+              child: const Text('清除'),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1512,31 +1556,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         const SizedBox(height: 20),
                         Text('提醒', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _pickReminder,
-                              icon: const Icon(
-                                Icons.notifications_outlined,
-                                size: 18,
-                              ),
-                              label: Text(
-                                _reminderAt == null
-                                    ? '设置提醒'
-                                    : DateFormat('MMMd HH:mm', 'zh_CN')
-                                        .format(_reminderAt!),
-                              ),
-                            ),
-                            if (_reminderAt != null) ...[
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () =>
-                                    _safeSetState(() => _reminderAt = null),
-                                child: const Text('清除'),
-                              ),
-                            ],
-                          ],
-                        ),
+                        _buildReminderRow(),
                         const SizedBox(height: 20),
                         Text('重复', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
