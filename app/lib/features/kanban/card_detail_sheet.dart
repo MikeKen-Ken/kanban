@@ -17,6 +17,7 @@ import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
 import 'description_expand_dialog.dart';
 import 'description_markdown_preview.dart';
+import 'commit_list_draft.dart';
 import 'discard_blank_card.dart';
 import 'due_date_shortcuts.dart';
 import 'kanban_labels.dart';
@@ -252,6 +253,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   /// 持久化当前编辑；点击周边/关闭/返回时也会调用。
   Future<void> _persist() async {
     if (_persisted || _skipPersist) return;
+
+    // 保存前把子任务/验证反馈输入框中未点「+」的非空草稿自动入列。
+    _commitPendingListDrafts();
 
     // 新建空白卡关闭时：标题与备注皆空则删除，避免留下空壳卡。
     if (shouldDiscardBlankCard(
@@ -757,14 +761,37 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     ];
   }
 
+  /// 将子任务与验证反馈输入框中的非空草稿写入对应列表（空白忽略）。
+  void _commitPendingListDrafts() {
+    final nextChecklist = commitChecklistDraft(
+      items: _checklist,
+      draftText: _checklistInput.text,
+      newId: () => const Uuid().v4(),
+    );
+    if (!identical(nextChecklist, _checklist)) {
+      _checklist = nextChecklist;
+      _checklistInput.clear();
+    }
+    final nextFeedback = commitChecklistDraft(
+      items: _verificationFeedback,
+      draftText: _verificationFeedbackInput.text,
+      newId: () => const Uuid().v4(),
+    );
+    if (!identical(nextFeedback, _verificationFeedback)) {
+      _verificationFeedback = nextFeedback;
+      _verificationFeedbackInput.clear();
+    }
+  }
+
   void _addChecklistItem() {
-    final text = _checklistInput.text.trim();
-    if (text.isEmpty) return;
+    final next = commitChecklistDraft(
+      items: _checklist,
+      draftText: _checklistInput.text,
+      newId: () => const Uuid().v4(),
+    );
+    if (identical(next, _checklist)) return;
     _safeSetState(() {
-      _checklist = [
-        ..._checklist,
-        ChecklistItem(id: const Uuid().v4(), text: text),
-      ];
+      _checklist = next;
       _checklistInput.clear();
     });
   }
@@ -797,13 +824,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   }
 
   void _addVerificationFeedbackItem() {
-    final text = _verificationFeedbackInput.text.trim();
-    if (text.isEmpty) return;
+    final next = commitChecklistDraft(
+      items: _verificationFeedback,
+      draftText: _verificationFeedbackInput.text,
+      newId: () => const Uuid().v4(),
+    );
+    if (identical(next, _verificationFeedback)) return;
     _safeSetState(() {
-      _verificationFeedback = [
-        ..._verificationFeedback,
-        ChecklistItem(id: const Uuid().v4(), text: text),
-      ];
+      _verificationFeedback = next;
       _verificationFeedbackInput.clear();
     });
   }
