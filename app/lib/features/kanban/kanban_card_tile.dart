@@ -10,6 +10,7 @@ import '../attachments/card_attachment_image.dart';
 import '../attachments/card_attachment_viewer.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
+import 'confirm_delete_card.dart';
 import 'kanban_labels.dart';
 import 'markdown_plain_text.dart';
 import 'transfer_card_sheet.dart';
@@ -124,29 +125,16 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     }
   }
 
-  /// 与详情页删除一致：确认后移入回收站。
+  /// 与详情页删除一致：按本机偏好确认后移入回收站。
   Future<void> _confirmAndDeleteCard() async {
-    final ok = await showDialog<bool>(
+    final controller = context.read<BoardController>();
+    final ok = await confirmDeleteCardIfNeeded(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除卡片？'),
-        content: Text('「${widget.card.title}」将移至回收站'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      cardTitle: widget.card.title,
+      confirmBeforeDelete: controller.appSettings.confirmBeforeDeleteCard,
     );
-    if (ok == true && mounted) {
-      await context
-          .read<BoardController>()
-          .deleteCard(widget.columnId, widget.card.id);
+    if (ok && mounted) {
+      await controller.deleteCard(widget.columnId, widget.card.id);
     }
   }
 

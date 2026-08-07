@@ -311,6 +311,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const Divider(),
+              Selector<BoardController, bool>(
+                selector: (_, c) => c.appSettings.confirmBeforeDeleteCard,
+                builder: (context, confirm, _) => SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  secondary: Icon(
+                    Icons.warning_amber_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: const Text('删除前确认'),
+                  subtitle: Text(
+                    confirm
+                        ? '删除卡片前会弹出确认对话框'
+                        : '关闭：右键/详情删除直接进入回收站',
+                  ),
+                  value: confirm,
+                  onChanged: (value) {
+                    final controller = context.read<BoardController>();
+                    controller.saveAppSettings(
+                      controller.appSettings.copyWith(
+                        confirmBeforeDeleteCard: value,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const Divider(),
               Selector<BoardController, int>(
                 selector: (_, c) => c.appSettings.completedAutoClearDays,
                 builder: (context, days, _) {

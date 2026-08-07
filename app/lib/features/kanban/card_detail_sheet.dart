@@ -16,6 +16,7 @@ import '../attachments/card_attachment_reorder_grid.dart';
 import '../attachments/card_attachment_viewer.dart';
 import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
+import 'confirm_delete_card.dart';
 import 'description_expand_dialog.dart';
 import 'description_markdown_preview.dart';
 import 'commit_list_draft.dart';
@@ -1811,34 +1812,19 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 ),
                                 TextButton(
                                   onPressed: () async {
-                                    final ok = await showDialog<bool>(
+                                    final controller =
+                                        context.read<BoardController>();
+                                    final ok = await confirmDeleteCardIfNeeded(
                                       context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('删除卡片？'),
-                                        content: Text(
-                                          '「${widget.card.title}」将移至回收站',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, false),
-                                            child: const Text('取消'),
-                                          ),
-                                          FilledButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, true),
-                                            child: const Text('删除'),
-                                          ),
-                                        ],
-                                      ),
+                                      cardTitle: widget.card.title,
+                                      confirmBeforeDelete: controller
+                                          .appSettings.confirmBeforeDeleteCard,
                                     );
-                                    if (ok == true && context.mounted) {
-                                      await context
-                                          .read<BoardController>()
-                                          .deleteCard(
-                                            widget.columnId,
-                                            widget.card.id,
-                                          );
+                                    if (ok && context.mounted) {
+                                      await controller.deleteCard(
+                                        widget.columnId,
+                                        widget.card.id,
+                                      );
                                       if (context.mounted) {
                                         _closeWithoutPersist();
                                       }
