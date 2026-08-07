@@ -11,19 +11,19 @@ bool hasAddedVerificationFeedbackItems({
   return next.any((item) => !originalIds.contains(item.id));
 }
 
-/// 解析「待验证」列：标题优先，其次默认 id `verify`。
-KanbanColumn? findVerifyColumn(Iterable<KanbanColumn> columns) {
+/// 解析「待返工」列：标题优先，其次默认 id [KanbanBoard.defaultReworkColumnId]。
+KanbanColumn? findReworkColumn(Iterable<KanbanColumn> columns) {
   for (final col in columns) {
-    if (col.title == KanbanBoard.defaultVerifyColumnTitle ||
-        col.id == 'verify') {
+    if (col.title == KanbanBoard.defaultReworkColumnTitle ||
+        col.id == KanbanBoard.defaultReworkColumnId) {
       return col;
     }
   }
   return null;
 }
 
-/// 新增了验证反馈且当前不在待验证列时，返回应移入的列 id；否则 `null`。
-String? targetVerifyColumnIdIfNeeded({
+/// 新增了验证反馈且当前不在待返工列时，返回应移入的列 id；否则 `null`。
+String? targetReworkColumnIdIfNeeded({
   required List<ChecklistItem> originalFeedback,
   required List<ChecklistItem> nextFeedback,
   required String currentColumnId,
@@ -35,7 +35,7 @@ String? targetVerifyColumnIdIfNeeded({
   )) {
     return null;
   }
-  final verify = findVerifyColumn(columns);
-  if (verify == null || verify.id == currentColumnId) return null;
-  return verify.id;
+  final rework = findReworkColumn(columns);
+  if (rework == null || rework.id == currentColumnId) return null;
+  return rework.id;
 }

@@ -23,7 +23,7 @@ import 'commit_list_draft.dart';
 import 'discard_blank_card.dart';
 import 'due_date_shortcuts.dart';
 import 'kanban_labels.dart';
-import 'move_to_verify_on_new_feedback.dart';
+import 'move_to_rework_on_new_feedback.dart';
 import 'transfer_card_sheet.dart';
 
 /// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
@@ -333,15 +333,15 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         colorValue: colorValue,
         clearColor: clearColor,
       );
-      await _moveToVerifyIfNewFeedbackAdded(verificationFeedback);
+      await _moveToReworkIfNewFeedbackAdded(verificationFeedback);
     } catch (_) {
       _persisted = false;
       rethrow;
     }
   }
 
-  /// 本次保存相对打开快照新增了验证反馈项时，自动移到「待验证」列。
-  Future<void> _moveToVerifyIfNewFeedbackAdded(
+  /// 本次保存相对打开快照新增了验证反馈项时，自动移到「待返工」列。
+  Future<void> _moveToReworkIfNewFeedbackAdded(
     List<ChecklistItem> nextFeedback,
   ) async {
     final board = _boardController.board;
@@ -349,20 +349,20 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final fromColumnId =
         _boardController.findColumnIdForCard(widget.card.id) ??
             widget.columnId;
-    final toColumnId = targetVerifyColumnIdIfNeeded(
+    final toColumnId = targetReworkColumnIdIfNeeded(
       originalFeedback: widget.card.verificationFeedback,
       nextFeedback: nextFeedback,
       currentColumnId: fromColumnId,
       columns: board.columns,
     );
     if (toColumnId == null) return;
-    final verify = findVerifyColumn(board.columns);
-    if (verify == null) return;
+    final rework = findReworkColumn(board.columns);
+    if (rework == null) return;
     await _boardController.moveCard(
       cardId: widget.card.id,
       fromColumnId: fromColumnId,
       toColumnId: toColumnId,
-      toDisplayIndex: verify.cards.length,
+      toDisplayIndex: rework.cards.length,
     );
   }
 

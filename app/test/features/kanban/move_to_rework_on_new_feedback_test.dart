@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kanban/features/kanban/move_to_verify_on_new_feedback.dart';
+import 'package:kanban/features/kanban/move_to_rework_on_new_feedback.dart';
 import 'package:kanban/models/kanban_models.dart';
 
 void main() {
@@ -51,30 +51,30 @@ void main() {
     });
   });
 
-  group('findVerifyColumn', () {
+  group('findReworkColumn', () {
     test('按标题解析，列 id 可自定义', () {
       final col = KanbanColumn(
         id: 'col-xyz',
-        title: '待验证',
+        title: '待返工',
         order: 0,
         cards: const [],
       );
-      expect(findVerifyColumn([col])?.id, 'col-xyz');
+      expect(findReworkColumn([col])?.id, 'col-xyz');
     });
 
-    test('标题不符时回退默认 id verify', () {
+    test('标题不符时回退默认 id rework', () {
       final col = KanbanColumn(
-        id: 'verify',
-        title: '验收中',
+        id: KanbanBoard.defaultReworkColumnId,
+        title: '返工中',
         order: 0,
         cards: const [],
       );
-      expect(findVerifyColumn([col])?.id, 'verify');
+      expect(findReworkColumn([col])?.id, 'rework');
     });
 
     test('找不到返回 null', () {
       expect(
-        findVerifyColumn([
+        findReworkColumn([
           KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
         ]),
         isNull,
@@ -82,30 +82,35 @@ void main() {
     });
   });
 
-  group('targetVerifyColumnIdIfNeeded', () {
+  group('targetReworkColumnIdIfNeeded', () {
     final columns = [
       KanbanColumn(id: 'doing', title: '进行中', order: 0, cards: const []),
-      KanbanColumn(id: 'verify', title: '待验证', order: 1, cards: const []),
+      KanbanColumn(
+        id: KanbanBoard.defaultReworkColumnId,
+        title: KanbanBoard.defaultReworkColumnTitle,
+        order: 1,
+        cards: const [],
+      ),
     ];
 
-    test('新增 VF 且不在待验证 → 返回待验证列 id', () {
+    test('新增 VF 且不在待返工 → 返回待返工列 id', () {
       expect(
-        targetVerifyColumnIdIfNeeded(
+        targetReworkColumnIdIfNeeded(
           originalFeedback: const [],
           nextFeedback: [ChecklistItem(id: 'vf1', text: '请验')],
           currentColumnId: 'doing',
           columns: columns,
         ),
-        'verify',
+        'rework',
       );
     });
 
-    test('已在待验证不重复移', () {
+    test('已在待返工不重复移', () {
       expect(
-        targetVerifyColumnIdIfNeeded(
+        targetReworkColumnIdIfNeeded(
           originalFeedback: const [],
           nextFeedback: [ChecklistItem(id: 'vf1', text: '请验')],
-          currentColumnId: 'verify',
+          currentColumnId: 'rework',
           columns: columns,
         ),
         isNull,
@@ -115,7 +120,7 @@ void main() {
     test('仅 checklist 式变更（无新增 VF id）不触发', () {
       // 模拟：打开时已有 VF，本次只改勾选；子任务草稿是否提交与本函数无关。
       expect(
-        targetVerifyColumnIdIfNeeded(
+        targetReworkColumnIdIfNeeded(
           originalFeedback: [
             ChecklistItem(id: 'vf1', text: '旧反馈'),
           ],
@@ -131,7 +136,7 @@ void main() {
 
     test('无新增 VF（列表未变）不触发', () {
       expect(
-        targetVerifyColumnIdIfNeeded(
+        targetReworkColumnIdIfNeeded(
           originalFeedback: const [],
           nextFeedback: const [],
           currentColumnId: 'doing',
