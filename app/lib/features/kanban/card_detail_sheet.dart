@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../common/app_snack_bar.dart';
+import '../../common/help_tip_icon.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../../settings/column_color_picker.dart';
@@ -1211,6 +1212,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         Row(
                           children: [
                             Text('链接', style: theme.textTheme.titleSmall),
+                            const HelpTipIcon(
+                              message:
+                                  '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
+                            ),
                             const Spacer(),
                             TextButton.icon(
                               onPressed: _addLink,
@@ -1221,7 +1226,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         ),
                         if (_links.isEmpty)
                           Text(
-                            '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
+                            '暂无链接',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -1254,25 +1259,28 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               ),
                           ],
                         const SizedBox(height: 20),
-                        Text('依赖与关联', style: theme.textTheme.titleSmall),
-                        const SizedBox(height: 4),
-                        Text(
-                          '连接本看板内的其他卡片。与上方「链接」网页书签不同。',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                        Row(
+                          children: [
+                            Text('依赖与关联',
+                                style: theme.textTheme.titleSmall),
+                            const HelpTipIcon(
+                              message:
+                                  '连接本看板内的其他卡片。与上方「链接」网页书签不同。',
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
-                        Text(
-                          '依赖（阻塞本卡）',
-                          style: theme.textTheme.labelLarge,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              '依赖（阻塞本卡）',
+                              style: theme.textTheme.labelLarge,
+                            ),
+                            const HelpTipIcon(
+                              message:
+                                  '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         ..._relationTiles(
@@ -1303,16 +1311,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          '关联（相关卡片）',
-                          style: theme.textTheme.labelLarge,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '无先后关系，仅便于跳转与追溯；不会阻塞本卡。',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              '关联（相关卡片）',
+                              style: theme.textTheme.labelLarge,
+                            ),
+                            const HelpTipIcon(
+                              message: '无先后关系，仅便于跳转与追溯；不会阻塞本卡。',
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         ..._relationTiles(
