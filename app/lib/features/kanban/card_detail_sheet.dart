@@ -16,6 +16,7 @@ import '../attachments/card_attachment_reorder_grid.dart';
 import '../attachments/card_attachment_viewer.dart';
 import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
+import '../completed_auto_clear/completed_auto_clear.dart';
 import 'confirm_delete_card.dart';
 import 'description_expand_dialog.dart';
 import 'description_markdown_preview.dart';
@@ -25,6 +26,7 @@ import 'due_date_shortcuts.dart';
 import 'kanban_labels.dart';
 import 'move_to_rework_on_new_feedback.dart';
 import 'transfer_card_sheet.dart';
+import 'verify_column.dart';
 
 /// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
 Future<void> showCardDetailSheet({
@@ -82,7 +84,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   final _verificationFeedbackInput = TextEditingController();
   bool _persisted = false;
   bool _skipPersist = false;
-  bool _previewMarkdown = false;
+  late bool _previewMarkdown;
   /// 备注全屏放大打开时，详情页暂不挂载备注 TextField，避免双绑定同一 controller。
   bool _descriptionExpanded = false;
   bool _resolvingConflict = false;
@@ -121,7 +123,23 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
+    // 待验证列打开详情时备注默认预览，便于阅读长文本；仍可切回编辑。
+    final columns = _boardController.board?.columns ?? const <KanbanColumn>[];
+    _previewMarkdown = shouldDefaultPreviewMarkdown(
+      columnId: widget.columnId,
+      columns: columns,
+    );
     _boardController.addListener(_onBoardChanged);
+  }
+
+  /// 当前卡是否仍在「待验证」列（用于完成按钮显隐）。
+  bool get _isInVerifyColumn {
+    final board = _boardController.board;
+    if (board == null) return false;
+    final columnId =
+        _boardController.findColumnIdForCard(widget.card.id) ??
+            widget.columnId;
+    return isVerifyColumnId(columnId: columnId, columns: board.columns);
   }
 
   @override
@@ -377,6 +395,65 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       return;
     }
     if (mounted) Navigator.pop(context);
+  }
+
+  /// 待验证详情：先保存编辑，再按看板完成逻辑移入「已完成」并关闭。
+  Future<void> _completeAndClose() async {
+    // 允许失败重试时再次写入编辑内容。
+    _persisted = false;
+    // 完成移动由 toggle/move 负责；避免 _persist 仅打勾却仍留在待验证。
+    final markCompletedLocally = _completed;
+    _completed = widget.card.completed;
+    try {
+      await _persist();
+    } catch (error) {
+      _completed = markCompletedLocally;
+      if (!mounted) return;
+      showAppSnackBar(context, message: '保存失败：$error');
+      return;
+    }
+    _completed = true;
+
+    final columnId =
+        _boardController.findColumnIdForCard(widget.card.id) ??
+            widget.columnId;
+    final live = _boardController.findCardById(widget.card.id);
+    if (live == null) {
+      if (mounted) _closeWithoutPersist();
+      return;
+    }
+
+    try {
+      if (!live.completed) {
+        // 与卡片瓦片 / complete_card 一致：标记完成并移入已完成列。
+        await _boardController.toggleCardCompleted(columnId, widget.card.id);
+      } else {
+        // 详情勾选后已保存为完成但尚未挪列时，补一次移入已完成。
+        final board = _boardController.board;
+        if (board != null) {
+          final done = findDoneColumn(
+            board,
+            doneColumnName: _boardController.projectSettings.doneColumnName,
+          );
+          if (done != null && done.id != columnId) {
+            await _boardController.moveCard(
+              cardId: widget.card.id,
+              fromColumnId: columnId,
+              toColumnId: done.id,
+              toDisplayIndex: done.cards.length,
+              completed: true,
+              completedAt: live.completedAt ??
+                  DateTime.now().millisecondsSinceEpoch,
+            );
+          }
+        }
+      }
+    } catch (error) {
+      if (!mounted) return;
+      showAppSnackBar(context, message: '完成失败：$error');
+      return;
+    }
+    if (mounted) _closeWithoutPersist();
   }
 
   Future<void> _saveAsTemplate() async {
@@ -1841,6 +1918,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                           ),
                         ),
+                        if (_isInVerifyColumn) ...[
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
+                            key: const ValueKey('card-detail-complete'),
+                            onPressed: _completeAndClose,
+                            icon: const Icon(Icons.check, size: 18),
+                            label: const Text('完成'),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                         FilledButton(
                           onPressed: _save,
                           child: const Text('保存'),
