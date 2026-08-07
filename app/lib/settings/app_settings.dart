@@ -135,20 +135,6 @@ class AppSettings {
     );
   }
 
-  static bool _platformImmediateDrag() {
-    if (kIsWeb) return true;
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.windows:
-      case TargetPlatform.macOS:
-      case TargetPlatform.linux:
-      case TargetPlatform.fuchsia:
-        return true;
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-        return false;
-    }
-  }
-
   static bool _platformMcpEnabledDefault() {
     if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.windows;
@@ -156,7 +142,7 @@ class AppSettings {
 
   static AppSettings platformDefault() {
     return AppSettings(
-      dragLongPressMs: _platformImmediateDrag() ? 0 : 500,
+      dragLongPressMs: 200,
       mcpEnabled: _platformMcpEnabledDefault(),
       mcpPort: McpConstants.defaultPort,
     );

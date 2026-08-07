@@ -148,7 +148,9 @@ class BoardController extends ChangeNotifier {
   String? get syncError => _syncService.lastError;
   String? get attachmentSyncWarning => _syncService.attachmentSyncWarning;
   DateTime? get lastSyncedAt => _syncService.lastSyncedAt;
+  SyncProgress? get syncProgress => _syncService.progress;
   Stream<SyncStatus> get syncStatusStream => _syncService.statusStream;
+  Stream<SyncProgress?> get syncProgressStream => _syncService.progressStream;
   bool get canUndo => _undoStack.canUndo;
   String? get undoLabel => _undoStack.nextLabel;
   bool get backupHistorySupported => _backupHistorySupported;
@@ -261,76 +263,81 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<Uint8List> createBackupArchive() async {
-    return _withBoardMutation(() async {
-      final workspace = await _loadWorkspaceSnapshot();
-      final attachments = <String, Uint8List>{};
-      final store = attachmentStore;
-      if (store != null) {
-        for (final project in workspace.manifest.projects) {
-          for (final attachmentId
-              in await store.listLocalAttachmentIds(project.id)) {
-            final source = await store.readBytes(
-              projectId: project.id,
-              attachmentId: attachmentId,
-              thumb: false,
-            );
-            if (source != null) {
-              attachments['attachments/${project.id}/$attachmentId'] = source;
-            }
-            final thumb = await store.readBytes(
-              projectId: project.id,
-              attachmentId: attachmentId,
-              thumb: true,
-            );
-            if (thumb != null) {
-              attachments['attachments/${project.id}/thumbs/$attachmentId'] =
-                  thumb;
-            }
+    // 短持锁捕获工作区；附件二进制读取放锁外，避免长时间阻塞冲突解决等 UI 写操作。
+    final workspace = await _loadWorkspaceSnapshot();
+    final labels = labelTrash;
+    final attachments = <String, Uint8List>{};
+    final store = attachmentStore;
+    if (store != null) {
+      for (final project in workspace.manifest.projects) {
+        for (final attachmentId
+            in await store.listLocalAttachmentIds(project.id)) {
+          final source = await store.readBytes(
+            projectId: project.id,
+            attachmentId: attachmentId,
+            thumb: false,
+          );
+          if (source != null) {
+            attachments['attachments/${project.id}/$attachmentId'] = source;
+          }
+          final thumb = await store.readBytes(
+            projectId: project.id,
+            attachmentId: attachmentId,
+            thumb: true,
+          );
+          if (thumb != null) {
+            attachments['attachments/${project.id}/thumbs/$attachmentId'] =
+                thumb;
           }
         }
       }
-      return const BackupArchiveService().encode(
-        BackupPackage(
-          workspace: workspace,
-          attachments: attachments,
-          labelTrash: labelTrash,
-        ),
-      );
-    });
+    }
+    return const BackupArchiveService().encode(
+      BackupPackage(
+        workspace: workspace,
+        attachments: attachments,
+        labelTrash: labels,
+      ),
+    );
   }
 
   Future<void> restoreBackupArchive(Uint8List bytes) async {
-    return _backupCoordinator.runExclusive(() {
-      return _withBoardMutation(() async {
-        final service = const BackupArchiveService();
-        final package = service.decode(bytes);
-        final safetyBytes = await createBackupArchive();
-        if (_backupHistorySupported) {
-          final safetySnapshot =
-              await _backupCoordinator.storeArchiveNow(safetyBytes);
-          await _repository.savePendingRestoreBackupId(safetySnapshot.id);
-        }
-        try {
+    return _backupCoordinator.runExclusive(() async {
+      final service = const BackupArchiveService();
+      final package = service.decode(bytes);
+      // 安全备份在看板锁外生成，避免读附件时卡住其它突变。
+      final safetyBytes = await createBackupArchive();
+      if (_backupHistorySupported) {
+        final safetySnapshot =
+            await _backupCoordinator.storeArchiveNow(safetyBytes);
+        await _repository.savePendingRestoreBackupId(safetySnapshot.id);
+      }
+      try {
+        await _withBoardMutation(() async {
           await _applyBackupPackage(package);
           if (_backupHistorySupported) {
             await _repository.clearPendingRestoreBackupId();
           }
-        } catch (error, stackTrace) {
-          try {
+          notifyListeners();
+          _markWorkspaceChanged();
+        });
+      } catch (error, stackTrace) {
+        try {
+          await _withBoardMutation(() async {
             await _applyBackupPackage(service.decode(safetyBytes));
             if (_backupHistorySupported) {
               await _repository.clearPendingRestoreBackupId();
             }
-          } catch (rollbackError) {
-            throw StateError(
-              '恢复失败且自动回滚失败：$error；回滚错误：$rollbackError',
-            );
-          }
-          Error.throwWithStackTrace(error, stackTrace);
+            notifyListeners();
+            _markWorkspaceChanged();
+          });
+        } catch (rollbackError) {
+          throw StateError(
+            '恢复失败且自动回滚失败：$error；回滚错误：$rollbackError',
+          );
         }
-        notifyListeners();
-        _markWorkspaceChanged();
-      });
+        Error.throwWithStackTrace(error, stackTrace);
+      }
     });
   }
 
@@ -1038,10 +1045,17 @@ class BoardController extends ChangeNotifier {
       }
       notifyListeners();
     });
+    _syncService.progressStream.listen((_) {
+      notifyListeners();
+    });
 
     if (webDavConfig.enabled && webDavConfig.isConfigured) {
-      _syncService.startPolling();
-      unawaited(_syncInBackground());
+      if (webDavConfig.autoPull) {
+        _syncService.startPolling();
+        unawaited(_syncInBackground());
+      } else {
+        _syncService.stopPolling();
+      }
     }
 
     unawaited(_syncMcpHost());
@@ -1077,25 +1091,30 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> _syncInBackground() async {
+    try {
+      // 网络阶段不持看板突变锁；服务内部仅在捕获/落盘时短持锁。
+      await _syncService.pullAndMerge();
+      await _reloadUiAfterSync();
+    } catch (e) {
+      errorMessage = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _reloadUiAfterSync() {
     return _withBoardMutation(() async {
-      try {
-        await _syncService.pullAndMerge();
-        manifest = await _repository.loadManifest();
-        if (activeProjectId != null) {
-          board = await _repository.loadBoard(activeProjectId!);
-          projectSettings =
-              await _repository.loadProjectSettings(activeProjectId!);
-          sharedContent = await _repository.loadSharedContent();
-          await _initializeSharedLabels();
-          await _refreshProjectThemeIds();
-          await _loadTrashState();
-        }
-        await refreshMissingAttachments();
-        notifyListeners();
-      } catch (e) {
-        errorMessage = e.toString();
-        notifyListeners();
+      manifest = await _repository.loadManifest();
+      if (activeProjectId != null) {
+        board = await _repository.loadBoard(activeProjectId!);
+        projectSettings =
+            await _repository.loadProjectSettings(activeProjectId!);
+        sharedContent = await _repository.loadSharedContent();
+        await _initializeSharedLabels();
+        await _refreshProjectThemeIds();
+        await _loadTrashState();
       }
+      await refreshMissingAttachments();
+      notifyListeners();
     });
   }
 
@@ -3048,19 +3067,13 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> saveWebDavConfig(WebDavConfig config) async {
-    return _withBoardMutation(() async {
+    final connected = config.enabled && config.isConfigured;
+    await _withBoardMutation(() async {
       webDavConfig = config;
       await _repository.saveWebDavConfig(config);
-      if (config.enabled && config.isConfigured) {
+      // 仅自动拉取开启时挂后台轮询；保存配置本身不触发同步
+      if (connected && config.autoPull) {
         _syncService.startPolling();
-        await _syncService.pullAndMerge();
-        manifest = await _repository.loadManifest();
-        if (activeProjectId != null) {
-          board = await _repository.loadBoard(activeProjectId!);
-          projectSettings =
-              await _repository.loadProjectSettings(activeProjectId!);
-          await _loadTrashState();
-        }
       } else {
         _syncService.stopPolling();
       }
@@ -3073,18 +3086,8 @@ class BoardController extends ChangeNotifier {
   }
 
   Future<void> syncNow() async {
-    return _withBoardMutation(() async {
-      await _syncService.pullAndMerge(userInitiated: true);
-      manifest = await _repository.loadManifest();
-      if (activeProjectId != null) {
-        board = await _repository.loadBoard(activeProjectId!);
-        projectSettings =
-            await _repository.loadProjectSettings(activeProjectId!);
-        await _loadTrashState();
-      }
-      await refreshMissingAttachments();
-      notifyListeners();
-    });
+    await _syncService.pullAndMerge(userInitiated: true);
+    await _reloadUiAfterSync();
   }
 
   /// 取消进行中的 WebDAV 同步，恢复可继续操作

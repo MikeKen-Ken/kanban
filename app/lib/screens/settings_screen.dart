@@ -25,7 +25,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  int _dragLongPressMs = 500;
+  int _dragLongPressMs = 200;
 
   @override
   void initState() {

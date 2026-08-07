@@ -111,6 +111,11 @@ class KanbanPaths {
   static String remoteSharedContentPath(String baseDir) =>
       '$baseDir/$sharedContentFileName';
 
+  static const syncIndexFileName = 'sync_index.json';
+
+  static String remoteSyncIndexPath(String baseDir) =>
+      '$baseDir/$syncIndexFileName';
+
   static String remoteBackupsDir(String baseDir) =>
       '$baseDir/$backupsDirName';
 

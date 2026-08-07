@@ -2,10 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/webdav_sync/webdav_config.dart';
 
 void main() {
-  test('poll interval clamps to 60–600 and defaults to 120', () {
+  test('poll interval clamps to 60–600 and defaults to 600', () {
     expect(WebDavConfig.minPollIntervalSeconds, 60);
     expect(WebDavConfig.maxPollIntervalSeconds, 600);
-    expect(WebDavConfig.defaultPollIntervalSeconds, 120);
+    expect(WebDavConfig.defaultPollIntervalSeconds, 600);
 
     expect(WebDavConfig.clampPollIntervalSeconds(15), 60);
     expect(WebDavConfig.clampPollIntervalSeconds(30), 60);
@@ -13,10 +13,10 @@ void main() {
     expect(WebDavConfig.clampPollIntervalSeconds(900), 600);
   });
 
-  test('push debounce clamps to 5–60 and defaults to 10', () {
+  test('push debounce clamps to 5–60 and defaults to 60', () {
     expect(WebDavConfig.minPushDebounceSeconds, 5);
     expect(WebDavConfig.maxPushDebounceSeconds, 60);
-    expect(WebDavConfig.defaultPushDebounceSeconds, 10);
+    expect(WebDavConfig.defaultPushDebounceSeconds, 60);
 
     expect(WebDavConfig.clampPushDebounceSeconds(1), 5);
     expect(WebDavConfig.clampPushDebounceSeconds(10), 10);
@@ -34,6 +34,30 @@ void main() {
       'pollIntervalSeconds': 15,
     });
     expect(config.pollIntervalSeconds, 60);
-    expect(config.pushDebounceSeconds, 10);
+    expect(config.pushDebounceSeconds, 60);
+    expect(config.autoPull, isTrue);
+  });
+
+  test('fromJson 可读 autoPull；缺失时默认开启', () {
+    final withPull = WebDavConfig.fromJson({
+      'enabled': true,
+      'serverUrl': 'https://example.com/dav',
+      'username': 'u',
+      'password': 'p',
+      'autoSync': false,
+      'autoPull': false,
+    });
+    expect(withPull.autoSync, isFalse);
+    expect(withPull.autoPull, isFalse);
+
+    final legacy = WebDavConfig.fromJson({
+      'enabled': true,
+      'serverUrl': 'https://example.com/dav',
+      'username': 'u',
+      'password': 'p',
+      'autoSync': false,
+    });
+    expect(legacy.autoSync, isFalse);
+    expect(legacy.autoPull, isTrue);
   });
 }

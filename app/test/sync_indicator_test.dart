@@ -15,4 +15,23 @@ void main() {
       '同步中…',
     );
   });
+
+  test('同步中展示文件进度计数', () {
+    const progress = SyncProgress(
+      phase: SyncPhase.uploading,
+      completed: 3,
+      total: 12,
+      skipped: 5,
+      currentLabel: '甲 / 待办',
+    );
+    expect(progress.shortLabel, '同步中 3/12');
+    expect(
+      syncStatusWithLastSuccessLabel(
+        SyncStatus.syncing,
+        DateTime(2026, 8, 3, 17, 5),
+        progress: progress,
+      ),
+      '同步中 3/12',
+    );
+  });
 }

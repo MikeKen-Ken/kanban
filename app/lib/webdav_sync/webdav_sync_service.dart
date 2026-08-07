@@ -18,9 +18,15 @@ import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import '../storage/json_file_io.dart';
 import '../storage/kanban_paths.dart';
+import 'sync_progress.dart';
+import 'sync_index.dart';
+import 'sync_upload_plan.dart';
 import 'webdav_config.dart';
 
 export '../features/sync_conflict/workspace_snapshot.dart';
+export 'sync_progress.dart';
+export 'sync_index.dart';
+export 'sync_upload_plan.dart';
 
 enum SyncStatus { idle, syncing, success, error }
 
@@ -70,6 +76,7 @@ class WebDavSyncService {
   String? lastError;
   String? attachmentSyncWarning;
   DateTime? lastSyncedAt;
+  SyncProgress? progress;
 
   /// 最近一次附件上传失败的原始错误（用于提示细节）
   String? _lastAttachmentError;
@@ -101,6 +108,24 @@ class WebDavSyncService {
 
   final _statusController = StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get statusStream => _statusController.stream;
+
+  final _progressController = StreamController<SyncProgress?>.broadcast();
+  Stream<SyncProgress?> get progressStream => _progressController.stream;
+
+  void _setProgress(SyncProgress? value) {
+    progress = value;
+    if (!_progressController.isClosed) {
+      _progressController.add(value);
+    }
+  }
+
+  void _clearProgress() => _setProgress(null);
+
+  Future<T> _withLocalTransaction<T>(Future<T> Function() action) =>
+      _runWorkspaceTransaction(action);
+
+  Future<ProjectWorkspaceSnapshot> _captureWorkspace() =>
+      _withLocalTransaction(_loadWorkspace);
 
   Client? _client(WebDavConfig config) {
     if (!config.isConfigured) return null;
@@ -643,57 +668,190 @@ class WebDavSyncService {
     }
   }
 
-  Future<int> _pushProject(
+  String _remotePathForUploadItem(String base, SyncUploadItem item) {
+    switch (item.kind) {
+      case SyncUploadKind.projectsManifest:
+        return KanbanPaths.remoteProjectsPath(base);
+      case SyncUploadKind.appTrash:
+        return KanbanPaths.remoteAppTrashPath(base);
+      case SyncUploadKind.sharedContent:
+        return KanbanPaths.remoteSharedContentPath(base);
+      case SyncUploadKind.boardMetadata:
+        return KanbanPaths.remoteProjectBoardPath(base, item.projectId!);
+      case SyncUploadKind.column:
+        return KanbanPaths.remoteProjectColumnPath(
+          base,
+          item.projectId!,
+          item.columnId!,
+        );
+      case SyncUploadKind.settings:
+        return KanbanPaths.remoteProjectSettingsPath(base, item.projectId!);
+      case SyncUploadKind.trash:
+        return KanbanPaths.remoteProjectTrashPath(base, item.projectId!);
+    }
+  }
+
+  Future<void> _ensureProjectDir(
     Client client,
     String base,
     String projectId,
-    KanbanBoard board,
-    ProjectSettings settings,
-    TrashBin trash,
+    Set<String> ensured,
   ) async {
-    final projectBase = KanbanPaths.remoteProjectDir(base, projectId);
+    if (!ensured.add(projectId)) return;
     try {
-      await client.mkdirAll(projectBase);
+      await client.mkdirAll(KanbanPaths.remoteProjectDir(base, projectId));
     } catch (_) {
       // note: 目录已存在时忽略
     }
-    // note: 先写列文件、再写 board 元数据，避免其他端拉取时元数据已列出列 id 但列文件尚未上传
-    for (final column in board.columns) {
-      _ensureNotCancelled();
+  }
+
+  /// 按计划增量上传 JSON；[baseline] 为 null 时全量上传。
+  Future<int> _pushWorkspaceJson({
+    required Client client,
+    required String base,
+    required ProjectWorkspaceSnapshot workspace,
+    ProjectWorkspaceSnapshot? baseline,
+    required int runId,
+  }) async {
+    final plan = buildSyncUploadPlan(
+      workspace: workspace,
+      baseline: baseline,
+    );
+    final ensuredDirs = <String>{};
+    final total = plan.items.length;
+    var completed = 0;
+    _setProgress(
+      SyncProgress(
+        phase: SyncPhase.uploading,
+        completed: 0,
+        total: total,
+        skipped: plan.skippedFileCount,
+        currentLabel: plan.isEmpty ? '无需上传 JSON' : null,
+      ),
+    );
+
+    // note: 先写列文件、再写 board 元数据；计划内保持列项先于同项目 board
+    final ordered = [...plan.items]..sort((a, b) {
+        final aCol = a.kind == SyncUploadKind.column ? 0 : 1;
+        final bCol = b.kind == SyncUploadKind.column ? 0 : 1;
+        if (aCol != bCol) return aCol - bCol;
+        return 0;
+      });
+
+    for (final item in ordered) {
+      _ensureNotCancelled(runId);
+      _setProgress(
+        SyncProgress(
+          phase: SyncPhase.uploading,
+          completed: completed,
+          total: total,
+          skipped: plan.skippedFileCount,
+          currentLabel: item.label,
+        ),
+      );
+      final projectId = item.projectId;
+      if (projectId != null) {
+        await _ensureProjectDir(client, base, projectId, ensuredDirs);
+      }
       await _writeJson(
         client,
-        KanbanPaths.remoteProjectColumnPath(base, projectId, column.id),
-        column.toJson(),
+        _remotePathForUploadItem(base, item),
+        item.json,
+      );
+      completed++;
+      _setProgress(
+        SyncProgress(
+          phase: SyncPhase.uploading,
+          completed: completed,
+          total: total,
+          skipped: plan.skippedFileCount,
+          currentLabel: item.label,
+        ),
       );
     }
-    await _cleanupRemoteColumns(
-      client,
-      KanbanPaths.remoteProjectColumnsDir(base, projectId),
-      board.columns.map((c) => c.id).toSet(),
-    );
+
+    for (final projectId in plan.projectsNeedingColumnCleanup) {
+      _ensureNotCancelled(runId);
+      final keep = plan.keepColumnIdsByProject[projectId] ?? const <String>{};
+      await _cleanupRemoteColumns(
+        client,
+        KanbanPaths.remoteProjectColumnsDir(base, projectId),
+        keep,
+      );
+    }
+
+    if (plan.needsProjectCleanup) {
+      _ensureNotCancelled(runId);
+      await _cleanupRemoteProjects(
+        client,
+        KanbanPaths.remoteProjectsDir(base),
+        plan.keepProjectIds,
+      );
+    }
+
+    // 无论是否有 JSON 变更，都重写索引，便于旧远端补齐与拉取跳过
+    _ensureNotCancelled(runId);
+    await _writeSyncIndex(client, base, workspace);
+
+    return plan.skippedFileCount;
+  }
+
+  Future<void> _writeSyncIndex(
+    Client client,
+    String base,
+    ProjectWorkspaceSnapshot workspace,
+  ) async {
+    final index = buildSyncIndex(workspace);
     await _writeJson(
       client,
-      KanbanPaths.remoteProjectBoardPath(base, projectId),
-      board.toMetadataJson(),
+      KanbanPaths.remoteSyncIndexPath(base),
+      index.toJson(),
     );
-    await _writeJson(
-      client,
-      KanbanPaths.remoteProjectSettingsPath(base, projectId),
-      settings.toJson(),
-    );
-    await _writeJson(
-      client,
-      KanbanPaths.remoteProjectTrashPath(base, projectId),
-      trash.toJson(),
-    );
-    final attachmentFailures = await _pushProjectAttachments(
-      client,
-      base,
-      projectId,
-      board,
-      trash,
-      settings: settings,
-    );
+  }
+
+  Future<SyncIndex?> _readSyncIndex(Client client, String base) async {
+    final json = await _readJson(client, KanbanPaths.remoteSyncIndexPath(base));
+    if (json == null) return null;
+    final index = SyncIndex.fromJson(json);
+    if (!index.isSupportedSchema) return null;
+    return index;
+  }
+
+  Future<int> _pushAllProjectAttachments({
+    required Client client,
+    required String base,
+    required ProjectWorkspaceSnapshot workspace,
+    required int runId,
+    bool cleanupOrphans = true,
+  }) async {
+    var attachmentFailures = 0;
+    final projects = workspace.manifest.projects;
+    var index = 0;
+    for (final entry in projects) {
+      _ensureNotCancelled(runId);
+      index++;
+      final board = workspace.boards[entry.id];
+      final settings = workspace.settings[entry.id];
+      final trash = workspace.projectTrash[entry.id] ?? TrashBin.empty;
+      if (board == null || settings == null) continue;
+      _setProgress(
+        SyncProgress(
+          phase: SyncPhase.attachments,
+          completed: index - 1,
+          total: projects.length,
+          currentLabel: entry.title.trim().isEmpty ? entry.id : entry.title,
+        ),
+      );
+      attachmentFailures += await _pushProjectAttachments(
+        client,
+        base,
+        entry.id,
+        board,
+        trash,
+        settings: settings,
+        cleanupOrphans: cleanupOrphans,
+      );
+    }
     return attachmentFailures;
   }
 
@@ -709,11 +867,27 @@ class WebDavSyncService {
     }
   }
 
-  Future<void> pushNow({bool force = false}) {
-    return _runWorkspaceTransaction(() => _pushNow(force: force));
+  /// 推送本地工作区。网络 I/O 不持有工作区事务锁。
+  ///
+  /// [baseline]：相对此快照跳过未变更 JSON；省略时自动使用 SyncBase。
+  /// [workspace]：若已持有待推快照（例如刚合并的结果），可直接传入以免重复捕获。
+  Future<void> pushNow({
+    bool force = false,
+    ProjectWorkspaceSnapshot? workspace,
+    ProjectWorkspaceSnapshot? baseline,
+  }) {
+    return _pushNow(
+      force: force,
+      workspace: workspace,
+      baseline: baseline,
+    );
   }
 
-  Future<void> _pushNow({bool force = false}) async {
+  Future<void> _pushNow({
+    bool force = false,
+    ProjectWorkspaceSnapshot? workspace,
+    ProjectWorkspaceSnapshot? baseline,
+  }) async {
     if (_syncInFlight) {
       _pushPending = true;
       _pushPendingForce = force || _pushPendingForce;
@@ -754,59 +928,49 @@ class WebDavSyncService {
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
+    _setProgress(const SyncProgress(phase: SyncPhase.discovering));
 
     try {
       _ensureNotCancelled(runId);
-      final workspace = await _loadWorkspace();
+      final captured = workspace ?? await _captureWorkspace();
+      final uploadBaseline =
+          baseline ?? (workspace == null ? await _syncBaseStore.load() : null);
       final base = _remoteBase(config);
-      var attachmentFailures = 0;
 
-      await _writeJson(
-        client,
-        KanbanPaths.remoteProjectsPath(base),
-        workspace.manifest.toJson(),
+      final skipped = await _pushWorkspaceJson(
+        client: client,
+        base: base,
+        workspace: captured,
+        baseline: uploadBaseline,
+        runId: runId,
       );
-      await _writeJson(
-        client,
-        KanbanPaths.remoteAppTrashPath(base),
-        workspace.appTrash.toJson(),
-      );
-      // 旧端/尚未接入共享存储的调用方会提供未初始化默认值，此时不能覆盖远端文件。
-      if (!workspace.sharedContent.isUninitialized) {
-        await _writeJson(
-          client,
-          KanbanPaths.remoteSharedContentPath(base),
-          workspace.sharedContent.toJson(),
-        );
-      }
-
-      for (final entry in workspace.manifest.projects) {
-        _ensureNotCancelled(runId);
-        final board = workspace.boards[entry.id];
-        final settings = workspace.settings[entry.id];
-        final trash = workspace.projectTrash[entry.id] ?? TrashBin.empty;
-        if (board == null || settings == null) continue;
-        attachmentFailures += await _pushProject(
-          client,
-          base,
-          entry.id,
-          board,
-          settings,
-          trash,
-        );
-      }
+      print('增量推送：跳过 $skipped 个未变更 JSON 文件');
 
       _ensureNotCancelled(runId);
-      await _cleanupRemoteProjects(
-        client,
-        KanbanPaths.remoteProjectsDir(base),
-        workspace.manifest.projects.map((p) => p.id).toSet(),
+      final attachmentFailures = await _pushAllProjectAttachments(
+        client: client,
+        base: base,
+        workspace: captured,
+        runId: runId,
       );
 
       if (!_shouldCommit(runId)) {
         throw const SyncCancelledException();
       }
-      await _syncBaseStore.save(workspace);
+
+      _setProgress(const SyncProgress(phase: SyncPhase.finalizing));
+      // 仅当本机工作区仍与已上传快照一致时推进 SyncBase，避免覆盖同步期间的新本地写入。
+      await _withLocalTransaction(() async {
+        final latest = await _loadWorkspace();
+        if (_workspaceJsonEquals(latest, captured)) {
+          await _syncBaseStore.save(captured);
+        } else {
+          print('推送后本地已有新变更，保留 SyncBase 并排队再次推送');
+          _pushPending = true;
+          _pushPendingForce = _pushPendingForce || force;
+        }
+      });
+
       _applyAttachmentSyncWarning(attachmentFailures);
       _noteSuccess();
       _setStatus(SyncStatus.success);
@@ -824,6 +988,7 @@ class WebDavSyncService {
       }
     } finally {
       _pushInFlight = false;
+      _clearProgress();
       if (_cancelRequested) {
         _clearCancelFlag();
       }
@@ -890,7 +1055,9 @@ class WebDavSyncService {
     return KanbanBoard.fromMetadataJson(meta, columns);
   }
 
-  Future<ProjectWorkspaceSnapshot?> pullRemote() async {
+  Future<ProjectWorkspaceSnapshot?> pullRemote({
+    ProjectWorkspaceSnapshot? reuseFrom,
+  }) async {
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return null;
 
@@ -901,7 +1068,70 @@ class WebDavSyncService {
     final manifestPath = KanbanPaths.remoteProjectsPath(base);
 
     try {
-      final manifestJson = await _readJson(client, manifestPath);
+      final remoteIndex = await _readSyncIndex(client, base);
+      if (reuseFrom != null &&
+          remoteIndex != null &&
+          syncIndexMatchesWorkspace(remoteIndex, reuseFrom)) {
+        print('拉取：远端 sync_index 与 SyncBase 一致，跳过全部 JSON 下载');
+        _setProgress(
+          SyncProgress(
+            phase: SyncPhase.downloading,
+            completed: 0,
+            total: 0,
+            skipped: remoteIndex.files.length,
+            currentLabel: 'JSON 未变更',
+          ),
+        );
+        return reuseFrom;
+      }
+
+      var skipped = 0;
+      var downloaded = 0;
+
+      Future<Map<String, dynamic>?> readRel(
+        String absolutePath,
+        String relativePath,
+        Object? baseJson,
+      ) async {
+        final reuse = canReuseSyncBaseJson(
+          remoteIndex: remoteIndex,
+          relativePath: relativePath,
+          baseJson: baseJson,
+        );
+        if (reuse) {
+          skipped++;
+          _setProgress(
+            SyncProgress(
+              phase: SyncPhase.downloading,
+              completed: downloaded,
+              skipped: skipped,
+              currentLabel: relativePath,
+            ),
+          );
+          if (baseJson is Map<String, dynamic>) {
+            return Map<String, dynamic>.from(baseJson);
+          }
+          final encoded = jsonDecode(syncCanonicalJson(baseJson!));
+          return Map<String, dynamic>.from(encoded as Map);
+        }
+        final json = await _readJson(client, absolutePath);
+        downloaded++;
+        _setProgress(
+          SyncProgress(
+            phase: SyncPhase.downloading,
+            completed: downloaded,
+            skipped: skipped,
+            currentLabel: relativePath,
+          ),
+        );
+        return json;
+      }
+
+      final manifestJson = await readRel(
+        manifestPath,
+        SyncIndexPaths.projects,
+        reuseFrom?.manifest.toJson(),
+      );
 
       // note: 兼容旧版 v2 单看板远端结构
       if (manifestJson == null) {
@@ -933,9 +1163,11 @@ class WebDavSyncService {
 
       for (final entry in manifest.projects) {
         final projectId = entry.id;
-        final boardMeta = await _readJson(
-          client,
+        final baseBoard = reuseFrom?.boards[projectId];
+        final boardMeta = await readRel(
           KanbanPaths.remoteProjectBoardPath(base, projectId),
+          SyncIndexPaths.projectBoard(projectId),
+          baseBoard?.toMetadataJson(),
         );
         if (boardMeta == null) continue;
 
@@ -944,12 +1176,17 @@ class WebDavSyncService {
         } else {
           final refs = (boardMeta['columns'] as List<dynamic>? ?? [])
               .cast<Map<String, dynamic>>();
+          final baseColumnsById = <String, KanbanColumn>{
+            for (final column in baseBoard?.columns ?? const <KanbanColumn>[])
+              column.id: column,
+          };
           final columns = <KanbanColumn>[];
           for (final ref in refs) {
             final colId = ref['id'] as String;
-            final colJson = await _readJson(
-              client,
+            final colJson = await readRel(
               KanbanPaths.remoteProjectColumnPath(base, projectId, colId),
+              SyncIndexPaths.projectColumn(projectId, colId),
+              baseColumnsById[colId]?.toJson(),
             );
             if (colJson != null) {
               columns.add(KanbanColumn.fromJson(colJson));
@@ -958,36 +1195,48 @@ class WebDavSyncService {
           boards[projectId] = KanbanBoard.fromMetadataJson(boardMeta, columns);
         }
 
-        final settingsJson = await _readJson(
-          client,
+        final settingsJson = await readRel(
           KanbanPaths.remoteProjectSettingsPath(base, projectId),
+          SyncIndexPaths.projectSettings(projectId),
+          reuseFrom?.settings[projectId]?.toJson(),
         );
         settings[projectId] = settingsJson == null
             ? const ProjectSettings()
             : ProjectSettings.fromJson(settingsJson);
 
-        final trashJson = await _readJson(
-          client,
+        final trashJson = await readRel(
           KanbanPaths.remoteProjectTrashPath(base, projectId),
+          SyncIndexPaths.projectTrash(projectId),
+          (reuseFrom?.projectTrash[projectId] ?? TrashBin.empty).toJson(),
         );
         projectTrash[projectId] =
             trashJson == null ? TrashBin.empty : TrashBin.fromJson(trashJson);
       }
 
-      final appTrashJson = await _readJson(
-        client,
+      final appTrashJson = await readRel(
         KanbanPaths.remoteAppTrashPath(base),
+        SyncIndexPaths.appTrash,
+        reuseFrom?.appTrash.toJson(),
       );
       final appTrash = appTrashJson == null
           ? TrashBin.empty
           : TrashBin.fromJson(appTrashJson);
-      final sharedContentJson = await _readJson(
-        client,
+
+      final baseShared = reuseFrom?.sharedContent;
+      final sharedContentJson = await readRel(
         KanbanPaths.remoteSharedContentPath(base),
+        SyncIndexPaths.sharedContent,
+        (baseShared == null || baseShared.isUninitialized)
+            ? null
+            : baseShared.toJson(),
       );
       final sharedContent = sharedContentJson == null
           ? SharedContent.empty
           : SharedContent.fromJson(sharedContentJson);
+
+      if (skipped > 0) {
+        print('拉取：跳过 $skipped 个未变更 JSON，下载 $downloaded 个');
+      }
 
       return ProjectWorkspaceSnapshot(
         manifest: manifest,
@@ -1018,9 +1267,7 @@ class WebDavSyncService {
   }
 
   Future<void> pullAndMerge({bool userInitiated = false}) {
-    return _runWorkspaceTransaction(
-      () => _pullAndMerge(userInitiated: userInitiated),
-    );
+    return _pullAndMerge(userInitiated: userInitiated);
   }
 
   Future<void> _pullAndMerge({bool userInitiated = false}) async {
@@ -1053,34 +1300,57 @@ class WebDavSyncService {
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
+    _setProgress(const SyncProgress(phase: SyncPhase.discovering));
     try {
       _ensureNotCancelled(runId);
-      final local = await _loadWorkspace();
-      final remote = await pullRemote();
+      // 短事务捕获本地快照；网络拉取在锁外进行。
+      var local = await _captureWorkspace();
+      final syncBase = await _syncBaseStore.load();
+      _setProgress(const SyncProgress(phase: SyncPhase.downloading));
+      final remote = await pullRemote(reuseFrom: syncBase);
       _ensureNotCancelled(runId);
       if (remote == null) {
-        // note: 远端为空时上传本地；先释放锁再 push
+        // note: 远端为空时上传本地；先结束本回合再 push
         _syncInFlight = false;
-        await pushNow(force: true);
+        await pushNow(force: true, workspace: local, baseline: null);
         return;
       }
 
-      final syncBase = await _syncBaseStore.load();
-      final merged = _mergeWorkspaces(local, remote, syncBase);
+      _setProgress(const SyncProgress(phase: SyncPhase.merging));
+      var merged = _mergeWorkspaces(local, remote, syncBase);
       _ensureNotCancelled(runId);
-      await _saveWorkspace(merged);
-      await _syncBaseStore.save(merged);
+
+      // 合并落盘前重新捕获，避免网络期间的本地写入被旧快照覆盖。
+      merged = await _withLocalTransaction(() async {
+        final latest = await _loadWorkspace();
+        final next = _workspaceJsonEquals(latest, local)
+            ? merged
+            : _mergeWorkspaces(latest, remote, syncBase);
+        await _saveWorkspace(next);
+        return next;
+      });
 
       final client = _client(config);
       var attachmentFailures = 0;
       if (client != null) {
         final base = _remoteBase(config);
-        for (final entry in merged.manifest.projects) {
+        final projects = merged.manifest.projects;
+        var index = 0;
+        for (final entry in projects) {
           _ensureNotCancelled(runId);
+          index++;
           final board = merged.boards[entry.id];
           if (board == null) continue;
           final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
           final settings = merged.settings[entry.id];
+          _setProgress(
+            SyncProgress(
+              phase: SyncPhase.attachments,
+              completed: index - 1,
+              total: projects.length,
+              currentLabel: entry.title.trim().isEmpty ? entry.id : entry.title,
+            ),
+          );
           attachmentFailures += await _pullProjectAttachments(
             client,
             base,
@@ -1094,7 +1364,7 @@ class WebDavSyncService {
 
       _applyAttachmentSyncWarning(attachmentFailures);
 
-      // note: 合并结果与远端一致时跳过全量 JSON 回推，但仍需补传本地有、远端缺的附件
+      // note: 合并结果与远端一致时跳过 JSON 回推，但仍需补传本地有、远端缺的附件
       if (_workspaceJsonEquals(merged, remote)) {
         if (shouldReconcileAttachmentsWhenJsonEquals(
               jsonEquals: true,
@@ -1102,36 +1372,32 @@ class WebDavSyncService {
             ) &&
             client != null) {
           final base = _remoteBase(config);
-          for (final entry in merged.manifest.projects) {
-            _ensureNotCancelled(runId);
-            final board = merged.boards[entry.id];
-            if (board == null) continue;
-            final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
-            final settings = merged.settings[entry.id];
-            attachmentFailures += await _pushProjectAttachments(
-              client,
-              base,
-              entry.id,
-              board,
-              trash,
-              settings: settings,
-              cleanupOrphans: false,
-            );
-          }
+          attachmentFailures += await _pushAllProjectAttachments(
+            client: client,
+            base: base,
+            workspace: merged,
+            runId: runId,
+            cleanupOrphans: false,
+          );
           _applyAttachmentSyncWarning(attachmentFailures);
         }
         if (!_shouldCommit(runId)) {
           throw const SyncCancelledException();
         }
+        await _syncBaseStore.save(merged);
         _noteSuccess();
         _setStatus(SyncStatus.success);
         return;
       }
 
-      // note: 合并后回推，避免本地并集结果只留本机
+      // note: 合并后按相对远端的增量回推，避免把并集只留在本机
       _ensureNotCancelled(runId);
       _syncInFlight = false;
-      await pushNow(force: true);
+      await pushNow(
+        force: true,
+        workspace: merged,
+        baseline: remote,
+      );
     } on SyncCancelledException {
       print('拉取同步已中止');
       if (status == SyncStatus.syncing) {
@@ -1146,6 +1412,7 @@ class WebDavSyncService {
       }
     } finally {
       _syncInFlight = false;
+      _clearProgress();
       if (_cancelRequested) {
         _clearCancelFlag();
       }
@@ -1374,7 +1641,7 @@ class WebDavSyncService {
   Future<void> _scheduleNextPoll() async {
     if (!_pollingEnabled) return;
     final config = await _loadConfig();
-    if (!_pollingEnabled || !config.enabled || !config.autoSync) return;
+    if (!_pollingEnabled || !config.enabled || !config.autoPull) return;
 
     final interval = Duration(seconds: _pollIntervalSeconds(config));
     var delay = interval;
@@ -1388,7 +1655,7 @@ class WebDavSyncService {
       try {
         if (!_pollingEnabled) return;
         final latest = await _loadConfig();
-        if (!_pollingEnabled || !latest.enabled || !latest.autoSync) return;
+        if (!_pollingEnabled || !latest.enabled || !latest.autoPull) return;
         if (_canStartAutoSync(latest)) {
           await pullAndMerge();
         }
@@ -1411,5 +1678,6 @@ class WebDavSyncService {
     _cooldownRetryTimer?.cancel();
     stopPolling();
     _statusController.close();
+    _progressController.close();
   }
 }

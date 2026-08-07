@@ -17,11 +17,11 @@ import '../features/attachments/attachment_store.dart';
 class WebDavConfig {
   static const minPollIntervalSeconds = 60;
   static const maxPollIntervalSeconds = 600;
-  static const defaultPollIntervalSeconds = 120;
+  static const defaultPollIntervalSeconds = maxPollIntervalSeconds;
 
   static const minPushDebounceSeconds = 5;
   static const maxPushDebounceSeconds = 60;
-  static const defaultPushDebounceSeconds = 10;
+  static const defaultPushDebounceSeconds = maxPushDebounceSeconds;
 
   const WebDavConfig({
     required this.enabled,
@@ -30,6 +30,7 @@ class WebDavConfig {
     required this.password,
     required this.remotePath,
     required this.autoSync,
+    required this.autoPull,
     required this.pollIntervalSeconds,
     required this.pushDebounceSeconds,
   });
@@ -39,7 +40,10 @@ class WebDavConfig {
   final String username;
   final String password;
   final String remotePath;
+  /// 本地变更后防抖自动上传
   final bool autoSync;
+  /// 启动与后台定时自动拉取
+  final bool autoPull;
   final int pollIntervalSeconds;
   final int pushDebounceSeconds;
 
@@ -67,6 +71,7 @@ class WebDavConfig {
     String? password,
     String? remotePath,
     bool? autoSync,
+    bool? autoPull,
     int? pollIntervalSeconds,
     int? pushDebounceSeconds,
   }) {
@@ -77,6 +82,7 @@ class WebDavConfig {
       password: password ?? this.password,
       remotePath: remotePath ?? this.remotePath,
       autoSync: autoSync ?? this.autoSync,
+      autoPull: autoPull ?? this.autoPull,
       pollIntervalSeconds: clampPollIntervalSeconds(
         pollIntervalSeconds ?? this.pollIntervalSeconds,
       ),
@@ -93,6 +99,7 @@ class WebDavConfig {
         'password': password,
         'remotePath': remotePath,
         'autoSync': autoSync,
+        'autoPull': autoPull,
         'pollIntervalSeconds': pollIntervalSeconds,
         'pushDebounceSeconds': pushDebounceSeconds,
       };
@@ -105,6 +112,8 @@ class WebDavConfig {
       password: json['password'] as String? ?? '',
       remotePath: json['remotePath'] as String? ?? '/KanbanApp',
       autoSync: json['autoSync'] as bool? ?? true,
+      // 旧配置无此字段时默认开启，与原先「autoSync 兼控拉取」行为一致
+      autoPull: json['autoPull'] as bool? ?? true,
       pollIntervalSeconds: clampPollIntervalSeconds(
         json['pollIntervalSeconds'] as int? ?? defaultPollIntervalSeconds,
       ),
@@ -121,6 +130,7 @@ class WebDavConfig {
     password: '',
     remotePath: '/KanbanApp',
     autoSync: true,
+    autoPull: true,
     pollIntervalSeconds: defaultPollIntervalSeconds,
     pushDebounceSeconds: defaultPushDebounceSeconds,
   );

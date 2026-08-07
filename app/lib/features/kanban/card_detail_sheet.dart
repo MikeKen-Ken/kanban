@@ -75,6 +75,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   bool _previewMarkdown = false;
   /// 备注全屏放大打开时，详情页暂不挂载备注 TextField，避免双绑定同一 controller。
   bool _descriptionExpanded = false;
+  bool _resolvingConflict = false;
+  /// 解决成功后即使弹层未立刻关闭，也隐藏冲突条（widget.card 是打开时快照）。
+  bool _conflictResolved = false;
 
   Iterable<TextEditingController> get _textControllers =>
       [_titleController, _descController, _checklistInput];
@@ -356,6 +359,45 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void _closeWithoutPersist() {
     _skipPersist = true;
     Navigator.pop(context);
+  }
+
+  KanbanCard? get _liveCard {
+    final board = _boardController.board;
+    if (board == null) return null;
+    for (final column in board.columns) {
+      for (final card in column.cards) {
+        if (card.id == widget.card.id) return card;
+      }
+    }
+    return null;
+  }
+
+  bool get _showConflictBanner {
+    if (_conflictResolved) return false;
+    final live = _liveCard;
+    if (live != null) return live.hasConflict;
+    return widget.card.hasConflict;
+  }
+
+  Future<void> _resolveConflict(CardConflictResolution resolution) async {
+    if (_resolvingConflict) return;
+    _safeSetState(() => _resolvingConflict = true);
+    try {
+      await _boardController.resolveCardConflict(
+        widget.columnId,
+        widget.card.id,
+        resolution,
+      );
+      if (!mounted) return;
+      _conflictResolved = true;
+      _closeWithoutPersist();
+    } catch (error) {
+      if (!mounted) return;
+      _safeSetState(() => _resolvingConflict = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('解决冲突失败：$error')),
+      );
+    }
   }
 
   Future<void> _openDescriptionExpanded() async {
@@ -851,6 +893,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       widget.card.copyWith(attachments: _attachments),
       _boardController.missingAttachmentIds,
     );
+    final conflictCard = _liveCard ?? widget.card;
 
     return PopScope(
       canPop: true,
@@ -908,7 +951,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                     ),
                   ),
                   const Divider(height: 1),
-                  if (widget.card.hasConflict)
+                  if (_showConflictBanner)
                     Material(
                       color: theme.colorScheme.errorContainer,
                       child: Padding(
@@ -917,7 +960,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.card.conflictDeleted
+                              conflictCard.conflictDeleted
                                   ? '同步冲突：另一侧删除了此卡片'
                                   : '同步冲突：存在另一份副本',
                               style: theme.textTheme.titleSmall?.copyWith(
@@ -925,11 +968,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            if (widget.card.conflictSide != null) ...[
+                            if (conflictCard.conflictSide != null) ...[
                               const SizedBox(height: 6),
                               Text(
-                                '另一份：${widget.card.conflictSide!.title}'
-                                '${widget.card.conflictSide!.description == null || widget.card.conflictSide!.description!.isEmpty ? '' : ' — ${widget.card.conflictSide!.description}'}',
+                                '另一份：${conflictCard.conflictSide!.title}'
+                                '${conflictCard.conflictSide!.description == null || conflictCard.conflictSide!.description!.isEmpty ? '' : ' — ${conflictCard.conflictSide!.description}'}',
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
@@ -943,29 +986,27 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               runSpacing: 8,
                               children: [
                                 FilledButton(
-                                  onPressed: () async {
-                                    await _boardController.resolveCardConflict(
-                                      widget.columnId,
-                                      widget.card.id,
-                                      CardConflictResolution.keepPrimary,
-                                    );
-                                    if (context.mounted) _closeWithoutPersist();
-                                  },
-                                  child: const Text('保留当前'),
+                                  onPressed: _resolvingConflict
+                                      ? null
+                                      : () => _resolveConflict(
+                                            CardConflictResolution.keepPrimary,
+                                          ),
+                                  child: Text(
+                                    _resolvingConflict ? '处理中…' : '保留当前',
+                                  ),
                                 ),
                                 OutlinedButton(
-                                  onPressed: () async {
-                                    await _boardController.resolveCardConflict(
-                                      widget.columnId,
-                                      widget.card.id,
-                                      CardConflictResolution.keepOther,
-                                    );
-                                    if (context.mounted) _closeWithoutPersist();
-                                  },
+                                  onPressed: _resolvingConflict
+                                      ? null
+                                      : () => _resolveConflict(
+                                            CardConflictResolution.keepOther,
+                                          ),
                                   child: Text(
-                                    widget.card.conflictDeleted
-                                        ? '确认删除'
-                                        : '保留另一份',
+                                    _resolvingConflict
+                                        ? '处理中…'
+                                        : (conflictCard.conflictDeleted
+                                            ? '确认删除'
+                                            : '保留另一份'),
                                   ),
                                 ),
                               ],

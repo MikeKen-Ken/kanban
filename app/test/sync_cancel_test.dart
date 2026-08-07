@@ -15,6 +15,7 @@ WebDavConfig _configured() => const WebDavConfig(
       password: 'p',
       remotePath: '/KanbanApp',
       autoSync: true,
+      autoPull: true,
       pollIntervalSeconds: 120,
       pushDebounceSeconds: 10,
     );
@@ -84,11 +85,12 @@ void main() {
     service.dispose();
   });
 
-  test('拉取合并整个过程进入工作区事务闸门', () async {
+  test('捕获本地快照进入工作区事务，网络等待不持锁', () async {
     final prefs = await SharedPreferences.getInstance();
     final gate = Completer<ProjectWorkspaceSnapshot>();
     var transactionActive = false;
     var loadedInsideTransaction = false;
+    var sawNetworkWhileUnlocked = false;
     final service = WebDavSyncService(
       loadConfig: () async => _configured(),
       loadWorkspace: () {
@@ -112,12 +114,16 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     expect(loadedInsideTransaction, isTrue);
+    // 捕获仍在等待时事务应保持；完成后网络阶段（pullRemote）不持锁。
     expect(transactionActive, isTrue);
 
     service.cancelSync();
     gate.complete(_emptyWorkspace());
     await pull;
+    // 取消后若曾进入远端拉取，事务应已释放。
     expect(transactionActive, isFalse);
+    sawNetworkWhileUnlocked = !transactionActive;
+    expect(sawNetworkWhileUnlocked, isTrue);
     service.dispose();
   });
 }

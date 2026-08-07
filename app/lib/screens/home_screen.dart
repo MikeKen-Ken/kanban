@@ -654,18 +654,22 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                   onPressed: _openTrash,
                 ),
               ),
-            Selector<BoardController, (SyncStatus, String?, int, DateTime?)>(
+            Selector<
+                BoardController,
+                (SyncStatus, String?, int, DateTime?, SyncProgress?)>(
               selector: (_, c) => (
                 c.syncStatus,
                 c.syncError,
                 c.unresolvedConflictCount,
                 c.lastSyncedAt,
+                c.syncProgress,
               ),
               builder: (context, data, _) => _SyncIndicator(
                 status: data.$1,
                 error: data.$2,
                 conflictCount: data.$3,
                 lastSyncedAt: data.$4,
+                progress: data.$5,
                 compact: compact,
                 onTap: () {
                   if (data.$3 <= 0) {
@@ -1074,6 +1078,7 @@ class _SyncIndicator extends StatelessWidget {
     this.error,
     this.conflictCount = 0,
     this.lastSyncedAt,
+    this.progress,
     this.compact = false,
   });
 
@@ -1081,6 +1086,7 @@ class _SyncIndicator extends StatelessWidget {
   final String? error;
   final int conflictCount;
   final DateTime? lastSyncedAt;
+  final SyncProgress? progress;
   final bool compact;
   final VoidCallback onTap;
   final VoidCallback? onCancel;
@@ -1097,19 +1103,34 @@ class _SyncIndicator extends StatelessWidget {
             SyncStatus.idle => null,
           };
 
+    final syncing = status == SyncStatus.syncing;
     final label = conflictCount > 0
         ? '有 $conflictCount 处冲突'
-        : syncStatusWithLastSuccessLabel(status, lastSyncedAt);
+        : syncStatusWithLastSuccessLabel(
+            status,
+            lastSyncedAt,
+            progress: progress,
+          );
 
     final lastSuccess = lastSyncedAt == null
         ? '尚未成功同步'
         : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
 
-    final syncing = status == SyncStatus.syncing;
+    final progressDetail = progress == null
+        ? null
+        : [
+            progress!.phaseLabel,
+            if (progress!.hasTotal) '${progress!.completed}/${progress!.total}',
+            if (progress!.skipped > 0) '跳过 ${progress!.skipped} 个未变更文件',
+            if (progress!.currentLabel != null) progress!.currentLabel!,
+          ].join(' · ');
+
     final tooltip = conflictCount > 0
         ? '有未解决的同步冲突，点击进入冲突中心'
         : syncing
-            ? '正在同步…可点击取消'
+            ? (progressDetail == null
+                ? '正在同步…可点击取消'
+                : '$progressDetail\n可点击取消')
             : error == null
                 ? '$lastSuccess\n点击立即同步'
                 : '$error\n$lastSuccess';

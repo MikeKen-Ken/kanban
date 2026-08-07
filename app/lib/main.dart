@@ -46,18 +46,26 @@ class _KanbanAppState extends State<KanbanApp> {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: widget.controller,
-      child: Consumer<BoardController>(
-        builder: (context, boardController, _) {
-          final preset =
-              projectThemeForId(boardController.projectSettings.themeId);
+      // 仅主题/引导相关字段变化时重建 MaterialApp，避免每次改卡都重建整棵应用树
+      //（详情弹层在冲突解决 notify 时曾因此出现“点了没反应”的体感）。
+      child: Selector<BoardController,
+          ({String themeId, ThemeMode themeMode, bool onboardingDone})>(
+        selector: (_, c) => (
+          themeId: c.projectSettings.themeId,
+          themeMode: c.appSettings.themeMode,
+          onboardingDone: c.appSettings.hasCompletedOnboarding,
+        ),
+        builder: (context, selected, _) {
+          final boardController = context.read<BoardController>();
+          final preset = projectThemeForId(selected.themeId);
           return MaterialApp(
             title: '看板',
             debugShowCheckedModeBanner: false,
             theme: buildKanbanTheme(preset, Brightness.light),
             darkTheme: buildKanbanTheme(preset, Brightness.dark),
-            themeMode: boardController.appSettings.themeMode,
+            themeMode: selected.themeMode,
             locale: const Locale('zh', 'CN'),
-            home: boardController.appSettings.hasCompletedOnboarding
+            home: selected.onboardingDone
                 ? const HomeScreen()
                 : OnboardingScreen(
                     onCompleted: () => boardController.saveAppSettings(
@@ -94,9 +102,13 @@ String formatSyncTime(DateTime time) {
 
 String syncStatusWithLastSuccessLabel(
   SyncStatus status,
-  DateTime? lastSyncedAt,
-) {
-  if (lastSyncedAt == null || status == SyncStatus.syncing) {
+  DateTime? lastSyncedAt, {
+  SyncProgress? progress,
+}) {
+  if (status == SyncStatus.syncing) {
+    return progress?.shortLabel ?? syncStatusLabel(status);
+  }
+  if (lastSyncedAt == null) {
     return syncStatusLabel(status);
   }
   if (status == SyncStatus.error) {

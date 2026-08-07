@@ -22,6 +22,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
 
   bool _enabled = false;
   bool _autoSync = true;
+  bool _autoPull = true;
   int _pollSeconds = WebDavConfig.defaultPollIntervalSeconds;
   int _pushDebounceSeconds = WebDavConfig.defaultPushDebounceSeconds;
   bool _obscurePassword = true;
@@ -35,6 +36,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
     final config = context.read<BoardController>().webDavConfig;
     _enabled = config.enabled;
     _autoSync = config.autoSync;
+    _autoPull = config.autoPull;
     _pollSeconds =
         WebDavConfig.clampPollIntervalSeconds(config.pollIntervalSeconds);
     _pushDebounceSeconds =
@@ -64,6 +66,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
           ? '/KanbanApp'
           : _pathController.text.trim(),
       autoSync: _autoSync,
+      autoPull: _autoPull,
       pollIntervalSeconds: WebDavConfig.clampPollIntervalSeconds(_pollSeconds),
       pushDebounceSeconds:
           WebDavConfig.clampPushDebounceSeconds(_pushDebounceSeconds),
@@ -102,8 +105,13 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
     await context.read<BoardController>().saveWebDavConfig(_buildConfig());
     if (!mounted) return;
     setState(() => _saving = false);
+    final tip = !_enabled
+        ? '已保存'
+        : (!_autoSync && !_autoPull)
+            ? '已保存；仅手动同步（点顶栏同步按钮）'
+            : '已保存';
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已保存，变更将自动同步到网盘')),
+      SnackBar(content: Text(tip)),
     );
     Navigator.pop(context);
   }
@@ -124,7 +132,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
               children: [
                 SwitchListTile(
                   title: const Text('启用 WebDAV 同步'),
-                  subtitle: const Text('开启后，新增/修改卡片会自动上传'),
+                  subtitle: const Text('开启后可配置连接；上传/拉取是否自动见下方开关'),
                   value: _enabled,
                   onChanged: (v) => setState(() => _enabled = v),
                 ),
@@ -132,7 +140,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Text(
-                      '开启后可配置服务器连接与自动同步',
+                      '开启后可配置服务器连接与同步行为',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color:
                                 Theme.of(context).colorScheme.onSurfaceVariant,
@@ -231,9 +239,11 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                 title: '同步行为',
                 children: [
                   SwitchListTile(
-                    title: const Text('自动同步'),
+                    title: const Text('自动上传'),
                     subtitle: Text(
-                      '本地变更后约 $_pushDebounceSeconds 秒自动上传',
+                      _autoSync
+                          ? '本地变更后约 $_pushDebounceSeconds 秒自动上传'
+                          : '关闭后仅手动同步时上传',
                     ),
                     value: _autoSync,
                     onChanged: (v) => setState(() => _autoSync = v),
@@ -253,21 +263,32 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                             WebDavConfig.clampPushDebounceSeconds(v.round()),
                       ),
                     ),
-                  SettingsSliderRow(
-                    title: '后台拉取间隔',
-                    description: '定期从网盘拉取更新；范围 1–10 分钟，避免频繁请求触发限流',
-                    value: _pollSeconds.toDouble(),
-                    valueLabel: _formatPollInterval(_pollSeconds),
-                    min: WebDavConfig.minPollIntervalSeconds.toDouble(),
-                    max: WebDavConfig.maxPollIntervalSeconds.toDouble(),
-                    divisions: (WebDavConfig.maxPollIntervalSeconds -
-                            WebDavConfig.minPollIntervalSeconds) ~/
-                        60,
-                    onChanged: (v) => setState(
-                      () => _pollSeconds =
-                          WebDavConfig.clampPollIntervalSeconds(v.round()),
+                  SwitchListTile(
+                    title: const Text('自动拉取'),
+                    subtitle: Text(
+                      _autoPull
+                          ? '启动时拉取，并按间隔后台拉取'
+                          : '关闭后仅手动同步时拉取',
                     ),
+                    value: _autoPull,
+                    onChanged: (v) => setState(() => _autoPull = v),
                   ),
+                  if (_autoPull)
+                    SettingsSliderRow(
+                      title: '后台拉取间隔',
+                      description: '定期从网盘拉取更新；范围 1–10 分钟，避免频繁请求触发限流',
+                      value: _pollSeconds.toDouble(),
+                      valueLabel: _formatPollInterval(_pollSeconds),
+                      min: WebDavConfig.minPollIntervalSeconds.toDouble(),
+                      max: WebDavConfig.maxPollIntervalSeconds.toDouble(),
+                      divisions: (WebDavConfig.maxPollIntervalSeconds -
+                              WebDavConfig.minPollIntervalSeconds) ~/
+                          60,
+                      onChanged: (v) => setState(
+                        () => _pollSeconds =
+                            WebDavConfig.clampPollIntervalSeconds(v.round()),
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 16),
