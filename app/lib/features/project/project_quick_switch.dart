@@ -258,9 +258,8 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
                             for (var i = 0; i < list.length; i++)
                               _QuickSwitchTile(
                                 project: list[i],
+                                // 仅高亮当前跟手项；无渐隐过渡，避免切换闪烁
                                 selected: i == _highlightedIndex,
-                                isActive:
-                                    list[i].id == widget.activeProjectId,
                                 seed: _seedColor(
                                   widget.themeIdFor(list[i].id),
                                   brightness,
@@ -463,14 +462,12 @@ class _QuickSwitchTile extends StatelessWidget {
   const _QuickSwitchTile({
     required this.project,
     required this.selected,
-    required this.isActive,
     required this.seed,
     required this.brightness,
   });
 
   final ProjectEntry project;
   final bool selected;
-  final bool isActive;
   final Color seed;
   final Brightness brightness;
 
@@ -487,11 +484,10 @@ class _QuickSwitchTile extends StatelessWidget {
         ? scheme.onPrimaryContainer
         : Theme.of(context).colorScheme.onSurface;
 
+    // 即时切换选中态，不做渐隐，避免跟手高亮闪烁
     return SizedBox(
       height: ProjectQuickSwitchGesture.itemExtent,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 90),
-        curve: Curves.easeOut,
+      child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
@@ -501,7 +497,7 @@ class _QuickSwitchTile extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              selected || isActive
+              selected
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
               size: 18,
