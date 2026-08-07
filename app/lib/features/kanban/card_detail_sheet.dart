@@ -1333,6 +1333,30 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               border: OutlineInputBorder(),
                             ),
                           ),
+                        Builder(
+                          builder: (context) {
+                            final metaCard = _liveCard ?? widget.card;
+                            final line = formatCardDetailTimestamps(
+                              createdAt: metaCard.createdAt,
+                              updatedAt: metaCard.updatedAt,
+                              completedAt: metaCard.completed
+                                  ? metaCard.completedAt
+                                  : null,
+                            );
+                            if (line == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                line,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                         const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
@@ -1824,30 +1848,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 .where((item) => item != id)
                                 .toList(),
                           ),
-                        ),
-                        Builder(
-                          builder: (context) {
-                            final metaCard = _liveCard ?? widget.card;
-                            final line = formatCardDetailTimestamps(
-                              createdAt: metaCard.createdAt,
-                              updatedAt: metaCard.updatedAt,
-                              completedAt: metaCard.completed
-                                  ? metaCard.completedAt
-                                  : null,
-                            );
-                            if (line == null) {
-                              return const SizedBox.shrink();
-                            }
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 24),
-                              child: Text(
-                                line,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            );
-                          },
                         ),
                       ],
                     ),
