@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../settings/settings_section.dart';
 import 'app_update_service.dart';
 import 'github_release_models.dart';
+import '../../common/app_snack_bar.dart';
 
 /// 检查并安装来自 GitHub Release 的更新。
 class AppUpdateScreen extends StatefulWidget {
@@ -87,9 +88,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
       );
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已调起安装；完成后请按提示完成更新')),
-      );
+      showAppSnackBar(context, message: '已调起安装；完成后请按提示完成更新');
     } catch (e) {
       if (!mounted) return;
       setState(() {

@@ -4,15 +4,14 @@ import 'package:provider/provider.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../project/projects_manifest.dart';
+import '../../common/app_snack_bar.dart';
 
 /// 集中展示并解决当前工作区中已发现的同步冲突。
 class ConflictCenterScreen extends StatelessWidget {
   const ConflictCenterScreen({super.key});
 
   void _showResolved(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showAppSnackBar(context, message: message);
   }
 
   Widget _choiceButtons({

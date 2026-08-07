@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
 import 'backup_history_store.dart';
+import '../../common/app_snack_bar.dart';
 
 class BackupHistoryScreen extends StatefulWidget {
   const BackupHistoryScreen({super.key});
@@ -54,17 +55,11 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     try {
       await context.read<BoardController>().createTimePointBackup();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('本地备份已创建，WebDAV 可用时会自动镜像'),
-        ),
-      );
+      showAppSnackBar(context, message: '本地备份已创建，WebDAV 可用时会自动镜像');
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('创建备份失败：$error')),
-      );
+      showAppSnackBar(context, message: '创建备份失败：$error');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -99,15 +94,11 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
             remote: remote,
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('工作区已恢复')),
-      );
+      showAppSnackBar(context, message: '工作区已恢复');
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('恢复失败：$error')),
-      );
+      showAppSnackBar(context, message: '恢复失败：$error');
     } finally {
       if (mounted) setState(() => _working = false);
     }

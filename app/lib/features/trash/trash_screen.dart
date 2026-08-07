@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
 import 'trash_models.dart';
+import '../../common/app_snack_bar.dart';
 
 class TrashScreen extends StatelessWidget {
   const TrashScreen({super.key});
@@ -59,13 +60,9 @@ class TrashScreen extends StatelessWidget {
     final error = await controller.restoreTrashItem(item.id);
     if (!context.mounted) return;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
+      showAppSnackBar(context, message: error);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已还原「${item.displayName}」')),
-      );
+      showAppSnackBar(context, message: '已还原「${item.displayName}」');
     }
   }
 
@@ -97,9 +94,7 @@ class TrashScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
     await controller.permanentlyDeleteTrashItem(item.id);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已永久删除「${item.displayName}」')),
-    );
+    showAppSnackBar(context, message: '已永久删除「${item.displayName}」');
   }
 
   Future<void> _confirmEmptyTrash(
@@ -129,9 +124,7 @@ class TrashScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
     await controller.emptyTrash();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('回收站已清空')),
-    );
+    showAppSnackBar(context, message: '回收站已清空');
   }
 
   @override

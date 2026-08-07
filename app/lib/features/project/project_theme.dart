@@ -213,16 +213,35 @@ ProjectThemePreset projectThemeForId(String? id) {
 
 ThemeData buildKanbanTheme(ProjectThemePreset preset, Brightness brightness) {
   final seed = brightness == Brightness.dark ? preset.seedDark : preset.seedLight;
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: brightness,
+  );
   return ThemeData(
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: brightness,
-    ),
+    colorScheme: colorScheme,
     useMaterial3: true,
     fontFamilyFallback: const [
       'Microsoft YaHei',
       'PingFang SC',
       'Noto Sans CJK SC',
     ],
+    // 顶部浮动提示：主题色容器底 + 圆角，避免默认底部长黑条
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      elevation: 3,
+      backgroundColor: colorScheme.primaryContainer,
+      contentTextStyle: TextStyle(
+        color: colorScheme.onPrimaryContainer,
+        fontSize: 14,
+      ),
+      actionTextColor: colorScheme.primary,
+      disabledActionTextColor:
+          colorScheme.onPrimaryContainer.withValues(alpha: 0.5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      dismissDirection: DismissDirection.up,
+      insetPadding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    ),
   );
 }

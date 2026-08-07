@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../common/app_snack_bar.dart';
 import '../controllers/board_controller.dart';
 import '../features/app_update/app_update_screen.dart';
 import '../features/kanban/card_detail_sheet.dart';
@@ -49,13 +50,9 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
       final syncError = controller.syncError;
       final attachmentWarning = controller.attachmentSyncWarning;
       if (status == SyncStatus.error && syncError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('同步失败：$syncError')),
-        );
+        showAppSnackBar(context, message: '同步失败：$syncError');
       } else if (status == SyncStatus.success && attachmentWarning != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(attachmentWarning)),
-        );
+        showAppSnackBar(context, message: attachmentWarning);
       }
     });
     bindImeGuard(_textControllers);
@@ -105,17 +102,16 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     if (!mounted || draft == null) return;
     final id = await context.read<BoardController>().quickCapture(draft);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(id == null ? '添加失败，请检查目标列' : '已添加「${draft.title}」'),
-        action: id == null
-            ? null
-            : SnackBarAction(
-                label: '撤销',
-                onPressed: () =>
-                    context.read<BoardController>().undoLastAction(),
-              ),
-      ),
+    showAppSnackBar(
+      context,
+      message: id == null ? '添加失败，请检查目标列' : '已添加「${draft.title}」',
+      action: id == null
+          ? null
+          : SnackBarAction(
+              label: '撤销',
+              onPressed: () =>
+                  context.read<BoardController>().undoLastAction(),
+            ),
     );
   }
 
@@ -124,25 +120,20 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     final label = controller.undoLabel;
     final undone = await controller.undoLastAction();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          undone
-              ? label == null
-                  ? '已撤销上一项操作'
-                  : '已撤销：$label'
-              : '没有可撤销的操作',
-        ),
-      ),
+    showAppSnackBar(
+      context,
+      message: undone
+          ? label == null
+              ? '已撤销上一项操作'
+              : '已撤销：$label'
+          : '没有可撤销的操作',
     );
   }
 
   void _requestSync() {
     final controller = context.read<BoardController>();
     if (controller.syncStatus == SyncStatus.syncing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('正在同步…可点取消按钮')),
-      );
+      showAppSnackBar(context, message: '正在同步…可点取消按钮');
       return;
     }
     controller.syncNow();
@@ -152,9 +143,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     final controller = context.read<BoardController>();
     final cancelled = controller.cancelSync();
     if (!cancelled || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已取消同步')),
-    );
+    showAppSnackBar(context, message: '已取消同步');
   }
 
   Future<void> _showFilters() async {
@@ -201,9 +190,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
           filter: _filter.copyWith(keyword: _searchQuery),
         );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已保存视图「$name」')),
-    );
+    showAppSnackBar(context, message: '已保存视图「$name」');
   }
 
   Future<void> _openToday() async {
@@ -373,14 +360,10 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
       _searchQuery = view.filter.keyword;
       _filter = view.filter.copyWith(keyword: '');
     });
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          view.isShowAll ? '已显示全部卡片' : '已应用「${view.name}」',
-        ),
-      ),
+    showAppSnackBar(
+      context,
+      message: view.isShowAll ? '已显示全部卡片' : '已应用「${view.name}」',
+      clearExisting: true,
     );
   }
 
@@ -400,9 +383,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         .where((card) => card.id == reference.cardId)
         .firstOrNull;
     if (card == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('这张卡片已被删除或移动，请刷新后重试')),
-      );
+      showAppSnackBar(context, message: '这张卡片已被删除或移动，请刷新后重试');
       return;
     }
     await showCardDetailSheet(

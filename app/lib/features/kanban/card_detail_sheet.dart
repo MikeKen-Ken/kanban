@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../../settings/column_color_picker.dart';
@@ -307,9 +308,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       await _persist();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：$error')),
-      );
+      showAppSnackBar(context, message: '保存失败：$error');
       return;
     }
     if (mounted) Navigator.pop(context);
@@ -351,9 +350,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     await _boardController.saveCardAsTemplate(card: card, name: name);
     _persisted = false;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已保存模板「$name」')),
-    );
+    showAppSnackBar(context, message: '已保存模板「$name」');
   }
 
   void _closeWithoutPersist() {
@@ -394,9 +391,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     } catch (error) {
       if (!mounted) return;
       _safeSetState(() => _resolvingConflict = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('解决冲突失败：$error')),
-      );
+      showAppSnackBar(context, message: '解决冲突失败：$error');
     }
   }
 
@@ -677,9 +672,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       }
     }
     if (candidates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('当前看板没有其他可关联的卡片')),
-      );
+      showAppSnackBar(context, message: '当前看板没有其他可关联的卡片');
       return;
     }
     final picked = await showModalBottomSheet<String>(
@@ -780,11 +773,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   Future<void> _pickAttachments() async {
     if (_attachments.length >= KanbanCard.maxAttachments) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('每张卡片最多 ${KanbanCard.maxAttachments} 张图片'),
-        ),
-      );
+      showAppSnackBar(context, message: '每张卡片最多 ${KanbanCard.maxAttachments} 张图片');
       return;
     }
 
@@ -799,9 +788,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     );
     if (!mounted) return;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
+      showAppSnackBar(context, message: error);
       return;
     }
 

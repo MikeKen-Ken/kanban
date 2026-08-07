@@ -5,6 +5,7 @@ import '../../controllers/board_controller.dart';
 import '../../settings/column_color_picker.dart';
 import '../kanban/kanban_labels.dart';
 import '../project/project_theme.dart';
+import '../../common/app_snack_bar.dart';
 
 class LabelManagementScreen extends StatelessWidget {
   const LabelManagementScreen({super.key});
@@ -101,9 +102,7 @@ class LabelManagementScreen extends StatelessWidget {
         .read<BoardController>()
         .addCustomLabel(result.name, result.colorValue);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已创建标签「${result.name}」')),
-    );
+    showAppSnackBar(context, message: '已创建标签「${result.name}」');
   }
 
   Future<void> _update(BuildContext context, KanbanLabel label) async {
@@ -115,9 +114,7 @@ class LabelManagementScreen extends StatelessWidget {
           colorValue: result.colorValue,
         );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(updated ? '标签已更新' : '标签不存在，无法更新')),
-    );
+    showAppSnackBar(context, message: updated ? '标签已更新' : '标签不存在，无法更新');
   }
 
   Future<void> _delete(BuildContext context, KanbanLabel label) async {
@@ -143,9 +140,7 @@ class LabelManagementScreen extends StatelessWidget {
     if (confirmed != true || !context.mounted) return;
     await context.read<BoardController>().removeCustomLabel(label.key);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已删除标签「${label.name}」')),
-    );
+    showAppSnackBar(context, message: '已删除标签「${label.name}」');
   }
 
   @override

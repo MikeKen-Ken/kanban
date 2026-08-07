@@ -7,6 +7,7 @@ import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_column_list.dart';
 import '../models/kanban_models.dart';
 import '../settings/column_color_picker.dart';
+import '../common/app_snack_bar.dart';
 
 class KanbanColumnWidget extends StatelessWidget {
   const KanbanColumnWidget({
@@ -225,9 +226,7 @@ class KanbanColumnWidget extends StatelessWidget {
     final controller = context.read<BoardController>();
     final count = column.cards.length;
     if (count == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已完成列为空，无需清空')),
-      );
+      showAppSnackBar(context, message: '已完成列为空，无需清空');
       return;
     }
 
@@ -252,9 +251,7 @@ class KanbanColumnWidget extends StatelessWidget {
 
     final cleared = await controller.clearDoneColumnCards(column.id);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(cleared > 0 ? '已清空 $cleared 张卡片' : '清空失败')),
-    );
+    showAppSnackBar(context, message: cleared > 0 ? '已清空 $cleared 张卡片' : '清空失败');
   }
 
   Future<void> _pickColumnColor(BuildContext context) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../../settings/settings_section.dart';
@@ -49,9 +50,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   Future<void> _save() async {
     final name = _doneColumnController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已完成列名称不能为空')),
-      );
+      showAppSnackBar(context, message: '已完成列名称不能为空');
       return;
     }
 
@@ -71,9 +70,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('项目设置已保存，将自动同步')),
-    );
+    showAppSnackBar(context, message: '项目设置已保存，将自动同步');
     Navigator.pop(context);
   }
 
@@ -84,11 +81,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     if (!mounted) return;
     setState(() => _backgroundBusy = false);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      showAppSnackBar(context, message: error);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('背景已更新，将自动同步')),
-      );
+      showAppSnackBar(context, message: '背景已更新，将自动同步');
     }
   }
 
@@ -101,9 +96,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
       _overlayDraft = null;
       _cardOpacityDraft = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已清除背景图')),
-    );
+    showAppSnackBar(context, message: '已清除背景图');
   }
 
   Future<void> _resolveConflict({required bool keepPrimary}) async {
@@ -119,11 +112,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
       _overlayDraft = null;
       _cardOpacityDraft = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(keepPrimary ? '已保留当前项目设置' : '已改用另一侧项目设置'),
-      ),
-    );
+    showAppSnackBar(context, message: keepPrimary ? '已保留当前项目设置' : '已改用另一侧项目设置');
   }
 
   String _themeLabel(String themeId) {

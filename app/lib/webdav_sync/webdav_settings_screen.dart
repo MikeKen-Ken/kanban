@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/board_controller.dart';
 import '../settings/settings_section.dart';
 import 'webdav_config.dart';
+import '../common/app_snack_bar.dart';
 
 /// WebDAV 同步详细设置页（连接配置仅保存在本机）
 class WebDavSettingsScreen extends StatefulWidget {
@@ -110,9 +111,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
         : (!_autoSync && !_autoPull)
             ? '已保存；仅手动同步（点顶栏同步按钮）'
             : '已保存';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tip)),
-    );
+    showAppSnackBar(context, message: tip);
     Navigator.pop(context);
   }
 

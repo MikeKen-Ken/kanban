@@ -8,6 +8,7 @@ import 'kanban_mcp_host.dart';
 import 'mcp_client_configurator.dart';
 import 'mcp_constants.dart';
 import 'mcp_paths.dart';
+import '../../common/app_snack_bar.dart';
 
 /// Windows MCP 服务状态与 Cursor / Codex 一键配置。
 class McpSettingsScreen extends StatefulWidget {
@@ -112,7 +113,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, message: message);
   }
 
   String _statusLabel(KanbanMcpHost host) {

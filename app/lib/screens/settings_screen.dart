@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../common/app_snack_bar.dart';
 import '../controllers/board_controller.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/app_update/app_update_screen.dart';
@@ -54,8 +55,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'kanban-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.kanban-backup';
     final saved = await saveBackupFile(bytes, fileName);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(saved ? '完整备份已导出' : '已取消导出')),
+    showAppSnackBar(
+      context,
+      message: saved ? '完整备份已导出' : '已取消导出',
     );
   }
 
@@ -83,14 +85,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await context.read<BoardController>().restoreBackupArchive(bytes);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('备份已恢复')),
-      );
+      showAppSnackBar(context, message: '备份已恢复');
     } on FormatException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('备份无效：${error.message}')),
-      );
+      showAppSnackBar(context, message: '备份无效：${error.message}');
     }
   }
 
@@ -185,9 +183,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     NotificationPermissionResult.denied =>
                       '未能开启通知，请在系统设置中允许本应用通知',
                   };
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(message)),
-                  );
+                  showAppSnackBar(context, message: message);
                 },
               ),
               SettingsNavigationTile(

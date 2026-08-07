@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../common/app_snack_bar.dart';
 import 'card_query_service.dart';
 import 'card_reference.dart';
 import 'filter_sheet.dart';
@@ -149,9 +150,7 @@ class _GlobalQueryScreenState extends State<GlobalQueryScreen> {
     if (name == null || name.isEmpty || !mounted) return;
     await widget.onSaveView(null, name, _effectiveFilter);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已保存视图「$name」')),
-    );
+    showAppSnackBar(context, message: '已保存视图「$name」');
   }
 
   Future<void> _manageViews() async {
@@ -168,14 +167,10 @@ class _GlobalQueryScreenState extends State<GlobalQueryScreen> {
     if (selected == null || !mounted) return;
     _searchController.text = selected.filter.keyword;
     setState(() => _filter = selected.filter.copyWith(keyword: ''));
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          selected.isShowAll ? '已显示全部卡片' : '已应用「${selected.name}」',
-        ),
-      ),
+    showAppSnackBar(
+      context,
+      message: selected.isShowAll ? '已显示全部卡片' : '已应用「${selected.name}」',
+      clearExisting: true,
     );
   }
 

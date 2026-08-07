@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'saved_view.dart';
+import '../../common/app_snack_bar.dart';
 
 typedef RenameSavedView = Future<void> Function(SavedView view, String name);
 typedef DeleteSavedView = Future<void> Function(SavedView view);
@@ -85,9 +86,7 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
             item,
       ]);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已重命名为「$name」')),
-    );
+    showAppSnackBar(context, message: '已重命名为「$name」');
   }
 
   Future<void> _delete(SavedView view) async {
@@ -113,9 +112,7 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
     await widget.onDelete(view);
     if (!mounted) return;
     setState(() => _views.removeWhere((item) => item.id == view.id));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已删除「${view.name}」')),
-    );
+    showAppSnackBar(context, message: '已删除「${view.name}」');
   }
 
   @override

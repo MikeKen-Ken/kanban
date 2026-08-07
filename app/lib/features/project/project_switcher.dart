@@ -7,6 +7,7 @@ import '../../features/project/projects_manifest.dart';
 import 'project_quick_switch.dart';
 import 'project_settings_screen.dart';
 import 'project_theme.dart';
+import '../../common/app_snack_bar.dart';
 
 /// 左上角项目切换器
 class ProjectSwitcher extends StatelessWidget {
@@ -81,9 +82,7 @@ class ProjectSwitcher extends StatelessWidget {
       BuildContext context, ProjectEntry project) async {
     final controller = context.read<BoardController>();
     if (controller.projects.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('至少需要保留一个项目')),
-      );
+      showAppSnackBar(context, message: '至少需要保留一个项目');
       return;
     }
 
@@ -109,9 +108,7 @@ class ProjectSwitcher extends StatelessWidget {
     final deleted = await controller.deleteProject(project.id);
     if (!context.mounted) return;
     if (!deleted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('删除失败')),
-      );
+      showAppSnackBar(context, message: '删除失败');
     }
   }
 
