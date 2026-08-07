@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +12,7 @@ double boardHorizontalScrollDelta(Offset scrollDelta) {
       : scrollDelta.dy;
 }
 
-/// 计算 Ctrl+滚轮后的目标偏移，并夹在可滚动范围内。
+/// 计算修饰键+滚轮后的目标偏移，并夹在可滚动范围内。
 @visibleForTesting
 double clampBoardScrollOffset({
   required double pixels,
@@ -24,16 +23,53 @@ double clampBoardScrollOffset({
   return (pixels + delta).clamp(minScrollExtent, maxScrollExtent);
 }
 
-/// 在按住 Ctrl 时认领滚轮事件，并驱动 [controller] 横向滚动。
+/// 当前焦点是否在可编辑文本内（输入框打字时不应把空格当横滚修饰键）。
+@visibleForTesting
+bool isEditableTextFocused([FocusNode? primaryFocus]) {
+  final focus = primaryFocus ?? FocusManager.instance.primaryFocus;
+  final context = focus?.context;
+  if (context == null) return false;
+  if (context.widget is EditableText) return true;
+  return context.findAncestorWidgetOfExactType<EditableText>() != null;
+}
+
+/// 是否应将滚轮认领为看板横向滚动。
 ///
-/// 未按 Ctrl 时不处理，以便列内纵向滚动等默认行为不受影响。
-bool tryClaimCtrlWheelForBoardScroll({
+/// - Ctrl：始终可作为横滚修饰键（与是否在输入框无关）。
+/// - 空格：仅在未聚焦可编辑文本时生效，避免抢走输入框里的空格打字语义。
+@visibleForTesting
+bool shouldClaimBoardHorizontalWheel({
+  required bool isControlPressed,
+  required bool isSpacePressed,
+  required bool isEditableFocused,
+}) {
+  if (isControlPressed) return true;
+  if (isSpacePressed && !isEditableFocused) return true;
+  return false;
+}
+
+/// 当前是否应按修饰键认领看板横向滚轮（读取硬件键盘与焦点状态）。
+@visibleForTesting
+bool isBoardHorizontalWheelModifierActive() {
+  return shouldClaimBoardHorizontalWheel(
+    isControlPressed: HardwareKeyboard.instance.isControlPressed,
+    isSpacePressed: HardwareKeyboard.instance.isLogicalKeyPressed(
+      LogicalKeyboardKey.space,
+    ),
+    isEditableFocused: isEditableTextFocused(),
+  );
+}
+
+/// 在按住 Ctrl 或（非输入焦点下的）空格时认领滚轮，并驱动 [controller] 横向滚动。
+///
+/// 未按修饰键时不处理，以便列内纵向滚动等默认行为不受影响。
+bool tryClaimModifierWheelForBoardScroll({
   required PointerSignalEvent event,
   required ScrollController controller,
-  required bool isControlPressed,
+  required bool claimHorizontal,
 }) {
   if (event is! PointerScrollEvent) return false;
-  if (!isControlPressed) return false;
+  if (!claimHorizontal) return false;
   if (!controller.hasClients) return false;
 
   GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
@@ -54,20 +90,20 @@ bool tryClaimCtrlWheelForBoardScroll({
   return true;
 }
 
-/// 按住 Ctrl 时拒绝滚轮/拖拽滚动，好让外层认领 Ctrl+滚轮。
-class _RejectWhenCtrlScrollPhysics extends ScrollPhysics {
-  const _RejectWhenCtrlScrollPhysics({super.parent});
+/// 按住 Ctrl 或（非输入焦点下）空格时拒绝滚轮/拖拽滚动，好让外层认领横滚。
+class _RejectWhenHorizontalModifierScrollPhysics extends ScrollPhysics {
+  const _RejectWhenHorizontalModifierScrollPhysics({super.parent});
 
   @override
-  _RejectWhenCtrlScrollPhysics applyTo(ScrollPhysics? ancestor) {
-    return _RejectWhenCtrlScrollPhysics(parent: buildParent(ancestor));
+  _RejectWhenHorizontalModifierScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _RejectWhenHorizontalModifierScrollPhysics(
+      parent: buildParent(ancestor),
+    );
   }
 
   @override
   bool shouldAcceptUserOffset(ScrollMetrics position) {
-    if (HardwareKeyboard.instance.isControlPressed) {
-      return false;
-    }
+    if (isBoardHorizontalWheelModifierActive()) return false;
     return super.shouldAcceptUserOffset(position);
   }
 }
@@ -77,13 +113,13 @@ class _BoardHorizontalScrollBehavior extends MaterialScrollBehavior {
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    return _RejectWhenCtrlScrollPhysics(
+    return _RejectWhenHorizontalModifierScrollPhysics(
       parent: super.getScrollPhysics(context),
     );
   }
 }
 
-/// 看板主视图横向滚动壳：共享控制器的可拖动滚动条 + Ctrl+滚轮左右滚动。
+/// 看板主视图横向滚动壳：共享控制器的可拖动滚动条 + Ctrl/空格+滚轮左右滚动。
 class BoardHorizontalScroll extends StatefulWidget {
   const BoardHorizontalScroll({
     super.key,
@@ -108,10 +144,10 @@ class _BoardHorizontalScrollState extends State<BoardHorizontalScroll> {
   }
 
   void _onPointerSignal(PointerSignalEvent event) {
-    tryClaimCtrlWheelForBoardScroll(
+    tryClaimModifierWheelForBoardScroll(
       event: event,
       controller: _controller,
-      isControlPressed: HardwareKeyboard.instance.isControlPressed,
+      claimHorizontal: isBoardHorizontalWheelModifierActive(),
     );
   }
 
