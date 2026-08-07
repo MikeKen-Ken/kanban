@@ -657,58 +657,63 @@ class _CardContent extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (!dragging && columnId != null) ...[
-                    if (showContextMenuButton && onContextMenu != null)
-                      Builder(
-                        builder: (buttonContext) {
-                          return IconButton(
-                            key: const ValueKey('card-context-menu-button'),
-                            tooltip: '更多（转移/删除）',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                            onPressed: () {
-                              final box = buttonContext.findRenderObject()
-                                  as RenderBox?;
-                              if (box == null || !box.hasSize) return;
-                              final anchor = box.localToGlobal(
-                                box.size.center(Offset.zero),
+                  // 操作列：置顶在上，三点菜单紧挨其正下方，尽量不拉宽卡片横向布局
+                  if (!dragging && columnId != null)
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: isPinned ? '取消置顶' : '置顶',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 28,
+                          ),
+                          onPressed: () => context
+                              .read<BoardController>()
+                              .toggleCardPin(columnId!, card.id),
+                          icon: Icon(
+                            isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                            size: 18,
+                            color: isPinned
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.55),
+                          ),
+                        ),
+                        if (showContextMenuButton && onContextMenu != null)
+                          Builder(
+                            builder: (buttonContext) {
+                              return IconButton(
+                                key: const ValueKey('card-context-menu-button'),
+                                tooltip: '更多（转移/删除）',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 28,
+                                  minHeight: 28,
+                                ),
+                                onPressed: () {
+                                  final box = buttonContext.findRenderObject()
+                                      as RenderBox?;
+                                  if (box == null || !box.hasSize) return;
+                                  final anchor = box.localToGlobal(
+                                    box.size.center(Offset.zero),
+                                  );
+                                  onContextMenu!(anchor);
+                                },
+                                icon: Icon(
+                                  Icons.more_vert,
+                                  size: 18,
+                                  color: colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.55),
+                                ),
                               );
-                              onContextMenu!(anchor);
                             },
-                            icon: Icon(
-                              Icons.more_vert,
-                              size: 18,
-                              color: colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.55),
-                            ),
-                          );
-                        },
-                      ),
-                    IconButton(
-                      tooltip: isPinned ? '取消置顶' : '置顶',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 28,
-                        minHeight: 28,
-                      ),
-                      onPressed: () => context
-                          .read<BoardController>()
-                          .toggleCardPin(columnId!, card.id),
-                      icon: Icon(
-                        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                        size: 18,
-                        color: isPinned
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.55),
-                      ),
+                          ),
+                      ],
                     ),
-                  ],
                 ],
               ),
             ),

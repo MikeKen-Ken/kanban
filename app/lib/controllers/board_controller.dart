@@ -2569,7 +2569,8 @@ class BoardController extends ChangeNotifier {
   ///
   /// 成功返回 `null`，失败返回简体中文错误说明。
   /// [sourceProjectId] 省略时使用界面当前项目（[uiActiveProjectId]）。
-  /// [targetColumnId] 省略时按 [resolveTransferTargetColumnId] 解析。
+  /// [targetColumnId] 省略时按 [resolveTransferTargetColumnId] 解析
+  ///（优先源列同名标题，否则待办，再兜底）。
   Future<String?> transferCardToProject({
     required String fromColumnId,
     required String cardId,
@@ -2613,9 +2614,17 @@ class BoardController extends ChangeNotifier {
       final toSettings = targetProjectId == activeProjectId
           ? projectSettings
           : await _repository.loadProjectSettings(targetProjectId);
+      String? sourceColumnTitle;
+      for (final col in fromBoard.columns) {
+        if (col.id == fromColumnId) {
+          sourceColumnTitle = col.title;
+          break;
+        }
+      }
       final resolvedTargetColumnId = targetColumnId ??
           resolveTransferTargetColumnId(
             toBoardLoaded,
+            sourceColumnTitle: sourceColumnTitle,
             doneColumnName: toSettings.doneColumnName,
           );
       if (resolvedTargetColumnId == null) return '目标项目没有可用列';
