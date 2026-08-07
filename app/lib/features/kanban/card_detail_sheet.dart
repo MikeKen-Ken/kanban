@@ -1874,6 +1874,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                             .projects
                                             .length >
                                         1;
+                                    // 全平台可用（含 Android）；板面另有右键/「⋯」/长按入口
                                     return TextButton(
                                       onPressed: _transferToOtherProject,
                                       child: Text(

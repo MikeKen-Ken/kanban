@@ -38,6 +38,28 @@ bool shouldSuppressCardTapAfterPress({
   return heldMs >= threshold;
 }
 
+/// 触控为主的平台通常没有可靠的右键（secondary tap）。
+bool isTouchPrimaryPlatform(TargetPlatform platform) {
+  return platform == TargetPlatform.android ||
+      platform == TargetPlatform.iOS;
+}
+
+/// 是否用长按打开卡片上下文菜单（转移/删除）。
+///
+/// 仅「即时拖拽」时可用：此时长按不再启动拖拽。
+/// 默认延迟拖拽下长按留给 [CardLongPressDraggable]，菜单需另寻入口。
+bool shouldEnableLongPressCardContextMenu({required bool immediateDrag}) {
+  return immediateDrag;
+}
+
+/// 是否在卡片上展示「⋯」菜单按钮。
+///
+/// Android / iOS 无可靠右键；默认又是长按拖拽，故始终提供显式入口，
+/// 与桌面右键、详情底栏「转移到…」形成等价可达。
+bool shouldShowCardContextMenuButton(TargetPlatform platform) {
+  return isTouchPrimaryPlatform(platform);
+}
+
 /// 长按延迟拖拽：阈值内不因位移自行拒绝，明显滑动时由外层滚动手势胜出。
 class CardLongPressDraggable<T extends Object> extends LongPressDraggable<T> {
   const CardLongPressDraggable({

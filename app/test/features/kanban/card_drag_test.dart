@@ -152,4 +152,32 @@ void main() {
       );
     });
   });
+
+  group('卡片上下文菜单触控入口', () {
+    test('Android / iOS 视为触控主平台，桌面否', () {
+      expect(isTouchPrimaryPlatform(TargetPlatform.android), isTrue);
+      expect(isTouchPrimaryPlatform(TargetPlatform.iOS), isTrue);
+      expect(isTouchPrimaryPlatform(TargetPlatform.windows), isFalse);
+      expect(isTouchPrimaryPlatform(TargetPlatform.macOS), isFalse);
+      expect(isTouchPrimaryPlatform(TargetPlatform.linux), isFalse);
+    });
+
+    test('仅即时拖拽启用长按菜单', () {
+      expect(
+        shouldEnableLongPressCardContextMenu(immediateDrag: true),
+        isTrue,
+      );
+      expect(
+        shouldEnableLongPressCardContextMenu(immediateDrag: false),
+        isFalse,
+      );
+    });
+
+    test('触控平台展示「⋯」菜单按钮，桌面不展示', () {
+      expect(shouldShowCardContextMenuButton(TargetPlatform.android), isTrue);
+      expect(shouldShowCardContextMenuButton(TargetPlatform.iOS), isTrue);
+      expect(shouldShowCardContextMenuButton(TargetPlatform.windows), isFalse);
+      expect(shouldShowCardContextMenuButton(TargetPlatform.macOS), isFalse);
+    });
+  });
 }

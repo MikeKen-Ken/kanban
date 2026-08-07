@@ -82,7 +82,12 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     );
   }
 
-  /// 桌面右键（或即时拖拽模式下的长按）弹出轻量上下文菜单。
+  /// 卡片上下文菜单（转移到… / 删除）。
+  ///
+  /// 触发方式：
+  /// - 桌面：右键（secondary tap）
+  /// - Android / iOS：卡片「⋯」按钮；若设置为即时拖拽，亦可长按
+  /// - 详情底栏「转移到…」：全平台可用（含默认延迟拖拽的 Android）
   Future<void> _showCardContextMenu(Offset globalPosition) async {
     if (!mounted || _dragStarted) return;
     final controller = context.read<BoardController>();
@@ -169,6 +174,9 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           ),
         );
 
+        final touchMenuButton = shouldShowCardContextMenuButton(
+          Theme.of(context).platform,
+        );
         final content = _CardContent(
           card: widget.card,
           columnId: widget.columnId,
@@ -182,8 +190,11 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           suppressInk: true,
           onOpenDetail: _openDetail,
           onContextMenu: _showCardContextMenu,
-          // 长按已用于延迟拖拽；仅即时拖拽模式才用长按作移动端菜单入口
-          enableLongPressContextMenu: immediateDrag,
+          // 默认延迟拖拽：长按启动拖拽，Android 靠「⋯」；即时拖拽才用长按开菜单
+          enableLongPressContextMenu: shouldEnableLongPressCardContextMenu(
+            immediateDrag: immediateDrag,
+          ),
+          showContextMenuButton: touchMenuButton,
         );
 
         // 拖起后原位只保留占位尺寸，不绘制幽灵卡面，避免与反馈层叠成两层
@@ -256,6 +267,7 @@ class _CardContent extends StatelessWidget {
     this.onOpenDetail,
     this.onContextMenu,
     this.enableLongPressContextMenu = false,
+    this.showContextMenuButton = false,
   });
 
   final KanbanCard card;
@@ -270,6 +282,8 @@ class _CardContent extends StatelessWidget {
   final VoidCallback? onOpenDetail;
   final void Function(Offset globalPosition)? onContextMenu;
   final bool enableLongPressContextMenu;
+  /// Android / iOS：显式「⋯」入口（见 [shouldShowCardContextMenuButton]）
+  final bool showContextMenuButton;
 
   @override
   Widget build(BuildContext context) {
@@ -592,7 +606,37 @@ class _CardContent extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (!dragging && columnId != null)
+                  if (!dragging && columnId != null) ...[
+                    if (showContextMenuButton && onContextMenu != null)
+                      Builder(
+                        builder: (buttonContext) {
+                          return IconButton(
+                            key: const ValueKey('card-context-menu-button'),
+                            tooltip: '更多（转移/删除）',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            onPressed: () {
+                              final box = buttonContext.findRenderObject()
+                                  as RenderBox?;
+                              if (box == null || !box.hasSize) return;
+                              final anchor = box.localToGlobal(
+                                box.size.center(Offset.zero),
+                              );
+                              onContextMenu!(anchor);
+                            },
+                            icon: Icon(
+                              Icons.more_vert,
+                              size: 18,
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.55),
+                            ),
+                          );
+                        },
+                      ),
                     IconButton(
                       tooltip: isPinned ? '取消置顶' : '置顶',
                       visualDensity: VisualDensity.compact,
@@ -613,6 +657,7 @@ class _CardContent extends StatelessWidget {
                                 .withValues(alpha: 0.55),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),

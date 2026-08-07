@@ -118,8 +118,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsSliderRow(
                 title: '拖拽按压时长',
                 description: _dragLongPressMs <= 0
-                    ? '按住卡片并移动即可拖动'
-                    : '按住卡片 ${_dragLongPressMs}ms 后再拖动',
+                    ? '按住并移动即可拖动；长按打开转移/删除菜单'
+                    : '按住 ${_dragLongPressMs}ms 后拖动；安卓等触控用卡片「⋯」或详情「转移到…」',
                 value: _dragLongPressMs.toDouble(),
                 valueLabel: _dragDurationLabel,
                 min: 0,
