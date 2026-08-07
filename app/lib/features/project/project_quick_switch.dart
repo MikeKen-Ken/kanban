@@ -8,6 +8,9 @@ import 'projects_manifest.dart';
 import 'project_theme.dart';
 
 /// 根据垂直位移计算快速切换高亮索引（相对起始项）。
+///
+/// 仅用于无面板几何信息时的相对步进；跟手高亮应优先用
+/// [projectQuickSwitchIndexAtY]。
 int projectQuickSwitchIndex({
   required int startIndex,
   required double dy,
@@ -18,6 +21,19 @@ int projectQuickSwitchIndex({
   if (itemExtent <= 0) return startIndex.clamp(0, length - 1);
   final next = startIndex + (dy / itemExtent).round();
   return next.clamp(0, length - 1);
+}
+
+/// 按列表内容坐标 Y（第 0 项顶部为 0，含滚动偏移）计算高亮索引。
+///
+/// 指针落在哪一行就高亮哪一行，避免面板被 clamp / 滚动后与按压点脱节。
+int projectQuickSwitchIndexAtY({
+  required double localY,
+  required double itemExtent,
+  required int length,
+}) {
+  if (length <= 0) return 0;
+  if (itemExtent <= 0) return 0;
+  return (localY / itemExtent).floor().clamp(0, length - 1);
 }
 
 /// 左上角项目快速切换：按住稍候出现列表，上下滑动高亮，松手确认。
@@ -55,6 +71,8 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
   int _highlightedIndex = 0;
   int _startIndex = 0;
   Offset _startGlobal = Offset.zero;
+  /// 面板顶部全局 Y（clamp 后），用于按指针绝对位置算高亮。
+  double _panelTop = 0;
   bool _sessionActive = false;
 
   @override
@@ -84,6 +102,31 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
     return i >= 0 ? i : 0;
   }
 
+  /// 指针全局 Y → 列表内容坐标（第 0 项顶部为 0）。
+  double _localYForGlobal(double globalY) {
+    final scroll =
+        _scrollController.hasClients ? _scrollController.offset : 0.0;
+    return globalY -
+        _panelTop -
+        ProjectQuickSwitchGesture.panelPaddingV +
+        scroll;
+  }
+
+  int _indexForGlobal(Offset globalPosition) {
+    return projectQuickSwitchIndexAtY(
+      localY: _localYForGlobal(globalPosition.dy),
+      itemExtent: ProjectQuickSwitchGesture.itemExtent,
+      length: widget.projects.length,
+    );
+  }
+
+  void _applyHighlight(int next, {required bool haptic}) {
+    if (next == _highlightedIndex) return;
+    _highlightedIndex = next;
+    if (haptic) HapticFeedback.selectionClick();
+    _overlayEntry?.markNeedsBuild();
+  }
+
   void _startSession(Offset globalPosition) {
     if (widget.projects.length <= 1) return;
     _startIndex = _indexOfActive();
@@ -93,24 +136,16 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
     _insertOverlay();
     HapticFeedback.mediumImpact();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureHighlightedVisible();
+      if (!_sessionActive) return;
+      // 长列表时尽量把起始项滚到按压点下方，短列表无法滚动则靠绝对坐标跟手
+      _scrollStartItemUnderAnchor();
+      _applyHighlight(_indexForGlobal(_startGlobal), haptic: false);
     });
   }
 
   void _updateSession(Offset globalPosition) {
     if (!_sessionActive || widget.projects.isEmpty) return;
-    final dy = globalPosition.dy - _startGlobal.dy;
-    final next = projectQuickSwitchIndex(
-      startIndex: _startIndex,
-      dy: dy,
-      itemExtent: ProjectQuickSwitchGesture.itemExtent,
-      length: widget.projects.length,
-    );
-    if (next == _highlightedIndex) return;
-    _highlightedIndex = next;
-    HapticFeedback.selectionClick();
-    _overlayEntry?.markNeedsBuild();
-    _ensureHighlightedVisible();
+    _applyHighlight(_indexForGlobal(globalPosition), haptic: true);
   }
 
   Future<void> _endSession({required bool commit}) async {
@@ -128,21 +163,30 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
     }
   }
 
-  void _ensureHighlightedVisible() {
+  /// 在可滚动时，把起始项中心对齐到按压点，减少开局错位。
+  void _scrollStartItemUnderAnchor() {
     if (!_scrollController.hasClients) return;
-    final targetOffset =
-        _highlightedIndex * ProjectQuickSwitchGesture.itemExtent;
     final view = _scrollController.position;
-    if (targetOffset < view.pixels) {
-      _scrollController.jumpTo(targetOffset);
-    } else if (targetOffset + ProjectQuickSwitchGesture.itemExtent >
-        view.pixels + view.viewportDimension) {
-      _scrollController.jumpTo(
-        (targetOffset + ProjectQuickSwitchGesture.itemExtent -
-                view.viewportDimension)
-            .clamp(0.0, view.maxScrollExtent),
-      );
-    }
+    if (view.maxScrollExtent <= 0) return;
+    final desiredScroll = _panelTop +
+        ProjectQuickSwitchGesture.panelPaddingV +
+        (_startIndex + 0.5) * ProjectQuickSwitchGesture.itemExtent -
+        _startGlobal.dy;
+    _scrollController.jumpTo(desiredScroll.clamp(0.0, view.maxScrollExtent));
+  }
+
+  double _computePanelTop({
+    required MediaQueryData media,
+    required double panelHeight,
+  }) {
+    // 让起始项中心大致对齐按压点；贴边时 clamp，跟手改由绝对 Y 保证
+    var top = _startGlobal.dy -
+        ProjectQuickSwitchGesture.panelPaddingV -
+        (_startIndex + 0.5) * ProjectQuickSwitchGesture.itemExtent;
+    return top.clamp(
+      media.padding.top + 8,
+      media.size.height - media.padding.bottom - panelHeight - 8,
+    );
   }
 
   void _insertOverlay() {
@@ -155,32 +199,29 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
       return;
     }
 
+    final media = MediaQuery.of(context);
+    final projects = widget.projects;
+    final contentHeight = ProjectQuickSwitchGesture.panelPaddingV * 2 +
+        projects.length * ProjectQuickSwitchGesture.itemExtent;
+    final maxPanelHeight = media.size.height * 0.7;
+    final panelHeight = contentHeight.clamp(0.0, maxPanelHeight);
+    _panelTop = _computePanelTop(media: media, panelHeight: panelHeight);
+
     _overlayEntry = OverlayEntry(
       builder: (ctx) {
-        final media = MediaQuery.of(ctx);
+        final overlayMedia = MediaQuery.of(ctx);
         final theme = Theme.of(ctx);
         final brightness = theme.brightness;
-        final projects = widget.projects;
-        final anchor = _startGlobal;
+        final list = widget.projects;
 
-        final contentHeight = ProjectQuickSwitchGesture.panelPaddingV * 2 +
-            projects.length * ProjectQuickSwitchGesture.itemExtent;
-        final maxPanelHeight = media.size.height * 0.7;
-        final panelHeight = contentHeight.clamp(0.0, maxPanelHeight);
-
-        // 让起始项中心大致对齐按压点，滑动过程中面板位置固定
-        var top = anchor.dy -
-            ProjectQuickSwitchGesture.panelPaddingV -
-            (_startIndex + 0.5) * ProjectQuickSwitchGesture.itemExtent;
-        top = top.clamp(
-          media.padding.top + 8,
-          media.size.height - media.padding.bottom - panelHeight - 8,
-        );
-
-        var left = anchor.dx - 24;
-        left = left.clamp(
+        final overlayMaxPanelHeight = overlayMedia.size.height * 0.7;
+        // 与插入时一致：滑动过程中面板位置固定
+        final top = _panelTop;
+        final left = (_startGlobal.dx - 24).clamp(
           8.0,
-          media.size.width - ProjectQuickSwitchGesture.panelMinWidth - 8,
+          overlayMedia.size.width -
+              ProjectQuickSwitchGesture.panelMinWidth -
+              8,
         );
 
         return IgnorePointer(
@@ -203,7 +244,7 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
                     constraints: BoxConstraints(
                       minWidth: ProjectQuickSwitchGesture.panelMinWidth,
                       maxWidth: ProjectQuickSwitchGesture.panelMaxWidth,
-                      maxHeight: maxPanelHeight,
+                      maxHeight: overlayMaxPanelHeight,
                     ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -214,14 +255,14 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            for (var i = 0; i < projects.length; i++)
+                            for (var i = 0; i < list.length; i++)
                               _QuickSwitchTile(
-                                project: projects[i],
+                                project: list[i],
                                 selected: i == _highlightedIndex,
                                 isActive:
-                                    projects[i].id == widget.activeProjectId,
+                                    list[i].id == widget.activeProjectId,
                                 seed: _seedColor(
-                                  widget.themeIdFor(projects[i].id),
+                                  widget.themeIdFor(list[i].id),
                                   brightness,
                                 ),
                                 brightness: brightness,
@@ -239,6 +280,8 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
       },
     );
     overlay.insert(_overlayEntry!);
+    // 插入后立即按按压点校正一次，避免等首帧前短暂错位
+    _highlightedIndex = _indexForGlobal(_startGlobal);
   }
 
   Color _seedColor(String themeId, Brightness brightness) {
