@@ -12,6 +12,7 @@ import 'card_detail_sheet.dart';
 import 'card_drag.dart';
 import 'kanban_labels.dart';
 import 'markdown_plain_text.dart';
+import 'transfer_card_sheet.dart';
 
 /// 单张看板卡片：勾选完成、拖拽、置顶、元数据展示
 class KanbanCardTile extends StatefulWidget {
@@ -83,6 +84,8 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
   /// 桌面右键（或即时拖拽模式下的长按）弹出轻量上下文菜单。
   Future<void> _showCardContextMenu(Offset globalPosition) async {
     if (!mounted || _dragStarted) return;
+    final controller = context.read<BoardController>();
+    final canTransfer = controller.projects.length > 1;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
     final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
     final selected = await showMenu<String>(
@@ -95,6 +98,11 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       ),
       items: [
         PopupMenuItem<String>(
+          value: 'transfer',
+          enabled: canTransfer,
+          child: Text(canTransfer ? '转移到…' : '转移到…（无其他项目）'),
+        ),
+        PopupMenuItem<String>(
           value: 'delete',
           child: Text(
             '删除',
@@ -103,7 +111,15 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         ),
       ],
     );
-    if (selected == 'delete' && mounted) {
+    if (!mounted) return;
+    if (selected == 'transfer') {
+      await showTransferCardToProjectFlow(
+        context: context,
+        columnId: widget.columnId,
+        cardId: widget.card.id,
+        cardTitle: widget.card.title,
+      );
+    } else if (selected == 'delete') {
       await _confirmAndDeleteCard();
     }
   }

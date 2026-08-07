@@ -22,6 +22,7 @@ import 'discard_blank_card.dart';
 import 'due_date_shortcuts.dart';
 import 'kanban_labels.dart';
 import 'move_to_verify_on_new_feedback.dart';
+import 'transfer_card_sheet.dart';
 
 /// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
 Future<void> showCardDetailSheet({
@@ -413,6 +414,31 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _persisted = false;
     if (!mounted) return;
     showAppSnackBar(context, message: '已保存模板「$name」');
+  }
+
+  Future<void> _transferToOtherProject() async {
+    final controller = context.read<BoardController>();
+    if (controller.projects.length <= 1) {
+      showAppSnackBar(context, message: '没有其他可转移的项目');
+      return;
+    }
+    try {
+      await _persist();
+    } catch (error) {
+      if (!mounted) return;
+      showAppSnackBar(context, message: '保存失败：$error');
+      return;
+    }
+    if (!mounted) return;
+    final ok = await showTransferCardToProjectFlow(
+      context: context,
+      columnId: widget.columnId,
+      cardId: widget.card.id,
+      cardTitle: _effectiveTitle,
+    );
+    if (ok && mounted) {
+      _closeWithoutPersist();
+    }
   }
 
   void _closeWithoutPersist() {
@@ -1728,43 +1754,82 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
-                        TextButton.icon(
-                          onPressed: _saveAsTemplate,
-                          icon: const Icon(Icons.bookmark_add_outlined),
-                          label: const Text('存为模板'),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            final ok = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('删除卡片？'),
-                                content: Text('「${widget.card.title}」将移至回收站'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text('取消'),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                TextButton.icon(
+                                  onPressed: _saveAsTemplate,
+                                  icon: const Icon(Icons.bookmark_add_outlined),
+                                  label: const Text('存为模板'),
+                                ),
+                                Builder(
+                                  builder: (context) {
+                                    final canTransfer = context
+                                            .watch<BoardController>()
+                                            .projects
+                                            .length >
+                                        1;
+                                    return TextButton(
+                                      onPressed: _transferToOtherProject,
+                                      child: Text(
+                                        '转移到…',
+                                        style: TextStyle(
+                                          color: canTransfer
+                                              ? null
+                                              : Theme.of(context).disabledColor,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    final ok = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('删除卡片？'),
+                                        content: Text(
+                                          '「${widget.card.title}」将移至回收站',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, false),
+                                            child: const Text('取消'),
+                                          ),
+                                          FilledButton(
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, true),
+                                            child: const Text('删除'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (ok == true && context.mounted) {
+                                      await context
+                                          .read<BoardController>()
+                                          .deleteCard(
+                                            widget.columnId,
+                                            widget.card.id,
+                                          );
+                                      if (context.mounted) {
+                                        _closeWithoutPersist();
+                                      }
+                                    }
+                                  },
+                                  child: Text(
+                                    '删除',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.error,
+                                    ),
                                   ),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('删除'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (ok == true && context.mounted) {
-                              await context
-                                  .read<BoardController>()
-                                  .deleteCard(widget.columnId, widget.card.id);
-                              if (context.mounted) _closeWithoutPersist();
-                            }
-                          },
-                          child: Text(
-                            '删除',
-                            style: TextStyle(color: theme.colorScheme.error),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const Spacer(),
                         FilledButton(
                           onPressed: _save,
                           child: const Text('保存'),
