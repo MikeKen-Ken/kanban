@@ -1333,7 +1333,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                       children: [
                         Builder(
                           builder: (context) {
-                            // 时间戳紧跟「备注」标题文字后方（同一行），非整块备注控件之后。
+                            // 创建于/更新于/完成于：放在「备注」标题文字正上方。
                             final metaCard = _liveCard ?? widget.card;
                             final timestamps = formatCardDetailTimestamps(
                               createdAt: metaCard.createdAt,
@@ -1342,49 +1342,42 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                   ? metaCard.completedAt
                                   : null,
                             );
-                            return Row(
-                              children: [
-                                Text(
-                                  '备注',
-                                  style: theme.textTheme.titleSmall,
+                            if (timestamps == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                timestamps,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
-                                if (timestamps != null) ...[
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      timestamps,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                        color: theme
-                                            .colorScheme.onSurfaceVariant,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ] else
-                                  const Spacer(),
-                                IconButton(
-                                  tooltip: '放大编辑',
-                                  onPressed: _openDescriptionExpanded,
-                                  icon: const Icon(
-                                    Icons.open_in_full,
-                                    size: 20,
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                TextButton(
-                                  onPressed: () => _safeSetState(
-                                    () => _previewMarkdown =
-                                        !_previewMarkdown,
-                                  ),
-                                  child: Text(
-                                    _previewMarkdown ? '编辑' : '预览',
-                                  ),
-                                ),
-                              ],
+                              ),
                             );
                           },
+                        ),
+                        Row(
+                          children: [
+                            Text('备注', style: theme.textTheme.titleSmall),
+                            const Spacer(),
+                            IconButton(
+                              tooltip: '放大编辑',
+                              onPressed: _openDescriptionExpanded,
+                              icon: const Icon(
+                                Icons.open_in_full,
+                                size: 20,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            TextButton(
+                              onPressed: () => _safeSetState(
+                                () => _previewMarkdown = !_previewMarkdown,
+                              ),
+                              child: Text(
+                                _previewMarkdown ? '编辑' : '预览',
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         if (_previewMarkdown)
