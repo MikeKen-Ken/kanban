@@ -58,6 +58,10 @@ class RecurrenceService {
         for (final item in completedCard.checklist)
           item.copyWith(completed: false),
       ],
+      verificationFeedback: [
+        for (final item in completedCard.verificationFeedback)
+          item.copyWith(completed: false),
+      ],
       colorValue: completedCard.colorValue,
     );
   }

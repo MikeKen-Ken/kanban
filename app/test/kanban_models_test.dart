@@ -52,7 +52,8 @@ void main() {
     expect(merged.columns.map((c) => c.id), contains('done'));
     expect(merged.columns.map((c) => c.id), contains('blocked'));
     expect(merged.columns.map((c) => c.id), contains('verify'));
-    expect(merged.columns.length, 5);
+    expect(merged.columns.map((c) => c.id), contains('rework'));
+    expect(merged.columns.length, 6);
   });
 
   test('merge keeps newer card when the same card exists on both sides', () {

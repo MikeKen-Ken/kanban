@@ -44,7 +44,7 @@ void main() {
     final bBoard = await controller.loadBoardSnapshot(projectB);
     final bCols = bBoard!.columns.map((c) => c.id).toList()..sort();
     expect(aCols, bCols);
-    expect(aCols, containsAll(['todo', 'doing', 'verify', 'done']));
+    expect(aCols, containsAll(['todo', 'doing', 'verify', 'rework', 'done']));
   });
 
   test('多项目省略 projectId 创建类写操作报错', () {

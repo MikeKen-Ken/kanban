@@ -66,12 +66,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late CardPriority _priority;
   late List<String> _labels;
   late List<ChecklistItem> _checklist;
+  late List<ChecklistItem> _verificationFeedback;
   late List<CardAttachment> _attachments;
   late List<CardLink> _links;
   late List<String> _blockedByIds;
   late List<String> _relatedIds;
   int? _colorValue;
   final _checklistInput = TextEditingController();
+  final _verificationFeedbackInput = TextEditingController();
   bool _persisted = false;
   bool _skipPersist = false;
   bool _previewMarkdown = false;
@@ -81,8 +83,12 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   /// 解决成功后即使弹层未立刻关闭，也隐藏冲突条（widget.card 是打开时快照）。
   bool _conflictResolved = false;
 
-  Iterable<TextEditingController> get _textControllers =>
-      [_titleController, _descController, _checklistInput];
+  Iterable<TextEditingController> get _textControllers => [
+        _titleController,
+        _descController,
+        _checklistInput,
+        _verificationFeedbackInput,
+      ];
 
   @override
   void initState() {
@@ -101,6 +107,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _priority = widget.card.priority;
     _labels = [...widget.card.labels];
     _checklist = [...widget.card.checklist];
+    _verificationFeedback = [...widget.card.verificationFeedback];
     _attachments = [...widget.card.sortedAttachments];
     _links = [...widget.card.sortedLinks];
     _blockedByIds = [...widget.card.blockedByIds];
@@ -117,6 +124,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _titleController.dispose();
     _descController.dispose();
     _checklistInput.dispose();
+    _verificationFeedbackInput.dispose();
     super.dispose();
   }
 
@@ -153,6 +161,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_priority != widget.card.priority) return true;
     if (!_listEquals(_labels, widget.card.labels)) return true;
     if (!_checklistEquals(_checklist, widget.card.checklist)) return true;
+    if (!_checklistEquals(
+        _verificationFeedback, widget.card.verificationFeedback)) {
+      return true;
+    }
     if (_colorValue != widget.card.colorValue) return true;
     if (!_attachmentIdsEqual(_attachments, widget.card.sortedAttachments)) {
       return true;
@@ -216,6 +228,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_priority != CardPriority.none) return true;
     if (_labels.isNotEmpty) return true;
     if (_checklist.isNotEmpty) return true;
+    if (_verificationFeedback.isNotEmpty) return true;
     if (_attachments.isNotEmpty) return true;
     if (_links.isNotEmpty) return true;
     if (_blockedByIds.isNotEmpty || _relatedIds.isNotEmpty) return true;
@@ -264,6 +277,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final priority = _priority;
     final labels = List<String>.from(_labels);
     final checklist = List<ChecklistItem>.from(_checklist);
+    final verificationFeedback =
+        List<ChecklistItem>.from(_verificationFeedback);
     final attachments = List<CardAttachment>.from(_attachments);
     final links = List<CardLink>.from(_links);
     final blockedByIds = List<String>.from(_blockedByIds);
@@ -289,6 +304,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         priority: priority,
         labels: labels,
         checklist: checklist,
+        verificationFeedback: verificationFeedback,
         attachments: attachments,
         links: links,
         blockedByIds: blockedByIds,
@@ -768,6 +784,99 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void _removeChecklistItem(String id) {
     _safeSetState(() {
       _checklist = _checklist.where((item) => item.id != id).toList();
+    });
+  }
+
+  Future<void> _editChecklistItem(String id) async {
+    await _editChecklistLikeItem(
+      id: id,
+      items: _checklist,
+      onApply: (next) => _checklist = next,
+      dialogTitle: '编辑子任务',
+    );
+  }
+
+  void _addVerificationFeedbackItem() {
+    final text = _verificationFeedbackInput.text.trim();
+    if (text.isEmpty) return;
+    _safeSetState(() {
+      _verificationFeedback = [
+        ..._verificationFeedback,
+        ChecklistItem(id: const Uuid().v4(), text: text),
+      ];
+      _verificationFeedbackInput.clear();
+    });
+  }
+
+  void _toggleVerificationFeedbackItem(String id) {
+    _safeSetState(() {
+      _verificationFeedback = _verificationFeedback
+          .map(
+            (item) => item.id == id
+                ? item.copyWith(completed: !item.completed)
+                : item,
+          )
+          .toList();
+    });
+  }
+
+  void _removeVerificationFeedbackItem(String id) {
+    _safeSetState(() {
+      _verificationFeedback =
+          _verificationFeedback.where((item) => item.id != id).toList();
+    });
+  }
+
+  Future<void> _editVerificationFeedbackItem(String id) async {
+    await _editChecklistLikeItem(
+      id: id,
+      items: _verificationFeedback,
+      onApply: (next) => _verificationFeedback = next,
+      dialogTitle: '编辑验证反馈',
+    );
+  }
+
+  Future<void> _editChecklistLikeItem({
+    required String id,
+    required List<ChecklistItem> items,
+    required void Function(List<ChecklistItem> next) onApply,
+    required String dialogTitle,
+  }) async {
+    final current = items.where((item) => item.id == id).firstOrNull;
+    if (current == null) return;
+    final controller = TextEditingController(text: current.text);
+    final nextText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(dialogTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || nextText == null || nextText.isEmpty) return;
+    _safeSetState(() {
+      onApply([
+        for (final item in items)
+          if (item.id == id) item.copyWith(text: nextText) else item,
+      ]);
     });
   }
 
@@ -1473,13 +1582,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           (item) => CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
                             value: item.completed,
-                            title: Text(
-                              item.text,
-                              style: item.completed
-                                  ? const TextStyle(
-                                      decoration: TextDecoration.lineThrough,
-                                    )
-                                  : null,
+                            title: GestureDetector(
+                              onTap: () => _editChecklistItem(item.id),
+                              child: Text(
+                                item.text,
+                                style: item.completed
+                                    ? const TextStyle(
+                                        decoration: TextDecoration.lineThrough,
+                                      )
+                                    : null,
+                              ),
                             ),
                             onChanged: (_) => _toggleChecklistItem(item.id),
                             secondary: IconButton(
@@ -1505,6 +1617,69 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                             IconButton(
                               onPressed: _addChecklistItem,
+                              icon: const Icon(Icons.add),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text('验证反馈', style: theme.textTheme.titleSmall),
+                            if (_verificationFeedback.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '${_verificationFeedback.where((i) => i.completed).length}/${_verificationFeedback.length}',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ..._verificationFeedback.map(
+                          (item) => CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: item.completed,
+                            title: GestureDetector(
+                              onTap: () =>
+                                  _editVerificationFeedbackItem(item.id),
+                              child: Text(
+                                item.text,
+                                style: item.completed
+                                    ? const TextStyle(
+                                        decoration: TextDecoration.lineThrough,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            onChanged: (_) =>
+                                _toggleVerificationFeedbackItem(item.id),
+                            secondary: IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () =>
+                                  _removeVerificationFeedbackItem(item.id),
+                            ),
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                key: const ValueKey(
+                                  'card-detail-verification-feedback',
+                                ),
+                                controller: _verificationFeedbackInput,
+                                decoration: const InputDecoration(
+                                  hintText: '添加验证反馈…',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                onSubmitted: (_) =>
+                                    _addVerificationFeedbackItem(),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _addVerificationFeedbackItem,
                               icon: const Icon(Icons.add),
                             ),
                           ],

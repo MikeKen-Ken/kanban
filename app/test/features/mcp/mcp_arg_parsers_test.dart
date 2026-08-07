@@ -154,6 +154,9 @@ void main() {
           ChecklistItem(id: '1', text: 'a', completed: true),
           ChecklistItem(id: '2', text: 'b'),
         ],
+        verificationFeedback: [
+          ChecklistItem(id: 'vf1', text: '需补测试', completed: false),
+        ],
         blockedByIds: const ['dep'],
         relatedIds: const ['rel'],
         links: [
@@ -169,6 +172,7 @@ void main() {
       final summary = mcpCardSummary(card, descriptionMax: 10);
       expect(summary['description'], 'aaaaaaaaaa…');
       expect(summary['checklist'], {'done': 1, 'total': 2});
+      expect(summary['verificationFeedback'], {'done': 0, 'total': 1});
       expect(summary['blockedByIds'], ['dep']);
       expect(summary['relatedIds'], ['rel']);
       expect(summary['links'], [

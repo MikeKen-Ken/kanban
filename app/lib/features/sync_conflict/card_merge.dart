@@ -81,6 +81,7 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       a.colorValue == b.colorValue &&
       _listEq(a.labels, b.labels) &&
       _checklistEq(a.checklist, b.checklist) &&
+      _checklistEq(a.verificationFeedback, b.verificationFeedback) &&
       _attachmentsEq(a.attachments, b.attachments) &&
       _linksEq(a.links, b.links) &&
       _listEq(a.blockedByIds, b.blockedByIds) &&
@@ -200,6 +201,7 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
       local.colorValue != remote.colorValue ||
       !_listEq(local.labels, remote.labels) ||
       !_checklistEq(local.checklist, remote.checklist) ||
+      !_checklistEq(local.verificationFeedback, remote.verificationFeedback) ||
       !_attachmentsEq(local.attachments, remote.attachments) ||
       !_linksEq(local.links, remote.links) ||
       !_listEq(local.blockedByIds, remote.blockedByIds) ||
@@ -355,6 +357,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.checklist,
     eq: _checklistEq,
   );
+  final verificationFeedbackConflict = _fieldConflict(
+    base: base.card.verificationFeedback,
+    local: loc.card.verificationFeedback,
+    remote: rem.card.verificationFeedback,
+    eq: _checklistEq,
+  );
   final attachmentsConflict = _fieldConflict(
     base: base.card.attachments,
     local: loc.card.attachments,
@@ -398,6 +406,7 @@ CardMergeResult mergeCardThreeWay({
       colorConflict ||
       labelsConflict ||
       checklistConflict ||
+      verificationFeedbackConflict ||
       attachmentsConflict ||
       linksConflict ||
       blockedByConflict ||
@@ -484,6 +493,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.checklist,
     eq: _checklistEq,
   );
+  final mergedVerificationFeedback = _threeWayValue(
+    base: base.card.verificationFeedback,
+    local: loc.card.verificationFeedback,
+    remote: rem.card.verificationFeedback,
+    eq: _checklistEq,
+  );
   final mergedAttachments = _threeWayValue(
     base: base.card.attachments,
     local: loc.card.attachments,
@@ -534,6 +549,7 @@ CardMergeResult mergeCardThreeWay({
     priority: mergedPriority,
     labels: mergedLabels,
     checklist: mergedChecklist,
+    verificationFeedback: mergedVerificationFeedback,
     attachments: mergedAttachments,
     links: mergedLinks,
     blockedByIds: mergedBlockedBy,

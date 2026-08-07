@@ -34,6 +34,9 @@ List<CardReference> buildCardReferences({
             checklistTexts: [
               for (final item in card.checklist) item.text,
             ],
+            verificationFeedbackTexts: [
+              for (final item in card.verificationFeedback) item.text,
+            ],
             priority: card.priority.name,
             completed: card.completed,
             dueDate: card.dueDate,

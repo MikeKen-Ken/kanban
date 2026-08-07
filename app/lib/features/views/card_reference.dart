@@ -13,6 +13,7 @@ class CardReference {
     this.labelIds = const [],
     this.labelNames = const [],
     this.checklistTexts = const [],
+    this.verificationFeedbackTexts = const [],
     this.priority = 'none',
     this.completed = false,
     this.dueDate,
@@ -35,6 +36,7 @@ class CardReference {
   final List<String> labelIds;
   final List<String> labelNames;
   final List<String> checklistTexts;
+  final List<String> verificationFeedbackTexts;
   final String priority;
   final bool completed;
   final int? dueDate;
@@ -59,6 +61,8 @@ class CardReference {
         if (labelIds.isNotEmpty) 'labelIds': labelIds,
         if (labelNames.isNotEmpty) 'labelNames': labelNames,
         if (checklistTexts.isNotEmpty) 'checklistTexts': checklistTexts,
+        if (verificationFeedbackTexts.isNotEmpty)
+          'verificationFeedbackTexts': verificationFeedbackTexts,
         if (priority != 'none') 'priority': priority,
         if (completed) 'completed': true,
         if (dueDate != null) 'dueDate': dueDate,
@@ -83,6 +87,9 @@ class CardReference {
       labelIds: _strings(json['labelIds'] ?? json['labels']),
       labelNames: _strings(json['labelNames']),
       checklistTexts: _strings(json['checklistTexts'] ?? json['checklist']),
+      verificationFeedbackTexts: _strings(
+        json['verificationFeedbackTexts'] ?? json['verificationFeedback'],
+      ),
       priority: _string(json['priority'], fallback: 'none'),
       completed: json['completed'] is bool ? json['completed'] as bool : false,
       dueDate: _nullableInt(json['dueDate']),

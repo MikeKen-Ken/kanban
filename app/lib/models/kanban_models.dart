@@ -107,6 +107,15 @@ class KanbanBoard {
     );
   }
 
+  /// 默认「待返工」列 id（新建看板）
+  static const defaultReworkColumnId = 'rework';
+
+  /// 默认「待返工」列标题
+  static const defaultReworkColumnTitle = '待返工';
+
+  /// 默认「待验证」列标题
+  static const defaultVerifyColumnTitle = '待验证';
+
   static KanbanBoard empty({
     required String id,
     String title = '我的看板',
@@ -139,18 +148,103 @@ class KanbanBoard {
         ),
         KanbanColumn(
           id: 'verify',
-          title: '待验证',
+          title: defaultVerifyColumnTitle,
           order: 3,
+          cards: [],
+        ),
+        KanbanColumn(
+          id: defaultReworkColumnId,
+          title: defaultReworkColumnTitle,
+          order: 4,
           cards: [],
         ),
         KanbanColumn(
           id: 'done',
           title: doneColumnTitle,
-          order: 4,
+          order: 5,
           cards: [],
         ),
       ],
     );
+  }
+
+  /// 确保存在「待返工」列，并尽量放在待验证之后、已完成之前。
+  ///
+  /// 已存在同名或默认 id 的列时只校正顺序；无则新建空列。
+  /// 若列集合与顺序已符合目标，返回 `this`（可做引用相等判断）。
+  KanbanBoard ensureReworkColumn({String doneColumnTitle = '已完成'}) {
+    final sorted = [...columns]..sort((a, b) => a.order.compareTo(b.order));
+    final existingIndex = sorted.indexWhere(
+      (col) =>
+          col.title == defaultReworkColumnTitle ||
+          col.id == defaultReworkColumnId,
+    );
+
+    final desiredIndex = _desiredReworkInsertIndex(
+      sorted,
+      doneColumnTitle: doneColumnTitle,
+      existingIndex: existingIndex,
+    );
+
+    if (existingIndex >= 0) {
+      if (existingIndex == desiredIndex) {
+        final alreadyNormalized = sorted.asMap().entries.every(
+              (entry) => entry.value.order == entry.key,
+            );
+        if (alreadyNormalized) return this;
+        return copyWith(
+          columns: [
+            for (var i = 0; i < sorted.length; i++)
+              sorted[i].copyWith(order: i),
+          ],
+        );
+      }
+      final rework = sorted.removeAt(existingIndex);
+      final insertAt = desiredIndex.clamp(0, sorted.length);
+      sorted.insert(insertAt, rework);
+      return copyWith(
+        columns: [
+          for (var i = 0; i < sorted.length; i++) sorted[i].copyWith(order: i),
+        ],
+      );
+    }
+
+    final insertAt = desiredIndex.clamp(0, sorted.length);
+    sorted.insert(
+      insertAt,
+      KanbanColumn(
+        id: defaultReworkColumnId,
+        title: defaultReworkColumnTitle,
+        order: insertAt,
+        cards: const [],
+      ),
+    );
+    return copyWith(
+      columns: [
+        for (var i = 0; i < sorted.length; i++) sorted[i].copyWith(order: i),
+      ],
+    );
+  }
+
+  /// 计算「待返工」应插入的下标：待验证之后；否则已完成之前；否则末尾。
+  static int _desiredReworkInsertIndex(
+    List<KanbanColumn> sorted, {
+    required String doneColumnTitle,
+    required int existingIndex,
+  }) {
+    final withoutRework = [
+      for (var i = 0; i < sorted.length; i++)
+        if (i != existingIndex) sorted[i],
+    ];
+    final verifyIndex = withoutRework.indexWhere(
+      (col) => col.title == defaultVerifyColumnTitle || col.id == 'verify',
+    );
+    if (verifyIndex >= 0) return verifyIndex + 1;
+    final doneIndex = withoutRework.indexWhere(
+      (col) => col.title == doneColumnTitle || col.id == 'done',
+    );
+    if (doneIndex >= 0) return doneIndex;
+    return withoutRework.length;
   }
 
   String toJsonString() => jsonEncode(toJson());
@@ -393,6 +487,7 @@ class KanbanCard {
     this.priority = CardPriority.none,
     this.labels = const [],
     this.checklist = const [],
+    this.verificationFeedback = const [],
     this.attachments = const [],
     this.links = const [],
     this.blockedByIds = const [],
@@ -418,6 +513,9 @@ class KanbanCard {
   final CardPriority priority;
   final List<String> labels;
   final List<ChecklistItem> checklist;
+
+  /// 验证反馈项（结构与子任务清单相同：可勾选条目）
+  final List<ChecklistItem> verificationFeedback;
   final List<CardAttachment> attachments;
 
   /// 外链书签
@@ -448,6 +546,11 @@ class KanbanCard {
   int get checklistDone => checklist.where((item) => item.completed).length;
 
   bool get hasChecklist => checklist.isNotEmpty;
+
+  int get verificationFeedbackDone =>
+      verificationFeedback.where((item) => item.completed).length;
+
+  bool get hasVerificationFeedback => verificationFeedback.isNotEmpty;
 
   bool get hasAttachments => attachments.isNotEmpty;
 
@@ -484,6 +587,7 @@ class KanbanCard {
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
+    List<ChecklistItem>? verificationFeedback,
     List<CardAttachment>? attachments,
     List<CardLink>? links,
     List<String>? blockedByIds,
@@ -514,6 +618,7 @@ class KanbanCard {
       priority: priority ?? this.priority,
       labels: labels ?? this.labels,
       checklist: checklist ?? this.checklist,
+      verificationFeedback: verificationFeedback ?? this.verificationFeedback,
       attachments: attachments ?? this.attachments,
       links: links ?? this.links,
       blockedByIds: blockedByIds ?? this.blockedByIds,
@@ -556,6 +661,9 @@ class KanbanCard {
       if (labels.isNotEmpty) 'labels': labels,
       if (checklist.isNotEmpty)
         'checklist': checklist.map((c) => c.toJson()).toList(),
+      if (verificationFeedback.isNotEmpty)
+        'verificationFeedback':
+            verificationFeedback.map((c) => c.toJson()).toList(),
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
       if (links.isNotEmpty) 'links': links.map((link) => link.toJson()).toList(),
@@ -597,6 +705,10 @@ class KanbanCard {
       checklist: (json['checklist'] as List<dynamic>? ?? [])
           .map((e) => ChecklistItem.fromJson(e as Map<String, dynamic>))
           .toList(),
+      verificationFeedback:
+          (json['verificationFeedback'] as List<dynamic>? ?? [])
+              .map((e) => ChecklistItem.fromJson(e as Map<String, dynamic>))
+              .toList(),
       attachments: (json['attachments'] as List<dynamic>? ?? [])
           .map((e) => CardAttachment.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -623,6 +735,9 @@ class KanbanCard {
     if (title.toLowerCase().contains(q)) return true;
     if (description?.toLowerCase().contains(q) ?? false) return true;
     for (final item in checklist) {
+      if (item.text.toLowerCase().contains(q)) return true;
+    }
+    for (final item in verificationFeedback) {
       if (item.text.toLowerCase().contains(q)) return true;
     }
     for (final link in links) {

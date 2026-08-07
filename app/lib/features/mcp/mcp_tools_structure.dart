@@ -1,6 +1,7 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../models/kanban_models.dart';
 import '../activity/activity_models.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_tool_results.dart';
@@ -191,12 +192,20 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'add_column',
-    description: '在指定项目新增列；多项目时必须传 projectId',
+    description:
+        '在指定项目新增列；可用 beforeColumnId / insertIndex 插入到指定位置'
+        '（例如在已完成列前插入「待返工」）。多项目时必须传 projectId',
     inputSchema: JsonSchema.object(
       properties: {
         'title': JsonSchema.string(),
         'projectId': JsonSchema.string(
           description: '项目 id；多项目时必填',
+        ),
+        'beforeColumnId': JsonSchema.string(
+          description: '插入到该列之前（优先于 insertIndex）',
+        ),
+        'insertIndex': JsonSchema.number(
+          description: '插入下标（从 0 起）；省略则追加到末尾',
         ),
       },
       required: ['title'],
@@ -213,15 +222,25 @@ void registerKanbanMcpStructureTools(
         controller,
         args['projectId'] as String?,
         (projectId) async {
-        await controller.addColumn(title);
-        final columnId = controller.board?.columns.isNotEmpty == true
-            ? controller.board!.columns.last.id
-            : null;
+        final beforeColumnId = mcpTrimmedString(args['beforeColumnId']);
+        final insertIndex = (args['insertIndex'] as num?)?.toInt();
+        await controller.addColumn(
+          title,
+          beforeColumnId: beforeColumnId,
+          insertIndex: insertIndex,
+        );
+        final columns = controller.board?.columns ?? const <KanbanColumn>[];
+        final column = columns.cast<KanbanColumn?>().firstWhere(
+              (col) => col!.title == title,
+              orElse: () => columns.isNotEmpty ? columns.last : null,
+            );
         return mcpJsonResult({
           'ok': true,
           'projectId': projectId,
-          if (columnId != null) 'columnId': columnId,
+          if (column != null) 'columnId': column.id,
           'title': title,
+          if (column != null)
+            'index': columns.indexWhere((col) => col.id == column.id),
         });
       },
         requireExplicitWhenMultiple: true,
@@ -296,7 +315,9 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'reorder_column',
-    description: '调整列顺序',
+    description:
+        '调整列顺序（例如把「待返工」移到待验证与已完成之间）。'
+        'newIndex 语义与 Flutter ReorderableList 一致',
     inputSchema: JsonSchema.object(
       properties: {
         'oldIndex': JsonSchema.number(description: '原下标（从 0 起）'),

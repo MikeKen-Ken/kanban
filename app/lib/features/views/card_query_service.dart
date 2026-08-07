@@ -52,6 +52,7 @@ class CardQueryService {
       ...card.labelIds,
       ...card.labelNames,
       ...card.checklistTexts,
+      ...card.verificationFeedbackTexts,
     ].map((value) => value.toLowerCase()).toList();
     return terms.every(
       (term) => fields.any((field) => field.contains(term)),

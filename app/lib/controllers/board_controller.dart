@@ -872,7 +872,10 @@ class BoardController extends ChangeNotifier {
 
       try {
         return await runZoned(
-          action,
+          () async {
+            await _ensureReworkColumnPersisted();
+            return action();
+          },
           zoneValues: {_projectMutationScopeKey: scope},
         );
       } finally {
@@ -1032,6 +1035,7 @@ class BoardController extends ChangeNotifier {
 
       board = await _repository.loadBoard(activeProjectId!);
       projectSettings = await _repository.loadProjectSettings(activeProjectId!);
+      await _ensureReworkColumnPersisted();
       await _refreshProjectThemeIds();
       await _loadTrashState();
     } catch (e) {
@@ -1114,6 +1118,7 @@ class BoardController extends ChangeNotifier {
         board = await _repository.loadBoard(activeProjectId!);
         projectSettings =
             await _repository.loadProjectSettings(activeProjectId!);
+        await _ensureReworkColumnPersisted();
         sharedContent = await _repository.loadSharedContent();
         await _initializeSharedLabels();
         await _refreshProjectThemeIds();
@@ -1393,6 +1398,7 @@ class BoardController extends ChangeNotifier {
     await _repository.saveActiveProjectId(projectId);
     board = await _repository.loadBoard(projectId);
     projectSettings = await _repository.loadProjectSettings(projectId);
+    await _ensureReworkColumnPersisted();
     projectThemeIds[projectId] = projectSettings.themeId;
     activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
     await _recordProjectUsed(projectId);
@@ -1601,20 +1607,60 @@ class BoardController extends ChangeNotifier {
       });
   }
 
-  Future<void> addColumn(String title) async {
+  Future<void> addColumn(
+    String title, {
+    int? insertIndex,
+    String? beforeColumnId,
+  }) async {
     return _withBoardMutation(() async {
     if (board == null) return;
-    final columns = [...board!.columns];
-    columns.add(
+    final columns = [...board!.columns]
+      ..sort((a, b) => a.order.compareTo(b.order));
+    var index = columns.length;
+    if (beforeColumnId != null && beforeColumnId.isNotEmpty) {
+      final before = columns.indexWhere((col) => col.id == beforeColumnId);
+      if (before >= 0) index = before;
+    } else if (insertIndex != null) {
+      index = insertIndex.clamp(0, columns.length);
+    }
+    columns.insert(
+      index,
       KanbanColumn(
         id: const Uuid().v4(),
         title: title,
-        order: columns.length,
+        order: index,
         cards: [],
       ),
     );
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    final normalized = [
+      for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
+    ];
+    await _persistAndSync(_bump(board!.copyWith(columns: normalized)));
       });
+  }
+
+  /// 为当前看板补齐「待返工」列（已有板迁移）；无变更则跳过。
+  Future<void> ensureReworkColumn() async {
+    return _withBoardMutation(() async {
+      await _ensureReworkColumnPersisted();
+    });
+  }
+
+  Future<void> _ensureReworkColumnPersisted() async {
+    final current = board;
+    if (current == null) return;
+    final next = current.ensureReworkColumn(
+      doneColumnTitle: projectSettings.doneColumnName,
+    );
+    if (identical(next, current)) return;
+    final sameShape = next.columns.length == current.columns.length &&
+        List.generate(next.columns.length, (i) {
+          final a = next.columns[i];
+          final b = current.columns[i];
+          return a.id == b.id && a.title == b.title && a.order == b.order;
+        }).every((ok) => ok);
+    if (sameShape) return;
+    await _persistAndSync(_bump(next));
   }
 
   Future<void> renameColumn(String columnId, String title) async {
@@ -1951,6 +1997,7 @@ class BoardController extends ChangeNotifier {
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
+    List<ChecklistItem>? verificationFeedback,
     List<CardAttachment>? attachments,
     List<CardLink>? links,
     List<String>? blockedByIds,
@@ -1983,6 +2030,8 @@ class BoardController extends ChangeNotifier {
           priority: priority ?? card.priority,
           labels: labels ?? card.labels,
           checklist: checklist ?? card.checklist,
+          verificationFeedback:
+              verificationFeedback ?? card.verificationFeedback,
           attachments: attachments ?? card.attachments,
           links: links ?? card.links,
           blockedByIds: blockedByIds ?? card.blockedByIds,
@@ -2015,6 +2064,7 @@ class BoardController extends ChangeNotifier {
             priority: original.priority,
             labels: original.labels,
             checklist: original.checklist,
+            verificationFeedback: original.verificationFeedback,
             attachments: original.attachments,
             links: original.links,
             blockedByIds: original.blockedByIds,

@@ -33,14 +33,28 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         break;
       }
       if (match == null) return mcpErrorResult('未找到卡片：$cardId');
-      return mcpJsonResult(match.toJson());
+      final payload = match.toJson();
+      final source = match.source;
+      if (source is KanbanCard) {
+        if (source.checklist.isNotEmpty) {
+          payload['checklist'] = [
+            for (final item in source.checklist) item.toJson(),
+          ];
+        }
+        if (source.verificationFeedback.isNotEmpty) {
+          payload['verificationFeedback'] = [
+            for (final item in source.verificationFeedback) item.toJson(),
+          ];
+        }
+      }
+      return mcpJsonResult(payload);
     },
   );
 
   server.registerTool(
     'create_card',
     description:
-        '在指定列创建卡片；支持到期日、提醒、重复、标签、清单、关联与外链。'
+        '在指定列创建卡片；支持到期日、提醒、重复、标签、清单、验证反馈、关联与外链。'
         '多项目时必须传 projectId（默认列 id 跨项目相同）',
     inputSchema: JsonSchema.object(
       properties: {
@@ -67,6 +81,13 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             'completed': JsonSchema.boolean(),
           }),
           description: '字符串数组或 {text,completed} 对象数组',
+        ),
+        'verificationFeedback': JsonSchema.array(
+          items: JsonSchema.object(properties: {
+            'text': JsonSchema.string(),
+            'completed': JsonSchema.boolean(),
+          }),
+          description: '验证反馈；格式同 checklist',
         ),
         'blockedByIds': JsonSchema.array(
           items: JsonSchema.string(description: '阻塞本卡的卡片 id'),
@@ -114,6 +135,8 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
                 .toList() ??
             const <String>[];
         final checklist = parseMcpChecklist(args['checklist']);
+        final verificationFeedback =
+            parseMcpChecklist(args['verificationFeedback']);
         final blockedByIds = parseMcpIdList(args['blockedByIds']);
         final relatedIds = parseMcpIdList(args['relatedIds']);
         final links = parseMcpLinks(args['links']);
@@ -138,6 +161,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         }
 
         if (checklist != null ||
+            verificationFeedback != null ||
             colorValue != null ||
             blockedByIds != null ||
             relatedIds != null ||
@@ -146,6 +170,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             columnId,
             cardId,
             checklist: checklist,
+            verificationFeedback: verificationFeedback,
             blockedByIds: blockedByIds,
             relatedIds: relatedIds,
             links: links,
@@ -168,7 +193,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
   server.registerTool(
     'update_card',
     description:
-        '更新卡片字段（需提供所在列）；支持到期日、提醒、重复、标签、清单、关联、外链与颜色。'
+        '更新卡片字段（需提供所在列）；支持到期日、提醒、重复、标签、清单、验证反馈、关联、外链与颜色。'
         '省略 projectId 时按 cardId 定位所属项目，不依赖当前激活项目',
     inputSchema: JsonSchema.object(
       properties: {
@@ -192,6 +217,13 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             'text': JsonSchema.string(),
             'completed': JsonSchema.boolean(),
           }),
+        ),
+        'verificationFeedback': JsonSchema.array(
+          items: JsonSchema.object(properties: {
+            'text': JsonSchema.string(),
+            'completed': JsonSchema.boolean(),
+          }),
+          description: '验证反馈整表替换；传空数组清空；格式同 checklist',
         ),
         'blockedByIds': JsonSchema.array(
           items: JsonSchema.string(description: '阻塞本卡的卡片 id；传空数组清空'),
@@ -244,6 +276,10 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         final checklist = args.containsKey('checklist')
             ? (parseMcpChecklist(args['checklist']) ?? const <ChecklistItem>[])
             : null;
+        final verificationFeedback = args.containsKey('verificationFeedback')
+            ? (parseMcpChecklist(args['verificationFeedback']) ??
+                const <ChecklistItem>[])
+            : null;
         final blockedByIds = args.containsKey('blockedByIds')
             ? (parseMcpIdList(args['blockedByIds']) ?? const <String>[])
             : null;
@@ -274,6 +310,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
               : parseMcpRecurrence(args['recurrence'] as String?),
           labels: labels,
           checklist: checklist,
+          verificationFeedback: verificationFeedback,
           blockedByIds: blockedByIds,
           relatedIds: relatedIds,
           links: links,

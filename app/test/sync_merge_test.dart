@@ -53,7 +53,8 @@ void main() {
     expect(merged.columns.map((c) => c.id), contains('done'));
     expect(merged.columns.map((c) => c.id), contains('blocked'));
     expect(merged.columns.map((c) => c.id), contains('verify'));
-    expect(merged.columns.length, 5);
+    expect(merged.columns.map((c) => c.id), contains('rework'));
+    expect(merged.columns.length, 6);
   });
 
   test('同字段冲突 → 有 conflictSide 且主侧为较新', () {
@@ -130,6 +131,72 @@ void main() {
     expect(card.title, '本地新标题');
     expect(card.description, '远端新备注');
     expect(card.hasConflict, isFalse);
+  });
+
+  test('验证反馈三路自动合且不丢字段', () {
+    final baseCard = _card(id: 'c1', title: '原标题', updatedAt: 50);
+    final base = _board(
+      revision: 1,
+      updatedAt: 50,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: [baseCard]),
+      ],
+    );
+    final localFeedback = [
+      ChecklistItem(id: 'vf1', text: '本地反馈', completed: false),
+    ];
+    final local = _board(
+      revision: 2,
+      updatedAt: 100,
+      columns: [
+        KanbanColumn(
+          id: 'todo',
+          title: '待办',
+          order: 0,
+          cards: [
+            baseCard.copyWith(
+              verificationFeedback: localFeedback,
+              updatedAt: 100,
+            ),
+          ],
+        ),
+      ],
+    );
+    final remote = _board(
+      revision: 2,
+      updatedAt: 110,
+      columns: [
+        KanbanColumn(
+          id: 'todo',
+          title: '待办',
+          order: 0,
+          cards: [
+            baseCard.copyWith(title: '远端标题', updatedAt: 110),
+          ],
+        ),
+      ],
+    );
+    final merged = mergeBoards(local: local, remote: remote, base: base);
+    final card = merged.columns.first.cards.single;
+    expect(card.title, '远端标题');
+    expect(card.verificationFeedback.single.text, '本地反馈');
+    expect(card.hasConflict, isFalse);
+  });
+
+  test('仅一侧新增待返工列不丢', () {
+    final local = KanbanBoard.empty(id: '1').copyWith(revision: 5, updatedAt: 100);
+    final remote = _board(
+      revision: 6,
+      updatedAt: 200,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: []),
+        KanbanColumn(id: 'doing', title: '进行中', order: 1, cards: []),
+        KanbanColumn(id: 'verify', title: '待验证', order: 2, cards: []),
+        KanbanColumn(id: 'done', title: '已完成', order: 3, cards: []),
+      ],
+    );
+    final merged = mergeBoards(local: local, remote: remote);
+    expect(merged.columns.map((c) => c.id), contains('rework'));
   });
 
   test('删 vs 改 → 冲突而非静默丢删', () {

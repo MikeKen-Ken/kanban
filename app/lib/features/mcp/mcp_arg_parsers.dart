@@ -367,6 +367,11 @@ Map<String, dynamic> mcpCardSummary(
         'done': card.checklistDone,
         'total': card.checklist.length,
       },
+    if (card.hasVerificationFeedback)
+      'verificationFeedback': {
+        'done': card.verificationFeedbackDone,
+        'total': card.verificationFeedback.length,
+      },
     if (truncated != null) 'description': truncated,
     if (card.colorValue != null) 'colorValue': card.colorValue,
     if (card.attachments.isNotEmpty)

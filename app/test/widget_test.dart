@@ -8,12 +8,16 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('default board has five columns', () {
+  test('default board has six columns including rework', () {
     final board = KanbanBoard.empty(id: 'test');
-    expect(board.columns.length, 5);
+    expect(board.columns.length, 6);
     expect(
       board.columns.map((c) => c.id).toList(),
-      ['todo', 'doing', 'blocked', 'verify', 'done'],
+      ['todo', 'doing', 'blocked', 'verify', 'rework', 'done'],
+    );
+    expect(
+      board.columns.map((c) => c.title).toList(),
+      ['待办', '进行中', '阻塞中', '待验证', '待返工', '已完成'],
     );
   });
 
@@ -40,9 +44,12 @@ void main() {
     expect(await todoFile.readAsString(), contains('"title": "待办"'));
 
     final loaded = await storage.loadBoard(board.id);
-    expect(loaded.columns.length, 5);
+    expect(loaded.columns.length, 6);
     expect(loaded.columns.first.id, 'todo');
-    expect(loaded.columns.map((c) => c.id), containsAll(['blocked', 'verify']));
+    expect(
+      loaded.columns.map((c) => c.id),
+      containsAll(['blocked', 'verify', 'rework']),
+    );
   });
 
   test('card json roundtrip with extended fields', () {
@@ -58,6 +65,9 @@ void main() {
       checklist: [
         ChecklistItem(id: 'cl1', text: '子任务', completed: true),
       ],
+      verificationFeedback: [
+        ChecklistItem(id: 'vf1', text: '验收未过', completed: false),
+      ],
     );
     final restored = KanbanCard.fromJson(card.toJson());
     expect(restored.completed, isTrue);
@@ -66,6 +76,8 @@ void main() {
     expect(restored.labels, ['work']);
     expect(restored.checklist.length, 1);
     expect(restored.checklist.first.completed, isTrue);
+    expect(restored.verificationFeedback.length, 1);
+    expect(restored.verificationFeedback.first.text, '验收未过');
   });
 
   test('card matches search query', () {
@@ -75,9 +87,40 @@ void main() {
       order: 0,
       createdAt: 0,
       labels: ['work'],
+      verificationFeedback: [
+        ChecklistItem(id: 'vf1', text: '缺少截图'),
+      ],
     );
     expect(card.matchesSearch('报告'), isTrue);
     expect(card.matchesSearch('工作'), isTrue);
+    expect(card.matchesSearch('截图'), isTrue);
     expect(card.matchesSearch('不存在'), isFalse);
+  });
+
+  test('ensureReworkColumn inserts between verify and done', () {
+    final legacy = KanbanBoard(
+      id: 'legacy',
+      title: '旧板',
+      updatedAt: 1,
+      revision: 1,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
+        KanbanColumn(id: 'doing', title: '进行中', order: 1, cards: const []),
+        KanbanColumn(id: 'blocked', title: '阻塞中', order: 2, cards: const []),
+        KanbanColumn(id: 'verify', title: '待验证', order: 3, cards: const []),
+        KanbanColumn(id: 'done', title: '已完成', order: 4, cards: const []),
+      ],
+    );
+    final ensured = legacy.ensureReworkColumn();
+    expect(ensured.columns.map((c) => c.title).toList(), [
+      '待办',
+      '进行中',
+      '阻塞中',
+      '待验证',
+      '待返工',
+      '已完成',
+    ]);
+    final already = KanbanBoard.empty(id: 'ok');
+    expect(identical(already.ensureReworkColumn(), already), isTrue);
   });
 }
