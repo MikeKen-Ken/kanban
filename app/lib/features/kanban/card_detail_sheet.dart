@@ -664,42 +664,49 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _safeSetState(() => _reminderAt = shortcut.resolve(DateTime.now()));
   }
 
-  /// 提醒快捷预设与「设置提醒」同一行；小屏可横向滚动。
+  void _clearReminder() {
+    _safeSetState(() => _reminderAt = null);
+  }
+
+  /// 提醒快捷预设自动换行；「设置提醒 / 清除」始终留在布局流中，避免被横向滚动藏住。
   Widget _buildReminderRow() {
     final now = DateTime.now();
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final shortcut in ReminderShortcut.values) ...[
-            FilterChip(
-              label: Text(shortcut.label),
-              selected: isSameLocalMinute(_reminderAt, shortcut.resolve(now)),
-              showCheckmark: false,
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onSelected: (_) => _applyReminderShortcut(shortcut),
-            ),
-            const SizedBox(width: 8),
-          ],
-          FilledButton.tonalIcon(
-            onPressed: _pickReminder,
-            icon: const Icon(Icons.notifications_outlined, size: 18),
-            label: Text(
-              _reminderAt == null
-                  ? '设置提醒'
-                  : DateFormat('MMMd HH:mm', 'zh_CN').format(_reminderAt!),
-            ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final shortcut in ReminderShortcut.values)
+          FilterChip(
+            label: Text(shortcut.label),
+            selected: isSameLocalMinute(_reminderAt, shortcut.resolve(now)),
+            showCheckmark: false,
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            // 再次点击已选中芯片则取消选择（清除提醒）。
+            onSelected: (selected) {
+              if (selected) {
+                _applyReminderShortcut(shortcut);
+              } else {
+                _clearReminder();
+              }
+            },
           ),
-          if (_reminderAt != null) ...[
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: () => _safeSetState(() => _reminderAt = null),
-              child: const Text('清除'),
-            ),
-          ],
-        ],
-      ),
+        FilledButton.tonalIcon(
+          onPressed: _pickReminder,
+          icon: const Icon(Icons.notifications_outlined, size: 18),
+          label: Text(
+            _reminderAt == null
+                ? '设置提醒'
+                : DateFormat('MMMd HH:mm', 'zh_CN').format(_reminderAt!),
+          ),
+        ),
+        if (_reminderAt != null)
+          TextButton(
+            onPressed: _clearReminder,
+            child: const Text('清除'),
+          ),
+      ],
     );
   }
 
