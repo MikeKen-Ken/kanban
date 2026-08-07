@@ -31,15 +31,29 @@ class KanbanApp extends StatefulWidget {
   State<KanbanApp> createState() => _KanbanAppState();
 }
 
-class _KanbanAppState extends State<KanbanApp> {
+class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 首帧后再初始化通知插件并申请权限，避免阻塞窗口显示
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(widget.controller.initializeReminders());
       unawaited(widget.controller.ensureNotificationPermissionOnFirstLaunch());
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(widget.controller.purgeExpiredCompletedCards());
+    }
   }
 
   @override

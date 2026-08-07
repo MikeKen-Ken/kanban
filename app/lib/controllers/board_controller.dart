@@ -13,6 +13,7 @@ import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/attachments/card_image_picker.dart';
 import '../features/activity/activity_models.dart';
 import '../features/automations/automations.dart';
+import '../features/completed_auto_clear/completed_auto_clear.dart';
 import '../features/import_export/backup_archive_service.dart';
 import '../features/import_export/backup_coordinator.dart';
 import '../features/import_export/backup_history_store.dart';
@@ -82,6 +83,10 @@ class BoardController extends ChangeNotifier {
 
   /// 串行化看板/清单突变，避免 MCP runOnProject 与 UI 写交错。
   final AsyncMutex _boardMutationMutex = AsyncMutex();
+
+  /// 已完成自动清空：上次扫描时间（进程内节流）
+  DateTime? _lastCompletedAutoClearAt;
+  bool _completedAutoClearRunning = false;
 
   KanbanBoard? _uiBoard;
   KanbanBoard? get board => _projectMutationScope?.board ?? _uiBoard;
@@ -1038,6 +1043,7 @@ class BoardController extends ChangeNotifier {
 
     unawaited(runOverdueAutomations());
     unawaited(_rescheduleReminders());
+    unawaited(purgeExpiredCompletedCards());
 
     _syncService.statusStream.listen((status) {
       if (status == SyncStatus.success || status == SyncStatus.error) {
@@ -1365,17 +1371,10 @@ class BoardController extends ChangeNotifier {
   }
 
   KanbanColumn? _findDoneColumn(KanbanBoard current) {
-    final doneName = projectSettings.doneColumnName;
-    for (final col in current.columns) {
-      if (col.id == 'done') return col;
-    }
-    for (final col in current.columns) {
-      if (col.title == doneName) return col;
-    }
-    for (final col in current.columns) {
-      if (col.title.contains('完成')) return col;
-    }
-    return null;
+    return findDoneColumn(
+      current,
+      doneColumnName: projectSettings.doneColumnName,
+    );
   }
 
   /// 是否为当前项目设置中的已完成列（各项目可配置不同列名）。
@@ -1667,11 +1666,16 @@ class BoardController extends ChangeNotifier {
   Future<void> saveAppSettings(AppSettings settings) async {
     final mcpChanged = settings.mcpEnabled != appSettings.mcpEnabled ||
         settings.mcpPort != appSettings.mcpPort;
+    final autoClearChanged =
+        settings.completedAutoClearDays != appSettings.completedAutoClearDays;
     appSettings = settings;
     await _repository.saveAppSettings(settings);
     notifyListeners();
     if (mcpChanged) {
       await _syncMcpHost();
+    }
+    if (autoClearChanged && settings.completedAutoClearDays > 0) {
+      unawaited(purgeExpiredCompletedCards(force: true));
     }
   }
 
@@ -2570,6 +2574,115 @@ class BoardController extends ChangeNotifier {
     );
     return count;
       });
+  }
+
+  /// 扫描全部项目，将超过保留天数的已完成列卡片移入回收站。
+  ///
+  /// [force] 为 true 时忽略节流（例如用户刚改了保留天数）。
+  /// 返回实际移入回收站的卡片数量。
+  Future<int> purgeExpiredCompletedCards({bool force = false}) async {
+    final days = appSettings.completedAutoClearDays;
+    if (days <= 0) return 0;
+    if (isLoading || errorMessage != null) return 0;
+    if (_completedAutoClearRunning) return 0;
+
+    final now = DateTime.now();
+    if (!force) {
+      final last = _lastCompletedAutoClearAt;
+      if (last != null &&
+          now.difference(last) < completedAutoClearMinInterval) {
+        return 0;
+      }
+    }
+
+    _completedAutoClearRunning = true;
+    _lastCompletedAutoClearAt = now;
+    var total = 0;
+    try {
+      final projects =
+          List<ProjectEntry>.from(manifest?.projects ?? const <ProjectEntry>[]);
+      for (final entry in projects) {
+        try {
+          total += await runOnProject(
+            entry.id,
+            () => _purgeExpiredCompletedInCurrentProject(days, now),
+          );
+        } catch (error) {
+          debugPrint('自动清空已完成失败（${entry.title}）：$error');
+        }
+      }
+      if (total > 0) {
+        debugPrint('自动清空已完成：$total 张卡片已移入回收站');
+      }
+      return total;
+    } finally {
+      _completedAutoClearRunning = false;
+    }
+  }
+
+  Future<int> _purgeExpiredCompletedInCurrentProject(
+    int days,
+    DateTime now,
+  ) async {
+    final current = board;
+    final projectId = activeProjectId;
+    if (current == null || projectId == null) return 0;
+
+    final expired = selectExpiredCompletedCards(
+      board: current,
+      doneColumnName: projectSettings.doneColumnName,
+      retainDays: days,
+      now: now,
+    );
+    if (expired.isEmpty) return 0;
+
+    final doneColumn = findDoneColumn(
+      current,
+      doneColumnName: projectSettings.doneColumnName,
+    );
+    if (doneColumn == null) return 0;
+
+    final expiredIds = {for (final card in expired) card.id};
+    final deletedAt = now.millisecondsSinceEpoch;
+    final newTrashItems = <TrashItem>[
+      for (final card in expired)
+        TrashItem.forCard(
+          trashId: const Uuid().v4(),
+          deletedAt: deletedAt,
+          projectId: projectId,
+          projectTitle: current.title,
+          columnId: doneColumn.id,
+          columnTitle: doneColumn.title,
+          card: card,
+        ),
+    ];
+
+    activeProjectTrash = activeProjectTrash.bump().copyWith(
+      items: [...newTrashItems, ...activeProjectTrash.items],
+    );
+    await _persistActiveProjectTrash();
+
+    final columns = current.columns.map((col) {
+      if (col.id != doneColumn.id) return col;
+      return col.copyWith(
+        cards: [
+          for (final card in col.cards)
+            if (!expiredIds.contains(card.id)) card,
+        ],
+      );
+    }).toList();
+    await _persistAndSync(_bump(current.copyWith(columns: columns)));
+
+    for (final card in expired) {
+      await _reminderScheduler.cancel(card.id);
+      await _recordActivity(
+        entityId: card.id,
+        entityTitle: card.title,
+        action: ActivityAction.deleted,
+        source: ActivitySource.automation,
+      );
+    }
+    return expired.length;
   }
 
   Future<void> moveCard({

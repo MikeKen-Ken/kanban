@@ -21,6 +21,7 @@ class AppSettings {
     this.customLabels = const [],
     this.mcpEnabled = false,
     this.mcpPort = McpConstants.defaultPort,
+    this.completedAutoClearDays = 0,
   });
 
   /// 拖拽前按压时长（毫秒）。0 表示按下即拖。
@@ -53,6 +54,9 @@ class AppSettings {
   /// MCP 监听端口（仅本机）
   final int mcpPort;
 
+  /// 已完成列卡片自动清空保留天数；`0` 表示从不自动清空（仅本机）
+  final int completedAutoClearDays;
+
   /// 0ms：按下并移动即拖
   bool get immediateDrag => dragLongPressMs <= 0;
 
@@ -69,6 +73,7 @@ class AppSettings {
     List<KanbanLabel>? customLabels,
     bool? mcpEnabled,
     int? mcpPort,
+    int? completedAutoClearDays,
   }) {
     return AppSettings(
       dragLongPressMs: dragLongPressMs ?? this.dragLongPressMs,
@@ -84,6 +89,8 @@ class AppSettings {
       customLabels: customLabels ?? this.customLabels,
       mcpEnabled: mcpEnabled ?? this.mcpEnabled,
       mcpPort: mcpPort ?? this.mcpPort,
+      completedAutoClearDays:
+          completedAutoClearDays ?? this.completedAutoClearDays,
     );
   }
 
@@ -100,12 +107,17 @@ class AppSettings {
           'customLabels': customLabels.map((label) => label.toJson()).toList(),
         'mcpEnabled': mcpEnabled,
         'mcpPort': mcpPort,
+        'completedAutoClearDays': completedAutoClearDays,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final defaults = AppSettings.platformDefault();
     final lastUsedRaw = json['projectLastUsedAt'] as Map<String, dynamic>?;
     final port = json['mcpPort'] as int? ?? defaults.mcpPort;
+    final clearDaysRaw = json['completedAutoClearDays'];
+    final clearDays = clearDaysRaw is int
+        ? clearDaysRaw
+        : (clearDaysRaw is num ? clearDaysRaw.toInt() : 0);
     return AppSettings(
       dragLongPressMs: json['dragLongPressMs'] as int? ??
           defaults.dragLongPressMs,
@@ -132,6 +144,7 @@ class AppSettings {
           .toList(),
       mcpEnabled: json['mcpEnabled'] as bool? ?? defaults.mcpEnabled,
       mcpPort: port < 1 || port > 65535 ? defaults.mcpPort : port,
+      completedAutoClearDays: clearDays < 0 ? 0 : clearDays,
     );
   }
 

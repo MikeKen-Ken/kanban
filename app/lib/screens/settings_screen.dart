@@ -5,6 +5,7 @@ import '../common/app_snack_bar.dart';
 import '../controllers/board_controller.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/app_update/app_update_screen.dart';
+import '../features/completed_auto_clear/completed_auto_clear.dart';
 import '../features/import_export/backup_file_picker.dart';
 import '../features/import_export/backup_history_screen.dart';
 import '../features/labels/label_management_screen.dart';
@@ -308,6 +309,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
+              ),
+              const Divider(),
+              Selector<BoardController, int>(
+                selector: (_, c) => c.appSettings.completedAutoClearDays,
+                builder: (context, days, _) {
+                  final options = [
+                    ...completedAutoClearDayOptions,
+                    if (!completedAutoClearDayOptions.contains(days)) days,
+                  ]..sort();
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    leading: Icon(
+                      Icons.auto_delete_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    title: const Text('自动清空已完成'),
+                    subtitle: Text(
+                      days <= 0
+                          ? '关闭：不会自动删除已完成卡片'
+                          : '超过 $days 天的已完成卡片会移入回收站',
+                    ),
+                    trailing: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: days,
+                        items: [
+                          for (final option in options)
+                            DropdownMenuItem(
+                              value: option,
+                              child: Text(completedAutoClearDaysLabel(option)),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          final controller = context.read<BoardController>();
+                          controller.saveAppSettings(
+                            controller.appSettings.copyWith(
+                              completedAutoClearDays: value,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
