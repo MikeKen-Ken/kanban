@@ -30,6 +30,13 @@ bool _listEq<T>(List<T> a, List<T> b) {
   return true;
 }
 
+/// 合并创建时间：取最早的正数 epoch，避免 0/缺省覆盖真实创建时间。
+int _earliestPositiveEpoch(int a, int b) {
+  if (a <= 0) return b;
+  if (b <= 0) return a;
+  return a < b ? a : b;
+}
+
 bool _checklistEq(List<ChecklistItem> a, List<ChecklistItem> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
@@ -151,8 +158,13 @@ CardMergeResult mergeCardTwoWay({
       local.columnId == remote.columnId) {
     final newer =
         localCard.updatedAt >= remoteCard.updatedAt ? localCard : remoteCard;
+    final createdAt =
+        _earliestPositiveEpoch(localCard.createdAt, remoteCard.createdAt);
     return CardMergeResult(
-      placed: PlacedCard(card: newer, columnId: local.columnId),
+      placed: PlacedCard(
+        card: newer.copyWith(createdAt: createdAt),
+        columnId: local.columnId,
+      ),
     );
   }
 
@@ -536,7 +548,10 @@ CardMergeResult mergeCardThreeWay({
     order: loc.card.updatedAt >= rem.card.updatedAt
         ? loc.card.order
         : rem.card.order,
-    createdAt: loc.card.createdAt,
+    createdAt: _earliestPositiveEpoch(
+      base.card.createdAt,
+      _earliestPositiveEpoch(loc.card.createdAt, rem.card.createdAt),
+    ),
     updatedAt: loc.card.updatedAt >= rem.card.updatedAt
         ? loc.card.updatedAt
         : rem.card.updatedAt,

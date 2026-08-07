@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../common/app_snack_bar.dart';
+import '../../common/date_utils.dart';
 import '../../common/help_tip_icon.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
@@ -1745,6 +1746,30 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               icon: const Icon(Icons.add),
                             ),
                           ],
+                        ),
+                        Builder(
+                          builder: (context) {
+                            final metaCard = _liveCard ?? widget.card;
+                            final line = formatCardDetailTimestamps(
+                              createdAt: metaCard.createdAt,
+                              updatedAt: metaCard.updatedAt,
+                              completedAt: metaCard.completed
+                                  ? metaCard.completedAt
+                                  : null,
+                            );
+                            if (line == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 24),
+                              child: Text(
+                                line,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),

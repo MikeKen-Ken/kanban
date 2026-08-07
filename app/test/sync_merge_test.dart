@@ -12,13 +12,14 @@ KanbanCard _card({
   String? description,
   int updatedAt = 100,
   int order = 0,
+  int createdAt = 1,
 }) {
   return KanbanCard(
     id: id,
     title: title,
     description: description,
     order: order,
-    createdAt: 1,
+    createdAt: createdAt,
     updatedAt: updatedAt,
   );
 }
@@ -39,6 +40,39 @@ KanbanBoard _board({
 }
 
 void main() {
+  test('两路内容相同时保留最早正数 createdAt', () {
+    final local = PlacedCard(
+      card: _card(id: 'c1', title: '同标题', createdAt: 0, updatedAt: 200),
+      columnId: 'todo',
+    );
+    final remote = PlacedCard(
+      card: _card(id: 'c1', title: '同标题', createdAt: 50, updatedAt: 100),
+      columnId: 'todo',
+    );
+    final result = mergeCardTwoWay(local: local, remote: remote);
+    expect(result.placed?.card.createdAt, 50);
+    expect(result.placed?.card.updatedAt, 200);
+  });
+
+  test('三路合并取最早正数 createdAt', () {
+    final base = PlacedCard(
+      card: _card(id: 'c1', title: '原', createdAt: 40, updatedAt: 40),
+      columnId: 'todo',
+    );
+    final local = PlacedCard(
+      card: _card(id: 'c1', title: '本地', createdAt: 0, updatedAt: 100),
+      columnId: 'todo',
+    );
+    final remote = PlacedCard(
+      card: _card(id: 'c1', title: '原', description: '远端备注', createdAt: 90, updatedAt: 110),
+      columnId: 'todo',
+    );
+    final result = mergeCardThreeWay(base: base, local: local, remote: remote);
+    expect(result.placed?.card.createdAt, 40);
+    expect(result.placed?.card.title, '本地');
+    expect(result.placed?.card.description, '远端备注');
+  });
+
   test('仅一侧新增列不丢', () {
     final local = KanbanBoard.empty(id: '1').copyWith(revision: 5, updatedAt: 100);
     final remote = _board(
