@@ -29,7 +29,7 @@ import 'move_to_rework_on_new_feedback.dart';
 import 'transfer_card_sheet.dart';
 import 'verify_column.dart';
 
-/// 卡片详情底部弹层：标题、备注、截止日期、优先级、标签、子任务
+/// 卡片详情底部弹层：标题、备注、优先级、卡片背景色、截止日期、标签、子任务
 Future<void> showCardDetailSheet({
   required BuildContext context,
   required String columnId,
@@ -1458,6 +1458,33 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                           ),
                         const SizedBox(height: 20),
+                        // 优先级放在备注下方、卡片背景色区域最上方。
+                        Text('优先级', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: CardPriority.values.map((p) {
+                            final selected = _priority == p;
+                            return FilterChip(
+                              label: Text(p.label),
+                              selected: selected,
+                              showCheckmark: false,
+                              onSelected: (_) =>
+                                  _safeSetState(() => _priority = p),
+                              avatar: p == CardPriority.none
+                                  ? null
+                                  : Icon(
+                                      Icons.flag,
+                                      size: 16,
+                                      color: p.color(
+                                        theme.colorScheme,
+                                        theme: themePreset,
+                                      ),
+                                    ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         // 快捷色与「更多颜色」同一行；小屏可横向滚动。
@@ -1629,32 +1656,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 ),
                               ),
                           ],
-                        ),
-                        const SizedBox(height: 20),
-                        Text('优先级', style: theme.textTheme.titleSmall),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: CardPriority.values.map((p) {
-                            final selected = _priority == p;
-                            return FilterChip(
-                              label: Text(p.label),
-                              selected: selected,
-                              showCheckmark: false,
-                              onSelected: (_) =>
-                                  _safeSetState(() => _priority = p),
-                              avatar: p == CardPriority.none
-                                  ? null
-                                  : Icon(
-                                      Icons.flag,
-                                      size: 16,
-                                      color: p.color(
-                                        theme.colorScheme,
-                                        theme: themePreset,
-                                      ),
-                                    ),
-                            );
-                          }).toList(),
                         ),
                         const SizedBox(height: 20),
                         Row(
