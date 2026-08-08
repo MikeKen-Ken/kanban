@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -46,13 +48,24 @@ class KanbanColumnWidget extends StatelessWidget {
     const dragHandleWidth = 24.0;
     const menuButtonWidth = 48.0;
     const horizontalPadding = 12.0;
-    return measure(column.title, titleStyle) +
+    final headerWidth = measure(column.title, titleStyle) +
         colorMarkerWidth +
         countWidth +
         dragHandleWidth +
         menuButtonWidth +
         horizontalPadding +
         3;
+
+    // 空列下限：保证「添加卡片」按钮单行显示，不被压成两行。
+    // OutlinedButton.icon + VisualDensity.compact：外边距 8*2、内边距约 16*2、
+    // 图标 18、icon-label 间距 8、描边约 2；末项为相对实测宽度的余量。
+    final addCardLabelStyle =
+        Theme.of(context).textTheme.labelLarge ?? titleStyle;
+    const addCardChrome = 8.0 + 8.0 + 16.0 + 16.0 + 18.0 + 8.0 + 2.0 + 8.0;
+    final addCardMinWidth =
+        measure('添加卡片', addCardLabelStyle) + addCardChrome;
+
+    return math.max(headerWidth, addCardMinWidth);
   }
 
   List<KanbanCard> _displayCards(BoardController controller) {
@@ -461,7 +474,7 @@ class KanbanColumnWidget extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: () => _addCard(context),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('添加卡片'),
+              label: const Text('添加卡片', maxLines: 1, softWrap: false),
               style: OutlinedButton.styleFrom(
                 visualDensity: VisualDensity.compact,
               ),
