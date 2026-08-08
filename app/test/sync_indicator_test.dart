@@ -63,4 +63,24 @@ void main() {
       '同步中 3/12',
     );
   });
+
+  test('窄屏同步摘要保留状态与最近同步日期', () {
+    final time = DateTime(2026, 8, 3, 17, 5);
+    expect(
+      compactSyncStatusLabel(SyncStatus.success, time),
+      '已同步 08-03',
+    );
+    expect(
+      compactSyncStatusLabel(
+        SyncStatus.idle,
+        time,
+        pendingUploadCount: 4,
+      ),
+      '待同步 4 · 08-03',
+    );
+    expect(
+      compactSyncStatusLabel(SyncStatus.error, time),
+      '同步失败 · 08-03',
+    );
+  });
 }

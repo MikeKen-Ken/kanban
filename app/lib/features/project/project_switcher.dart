@@ -187,13 +187,16 @@ class ProjectSwitcher extends StatelessWidget {
         final sortMode = controller.appSettings.projectSortMode;
 
         // 短按：完整菜单；稍长按住后上下滑动：快速切换项目
-        return ProjectQuickSwitchGesture(
-          projects: projects,
-          activeProjectId: controller.activeProjectId,
-          longPressDelay: controller.appSettings.dragDelay,
-          themeIdFor: controller.themeIdForProject,
-          onCommit: controller.switchProject,
-          child: PopupMenuButton<String>(
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ProjectQuickSwitchGesture(
+              projects: projects,
+              activeProjectId: controller.activeProjectId,
+              longPressDelay: controller.appSettings.dragDelay,
+              themeIdFor: controller.themeIdForProject,
+              onCommit: controller.switchProject,
+              child: PopupMenuButton<String>(
             tooltip: '切换项目（短按菜单，长按滑动快速切换）',
             constraints: const BoxConstraints(
               minWidth: _menuMinWidth,
@@ -420,8 +423,16 @@ class ProjectSwitcher extends StatelessWidget {
               ];
               return items;
             },
-          ),
-        );      },
+              ),
+            ),
+            IconButton(
+              tooltip: '新建项目',
+              icon: const Icon(Icons.add),
+              onPressed: () => _createProject(context),
+            ),
+          ],
+        );
+      },
     );
   }
 }

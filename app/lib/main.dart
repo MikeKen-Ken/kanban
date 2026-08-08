@@ -134,6 +134,28 @@ String syncStatusWithLastSuccessLabel(
   return '$base · 待同步 $pendingUploadCount';
 }
 
+/// 窄屏顶栏使用的同步摘要，保留状态与最近成功同步日期。
+String compactSyncStatusLabel(
+  SyncStatus status,
+  DateTime? lastSyncedAt, {
+  SyncProgress? progress,
+  int pendingUploadCount = 0,
+}) {
+  if (status == SyncStatus.syncing) {
+    return progress?.shortLabel ?? syncStatusLabel(status);
+  }
+  final date = lastSyncedAt == null
+      ? null
+      : formatSyncTime(lastSyncedAt).split(' ').first;
+  if (status == SyncStatus.error) {
+    return date == null ? '同步失败' : '同步失败 · $date';
+  }
+  if (date == null) return syncStatusLabel(status);
+  final base = '已同步 $date';
+  if (pendingUploadCount <= 0) return base;
+  return '待同步 $pendingUploadCount · $date';
+}
+
 IconData syncStatusIcon(SyncStatus status) {
   switch (status) {
     case SyncStatus.idle:

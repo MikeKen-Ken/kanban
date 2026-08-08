@@ -13,7 +13,6 @@ import '../features/project/project_switcher.dart';
 import '../features/quick_capture/quick_capture.dart';
 import '../features/sync_conflict/conflict_center_screen.dart';
 import '../features/trash/trash_screen.dart';
-import '../features/views/filter_sheet.dart';
 import '../features/views/views.dart';
 import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
@@ -31,8 +30,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  FilterSpec _filter = const FilterSpec();
-
   @override
   void initState() {
     super.initState();
@@ -118,53 +115,6 @@ class _HomeScreenState extends State<HomeScreen> {
     showAppSnackBar(context, message: '已取消同步');
   }
 
-  Future<void> _showFilters() async {
-    final controller = context.read<BoardController>();
-    final labels = {
-      for (final label in controller.appSettings.customLabels)
-        label.key: label.name,
-    };
-    final picked = await showCardFilterSheet(
-      context: context,
-      initial: _filter,
-      labels: labels,
-    );
-    if (picked != null && mounted) setState(() => _filter = picked);
-  }
-
-  Future<void> _saveCurrentView() async {
-    var draftName = '';
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('保存当前视图'),
-        content: TextFormField(
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '视图名称'),
-          onChanged: (value) => draftName = value,
-          onFieldSubmitted: (value) => Navigator.pop(context, value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, draftName.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    if (name == null || name.isEmpty || !mounted) return;
-    await context.read<BoardController>().saveView(
-          name: name,
-          filter: _filter,
-        );
-    if (!mounted) return;
-    showAppSnackBar(context, message: '已保存视图「$name」');
-  }
-
   Future<void> _openCalendar() async {
     final controller = context.read<BoardController>();
     if (!mounted) return;
@@ -229,42 +179,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _pickSwimlaneMode() async {
+  Future<void> _cycleSwimlaneMode() async {
     final controller = context.read<BoardController>();
     final current = controller.projectSettings.swimlaneMode;
-    final picked = await showModalBottomSheet<SwimlaneMode>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Text(
-                '看板泳道',
-                style: Theme.of(ctx).textTheme.titleMedium,
-              ),
-            ),
-            for (final mode in SwimlaneMode.values)
-              ListTile(
-                leading: Icon(
-                  current == mode
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                ),
-                title: Text(mode.label),
-                onTap: () => Navigator.pop(ctx, mode),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (picked == null || picked == current || !mounted) return;
+    final next = nextSwimlaneMode(current);
     await controller.saveProjectSettings(
-      controller.projectSettings.copyWith(swimlaneMode: picked),
+      controller.projectSettings.copyWith(swimlaneMode: next),
     );
+    if (!mounted) return;
+    showAppSnackBar(context, message: '泳道：${next.label}');
   }
 
   Future<void> _openSearch() async {
@@ -294,37 +217,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _manageSavedViews() async {
-    final controller = context.read<BoardController>();
-    final selected = await Navigator.of(context).push<SavedView>(
-      MaterialPageRoute<SavedView>(
-        builder: (_) => SavedViewsScreen(
-          views: controller.savedViews,
-          onRename: (view, name) => controller.saveView(
-            id: view.id,
-            name: name,
-            filter: view.filter,
-          ),
-          onDelete: (view) => controller.deleteSavedView(view.id),
-        ),
-      ),
-    );
-    if (selected != null && mounted) _applySavedView(selected);
-  }
-
-  void _applySavedView(SavedView view) {
-    setState(() => _filter = view.filter);
-    showAppSnackBar(
-      context,
-      message: view.isShowAll ? '已显示全部卡片' : '已应用「${view.name}」',
-      clearExisting: true,
-    );
-  }
-
-  void _showAllCards() {
-    _applySavedView(SavedView.showAll);
   }
 
   Future<void> _openReference(CardReference reference) async {
@@ -375,19 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _openCalendar();
         break;
       case 'swimlane':
-        _pickSwimlaneMode();
-        break;
-      case 'filter':
-        _showFilters();
-        break;
-      case 'showAll':
-        _showAllCards();
-        break;
-      case 'save':
-        _saveCurrentView();
-        break;
-      case 'saved':
-        _manageSavedViews();
+        _cycleSwimlaneMode();
         break;
       case 'undo':
         _undoWithFeedback();
@@ -443,7 +323,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BoardController>();
-    final savedViews = controller.savedViews;
     final compact = MediaQuery.sizeOf(context).width < 600;
     return CallbackShortcuts(
       bindings: {
@@ -510,75 +389,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? Icons.view_agenda_outlined
                       : Icons.view_agenda,
                 ),
-                onPressed: _pickSwimlaneMode,
+                onPressed: _cycleSwimlaneMode,
               ),
             IconButton(
               tooltip: '搜索',
               icon: const Icon(Icons.search),
               onPressed: _openSearch,
             ),
-            if (!compact)
-              PopupMenuButton<String>(
-                tooltip: _filter.hasFilters ? '筛选已启用' : '筛选与保存视图',
-                icon: Badge(
-                  isLabelVisible: _filter.hasFilters,
-                  child: const Icon(Icons.filter_list),
-                ),
-                onSelected: (value) {
-                  if (value == '__filter') {
-                    _showFilters();
-                  } else if (value == '__show_all') {
-                    _showAllCards();
-                  } else if (value == '__save') {
-                    _saveCurrentView();
-                  } else if (value == '__manage') {
-                    _manageSavedViews();
-                  } else {
-                    final view = savedViews
-                        .where((item) => item.id == value)
-                        .firstOrNull;
-                    if (view != null) _applySavedView(view);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: '__filter',
-                    child: ListTile(
-                      leading: Icon(Icons.tune),
-                      title: Text('编辑筛选'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: '__show_all',
-                    child: ListTile(
-                      leading: Icon(Icons.filter_alt_off_outlined),
-                      title: Text('显示全部'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: '__save',
-                    child: ListTile(
-                      leading: Icon(Icons.bookmark_add_outlined),
-                      title: Text('保存当前视图'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: '__manage',
-                    child: ListTile(
-                      leading: Icon(Icons.bookmarks_outlined),
-                      title: Text('管理保存视图'),
-                    ),
-                  ),
-                  for (final view in savedViews)
-                    PopupMenuItem(
-                      value: view.id,
-                      child: ListTile(
-                        leading: const Icon(Icons.bookmark_outline),
-                        title: Text(view.name),
-                      ),
-                    ),
-                ],
-              ),
             if (!compact)
               Selector<BoardController, int>(
                 selector: (_, c) => c.trashItemCount,
@@ -651,37 +468,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: Text(
                         '泳道：${controller.projectSettings.swimlaneMode.label}',
                       ),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'filter',
-                    child: ListTile(
-                      leading: Badge(
-                        isLabelVisible: _filter.hasFilters,
-                        child: const Icon(Icons.filter_list),
-                      ),
-                      title: const Text('编辑筛选'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'showAll',
-                    child: ListTile(
-                      leading: Icon(Icons.filter_alt_off_outlined),
-                      title: Text('显示全部'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'save',
-                    child: ListTile(
-                      leading: Icon(Icons.bookmark_add_outlined),
-                      title: Text('保存当前视图'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'saved',
-                    child: ListTile(
-                      leading: Icon(Icons.bookmarks_outlined),
-                      title: Text('管理保存视图'),
                     ),
                   ),
                   PopupMenuItem(
@@ -772,24 +558,10 @@ class _HomeScreenState extends State<HomeScreen> {
           return _EmptyBoardState(onCreateColumn: () => _addColumn(context));
         }
 
-        final projectId = controller.activeProjectId ?? board.id;
-        final spec = _filter;
-        final references = buildCardReferences(
-          manifest: controller.manifest!,
-          boards: {projectId: board},
-          customLabels: controller.appSettings.customLabels,
-        );
-        final visibleIds = const CardQueryService()
-            .query(references, spec)
-            .map((card) => card.cardId)
-            .toSet();
-        if (spec.hasFilters && visibleIds.isEmpty) {
-          return _SearchEmptyState(
-            onClear: () {
-              setState(() => _filter = const FilterSpec());
-            },
-          );
-        }
+        final visibleIds = {
+          for (final column in board.columns)
+            for (final card in column.cards) card.id,
+        };
 
         if (compact) {
           if (controller.projectSettings.swimlaneMode != SwimlaneMode.none) {
@@ -934,42 +706,6 @@ class _EmptyBoardState extends StatelessWidget {
   }
 }
 
-class _SearchEmptyState extends StatelessWidget {
-  const _SearchEmptyState({required this.onClear});
-
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Semantics(
-        liveRegion: true,
-        label: '没有符合条件的卡片',
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.search_off,
-                size: 52,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 12),
-              Text('没有符合条件的卡片', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: onClear,
-                child: const Text('清除搜索和筛选'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SyncIndicator extends StatelessWidget {
   const _SyncIndicator({
     required this.status,
@@ -1009,6 +745,14 @@ class _SyncIndicator extends StatelessWidget {
     final label = conflictCount > 0
         ? '有 $conflictCount 处冲突'
         : syncStatusWithLastSuccessLabel(
+            status,
+            lastSyncedAt,
+            progress: progress,
+            pendingUploadCount: pendingUploadCount,
+          );
+    final compactLabel = conflictCount > 0
+        ? '冲突 $conflictCount'
+        : compactSyncStatusLabel(
             status,
             lastSyncedAt,
             progress: progress,
@@ -1054,25 +798,18 @@ class _SyncIndicator extends StatelessWidget {
       size: 20,
     );
 
-    final syncButton = compact
-        ? IconButton(
-            onPressed: onTap,
-            icon: Badge(
-              isLabelVisible: conflictCount > 0 || pendingUploadCount > 0,
-              label: Text(
-                conflictCount > 0 ? '$conflictCount' : '$pendingUploadCount',
-              ),
-              child: icon,
-            ),
-          )
-        : TextButton.icon(
-            onPressed: onTap,
-            icon: icon,
-            label: Text(
-              label,
-              style: TextStyle(color: color, fontSize: 13),
-            ),
-          );
+    final syncButton = TextButton.icon(
+      onPressed: onTap,
+      icon: icon,
+      label: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: compact ? 112 : double.infinity),
+        child: Text(
+          compact ? compactLabel : label,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: color, fontSize: 13),
+        ),
+      ),
+    );
 
     final cancelButton = onCancel == null
         ? null

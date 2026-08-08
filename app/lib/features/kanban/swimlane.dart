@@ -23,6 +23,15 @@ extension SwimlaneModeX on SwimlaneMode {
   }
 }
 
+/// 顶栏按钮每次点击后的泳道顺序。
+SwimlaneMode nextSwimlaneMode(SwimlaneMode current) {
+  return switch (current) {
+    SwimlaneMode.none => SwimlaneMode.priority,
+    SwimlaneMode.priority => SwimlaneMode.label,
+    SwimlaneMode.label => SwimlaneMode.none,
+  };
+}
+
 /// 一条泳道的标识与展示。
 class SwimlaneBucket {
   const SwimlaneBucket({

@@ -1,8 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/kanban/swimlane.dart';
 import 'package:kanban/features/kanban/verify_column.dart';
 import 'package:kanban/models/kanban_models.dart';
 
 void main() {
+  test('泳道顶栏按钮按优先级、按标签、关闭的顺序循环', () {
+    expect(nextSwimlaneMode(SwimlaneMode.none), SwimlaneMode.priority);
+    expect(nextSwimlaneMode(SwimlaneMode.priority), SwimlaneMode.label);
+    expect(nextSwimlaneMode(SwimlaneMode.label), SwimlaneMode.none);
+  });
   group('findVerifyColumn', () {
     test('按标题解析，列 id 可自定义', () {
       final col = KanbanColumn(
