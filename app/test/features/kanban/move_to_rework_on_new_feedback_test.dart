@@ -72,6 +72,42 @@ void main() {
       expect(findReworkColumn([col])?.id, 'rework');
     });
 
+    test('标题优先于靠前的改名 rework id', () {
+      final columns = [
+        KanbanColumn(
+          id: KanbanBoard.defaultReworkColumnId,
+          title: '旧返工',
+          order: 0,
+          cards: const [],
+        ),
+        KanbanColumn(
+          id: 'uuid-rework',
+          title: KanbanBoard.defaultReworkColumnTitle,
+          order: 1,
+          cards: const [],
+        ),
+      ];
+      expect(findReworkColumn(columns)?.id, 'uuid-rework');
+    });
+
+    test('多个同名待返工取第一个', () {
+      final columns = [
+        KanbanColumn(
+          id: 'first',
+          title: KanbanBoard.defaultReworkColumnTitle,
+          order: 0,
+          cards: const [],
+        ),
+        KanbanColumn(
+          id: 'second',
+          title: KanbanBoard.defaultReworkColumnTitle,
+          order: 1,
+          cards: const [],
+        ),
+      ];
+      expect(findReworkColumn(columns)?.id, 'first');
+    });
+
     test('找不到返回 null', () {
       expect(
         findReworkColumn([

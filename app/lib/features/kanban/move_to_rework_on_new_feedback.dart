@@ -11,13 +11,18 @@ bool hasAddedVerificationFeedbackItems({
   return next.any((item) => !originalIds.contains(item.id));
 }
 
-/// 解析「待返工」列：标题优先，其次默认 id [KanbanBoard.defaultReworkColumnId]。
+/// 解析「待返工」列：先扫全部列按标题精确匹配，再回退默认 id。
+///
+/// 存在多个同名「待返工」时取顺序中的第一个，避免误建或误绑到仅 id 匹配、标题已改名的列。
 KanbanColumn? findReworkColumn(Iterable<KanbanColumn> columns) {
-  for (final col in columns) {
-    if (col.title == KanbanBoard.defaultReworkColumnTitle ||
-        col.id == KanbanBoard.defaultReworkColumnId) {
-      return col;
-    }
+  final list = columns is List<KanbanColumn>
+      ? columns
+      : List<KanbanColumn>.of(columns);
+  for (final col in list) {
+    if (col.title == KanbanBoard.defaultReworkColumnTitle) return col;
+  }
+  for (final col in list) {
+    if (col.id == KanbanBoard.defaultReworkColumnId) return col;
   }
   return null;
 }

@@ -498,7 +498,10 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
       ),
     );
     if (title != null && title.isNotEmpty) {
-      await controller.addColumn(title);
+      final error = await controller.addColumn(title);
+      if (error != null && context.mounted) {
+        showAppSnackBar(context, message: error);
+      }
     }
   }
 

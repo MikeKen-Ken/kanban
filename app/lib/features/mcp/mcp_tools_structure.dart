@@ -224,11 +224,12 @@ void registerKanbanMcpStructureTools(
         (projectId) async {
         final beforeColumnId = mcpTrimmedString(args['beforeColumnId']);
         final insertIndex = (args['insertIndex'] as num?)?.toInt();
-        await controller.addColumn(
+        final error = await controller.addColumn(
           title,
           beforeColumnId: beforeColumnId,
           insertIndex: insertIndex,
         );
+        if (error != null) return mcpErrorResult(error);
         final columns = controller.board?.columns ?? const <KanbanColumn>[];
         final column = columns.cast<KanbanColumn?>().firstWhere(
               (col) => col!.title == title,
@@ -272,7 +273,8 @@ void registerKanbanMcpStructureTools(
       }
       return runMcpForProject(controller, args['projectId'] as String?,
           (projectId) async {
-        await controller.renameColumn(columnId, title);
+        final error = await controller.renameColumn(columnId, title);
+        if (error != null) return mcpErrorResult(error);
         return mcpJsonResult({
           'ok': true,
           'columnId': columnId,

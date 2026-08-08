@@ -170,15 +170,58 @@ class KanbanBoard {
 
   /// 确保存在「待返工」列，并尽量放在待验证之后、已完成之前。
   ///
-  /// 已存在同名或默认 id 的列时只校正顺序；无则新建空列。
+  /// 按标题优先识别；多个同名「待返工」会合并到优先列（优先默认 id，否则第一个）并删除多余列。
+  /// 仅当既无同名标题、也无默认 id 时才新建一次。
   /// 若列集合与顺序已符合目标，返回 `this`（可做引用相等判断）。
   KanbanBoard ensureReworkColumn({String doneColumnTitle = '已完成'}) {
-    final sorted = [...columns]..sort((a, b) => a.order.compareTo(b.order));
-    final existingIndex = sorted.indexWhere(
-      (col) =>
-          col.title == defaultReworkColumnTitle ||
-          col.id == defaultReworkColumnId,
+    var sorted = [...columns]..sort((a, b) => a.order.compareTo(b.order));
+    var mutated = false;
+
+    final titleMatchIndexes = <int>[
+      for (var i = 0; i < sorted.length; i++)
+        if (sorted[i].title == defaultReworkColumnTitle) i,
+    ];
+    if (titleMatchIndexes.length > 1) {
+      final keepIndex = titleMatchIndexes.firstWhere(
+        (i) => sorted[i].id == defaultReworkColumnId,
+        orElse: () => titleMatchIndexes.first,
+      );
+      final keep = sorted[keepIndex];
+      final seenCardIds = <String>{for (final card in keep.cards) card.id};
+      final mergedCards = [...keep.cards];
+      final removeIds = <String>{};
+      for (final i in titleMatchIndexes) {
+        if (i == keepIndex) continue;
+        removeIds.add(sorted[i].id);
+        for (final card in sorted[i].cards) {
+          if (seenCardIds.add(card.id)) {
+            mergedCards.add(card);
+          }
+        }
+      }
+      final normalizedCards = [
+        for (var i = 0; i < mergedCards.length; i++)
+          mergedCards[i].copyWith(order: i),
+      ];
+      sorted = [
+        for (final col in sorted)
+          if (col.id == keep.id)
+            keep.copyWith(cards: normalizedCards)
+          else if (!removeIds.contains(col.id))
+            col,
+      ];
+      mutated = true;
+    }
+
+    // 标题优先，其次默认 id（避免「标题已改名的 rework」抢在真正的「待返工」之前）。
+    var existingIndex = sorted.indexWhere(
+      (col) => col.title == defaultReworkColumnTitle,
     );
+    if (existingIndex < 0) {
+      existingIndex = sorted.indexWhere(
+        (col) => col.id == defaultReworkColumnId,
+      );
+    }
 
     final desiredIndex = _desiredReworkInsertIndex(
       sorted,
@@ -191,7 +234,7 @@ class KanbanBoard {
         final alreadyNormalized = sorted.asMap().entries.every(
               (entry) => entry.value.order == entry.key,
             );
-        if (alreadyNormalized) return this;
+        if (alreadyNormalized && !mutated) return this;
         return copyWith(
           columns: [
             for (var i = 0; i < sorted.length; i++)
@@ -207,6 +250,18 @@ class KanbanBoard {
           for (var i = 0; i < sorted.length; i++) sorted[i].copyWith(order: i),
         ],
       );
+    }
+
+    // 防御：同名已存在时绝不新建（即使 id 查找未命中）。
+    if (sorted.any((col) => col.title == defaultReworkColumnTitle)) {
+      return mutated
+          ? copyWith(
+              columns: [
+                for (var i = 0; i < sorted.length; i++)
+                  sorted[i].copyWith(order: i),
+              ],
+            )
+          : this;
     }
 
     final insertAt = desiredIndex.clamp(0, sorted.length);

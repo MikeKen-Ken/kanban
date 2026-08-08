@@ -1637,15 +1637,21 @@ class BoardController extends ChangeNotifier {
       });
   }
 
-  Future<void> addColumn(
+  /// 新增列；标题 trim 后与现有列精确同名则拒绝，返回错误文案。
+  Future<String?> addColumn(
     String title, {
     int? insertIndex,
     String? beforeColumnId,
   }) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
+    if (board == null) return '看板未就绪';
+    final normalized = title.trim();
+    if (normalized.isEmpty) return '列名称不能为空';
     final columns = [...board!.columns]
       ..sort((a, b) => a.order.compareTo(b.order));
+    if (columns.any((col) => col.title == normalized)) {
+      return '已存在同名列「$normalized」';
+    }
     var index = columns.length;
     if (beforeColumnId != null && beforeColumnId.isNotEmpty) {
       final before = columns.indexWhere((col) => col.id == beforeColumnId);
@@ -1657,15 +1663,18 @@ class BoardController extends ChangeNotifier {
       index,
       KanbanColumn(
         id: const Uuid().v4(),
-        title: title,
+        title: normalized,
         order: index,
         cards: [],
       ),
     );
-    final normalized = [
+    final normalizedColumns = [
       for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
     ];
-    await _persistAndSync(_bump(board!.copyWith(columns: normalized)));
+    await _persistAndSync(
+      _bump(board!.copyWith(columns: normalizedColumns)),
+    );
+    return null;
       });
   }
 
@@ -1693,14 +1702,23 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(_bump(next));
   }
 
-  Future<void> renameColumn(String columnId, String title) async {
+  /// 重命名列；与其他列标题冲突时拒绝，返回错误文案。
+  Future<String?> renameColumn(String columnId, String title) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
+    if (board == null) return '看板未就绪';
+    final normalized = title.trim();
+    if (normalized.isEmpty) return '列名称不能为空';
+    if (board!.columns.any(
+      (col) => col.id != columnId && col.title == normalized,
+    )) {
+      return '已存在同名列「$normalized」';
+    }
     final columns = board!.columns.map((col) {
       if (col.id != columnId) return col;
-      return col.copyWith(title: title);
+      return col.copyWith(title: normalized);
     }).toList();
     await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    return null;
       });
   }
 

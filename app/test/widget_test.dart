@@ -123,4 +123,91 @@ void main() {
     final already = KanbanBoard.empty(id: 'ok');
     expect(identical(already.ensureReworkColumn(), already), isTrue);
   });
+
+  test('ensureReworkColumn 已有自定义 id 同名列时不新建', () {
+    final board = KanbanBoard(
+      id: 'custom',
+      title: '板',
+      updatedAt: 1,
+      revision: 1,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
+        KanbanColumn(id: 'verify', title: '待验证', order: 1, cards: const []),
+        KanbanColumn(
+          id: 'uuid-rework',
+          title: '待返工',
+          order: 2,
+          cards: const [],
+        ),
+        KanbanColumn(id: 'done', title: '已完成', order: 3, cards: const []),
+      ],
+    );
+    final ensured = board.ensureReworkColumn();
+    expect(
+      ensured.columns.where((c) => c.title == '待返工').length,
+      1,
+    );
+    expect(
+      ensured.columns.any((c) => c.id == KanbanBoard.defaultReworkColumnId),
+      isFalse,
+    );
+    expect(ensured.columns.map((c) => c.id).toList(), [
+      'todo',
+      'verify',
+      'uuid-rework',
+      'done',
+    ]);
+  });
+
+  test('ensureReworkColumn 合并多个同名待返工列', () {
+    final board = KanbanBoard(
+      id: 'dup',
+      title: '板',
+      updatedAt: 1,
+      revision: 1,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
+        KanbanColumn(id: 'verify', title: '待验证', order: 1, cards: const []),
+        KanbanColumn(
+          id: 'uuid-a',
+          title: '待返工',
+          order: 2,
+          cards: [
+            KanbanCard(
+              id: 'c1',
+              title: '卡1',
+              order: 0,
+              createdAt: 1,
+              updatedAt: 1,
+            ),
+          ],
+        ),
+        KanbanColumn(
+          id: KanbanBoard.defaultReworkColumnId,
+          title: '待返工',
+          order: 3,
+          cards: [
+            KanbanCard(
+              id: 'c2',
+              title: '卡2',
+              order: 0,
+              createdAt: 1,
+              updatedAt: 1,
+            ),
+          ],
+        ),
+        KanbanColumn(id: 'done', title: '已完成', order: 4, cards: const []),
+      ],
+    );
+    final ensured = board.ensureReworkColumn();
+    final reworks =
+        ensured.columns.where((c) => c.title == '待返工').toList();
+    expect(reworks, hasLength(1));
+    expect(reworks.single.id, KanbanBoard.defaultReworkColumnId);
+    expect(reworks.single.cards.map((c) => c.id).toList(), ['c2', 'c1']);
+    expect(
+      ensured.columns.map((c) => c.title).toList(),
+      ['待办', '待验证', '待返工', '已完成'],
+    );
+  });
 }

@@ -194,7 +194,10 @@ class KanbanColumnWidget extends StatelessWidget {
       ),
     );
     if (title != null && title.isNotEmpty) {
-      await controller.renameColumn(column.id, title);
+      final error = await controller.renameColumn(column.id, title);
+      if (error != null && context.mounted) {
+        showAppSnackBar(context, message: error);
+      }
     }
   }
 
