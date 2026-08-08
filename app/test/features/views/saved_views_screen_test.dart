@@ -25,7 +25,7 @@ void main() {
     expect(find.byKey(const ValueKey('saved-view-show-all')), findsOneWidget);
     expect(find.text('显示全部'), findsOneWidget);
     expect(find.text('还没有保存视图'), findsOneWidget);
-    expect(find.textContaining('全部卡片'), findsOneWidget);
+    expect(find.textContaining('在“搜索”中设置'), findsOneWidget);
   });
 
   testWidgets('可重命名并删除保存视图', (tester) async {

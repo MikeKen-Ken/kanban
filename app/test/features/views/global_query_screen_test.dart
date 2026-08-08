@@ -44,6 +44,8 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    expect(find.text('搜索'), findsOneWidget);
+    expect(find.text('全部项目'), findsOneWidget);
     expect(find.text('发布新版本'), findsOneWidget);
     expect(find.text('购买灯泡'), findsOneWidget);
 
@@ -66,6 +68,58 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('发布新版本'), findsNothing);
+    expect(find.text('购买灯泡'), findsOneWidget);
+  });
+
+  testWidgets('可通过范围选择限定到项目或列', (tester) async {
+    await tester.pumpWidget(buildScreen());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('query-scope-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('query-scope-project-work')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('query-scope-button')),
+        matching: find.text('项目：工作'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('发布新版本'), findsOneWidget);
+    expect(find.text('购买灯泡'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('query-scope-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('query-scope-column-home-todo')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('query-scope-button')),
+        matching: find.text('家庭 · 待办'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('发布新版本'), findsNothing);
+    expect(find.text('购买灯泡'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('query-scope-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('query-scope-all')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('query-scope-button')),
+        matching: find.text('全部项目'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('发布新版本'), findsOneWidget);
     expect(find.text('购买灯泡'), findsOneWidget);
   });
 

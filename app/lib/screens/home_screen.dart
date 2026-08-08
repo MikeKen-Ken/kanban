@@ -19,7 +19,6 @@ import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
 import '../features/kanban/swimlane_board.dart';
 import '../main.dart';
-import '../utils/ime_guard.dart';
 import '../webdav_sync/webdav_sync_service.dart';
 import 'settings_screen.dart';
 import '../widgets/kanban_column_widget.dart';
@@ -31,14 +30,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with ImeGuard {
-  final _searchController = TextEditingController();
-  final _searchFocusNode = FocusNode();
-  String _searchQuery = '';
-  bool _showSearch = false;
+class _HomeScreenState extends State<HomeScreen> {
   FilterSpec _filter = const FilterSpec();
-
-  Iterable<TextEditingController> get _textControllers => [_searchController];
 
   @override
   void initState() {
@@ -46,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     final controller = context.read<BoardController>();
     controller.syncStatusStream.listen((status) {
       if (!mounted) return;
-      deferRebuildIfComposing(_textControllers);
+      setState(() {});
       final syncError = controller.syncError;
       final attachmentWarning = controller.attachmentSyncWarning;
       if (status == SyncStatus.error && syncError != null) {
@@ -55,46 +48,10 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         showAppSnackBar(context, message: attachmentWarning);
       }
     });
-    bindImeGuard(_textControllers);
-    _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(maybePromptAppUpdate(context));
     });
-  }
-
-  void _onSearchChanged() {
-    if (isComposing(_searchController)) return;
-    final v = _searchController.text;
-    if (v != _searchQuery) {
-      setState(() => _searchQuery = v);
-    }
-  }
-
-  @override
-  void dispose() {
-    _searchController.removeListener(_onSearchChanged);
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _showAndFocusSearch() {
-    setState(() => _showSearch = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _searchFocusNode.requestFocus();
-    });
-  }
-
-  void _toggleSearch() {
-    setState(() {
-      _showSearch = !_showSearch;
-      if (!_showSearch) {
-        _searchController.clear();
-        _searchQuery = '';
-      }
-    });
-    if (_showSearch) _showAndFocusSearch();
   }
 
   Future<void> _quickCapture() async {
@@ -202,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     if (name == null || name.isEmpty || !mounted) return;
     await context.read<BoardController>().saveView(
           name: name,
-          filter: _filter.copyWith(keyword: _searchQuery),
+          filter: _filter,
         );
     if (!mounted) return;
     showAppSnackBar(context, message: '已保存视图「$name」');
@@ -326,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     );
   }
 
-  Future<void> _openGlobalQuery() async {
+  Future<void> _openSearch() async {
     final controller = context.read<BoardController>();
     final labels = {
       for (final label in controller.appSettings.customLabels)
@@ -370,11 +327,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
   }
 
   void _applySavedView(SavedView view) {
-    _searchController.text = view.filter.keyword;
-    setState(() {
-      _searchQuery = view.filter.keyword;
-      _filter = view.filter.copyWith(keyword: '');
-    });
+    setState(() => _filter = view.filter);
     showAppSnackBar(
       context,
       message: view.isShowAll ? '已显示全部卡片' : '已应用「${view.name}」',
@@ -441,9 +394,6 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         break;
       case 'filter':
         _showFilters();
-        break;
-      case 'search':
-        _toggleSearch();
         break;
       case 'showAll':
         _showAllCards();
@@ -513,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-            _showAndFocusSearch,
+            _openSearch,
         const SingleActivator(LogicalKeyboardKey.keyN, control: true):
             _quickCapture,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
@@ -557,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
             if (!compact)
               IconButton(
                 tooltip: '新建列',
-                icon: const Icon(Icons.view_column_outlined),
+                icon: const Icon(Icons.add),
                 onPressed: () => _addColumn(context),
               ),
             if (!compact)
@@ -584,9 +534,9 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 onPressed: _pickSwimlaneMode,
               ),
             IconButton(
-              tooltip: '全部卡片',
-              icon: const Icon(Icons.view_list_outlined),
-              onPressed: _openGlobalQuery,
+              tooltip: '搜索',
+              icon: const Icon(Icons.search),
+              onPressed: _openSearch,
             ),
             if (!compact)
               PopupMenuButton<String>(
@@ -651,14 +601,6 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 ],
               ),
             if (!compact)
-              IconButton(
-                tooltip: _showSearch ? '关闭搜索' : '搜索卡片',
-                icon: Icon(
-                  _showSearch ? Icons.search_off : Icons.search,
-                ),
-                onPressed: _toggleSearch,
-              ),
-            if (!compact)
               Selector<BoardController, int>(
                 selector: (_, c) => c.trashItemCount,
                 builder: (context, count, _) => IconButton(
@@ -714,17 +656,6 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 tooltip: '更多操作',
                 onSelected: _handleCompactAction,
                 itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'search',
-                    child: ListTile(
-                      leading: Icon(
-                        _showSearch ? Icons.search_off : Icons.search,
-                      ),
-                      title: Text(
-                        _showSearch ? '关闭当前项目搜索' : '搜索当前项目',
-                      ),
-                    ),
-                  ),
                   const PopupMenuItem(
                     value: 'today',
                     child: ListTile(
@@ -806,7 +737,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                   const PopupMenuItem(
                     value: 'column',
                     child: ListTile(
-                      leading: Icon(Icons.view_column_outlined),
+                      leading: Icon(Icons.add),
                       title: Text('新建列'),
                     ),
                   ),
@@ -831,36 +762,6 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
                 ],
               ),
           ],
-          bottom: _showSearch
-              ? PreferredSize(
-                  preferredSize: const Size.fromHeight(56),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: TextField(
-                      key: const ValueKey('home-search'),
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
-                        hintText: '搜索标题、备注、标签、子任务…',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 20),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(28),
-                        ),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                )
-              : null,
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _quickCapture,
@@ -898,7 +799,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         }
 
         final projectId = controller.activeProjectId ?? board.id;
-        final spec = _filter.copyWith(keyword: _searchQuery);
+        final spec = _filter;
         final references = buildCardReferences(
           manifest: controller.manifest!,
           boards: {projectId: board},
@@ -911,11 +812,7 @@ class _HomeScreenState extends State<HomeScreen> with ImeGuard {
         if (spec.hasFilters && visibleIds.isEmpty) {
           return _SearchEmptyState(
             onClear: () {
-              _searchController.clear();
-              setState(() {
-                _searchQuery = '';
-                _filter = const FilterSpec();
-              });
+              setState(() => _filter = const FilterSpec());
             },
           );
         }

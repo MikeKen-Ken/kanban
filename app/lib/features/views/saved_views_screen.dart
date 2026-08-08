@@ -213,7 +213,7 @@ class _SavedViewsEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '在“全部卡片”中设置搜索和筛选后即可保存',
+            '在“搜索”中设置范围和筛选后即可保存',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),

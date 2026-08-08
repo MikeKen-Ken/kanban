@@ -6,6 +6,8 @@ import 'card_query_service.dart';
 import 'card_reference.dart';
 import 'filter_sheet.dart';
 import 'filter_spec.dart';
+import 'query_scope.dart';
+import 'query_scope_picker.dart';
 import 'saved_view.dart';
 import 'saved_views_screen.dart';
 
@@ -189,13 +191,54 @@ class _GlobalQueryScreenState extends State<GlobalQueryScreen> {
     setState(() => _filter = const FilterSpec());
   }
 
+  QueryScope get _scope => QueryScope.fromFilter(
+        projectIds: _filter.projectIds,
+        columnIds: _filter.columnIds,
+      );
+
+  QueryScopeCatalog get _catalog => QueryScopeCatalog(_cards);
+
+  String get _scopeLabel {
+    final hasCustomScope = _filter.projectIds.length > 1 ||
+        _filter.columnIds.length > 1 ||
+        (_filter.columnIds.length == 1 && _filter.projectIds.length > 1);
+    if (hasCustomScope) return '自定义筛选';
+    return _catalog.labelFor(_scope);
+  }
+
+  String get _searchHint {
+    switch (_scope.kind) {
+      case QueryScopeKind.allProjects:
+        return '搜索全部项目中的卡片';
+      case QueryScopeKind.project:
+        return '搜索所选项目中的卡片';
+      case QueryScopeKind.column:
+        return '搜索所选列中的卡片';
+    }
+  }
+
+  Future<void> _pickScope() async {
+    final picked = await showQueryScopePicker(
+      context: context,
+      catalog: _catalog,
+      current: _scope,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _filter = _filter.copyWith(
+        projectIds: picked.projectIds,
+        columnIds: picked.columnIds,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final spec = _effectiveFilter;
     final results = const CardQueryService().query(_cards, spec);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('全部卡片'),
+        title: const Text('搜索'),
         actions: [
           IconButton(
             tooltip: spec.hasFilters ? '筛选已启用' : '筛选与排序',
@@ -221,22 +264,41 @@ class _GlobalQueryScreenState extends State<GlobalQueryScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              key: const ValueKey('global-query-search'),
-              controller: _searchController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: '搜索全部项目中的卡片',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '清除搜索',
-                        onPressed: _searchController.clear,
-                        icon: const Icon(Icons.clear),
-                      ),
-                border: const OutlineInputBorder(),
-              ),
+            child: Column(
+              children: [
+                TextField(
+                  key: const ValueKey('global-query-search'),
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: _searchHint,
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: '清除搜索',
+                            onPressed: _searchController.clear,
+                            icon: const Icon(Icons.clear),
+                          ),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  key: const ValueKey('query-scope-button'),
+                  onTap: _loading ? null : _pickScope,
+                  borderRadius: BorderRadius.circular(4),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: '搜索范围',
+                      prefixIcon: Icon(Icons.travel_explore_outlined),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    child: Text(_scopeLabel),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(child: _buildBody(results, spec)),
