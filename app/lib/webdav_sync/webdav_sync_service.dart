@@ -78,13 +78,18 @@ class WebDavSyncService {
   DateTime? lastSyncedAt;
   SyncProgress? progress;
 
+  /// 相对 SyncBase 尚未上传的 JSON 文件数（跨全工作区）
+  int pendingUploadCount = 0;
+
   /// 最近一次附件上传失败的原始错误（用于提示细节）
   String? _lastAttachmentError;
 
   Timer? _debounceTimer;
   Timer? _pollTimer;
   Timer? _cooldownRetryTimer;
+  Timer? _pendingCountTimer;
   int _pushScheduleGen = 0;
+  int _pendingCountGen = 0;
   bool _pollingEnabled = false;
   bool _pushInFlight = false;
   bool _pushPending = false;
@@ -111,6 +116,9 @@ class WebDavSyncService {
 
   final _progressController = StreamController<SyncProgress?>.broadcast();
   Stream<SyncProgress?> get progressStream => _progressController.stream;
+
+  final _pendingCountController = StreamController<int>.broadcast();
+  Stream<int> get pendingUploadCountStream => _pendingCountController.stream;
 
   void _setProgress(SyncProgress? value) {
     progress = value;
@@ -348,6 +356,46 @@ class WebDavSyncService {
     final gen = ++_pushScheduleGen;
     _debounceTimer?.cancel();
     unawaited(_armPushDebounce(gen));
+    schedulePendingUploadCountRefresh();
+  }
+
+  /// 本地变更后短防抖刷新待同步数量，避免与看板突变锁死锁
+  void schedulePendingUploadCountRefresh() {
+    final gen = ++_pendingCountGen;
+    _pendingCountTimer?.cancel();
+    _pendingCountTimer = Timer(const Duration(milliseconds: 200), () {
+      if (gen != _pendingCountGen) return;
+      unawaited(refreshPendingUploadCount());
+    });
+  }
+
+  /// 相对 SyncBase 统计待上传 JSON 数；未配置同步时为 0
+  Future<int> refreshPendingUploadCount() async {
+    final config = await _loadConfig();
+    if (!config.enabled || !config.isConfigured) {
+      _setPendingUploadCount(0);
+      return 0;
+    }
+    try {
+      final workspace = await _captureWorkspace();
+      final baseline = await _syncBaseStore.load();
+      final count = countPendingSyncUploads(
+        workspace: workspace,
+        baseline: baseline,
+      );
+      _setPendingUploadCount(count);
+    } on Object catch (e) {
+      print('刷新待同步数量失败：$e');
+    }
+    return pendingUploadCount;
+  }
+
+  void _setPendingUploadCount(int value) {
+    if (pendingUploadCount == value) return;
+    pendingUploadCount = value;
+    if (!_pendingCountController.isClosed) {
+      _pendingCountController.add(value);
+    }
   }
 
   Future<void> _armPushDebounce(int gen) async {
@@ -974,17 +1022,21 @@ class WebDavSyncService {
       _applyAttachmentSyncWarning(attachmentFailures);
       _noteSuccess();
       _setStatus(SyncStatus.success);
+      unawaited(refreshPendingUploadCount());
     } on SyncCancelledException {
       print('推送同步已中止');
       if (status == SyncStatus.syncing) {
         _setStatus(SyncStatus.idle);
       }
+      unawaited(refreshPendingUploadCount());
     } catch (e) {
       if (!_shouldCommit(runId)) {
         print('推送同步已取消，忽略错误：$e');
+        unawaited(refreshPendingUploadCount());
       } else {
         _noteFailure(e);
         _setStatus(SyncStatus.error, error: e.toString());
+        unawaited(refreshPendingUploadCount());
       }
     } finally {
       _pushInFlight = false;
@@ -1387,6 +1439,7 @@ class WebDavSyncService {
         await _syncBaseStore.save(merged);
         _noteSuccess();
         _setStatus(SyncStatus.success);
+        unawaited(refreshPendingUploadCount());
         return;
       }
 
@@ -1403,12 +1456,15 @@ class WebDavSyncService {
       if (status == SyncStatus.syncing) {
         _setStatus(SyncStatus.idle);
       }
+      unawaited(refreshPendingUploadCount());
     } catch (e) {
       if (!_shouldCommit(runId)) {
         print('拉取同步已取消，忽略错误：$e');
+        unawaited(refreshPendingUploadCount());
       } else {
         _noteFailure(e);
         _setStatus(SyncStatus.error, error: e.toString());
+        unawaited(refreshPendingUploadCount());
       }
     } finally {
       _syncInFlight = false;
@@ -1676,8 +1732,10 @@ class WebDavSyncService {
   void dispose() {
     _debounceTimer?.cancel();
     _cooldownRetryTimer?.cancel();
+    _pendingCountTimer?.cancel();
     stopPolling();
     _statusController.close();
     _progressController.close();
+    _pendingCountController.close();
   }
 }

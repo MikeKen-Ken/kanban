@@ -16,6 +16,34 @@ void main() {
     );
   });
 
+  test('已同步后追加待同步数量，为 0 时不展示', () {
+    final time = DateTime(2026, 8, 3, 17, 5);
+    expect(
+      syncStatusWithLastSuccessLabel(
+        SyncStatus.success,
+        time,
+        pendingUploadCount: 0,
+      ),
+      '已同步 08-03 17:05',
+    );
+    expect(
+      syncStatusWithLastSuccessLabel(
+        SyncStatus.success,
+        time,
+        pendingUploadCount: 4,
+      ),
+      '已同步 08-03 17:05 · 待同步 4',
+    );
+    expect(
+      syncStatusWithLastSuccessLabel(
+        SyncStatus.idle,
+        time,
+        pendingUploadCount: 2,
+      ),
+      '已同步 08-03 17:05 · 待同步 2',
+    );
+  });
+
   test('同步中展示文件进度计数', () {
     const progress = SyncProgress(
       phase: SyncPhase.uploading,
@@ -30,6 +58,7 @@ void main() {
         SyncStatus.syncing,
         DateTime(2026, 8, 3, 17, 5),
         progress: progress,
+        pendingUploadCount: 9,
       ),
       '同步中 3/12',
     );

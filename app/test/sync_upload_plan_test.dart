@@ -139,6 +139,7 @@ void main() {
     expect(plan.skippedFileCount, greaterThan(0));
     expect(plan.needsProjectCleanup, isFalse);
     expect(plan.projectsNeedingColumnCleanup, isEmpty);
+    expect(countPendingSyncUploads(workspace: local, baseline: base), 0);
   });
 
   test('只改一张卡时只上传该列与变更的看板元数据', () {
@@ -189,6 +190,10 @@ void main() {
     expect(
       plan.items.any((i) => i.projectId == 'p2'),
       isFalse,
+    );
+    expect(
+      countPendingSyncUploads(workspace: local, baseline: base),
+      plan.items.length,
     );
   });
 

@@ -155,6 +155,7 @@ class BoardController extends ChangeNotifier {
   String? get attachmentSyncWarning => _syncService.attachmentSyncWarning;
   DateTime? get lastSyncedAt => _syncService.lastSyncedAt;
   SyncProgress? get syncProgress => _syncService.progress;
+  int get pendingSyncUploadCount => _syncService.pendingUploadCount;
   Stream<SyncStatus> get syncStatusStream => _syncService.statusStream;
   Stream<SyncProgress?> get syncProgressStream => _syncService.progressStream;
   bool get canUndo => _undoStack.canUndo;
@@ -1085,6 +1086,10 @@ class BoardController extends ChangeNotifier {
     _syncService.progressStream.listen((_) {
       notifyListeners();
     });
+    _syncService.pendingUploadCountStream.listen((_) {
+      notifyListeners();
+    });
+    unawaited(_syncService.refreshPendingUploadCount());
 
     if (webDavConfig.enabled && webDavConfig.isConfigured) {
       if (webDavConfig.autoPull) {
@@ -3653,6 +3658,7 @@ class BoardController extends ChangeNotifier {
       }
       notifyListeners();
     });
+    unawaited(_syncService.refreshPendingUploadCount());
   }
 
   Future<bool> testWebDav(WebDavConfig config) {

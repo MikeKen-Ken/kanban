@@ -590,13 +590,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             Selector<
                 BoardController,
-                (SyncStatus, String?, int, DateTime?, SyncProgress?)>(
+                (SyncStatus, String?, int, DateTime?, SyncProgress?, int)>(
               selector: (_, c) => (
                 c.syncStatus,
                 c.syncError,
                 c.unresolvedConflictCount,
                 c.lastSyncedAt,
                 c.syncProgress,
+                c.pendingSyncUploadCount,
               ),
               builder: (context, data, _) => _SyncIndicator(
                 status: data.$1,
@@ -604,6 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 conflictCount: data.$3,
                 lastSyncedAt: data.$4,
                 progress: data.$5,
+                pendingUploadCount: data.$6,
                 compact: compact,
                 onTap: () {
                   if (data.$3 <= 0) {
@@ -973,6 +975,7 @@ class _SyncIndicator extends StatelessWidget {
     this.conflictCount = 0,
     this.lastSyncedAt,
     this.progress,
+    this.pendingUploadCount = 0,
     this.compact = false,
   });
 
@@ -981,6 +984,7 @@ class _SyncIndicator extends StatelessWidget {
   final int conflictCount;
   final DateTime? lastSyncedAt;
   final SyncProgress? progress;
+  final int pendingUploadCount;
   final bool compact;
   final VoidCallback onTap;
   final VoidCallback? onCancel;
@@ -1004,11 +1008,15 @@ class _SyncIndicator extends StatelessWidget {
             status,
             lastSyncedAt,
             progress: progress,
+            pendingUploadCount: pendingUploadCount,
           );
 
     final lastSuccess = lastSyncedAt == null
         ? '尚未成功同步'
         : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
+    final pendingDetail = pendingUploadCount > 0
+        ? '待同步 $pendingUploadCount 个文件（相对上次成功同步）'
+        : null;
 
     final progressDetail = progress == null
         ? null
@@ -1026,8 +1034,16 @@ class _SyncIndicator extends StatelessWidget {
                 ? '正在同步…可点击取消'
                 : '$progressDetail\n可点击取消')
             : error == null
-                ? '$lastSuccess\n点击立即同步'
-                : '$error\n$lastSuccess';
+                ? [
+                    lastSuccess,
+                    if (pendingDetail != null) pendingDetail,
+                    '点击立即同步',
+                  ].join('\n')
+                : [
+                    error!,
+                    lastSuccess,
+                    if (pendingDetail != null) pendingDetail,
+                  ].join('\n');
     final icon = Icon(
       conflictCount > 0 ? Icons.warning_amber_outlined : syncStatusIcon(status),
       color: color,
@@ -1038,8 +1054,10 @@ class _SyncIndicator extends StatelessWidget {
         ? IconButton(
             onPressed: onTap,
             icon: Badge(
-              isLabelVisible: conflictCount > 0,
-              label: Text('$conflictCount'),
+              isLabelVisible: conflictCount > 0 || pendingUploadCount > 0,
+              label: Text(
+                conflictCount > 0 ? '$conflictCount' : '$pendingUploadCount',
+              ),
               child: icon,
             ),
           )

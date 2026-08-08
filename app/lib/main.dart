@@ -118,6 +118,7 @@ String syncStatusWithLastSuccessLabel(
   SyncStatus status,
   DateTime? lastSyncedAt, {
   SyncProgress? progress,
+  int pendingUploadCount = 0,
 }) {
   if (status == SyncStatus.syncing) {
     return progress?.shortLabel ?? syncStatusLabel(status);
@@ -128,7 +129,9 @@ String syncStatusWithLastSuccessLabel(
   if (status == SyncStatus.error) {
     return syncStatusLabel(status);
   }
-  return '已同步 ${formatSyncTime(lastSyncedAt)}';
+  final base = '已同步 ${formatSyncTime(lastSyncedAt)}';
+  if (pendingUploadCount <= 0) return base;
+  return '$base · 待同步 $pendingUploadCount';
 }
 
 IconData syncStatusIcon(SyncStatus status) {

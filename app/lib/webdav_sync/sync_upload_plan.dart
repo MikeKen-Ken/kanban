@@ -209,6 +209,17 @@ SyncUploadPlan buildSyncUploadPlan({
   );
 }
 
+/// 相对 SyncBase 待上传的 JSON 文件数（跨全部项目；含清单/共享/设置/列等）
+int countPendingSyncUploads({
+  required ProjectWorkspaceSnapshot workspace,
+  ProjectWorkspaceSnapshot? baseline,
+}) {
+  return buildSyncUploadPlan(
+    workspace: workspace,
+    baseline: baseline,
+  ).items.length;
+}
+
 /// 供测试与调试：汇总计划中涉及的项目 id
 Set<String> syncUploadPlanTouchedProjectIds(SyncUploadPlan plan) {
   return {
