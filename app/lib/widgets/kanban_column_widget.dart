@@ -25,6 +25,36 @@ class KanbanColumnWidget extends StatelessWidget {
   final Set<String>? visibleCardIds;
   final double width;
 
+  double _emptyColumnWidth(
+    BuildContext context, {
+    required TextStyle titleStyle,
+    required TextStyle countStyle,
+    required String countLabel,
+    required bool hasColor,
+  }) {
+    double measure(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      return painter.width;
+    }
+
+    final colorMarkerWidth = hasColor ? 12.0 : 0.0;
+    final countWidth = measure(countLabel, countStyle) + 12;
+    const dragHandleWidth = 24.0;
+    const menuButtonWidth = 48.0;
+    const horizontalPadding = 12.0;
+    return measure(column.title, titleStyle) +
+        colorMarkerWidth +
+        countWidth +
+        dragHandleWidth +
+        menuButtonWidth +
+        horizontalPadding +
+        3;
+  }
+
   List<KanbanCard> _displayCards(BoardController controller) {
     final cards = controller.displayCardsForColumn(column);
     final visible = visibleCardIds;
@@ -284,9 +314,35 @@ class KanbanColumnWidget extends StatelessWidget {
     final visibleCount = cards
         .where((c) => c.matchesSearch(searchQuery, customLabels: customLabels))
         .length;
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: columnColor,
+        ) ??
+        DefaultTextStyle.of(context).style.copyWith(color: columnColor);
+    final countLabel = wipLimit == null
+        ? (searchQuery.isEmpty
+              ? '${cards.length}'
+              : '$visibleCount/${cards.length}')
+        : '$activeCount/$wipLimit';
+    final countStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: overWip ? colorScheme.onErrorContainer : null,
+          fontWeight: overWip ? FontWeight.w700 : null,
+        ) ??
+        DefaultTextStyle.of(context).style.copyWith(
+              color: overWip ? colorScheme.onErrorContainer : null,
+              fontWeight: overWip ? FontWeight.w700 : null,
+            );
+    final effectiveWidth = column.cards.isEmpty
+        ? _emptyColumnWidth(
+            context,
+            titleStyle: titleStyle,
+            countStyle: countStyle,
+            countLabel: countLabel,
+            hasColor: columnColor != null,
+          )
+        : width;
 
     return Container(
-      width: width,
+      width: effectiveWidth,
       decoration: BoxDecoration(
         color: columnColor != null
             ? columnColor.withValues(alpha: 0.12)
@@ -303,35 +359,23 @@ class KanbanColumnWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 4, 10),
+            padding: const EdgeInsets.fromLTRB(12, 12, 0, 10),
             child: Row(
               children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      if (columnColor != null) ...[
-                        Container(
-                          width: 4,
-                          height: 20,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: columnColor,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ],
-                      Expanded(
-                        child: Text(
-                          column.title,
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: columnColor,
-                                  ),
-                        ),
-                      ),
-                    ],
+                if (columnColor != null)
+                  Container(
+                    width: 4,
+                    height: 20,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: columnColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
+                if (column.cards.isEmpty)
+                  Text(column.title, style: titleStyle)
+                else
+                  Expanded(child: Text(column.title, style: titleStyle)),
                 Tooltip(
                   message: wipLimit == null
                       ? '卡片数量'
@@ -347,16 +391,8 @@ class KanbanColumnWidget extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      wipLimit == null
-                          ? (searchQuery.isEmpty
-                              ? '${cards.length}'
-                              : '$visibleCount/${cards.length}')
-                          : '$activeCount/$wipLimit',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color:
-                                overWip ? colorScheme.onErrorContainer : null,
-                            fontWeight: overWip ? FontWeight.w700 : null,
-                          ),
+                      countLabel,
+                      style: countStyle,
                     ),
                   ),
                 ),
@@ -367,7 +403,7 @@ class KanbanColumnWidget extends StatelessWidget {
                     child: MouseRegion(
                       cursor: SystemMouseCursors.grab,
                       child: Padding(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(2),
                         child: Icon(
                           Icons.drag_indicator,
                           size: 20,
