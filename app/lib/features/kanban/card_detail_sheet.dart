@@ -1111,7 +1111,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final current = items.where((item) => item.id == id).firstOrNull;
     if (current == null) return;
     final controller = TextEditingController(text: current.text);
-    final nextText = await showDialog<String>(
+    final dialogResult = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(dialogTitle),
@@ -1139,6 +1139,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
           ),
         ],
       ),
+    );
+    final nextText = resolveChecklistItemDialogResult(
+      dialogResult: dialogResult,
+      draftText: controller.text,
     );
     controller.dispose();
     if (!mounted) return;

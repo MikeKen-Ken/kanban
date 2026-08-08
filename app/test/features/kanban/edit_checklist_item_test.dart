@@ -3,6 +3,38 @@ import 'package:kanban/features/kanban/edit_checklist_item.dart';
 import 'package:kanban/models/kanban_models.dart';
 
 void main() {
+  group('resolveChecklistItemDialogResult', () {
+    test('点击遮罩关闭且输入已清空时返回空字符串，以便删除该项', () {
+      expect(
+        resolveChecklistItemDialogResult(
+          dialogResult: null,
+          draftText: '   ',
+        ),
+        '',
+      );
+    });
+
+    test('点击遮罩关闭但输入仍非空时保留取消语义', () {
+      expect(
+        resolveChecklistItemDialogResult(
+          dialogResult: null,
+          draftText: '尚未保存的修改',
+        ),
+        isNull,
+      );
+    });
+
+    test('按钮返回值优先于输入框快照', () {
+      expect(
+        resolveChecklistItemDialogResult(
+          dialogResult: '保存后的文本',
+          draftText: '',
+        ),
+        '保存后的文本',
+      );
+    });
+  });
+
   group('applyChecklistItemEdit', () {
     final items = [
       ChecklistItem(id: 'a', text: '子任务甲', completed: true),
