@@ -165,22 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
     showAppSnackBar(context, message: '已保存视图「$name」');
   }
 
-  Future<void> _openToday() async {
-    final controller = context.read<BoardController>();
-    final cards = await controller.loadAllCardReferences();
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => TodayViewScreen(
-          cards: cards,
-          onOpen: (reference) => _openReference(reference),
-          onToggleCompleted: (reference) =>
-              _toggleReferenceCompleted(reference),
-        ),
-      ),
-    );
-  }
-
   Future<void> _openCalendar() async {
     final controller = context.read<BoardController>();
     if (!mounted) return;
@@ -383,9 +367,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleCompactAction(String action) {
     switch (action) {
-      case 'today':
-        _openToday();
-        break;
       case 'calendar':
         _openCalendar();
         break;
@@ -509,12 +490,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 tooltip: '新建列',
                 icon: const Icon(Icons.add),
                 onPressed: () => _addColumn(context),
-              ),
-            if (!compact)
-              IconButton(
-                tooltip: '今日任务',
-                icon: const Icon(Icons.today_outlined),
-                onPressed: _openToday,
               ),
             if (!compact)
               IconButton(
@@ -656,13 +631,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 tooltip: '更多操作',
                 onSelected: _handleCompactAction,
                 itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'today',
-                    child: ListTile(
-                      leading: Icon(Icons.today_outlined),
-                      title: Text('今日任务'),
-                    ),
-                  ),
                   const PopupMenuItem(
                     value: 'calendar',
                     child: ListTile(

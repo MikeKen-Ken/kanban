@@ -21,9 +21,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       description: '创建列和卡片，拖动调整进度；列可设置软性在制品上限。',
     ),
     (
-      icon: Icons.today_outlined,
-      title: '聚焦今天',
-      description: '今日视图会集中显示逾期、今天和本周任务，也可用组合筛选缩小范围。',
+      icon: Icons.calendar_month_outlined,
+      title: '按日期安排任务',
+      description: '在日历中查看到期日、选中今天即可看到当日任务，也可用组合筛选缩小范围。',
     ),
     (
       icon: Icons.cloud_sync_outlined,
