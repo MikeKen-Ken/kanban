@@ -269,6 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openSearch() async {
     final controller = context.read<BoardController>();
+    final currentProjectId = controller.uiActiveProjectId;
     final labels = {
       for (final label in controller.appSettings.customLabels)
         label.key: label.name,
@@ -287,6 +288,9 @@ class _HomeScreenState extends State<HomeScreen> {
             filter: filter,
           ),
           onDeleteView: (view) => controller.deleteSavedView(view.id),
+          initialFilter: currentProjectId == null
+              ? const FilterSpec()
+              : FilterSpec(projectIds: [currentProjectId]),
         ),
       ),
     );

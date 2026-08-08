@@ -26,6 +26,7 @@ void main() {
   Widget buildScreen({
     List<SavedView> views = const [],
     PersistSavedView? onSaveView,
+    FilterSpec initialFilter = const FilterSpec(),
   }) {
     return MaterialApp(
       home: GlobalQueryScreen(
@@ -36,6 +37,7 @@ void main() {
         savedViews: () => views,
         onSaveView: onSaveView ?? (_, __, ___) async {},
         onDeleteView: (_) async {},
+        initialFilter: initialFilter,
       ),
     );
   }
@@ -119,6 +121,37 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text('发布新版本'), findsOneWidget);
+    expect(find.text('购买灯泡'), findsOneWidget);
+  });
+
+  testWidgets('默认当前项目且仍可切换其他项目或全部项目', (tester) async {
+    await tester.pumpWidget(
+      buildScreen(
+        initialFilter: const FilterSpec(projectIds: ['work']),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('项目：工作'), findsOneWidget);
+    expect(find.text('发布新版本'), findsOneWidget);
+    expect(find.text('购买灯泡'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('query-scope-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('query-scope-project-home')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('项目：家庭'), findsOneWidget);
+    expect(find.text('发布新版本'), findsNothing);
+    expect(find.text('购买灯泡'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('query-scope-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('query-scope-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('全部项目'), findsOneWidget);
     expect(find.text('发布新版本'), findsOneWidget);
     expect(find.text('购买灯泡'), findsOneWidget);
   });
