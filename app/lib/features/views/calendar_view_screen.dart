@@ -214,74 +214,123 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                             },
                             builder: (context, candidate, rejected) {
                               final hovering = candidate.isNotEmpty;
-                              return Material(
-                                color: hovering
-                                    ? theme.colorScheme.primaryContainer
-                                    : isSelected
-                                        ? theme.colorScheme.secondaryContainer
-                                        : theme
-                                            .colorScheme.surfaceContainerHighest
-                                            .withValues(
-                                            alpha: inMonth ? 1 : 0.45,
-                                          ),
-                                borderRadius: BorderRadius.circular(8),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(8),
-                                  onTap: () =>
-                                      setState(() => _selectedDay = day),
-                                  onLongPress: () async {
-                                    await widget.onCreateForDay(day);
-                                    await _reload();
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 2,
+                              final backgroundColor = hovering
+                                  ? theme.colorScheme.primaryContainer
+                                  : isSelected
+                                      ? theme.colorScheme.secondaryContainer
+                                      : inMonth
+                                          ? theme.colorScheme
+                                              .surfaceContainerHighest
+                                          : theme.colorScheme.surfaceContainerLow;
+                              final dateColor = isToday
+                                  ? theme.colorScheme.primary
+                                  : inMonth
+                                      ? theme.colorScheme.onSurface
+                                      : theme.colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.62);
+                              final semanticsLabel = '${day.month}月${day.day}日'
+                                  '${isToday ? '，今天' : ''}'
+                                  '${inMonth ? '' : '，非本月'}'
+                                  '${count > 0 ? '，$count 项到期任务' : '，无到期任务'}';
+
+                              return Semantics(
+                                button: true,
+                                selected: isSelected,
+                                label: semanticsLabel,
+                                child: Material(
+                                  color: backgroundColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: BorderSide(
+                                      color: isToday
+                                          ? theme.colorScheme.primary
+                                          : isSelected
+                                              ? theme.colorScheme.secondary
+                                              : Colors.transparent,
+                                      width: isToday ? 2 : 1,
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
+                                  ),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () =>
+                                        setState(() => _selectedDay = day),
+                                    onLongPress: () async {
+                                      await widget.onCreateForDay(day);
+                                      await _reload();
+                                    },
+                                    child: Stack(
+                                      fit: StackFit.expand,
                                       children: [
-                                        Text(
-                                          '${day.day}',
-                                          style: theme.textTheme.labelLarge
-                                              ?.copyWith(
-                                            fontWeight: isToday
-                                                ? FontWeight.w800
-                                                : FontWeight.w500,
-                                            color: isToday
-                                                ? theme.colorScheme.primary
-                                                : inMonth
-                                                    ? null
-                                                    : theme.colorScheme
-                                                        .onSurfaceVariant,
+                                        Align(
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            '${day.day}',
+                                            style: theme.textTheme.labelLarge
+                                                ?.copyWith(
+                                              fontWeight: isToday
+                                                  ? FontWeight.w800
+                                                  : FontWeight.w500,
+                                              color: dateColor,
+                                            ),
                                           ),
                                         ),
-                                        if (count > 0) ...[
-                                          const Spacer(),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 5,
-                                              vertical: 1,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: theme.colorScheme.primary,
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                            ),
-                                            child: Text(
-                                              '$count',
-                                              style: theme.textTheme.labelSmall
-                                                  ?.copyWith(
-                                                color: theme
-                                                    .colorScheme.onPrimary,
-                                                fontSize: 10,
-                                                height: 1.1,
+                                        if (isToday)
+                                          Positioned(
+                                            top: 3,
+                                            left: 3,
+                                            child: Container(
+                                              key: const ValueKey(
+                                                'calendar-today-marker',
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 4,
+                                                vertical: 1,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: theme.colorScheme.primary,
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                '今',
+                                                style: theme.textTheme.labelSmall
+                                                    ?.copyWith(
+                                                  color: theme.colorScheme
+                                                      .onPrimary,
+                                                  fontSize: 10,
+                                                  height: 1.1,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(height: 2),
-                                        ],
+                                        if (count > 0)
+                                          Positioned(
+                                            right: 3,
+                                            bottom: 3,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 5,
+                                                vertical: 1,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: theme.colorScheme.primary,
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                              child: Text(
+                                                '$count',
+                                                style: theme.textTheme.labelSmall
+                                                    ?.copyWith(
+                                                  color: theme
+                                                      .colorScheme.onPrimary,
+                                                  fontSize: 10,
+                                                  height: 1.1,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   ),

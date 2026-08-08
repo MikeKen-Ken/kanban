@@ -83,4 +83,77 @@ void main() {
     expect(find.text('后天任务'), findsNothing);
     expect(find.byKey(const ValueKey('calendar-day-empty')), findsNothing);
   });
+
+  testWidgets('今天始终有标识，选中其他日期后日期数字仍位于格子中央', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+
+    await tester.pumpWidget(buildScreen(cards: const []));
+    await tester.pumpAndSettle();
+
+    final todayMarker = find.byKey(const ValueKey('calendar-today-marker'));
+    expect(todayMarker, findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('今天')), findsOneWidget);
+
+    final todayCell = find
+        .ancestor(
+          of: todayMarker,
+          matching: find.byType(Material),
+        )
+        .first;
+    expect(todayCell, findsOneWidget);
+    final today = DateTime.now();
+    final todayNumber = find.descendant(
+      of: todayCell,
+      matching: find.text('${today.day}'),
+    );
+    expect(todayNumber, findsOneWidget);
+
+    final cellRect = tester.getRect(todayCell);
+    final numberRect = tester.getRect(todayNumber);
+    expect((numberRect.center.dx - cellRect.center.dx).abs(), lessThan(1));
+    expect((numberRect.center.dy - cellRect.center.dy).abs(), lessThan(1));
+
+    final cells = find.descendant(
+      of: find.byType(GridView),
+      matching: find.byType(Material),
+    );
+    final todayElement = todayCell.evaluate().single;
+    final anotherCell = cells.evaluate().firstWhere(
+          (element) => element != todayElement,
+        );
+    await tester.tap(find.byWidget(anotherCell.widget));
+    await tester.pumpAndSettle();
+
+    expect(todayMarker, findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('今天')), findsOneWidget);
+  });
+
+  testWidgets('本月与非本月日期使用不同的格子底色', (tester) async {
+    await tester.pumpWidget(buildScreen(cards: const []));
+    await tester.pumpAndSettle();
+
+    final theme = Theme.of(tester.element(find.byType(GridView)));
+    final cells = find
+        .descendant(
+          of: find.byType(GridView),
+          matching: find.byType(Material),
+        )
+        .evaluate()
+        .map((element) => element.widget as Material)
+        .toList();
+
+    expect(
+      cells.where((cell) => cell.color == theme.colorScheme.surfaceContainerLow),
+      isNotEmpty,
+    );
+    expect(
+      cells.where(
+        (cell) => cell.color == theme.colorScheme.surfaceContainerHighest,
+      ),
+      isNotEmpty,
+    );
+  });
 }
