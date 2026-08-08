@@ -23,6 +23,7 @@ import 'description_markdown_preview.dart';
 import 'commit_list_draft.dart';
 import 'discard_blank_card.dart';
 import 'due_date_shortcuts.dart';
+import 'edit_checklist_item.dart';
 import 'kanban_labels.dart';
 import 'reminder_shortcuts.dart';
 import 'move_to_rework_on_new_feedback.dart';
@@ -1125,7 +1126,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () {
+              // 清空后点取消视为删除；文本非空则丢弃编辑（返回 null）
+              final text = controller.text.trim();
+              Navigator.pop(ctx, text.isEmpty ? '' : null);
+            },
             child: const Text('取消'),
           ),
           FilledButton(
@@ -1136,13 +1141,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       ),
     );
     controller.dispose();
-    if (!mounted || nextText == null || nextText.isEmpty) return;
-    _safeSetState(() {
-      onApply([
-        for (final item in items)
-          if (item.id == id) item.copyWith(text: nextText) else item,
-      ]);
-    });
+    if (!mounted) return;
+    final next = applyChecklistItemEdit(
+      items: items,
+      id: id,
+      dialogResult: nextText,
+    );
+    if (identical(next, items)) return;
+    _safeSetState(() => onApply(next));
   }
 
   Future<void> _pickAttachments() async {
