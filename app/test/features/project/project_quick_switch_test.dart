@@ -1,6 +1,9 @@
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:kanban/features/project/project_quick_switch.dart';
+import 'package:kanban/features/project/projects_manifest.dart';
 
 void main() {
   group('projectQuickSwitchIndex', () {
@@ -165,6 +168,91 @@ void main() {
         ),
         2,
       );
+    });
+  });
+
+  group('ProjectQuickSwitchGesture 窗口边界', () {
+    List<ProjectEntry> projects() => [
+          const ProjectEntry(
+            id: 'a',
+            title: '项目甲',
+            updatedAt: 1,
+            revision: 1,
+          ),
+          const ProjectEntry(
+            id: 'b',
+            title: '项目乙',
+            updatedAt: 2,
+            revision: 1,
+          ),
+          const ProjectEntry(
+            id: 'c',
+            title: '项目丙',
+            updatedAt: 3,
+            revision: 1,
+          ),
+        ];
+
+    testWidgets('PointerCancel 后面板仍在，新 pointer 按住移动可继续切换',
+        (tester) async {
+      String? committed;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(
+              title: ProjectQuickSwitchGesture(
+                projects: projects(),
+                activeProjectId: 'a',
+                longPressDelay: const Duration(milliseconds: 50),
+                themeIdFor: (_) => 'default',
+                onCommit: (id) async {
+                  committed = id;
+                },
+                child: const Text('当前项目'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final center = tester.getCenter(find.text('当前项目'));
+      final gesture = await tester.startGesture(
+        center,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pumpAndSettle();
+
+      // 已进入快速切换：面板列出各项目
+      expect(find.text('项目甲'), findsWidgets);
+      expect(find.text('项目乙'), findsOneWidget);
+
+      // 模拟移出窗口：cancel 原 pointer（不松键）
+      await gesture.cancel();
+      await tester.pump();
+
+      // 会话应保持：面板仍在
+      expect(find.text('项目乙'), findsOneWidget);
+      expect(committed, isNull);
+
+      // 再次进入：新 pointer 按住并下移到更靠下的位置
+      final resumed = await tester.startGesture(
+        center.translate(0, 96),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump();
+      await resumed.moveBy(const Offset(0, 20));
+      await tester.pump();
+
+      // 仍可跟手：面板未因 cancel 关闭
+      expect(find.text('项目丙'), findsOneWidget);
+
+      await resumed.up();
+      await tester.pumpAndSettle();
+
+      // 松手应提交（高亮项可能是乙或丙，取决于绝对 Y；关键是流程能走完）
+      expect(committed, isNotNull);
+      expect(find.text('项目乙'), findsNothing);
     });
   });
 }

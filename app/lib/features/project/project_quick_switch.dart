@@ -74,12 +74,60 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
   /// 面板顶部全局 Y（clamp 后），用于按指针绝对位置算高亮。
   double _panelTop = 0;
   bool _sessionActive = false;
+  /// 会话期间挂接全局指针路由，避免移出窗口后 GestureRecognizer 丢跟踪。
+  bool _globalRouteAttached = false;
+  /// 已因离开窗口等收到 cancel：此后换新 pointer / buttons==0 均由全局路由收尾。
+  bool _scrubPointerInterrupted = false;
 
   @override
   void dispose() {
+    _detachGlobalPointerRoute();
     _removeOverlay();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _attachGlobalPointerRoute() {
+    if (_globalRouteAttached) return;
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_handleGlobalPointer);
+    _globalRouteAttached = true;
+  }
+
+  void _detachGlobalPointerRoute() {
+    if (!_globalRouteAttached) return;
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_handleGlobalPointer);
+    _globalRouteAttached = false;
+  }
+
+  /// 桌面端移出窗口常触发 PointerCancel 并停止 recognizer 跟踪；
+  /// 全局路由在按住不放（含再次进入窗口）时继续跟手，松手再提交。
+  void _handleGlobalPointer(PointerEvent event) {
+    if (!_sessionActive) return;
+
+    if (event is PointerCancelEvent) {
+      // 保持会话：cancel 不代表用户放弃，常见于指针离开应用窗口
+      _scrubPointerInterrupted = true;
+      return;
+    }
+
+    if (event is PointerUpEvent) {
+      unawaited(_endSession(commit: true));
+      return;
+    }
+
+    // cancel 后再次进入可能换新 pointer id；以 buttons/down 判断仍在按住
+    final held = event.down || event.buttons != 0;
+    if (event is PointerDownEvent ||
+        event is PointerMoveEvent ||
+        event is PointerHoverEvent) {
+      if (held) {
+        _updateSession(event.position);
+      } else if (_scrubPointerInterrupted &&
+          (event is PointerMoveEvent || event is PointerHoverEvent)) {
+        // 在窗外松手后回到窗口：收不到 Up，但会看到 buttons==0
+        unawaited(_endSession(commit: true));
+      }
+    }
   }
 
   @override
@@ -133,6 +181,9 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
     _highlightedIndex = _startIndex;
     _startGlobal = globalPosition;
     _sessionActive = true;
+    _scrubPointerInterrupted = false;
+    // 先于 overlay 挂接，确保随后 cancel/移出窗口仍能收到指针事件
+    _attachGlobalPointerRoute();
     _insertOverlay();
     HapticFeedback.mediumImpact();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -224,7 +275,23 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
               8,
         );
 
-        return IgnorePointer(
+        // Listener 承接命中测试内的 move/up；与全局路由互补（离开窗口再进入）。
+        // 不吞事件给下方，会话跟手以全局路由与本 Listener 为准。
+        return Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerMove: (e) {
+            if (!_sessionActive) return;
+            if (e.buttons != 0 || e.down) {
+              _updateSession(e.position);
+            }
+          },
+          onPointerUp: (e) {
+            if (!_sessionActive) return;
+            unawaited(_endSession(commit: true));
+          },
+          onPointerCancel: (e) {
+            // 移出窗口时的 cancel：不结束会话
+          },
           child: Stack(
             children: [
               Positioned.fill(
@@ -235,38 +302,40 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
               Positioned(
                 left: left,
                 top: top,
-                child: Material(
-                  elevation: 10,
-                  borderRadius: BorderRadius.circular(12),
-                  color: theme.colorScheme.surface,
-                  clipBehavior: Clip.antiAlias,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: ProjectQuickSwitchGesture.panelMinWidth,
-                      maxWidth: ProjectQuickSwitchGesture.panelMaxWidth,
-                      maxHeight: overlayMaxPanelHeight,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: ProjectQuickSwitchGesture.panelPaddingV,
+                child: IgnorePointer(
+                  child: Material(
+                    elevation: 10,
+                    borderRadius: BorderRadius.circular(12),
+                    color: theme.colorScheme.surface,
+                    clipBehavior: Clip.antiAlias,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: ProjectQuickSwitchGesture.panelMinWidth,
+                        maxWidth: ProjectQuickSwitchGesture.panelMaxWidth,
+                        maxHeight: overlayMaxPanelHeight,
                       ),
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (var i = 0; i < list.length; i++)
-                              _QuickSwitchTile(
-                                project: list[i],
-                                // 仅高亮当前跟手项；无渐隐过渡，避免切换闪烁
-                                selected: i == _highlightedIndex,
-                                seed: _seedColor(
-                                  widget.themeIdFor(list[i].id),
-                                  brightness,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: ProjectQuickSwitchGesture.panelPaddingV,
+                        ),
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (var i = 0; i < list.length; i++)
+                                _QuickSwitchTile(
+                                  project: list[i],
+                                  // 仅高亮当前跟手项；无渐隐过渡，避免切换闪烁
+                                  selected: i == _highlightedIndex,
+                                  seed: _seedColor(
+                                    widget.themeIdFor(list[i].id),
+                                    brightness,
+                                  ),
+                                  brightness: brightness,
                                 ),
-                                brightness: brightness,
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -289,7 +358,9 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
   }
 
   void _removeOverlay() {
+    _detachGlobalPointerRoute();
     _sessionActive = false;
+    _scrubPointerInterrupted = false;
     _overlayEntry?.remove();
     _overlayEntry = null;
   }
@@ -309,10 +380,11 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
             instance.onStart = _startSession;
             instance.onUpdate = _updateSession;
             instance.onEnd = () {
-              _endSession(commit: true);
+              unawaited(_endSession(commit: true));
             };
+            // 仅 arena 拒绝等真正放弃；移出窗口的 PointerCancel 由 recognizer 忽略
             instance.onCancel = () {
-              _endSession(commit: false);
+              unawaited(_endSession(commit: false));
             };
           },
         ),
@@ -393,17 +465,31 @@ class _ProjectScrubGestureRecognizer extends OneSequenceGestureRecognizer {
       return;
     }
 
-    if (event is PointerUpEvent || event is PointerCancelEvent) {
+    if (event is PointerCancelEvent) {
+      // 已进入快速切换：桌面端鼠标移出窗口常发 cancel，不能结束会话。
+      // 停止本 recognizer 跟踪即可，会话由 State 的全局指针路由继续跟手。
+      if (_accepted) {
+        _clearTimer();
+        stopTrackingPointer(event.pointer);
+        _pointer = null;
+        _origin = null;
+        // 保持 _accepted 语义已交给上层；本地复位以免重复回调
+        _accepted = false;
+        return;
+      }
+      _clearTimer();
+      stopTrackingPointer(event.pointer);
+      resolve(GestureDisposition.rejected);
+      _resetTracking();
+      return;
+    }
+
+    if (event is PointerUpEvent) {
       final wasAccepted = _accepted;
-      final cancelled = event is PointerCancelEvent;
       _clearTimer();
       stopTrackingPointer(event.pointer);
       if (wasAccepted) {
-        if (cancelled) {
-          onCancel?.call();
-        } else {
-          onEnd?.call();
-        }
+        onEnd?.call();
       } else {
         resolve(GestureDisposition.rejected);
       }
