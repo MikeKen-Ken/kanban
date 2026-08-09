@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/completed_auto_clear/completed_auto_clear.dart';
+import 'package:kanban/features/kanban/move_to_rework_on_new_feedback.dart';
 import 'package:kanban/features/kanban/swimlane.dart';
 import 'package:kanban/features/kanban/verify_column.dart';
 import 'package:kanban/models/kanban_models.dart';
@@ -49,7 +51,18 @@ void main() {
         order: 1,
         cards: const [],
       ),
-      KanbanColumn(id: 'done', title: '已完成', order: 2, cards: const []),
+      KanbanColumn(
+        id: 'custom-rework',
+        title: KanbanBoard.defaultReworkColumnTitle,
+        order: 2,
+        cards: const [],
+      ),
+      KanbanColumn(
+        id: 'custom-done',
+        title: '已完成',
+        order: 3,
+        cards: const [],
+      ),
     ];
 
     test('自定义 id 的待验证列为 true', () {
@@ -66,21 +79,114 @@ void main() {
       );
     });
 
-    test('非待验证列不默认预览', () {
+    test('待返工与已完成列默认预览', () {
+      expect(
+        isReworkColumnId(columnId: 'custom-rework', columns: columns),
+        isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(
+          columnId: 'custom-rework',
+          columns: columns,
+        ),
+        isTrue,
+      );
+      expect(
+        isDoneColumnId(
+          columnId: 'custom-done',
+          columns: columns,
+          doneColumnName: '已完成',
+        ),
+        isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(
+          columnId: 'custom-done',
+          columns: columns,
+          doneColumnName: '已完成',
+        ),
+        isTrue,
+      );
+    });
+
+    test('默认 id 的待返工与已完成在快照中也默认预览', () {
+      final defaultRoleColumns = [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
+        KanbanColumn(id: 'verify', title: '待验证', order: 1, cards: const []),
+        KanbanColumn(id: 'rework', title: '待返工', order: 2, cards: const []),
+        KanbanColumn(id: 'done', title: '已完成', order: 3, cards: const []),
+      ];
+      expect(
+        shouldDefaultPreviewMarkdown(
+          columnId: 'rework',
+          columns: defaultRoleColumns,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(
+          columnId: 'done',
+          columns: defaultRoleColumns,
+        ),
+        isTrue,
+      );
+    });
+
+    test('非角色列不默认预览', () {
       expect(
         shouldDefaultPreviewMarkdown(columnId: 'todo', columns: columns),
         isFalse,
       );
       expect(
-        shouldDefaultPreviewMarkdown(columnId: 'done', columns: columns),
+        shouldDefaultPreviewMarkdown(
+          columnId: 'doing',
+          columns: [
+            KanbanColumn(id: 'doing', title: '进行中', order: 0, cards: const []),
+          ],
+        ),
         isFalse,
       );
     });
 
-    test('列快照缺失时仍识别默认 id verify', () {
+    test('列快照缺失时仍识别默认 id', () {
       expect(
         isVerifyColumnId(columnId: 'verify', columns: const []),
         isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(columnId: 'verify', columns: const []),
+        isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(columnId: 'rework', columns: const []),
+        isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(columnId: 'done', columns: const []),
+        isTrue,
+      );
+    });
+
+    test('自定义已完成列名仍按角色识别', () {
+      final renamed = [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
+        KanbanColumn(id: 'archive', title: '完成归档', order: 1, cards: const []),
+      ];
+      expect(
+        shouldDefaultPreviewMarkdown(
+          columnId: 'archive',
+          columns: renamed,
+          doneColumnName: '完成归档',
+        ),
+        isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(
+          columnId: 'todo',
+          columns: renamed,
+          doneColumnName: '完成归档',
+        ),
+        isFalse,
       );
     });
   });

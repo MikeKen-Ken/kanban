@@ -1,4 +1,6 @@
 import '../../models/kanban_models.dart';
+import '../completed_auto_clear/completed_auto_clear.dart';
+import 'move_to_rework_on_new_feedback.dart';
 
 /// 解析「待验证」列：标题优先，其次默认 id `verify`。
 ///
@@ -27,10 +29,19 @@ bool isVerifyColumnId({
   return columnId == 'verify';
 }
 
-/// 待验证列打开详情时，备注应默认进入 Markdown 预览。
+/// 待验证 / 待返工 / 已完成打开详情时，备注应默认进入 Markdown 预览。
+///
+/// 按列角色工具识别，不依赖脆弱的列名硬编码匹配；其他列仍默认编辑。
 bool shouldDefaultPreviewMarkdown({
   required String columnId,
   required Iterable<KanbanColumn> columns,
+  String doneColumnName = '已完成',
 }) {
-  return isVerifyColumnId(columnId: columnId, columns: columns);
+  if (isVerifyColumnId(columnId: columnId, columns: columns)) return true;
+  if (isReworkColumnId(columnId: columnId, columns: columns)) return true;
+  return isDoneColumnId(
+    columnId: columnId,
+    columns: columns,
+    doneColumnName: doneColumnName,
+  );
 }

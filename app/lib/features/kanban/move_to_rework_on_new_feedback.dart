@@ -27,6 +27,17 @@ KanbanColumn? findReworkColumn(Iterable<KanbanColumn> columns) {
   return null;
 }
 
+/// [columnId] 是否对应看板中的「待返工」列。
+bool isReworkColumnId({
+  required String columnId,
+  required Iterable<KanbanColumn> columns,
+}) {
+  final rework = findReworkColumn(columns);
+  if (rework != null) return rework.id == columnId;
+  // 列尚未出现在快照时，仍按默认 id 识别。
+  return columnId == KanbanBoard.defaultReworkColumnId;
+}
+
 /// 是否存在未勾选完成的验证反馈项。
 bool hasIncompleteVerificationFeedback(List<ChecklistItem> feedback) {
   return feedback.any((item) => !item.completed);

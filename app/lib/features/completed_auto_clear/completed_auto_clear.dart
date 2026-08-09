@@ -15,21 +15,49 @@ String completedAutoClearDaysLabel(int days) {
 /// 用于判断「完成多久」的时间戳：优先 [KanbanCard.completedAt]，否则 [KanbanCard.updatedAt]。
 int completedReferenceMs(KanbanCard card) => card.completedAt ?? card.updatedAt;
 
+/// 在列列表中定位已完成列（与看板控制器识别规则一致）。
+///
+/// 优先级：默认 id `done` → 标题等于 [doneColumnName] → 标题含「完成」。
+KanbanColumn? findDoneColumnAmong(
+  Iterable<KanbanColumn> columns, {
+  required String doneColumnName,
+}) {
+  for (final col in columns) {
+    if (col.id == 'done') return col;
+  }
+  for (final col in columns) {
+    if (col.title == doneColumnName) return col;
+  }
+  for (final col in columns) {
+    if (col.title.contains('完成')) return col;
+  }
+  return null;
+}
+
 /// 在看板中定位已完成列（与看板控制器识别规则一致）。
 KanbanColumn? findDoneColumn(
   KanbanBoard board, {
   required String doneColumnName,
 }) {
-  for (final col in board.columns) {
-    if (col.id == 'done') return col;
-  }
-  for (final col in board.columns) {
-    if (col.title == doneColumnName) return col;
-  }
-  for (final col in board.columns) {
-    if (col.title.contains('完成')) return col;
-  }
-  return null;
+  return findDoneColumnAmong(
+    board.columns,
+    doneColumnName: doneColumnName,
+  );
+}
+
+/// [columnId] 是否对应看板中的「已完成」列。
+bool isDoneColumnId({
+  required String columnId,
+  required Iterable<KanbanColumn> columns,
+  required String doneColumnName,
+}) {
+  final done = findDoneColumnAmong(
+    columns,
+    doneColumnName: doneColumnName,
+  );
+  if (done != null) return done.id == columnId;
+  // 列尚未出现在快照时，仍按默认 id 识别。
+  return columnId == 'done';
 }
 
 /// 筛选已完成列中超过保留天数的卡片。
