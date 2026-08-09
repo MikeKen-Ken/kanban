@@ -30,6 +30,13 @@ import 'move_to_rework_on_new_feedback.dart';
 import 'transfer_card_sheet.dart';
 import 'verify_column.dart';
 
+/// 卡片详情 BottomSheet 是否允许整页垂直拖拽。
+///
+/// 必须为 false：电脑端默认 enableDrag 会在按钮上挂垂直拖动手势，
+/// 与点击竞争并表现为「穿透」拖面板。高度调整交给 [DraggableScrollableSheet]。
+@visibleForTesting
+const bool kCardDetailSheetEnableDrag = false;
+
 /// 卡片详情底部弹层：标题、备注、优先级、卡片背景色、截止日期、标签、子任务
 Future<void> showCardDetailSheet({
   required BuildContext context,
@@ -41,6 +48,11 @@ Future<void> showCardDetailSheet({
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    // 关闭整页垂直拖拽：电脑端鼠标在按钮上轻微移动会抢走点击，表现为「穿透」拖面板。
+    // 面板高度仍由下方 DraggableScrollableSheet + 内容区滚动手势调整；关闭靠按钮/遮罩。
+    enableDrag: kCardDetailSheetEnableDrag,
+    // 仅顶部手柄可拖拽关闭，避免按钮/内容控件参与 BottomSheet 拖动手势。
+    showDragHandle: true,
     builder: (ctx) => _CardDetailSheet(
       columnId: columnId,
       card: card,
