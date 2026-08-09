@@ -357,13 +357,15 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     // 先占位防 PopScope/连点重复写入；失败时回滚以便重试。
     _persisted = true;
     try {
-      await _boardController.updateCardFull(
+      final updateError = await _boardController.updateCardFull(
         widget.columnId,
         widget.card.id,
         title: title,
         description: description,
         clearDescription: description == null,
-        completed: completed,
+        completed: hasIncompleteVerificationFeedback(verificationFeedback)
+            ? false
+            : completed,
         dueDate: dueDate,
         clearDueDate: clearDueDate,
         reminderAt: reminderAt,
@@ -381,6 +383,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         colorValue: colorValue,
         clearColor: clearColor,
       );
+      if (updateError != null) throw StateError(updateError);
       await _moveToReworkIfNewFeedbackAdded(verificationFeedback);
     } catch (_) {
       _persisted = false;
@@ -482,7 +485,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     try {
       if (!live.completed) {
         // 与卡片瓦片 / complete_card 一致：标记完成并移入已完成列。
-        await _boardController.toggleCardCompleted(columnId, widget.card.id);
+        final completionError = await _boardController.toggleCardCompleted(
+          columnId,
+          widget.card.id,
+        );
+        if (completionError != null) throw StateError(completionError);
       } else {
         // 详情勾选后已保存为完成但尚未挪列时，补一次移入已完成。
         final board = _boardController.board;
@@ -492,7 +499,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
             doneColumnName: _boardController.projectSettings.doneColumnName,
           );
           if (done != null && done.id != columnId) {
-            await _boardController.moveCard(
+            final moveError = await _boardController.moveCard(
               cardId: widget.card.id,
               fromColumnId: columnId,
               toColumnId: done.id,
@@ -501,6 +508,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
               completedAt: live.completedAt ??
                   DateTime.now().millisecondsSinceEpoch,
             );
+            if (moveError != null) throw StateError(moveError);
           }
         }
       }

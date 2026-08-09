@@ -2,6 +2,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
+import '../kanban/move_to_rework_on_new_feedback.dart';
 import '../views/card_reference.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_tool_results.dart';
@@ -166,7 +167,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             blockedByIds != null ||
             relatedIds != null ||
             links != null) {
-          await controller.updateCardFull(
+          final updateError = await controller.updateCardFull(
             columnId,
             cardId,
             checklist: checklist,
@@ -176,12 +177,15 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             links: links,
             colorValue: colorValue,
           );
+          if (updateError != null) return mcpErrorResult(updateError);
         }
 
+        final actualColumnId =
+            controller.findColumnIdForCard(cardId) ?? columnId;
         return mcpJsonResult({
           'cardId': cardId,
           'projectId': projectId,
-          'columnId': columnId,
+          'columnId': actualColumnId,
           'title': title,
         });
       },
@@ -290,7 +294,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
             ? (parseMcpLinks(args['links']) ?? const <CardLink>[])
             : null;
 
-        await controller.updateCardFull(
+        final updateError = await controller.updateCardFull(
           columnId,
           cardId,
           title: mcpTrimmedString(args['title']),
@@ -317,10 +321,13 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           colorValue: (args['colorValue'] as num?)?.toInt(),
           clearColor: args['clearColor'] == true,
         );
+        if (updateError != null) return mcpErrorResult(updateError);
+        final actualColumnId =
+            controller.findColumnIdForCard(cardId) ?? columnId;
         return mcpJsonResult({
           'ok': true,
           'cardId': cardId,
-          'columnId': columnId,
+          'columnId': actualColumnId,
           'projectId': projectId,
         });
       });
@@ -440,8 +447,17 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           }
         }
         if (target == null) return mcpErrorResult('卡片不存在');
+        if (hasIncompleteVerificationFeedback(target.verificationFeedback)) {
+          return mcpErrorResult(
+            incompleteVerificationFeedbackBlocksProgressMessage,
+          );
+        }
         if (!target.completed) {
-          await controller.toggleCardCompleted(columnId, cardId);
+          final completionError =
+              await controller.toggleCardCompleted(columnId, cardId);
+          if (completionError != null) {
+            return mcpErrorResult(completionError);
+          }
         }
         return mcpJsonResult({
           'ok': true,

@@ -41,6 +41,10 @@ bool isReworkColumnId({
 /// 无验证反馈时禁止移入「待返工」的提示文案。
 const reworkMoveRequiresFeedbackMessage = '需要添加反馈才可以进入待返工';
 
+/// 仍有验证反馈未完成时，卡片不能离开「待返工」或被标记完成。
+const incompleteVerificationFeedbackBlocksProgressMessage =
+    '请先完成所有验证反馈，卡片才能离开待返工或标记完成';
+
 /// 跨列移入「待返工」且 [verificationFeedback] 为空时返回拒绝原因；否则 `null`。
 ///
 /// 同列内重排不校验。已有反馈（含仅已勾选项）允许进入。
@@ -52,6 +56,10 @@ String? reworkMoveRejectionReason({
   required Iterable<KanbanColumn> columns,
 }) {
   if (fromColumnId == toColumnId) return null;
+  if (hasIncompleteVerificationFeedback(verificationFeedback) &&
+      !isReworkColumnId(columnId: toColumnId, columns: columns)) {
+    return incompleteVerificationFeedbackBlocksProgressMessage;
+  }
   if (!isReworkColumnId(columnId: toColumnId, columns: columns)) return null;
   if (verificationFeedback.isNotEmpty) return null;
   return reworkMoveRequiresFeedbackMessage;

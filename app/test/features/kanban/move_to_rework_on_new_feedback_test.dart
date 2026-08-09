@@ -180,6 +180,34 @@ void main() {
       );
     });
 
+    test('有未完成反馈时移入非待返工列 → 拒绝', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'done',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '仍需修复'),
+          ],
+          columns: columns,
+        ),
+        incompleteVerificationFeedbackBlocksProgressMessage,
+      );
+    });
+
+    test('反馈全部完成后可移入非待返工列', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'done',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '已修复', completed: true),
+          ],
+          columns: columns,
+        ),
+        isNull,
+      );
+    });
+
     test('自定义 id 的待返工标题列同样门禁', () {
       final custom = [
         KanbanColumn(id: 'verify', title: '待验证', order: 0, cards: const []),

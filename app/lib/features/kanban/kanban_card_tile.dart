@@ -155,7 +155,11 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
 
     try {
       if (!live.completed) {
-        await controller.toggleCardCompleted(columnId, cardId);
+        final completionError =
+            await controller.toggleCardCompleted(columnId, cardId);
+        if (completionError != null && mounted) {
+          showAppSnackBar(context, message: completionError);
+        }
         return;
       }
       // 已勾选完成但尚未在已完成列时，补一次移入（与详情完成逻辑一致）。
@@ -166,7 +170,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         doneColumnName: controller.projectSettings.doneColumnName,
       );
       if (done != null && done.id != columnId) {
-        await controller.moveCard(
+        final moveError = await controller.moveCard(
           cardId: cardId,
           fromColumnId: columnId,
           toColumnId: done.id,
@@ -175,6 +179,9 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           completedAt: live.completedAt ??
               DateTime.now().millisecondsSinceEpoch,
         );
+        if (moveError != null && mounted) {
+          showAppSnackBar(context, message: moveError);
+        }
       }
     } catch (error) {
       if (!mounted) return;
@@ -493,9 +500,14 @@ class _CardContent extends StatelessWidget {
                               MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
                           value: card.completed,
-                          onChanged: (_) => context
-                              .read<BoardController>()
-                              .toggleCardCompleted(columnId!, card.id),
+                          onChanged: (_) async {
+                            final error = await context
+                                .read<BoardController>()
+                                .toggleCardCompleted(columnId!, card.id);
+                            if (error != null && context.mounted) {
+                              showAppSnackBar(context, message: error);
+                            }
+                          },
                         )
                       else
                         const SizedBox(width: 8),

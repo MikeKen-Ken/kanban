@@ -2044,7 +2044,8 @@ class BoardController extends ChangeNotifier {
     );
   }
 
-  Future<void> updateCardFull(
+  /// 更新卡片。规则门禁拒绝时返回简体中文原因，成功返回 `null`。
+  Future<String?> updateCardFull(
     String columnId,
     String cardId, {
     String? title,
@@ -2069,18 +2070,30 @@ class BoardController extends ChangeNotifier {
     bool clearColor = false,
   }) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
+    if (board == null) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
     final original = board!.columns
         .where((column) => column.id == columnId)
         .expand((column) => column.cards)
         .where((card) => card.id == cardId)
         .firstOrNull;
+    if (original == null) return null;
+    final nextVerificationFeedback =
+        verificationFeedback ?? original.verificationFeedback;
+    if (completed == true &&
+        hasIncompleteVerificationFeedback(nextVerificationFeedback)) {
+      return incompleteVerificationFeedbackBlocksProgressMessage;
+    }
+    // 未完成反馈是流程权威状态：即使旧数据已完成，也必须恢复未完成态。
+    final nextCompleted = hasIncompleteVerificationFeedback(
+      nextVerificationFeedback,
+    )
+        ? false
+        : (completed ?? original.completed);
     final columns = board!.columns.map((col) {
       if (col.id != columnId) return col;
       final cards = col.cards.map((card) {
         if (card.id != cardId) return card;
-        final nextCompleted = completed ?? card.completed;
         return card.copyWith(
           title: title ?? card.title,
           description:
@@ -2094,8 +2107,7 @@ class BoardController extends ChangeNotifier {
           priority: priority ?? card.priority,
           labels: labels ?? card.labels,
           checklist: checklist ?? card.checklist,
-          verificationFeedback:
-              verificationFeedback ?? card.verificationFeedback,
+          verificationFeedback: nextVerificationFeedback,
           attachments: attachments ?? card.attachments,
           links: links ?? card.links,
           blockedByIds: blockedByIds ?? card.blockedByIds,
@@ -2109,12 +2121,11 @@ class BoardController extends ChangeNotifier {
     await _persistAndSync(
       _bump(board!.copyWith(columns: _normalizeOrders(columns))),
     );
-    if (original != null) {
-      if (!_applyingAutomation) {
+    if (!_applyingAutomation) {
         final restoredTitle = title ?? original.title;
         final restoredDescription =
             clearDescription ? null : (description ?? original.description);
-        final restoredCompleted = completed ?? original.completed;
+        final restoredCompleted = nextCompleted;
         final restoredDueDate =
             clearDueDate ? null : (dueDate ?? original.dueDate);
         final restoredReminderAt =
@@ -2135,7 +2146,8 @@ class BoardController extends ChangeNotifier {
             clearColor ? null : (colorValue ?? original.colorValue);
         _pushUndo(
           '编辑「${original.title}」',
-          () => updateCardFull(
+          () async {
+            final error = await updateCardFull(
             columnId,
             cardId,
             title: original.title,
@@ -2158,8 +2170,11 @@ class BoardController extends ChangeNotifier {
             relatedIds: original.relatedIds,
             colorValue: original.colorValue,
             clearColor: original.colorValue == null,
-          ),
-          redo: () => updateCardFull(
+            );
+            if (error != null) throw StateError(error);
+          },
+          redo: () async {
+            final error = await updateCardFull(
             columnId,
             cardId,
             title: restoredTitle,
@@ -2182,25 +2197,26 @@ class BoardController extends ChangeNotifier {
             relatedIds: restoredRelated,
             colorValue: restoredColor,
             clearColor: restoredColor == null,
-          ),
+            );
+            if (error != null) throw StateError(error);
+          },
         );
-      }
-      await _recordActivity(
-        entityId: cardId,
-        entityTitle: title ?? original.title,
-        action: ActivityAction.updated,
-      );
     }
+    await _recordActivity(
+      entityId: cardId,
+      entityTitle: title ?? original.title,
+      action: ActivityAction.updated,
+    );
     await _rescheduleReminders();
 
-    if (!_applyingAutomation && original != null) {
+    if (!_applyingAutomation) {
       final updated = board!.columns
           .where((column) => column.id == columnId)
           .expand((column) => column.cards)
           .where((card) => card.id == cardId)
           .firstOrNull;
       if (updated != null) {
-        if (completed == true && !original.completed) {
+        if (nextCompleted && !original.completed) {
           await _runAutomations(
             _automationEngine.effectsForCompleted(
               rules: projectSettings.automationRules,
@@ -2223,6 +2239,25 @@ class BoardController extends ChangeNotifier {
         }
       }
     }
+    if (hasIncompleteVerificationFeedback(nextVerificationFeedback)) {
+      await ensureReworkColumn();
+      final currentColumnId = findColumnIdForCard(cardId);
+      final currentBoard = board;
+      final rework = currentBoard == null
+          ? null
+          : findReworkColumn(currentBoard.columns);
+      if (currentColumnId != null &&
+          rework != null &&
+          currentColumnId != rework.id) {
+        await moveCard(
+          cardId: cardId,
+          fromColumnId: currentColumnId,
+          toColumnId: rework.id,
+          toDisplayIndex: rework.cards.length,
+        );
+      }
+    }
+    return null;
       });
   }
 
@@ -2510,9 +2545,10 @@ class BoardController extends ChangeNotifier {
     ];
   }
 
-  Future<void> toggleCardCompleted(String columnId, String cardId) async {
+  /// 切换完成状态。仍有未完成验证反馈时拒绝完成并返回原因。
+  Future<String?> toggleCardCompleted(String columnId, String cardId) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
+    if (board == null) return null;
     final current = board!;
     KanbanCard? target;
     for (final col in current.columns) {
@@ -2523,14 +2559,18 @@ class BoardController extends ChangeNotifier {
         }
       }
     }
-    if (target == null) return;
+    if (target == null) return null;
 
     final nextCompleted = !target.completed;
+    if (nextCompleted &&
+        hasIncompleteVerificationFeedback(target.verificationFeedback)) {
+      return incompleteVerificationFeedbackBlocksProgressMessage;
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     final doneColumn = _findDoneColumn(current);
 
     if (nextCompleted && doneColumn != null && doneColumn.id != columnId) {
-      await moveCard(
+      final moveError = await moveCard(
         cardId: cardId,
         fromColumnId: columnId,
         toColumnId: doneColumn.id,
@@ -2538,12 +2578,13 @@ class BoardController extends ChangeNotifier {
         completed: true,
         completedAt: now,
       );
+      if (moveError != null) return moveError;
       await _afterCompletionChanged(
         target,
         sourceColumnId: columnId,
         completed: true,
       );
-      return;
+      return null;
     }
 
     if (!nextCompleted && doneColumn?.id == columnId) {
@@ -2553,7 +2594,7 @@ class BoardController extends ChangeNotifier {
                 current.columns.isNotEmpty ? current.columns.first : null,
           );
       if (todoColumn != null && todoColumn.id != columnId) {
-        await moveCard(
+        final moveError = await moveCard(
           cardId: cardId,
           fromColumnId: columnId,
           toColumnId: todoColumn.id,
@@ -2561,21 +2602,25 @@ class BoardController extends ChangeNotifier {
           completed: false,
           completedAt: null,
         );
+        if (moveError != null) return moveError;
         await _afterCompletionChanged(
           target,
           sourceColumnId: columnId,
           completed: false,
         );
-        return;
+        return null;
       }
     }
 
-    await updateCardFull(columnId, cardId, completed: nextCompleted);
+    final updateError =
+        await updateCardFull(columnId, cardId, completed: nextCompleted);
+    if (updateError != null) return updateError;
     await _afterCompletionChanged(
       target,
       sourceColumnId: columnId,
       completed: nextCompleted,
     );
+    return null;
       });
   }
 
@@ -3149,7 +3194,7 @@ class BoardController extends ChangeNotifier {
     return expired.length;
   }
 
-  /// 移动卡片。失败时返回简体中文原因（例如无反馈不可入待返工），成功返回 `null`。
+  /// 移动卡片。规则门禁拒绝时返回简体中文原因，成功返回 `null`。
   Future<String?> moveCard({
     required String cardId,
     required String fromColumnId,

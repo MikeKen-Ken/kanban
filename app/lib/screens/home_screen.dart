@@ -246,7 +246,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (controller.activeProjectId != reference.projectId) {
       await controller.switchProject(reference.projectId);
     }
-    await controller.toggleCardCompleted(reference.columnId, reference.cardId);
+    final error = await controller.toggleCardCompleted(
+      reference.columnId,
+      reference.cardId,
+    );
+    if (error != null && mounted) {
+      showAppSnackBar(context, message: error);
+    }
   }
 
   void _openTrash() {
