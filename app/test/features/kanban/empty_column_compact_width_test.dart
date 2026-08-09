@@ -35,7 +35,7 @@ void main() {
     }
   });
 
-  testWidgets('空列在 PageView 式紧宽度约束下仍按内容收缩', (tester) async {
+  testWidgets('窄屏横向看板让空列按内容收缩且首尾边距对称', (tester) async {
     final target = controller.board!.columns.first;
     for (final card in List.of(target.cards)) {
       await controller.deleteCard(target.id, card.id);
@@ -45,6 +45,7 @@ void main() {
     expect(column.cards, isEmpty);
 
     const tightWidth = 360.0;
+    final scrollController = ScrollController();
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: controller,
@@ -54,10 +55,20 @@ void main() {
               child: SizedBox(
                 width: tightWidth,
                 height: 640,
-                child: KanbanColumnWidget(
-                  column: column,
-                  columnIndex: 0,
-                  width: tightWidth,
+                child: ListView.separated(
+                  controller: scrollController,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: controller.board!.columns.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final boardColumn = controller.board!.columns[index];
+                    return KanbanColumnWidget(
+                      column: boardColumn,
+                      columnIndex: index,
+                      width: tightWidth - 24,
+                    );
+                  },
                 ),
               ),
             ),
@@ -76,6 +87,18 @@ void main() {
     final width = tester.getSize(bodyColumn).width;
     expect(width, lessThan(tightWidth - 40));
     expect(width, greaterThan(80));
+    expect(tester.getTopLeft(bodyColumn).dx, 12);
+
+    scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    await tester.pump();
+    final lastBodyColumn = find
+        .descendant(
+          of: find.byType(KanbanColumnWidget).last,
+          matching: find.byType(Column),
+        )
+        .first;
+    expect(tester.getTopRight(lastBodyColumn).dx, tightWidth - 12);
+    scrollController.dispose();
 
     // 卸掉界面，避免 tearDown 删目录时文件仍被占用。
     await tester.pumpWidget(const SizedBox.shrink());

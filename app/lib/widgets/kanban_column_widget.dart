@@ -466,8 +466,7 @@ class KanbanColumnWidget extends StatelessWidget {
       ),
     );
 
-    // 安卓窄屏走 PageView，子项宽度为紧约束；仅设 Container.width 会被撑满，
-    // 表现为标题行工具靠左但列宽不变。用 Align 放开子约束后空列才能真正收缩。
+    // 某些父组件会向列传递紧宽度约束；放开子约束后空列仍可按内容收缩。
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.hasTightWidth &&

@@ -573,20 +573,18 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
           final width = MediaQuery.sizeOf(context).width - 24;
-          return PageView.builder(
-            padEnds: false,
-            controller: PageController(viewportFraction: 0.94),
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
             itemCount: board.columns.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final column = board.columns[index];
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 0, 88),
-                child: KanbanColumnWidget(
-                  column: column,
-                  columnIndex: index,
-                  visibleCardIds: visibleIds,
-                  width: width,
-                ),
+              return KanbanColumnWidget(
+                column: column,
+                columnIndex: index,
+                visibleCardIds: visibleIds,
+                width: width,
               );
             },
           );
