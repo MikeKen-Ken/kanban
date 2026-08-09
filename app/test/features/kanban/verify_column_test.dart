@@ -132,7 +132,7 @@ void main() {
       );
     });
 
-    test('非角色列不默认预览', () {
+    test('进行中与阻塞中列默认预览，其他列保持编辑', () {
       expect(
         shouldDefaultPreviewMarkdown(columnId: 'todo', columns: columns),
         isFalse,
@@ -144,7 +144,17 @@ void main() {
             KanbanColumn(id: 'doing', title: '进行中', order: 0, cards: const []),
           ],
         ),
-        isFalse,
+        isTrue,
+      );
+      expect(
+        shouldDefaultPreviewMarkdown(
+          columnId: 'blocked',
+          columns: [
+            KanbanColumn(
+                id: 'blocked', title: '阻塞中', order: 0, cards: const []),
+          ],
+        ),
+        isTrue,
       );
     });
 

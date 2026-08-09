@@ -29,7 +29,7 @@ bool isVerifyColumnId({
   return columnId == 'verify';
 }
 
-/// 待验证 / 待返工 / 阻塞中 / 已完成打开详情时，备注应默认进入 Markdown 预览。
+/// 进行中 / 待验证 / 待返工 / 阻塞中 / 已完成打开详情时，备注应默认进入 Markdown 预览。
 ///
 /// 按列角色工具识别，不依赖脆弱的列名硬编码匹配；其他列仍默认编辑。
 bool shouldDefaultPreviewMarkdown({
@@ -39,6 +39,7 @@ bool shouldDefaultPreviewMarkdown({
 }) {
   if (isVerifyColumnId(columnId: columnId, columns: columns)) return true;
   if (isReworkColumnId(columnId: columnId, columns: columns)) return true;
+  if (columnId == 'doing') return true;
   if (columnId == 'blocked') return true;
   return isDoneColumnId(
     columnId: columnId,
