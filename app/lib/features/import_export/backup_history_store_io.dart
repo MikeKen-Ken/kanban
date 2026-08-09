@@ -15,18 +15,33 @@ class _IoBackupHistoryStore implements BackupHistoryStore {
 
   static const _extension = '.kanban-backup';
   final Directory? _baseDirectory;
+  String? _customDirectoryPath;
 
   @override
   bool get isSupported => true;
 
   Future<Directory> _directory() async {
-    final base =
-        _baseDirectory ?? await getApplicationDocumentsDirectory();
+    final customPath = _customDirectoryPath;
+    if (customPath != null && customPath.isNotEmpty) {
+      final directory = Directory(customPath);
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      return directory;
+    }
+    final base = _baseDirectory ?? await getApplicationDocumentsDirectory();
     final directory = Directory(p.join(base.path, 'kanban', 'backups'));
     if (!await directory.exists()) {
       await directory.create(recursive: true);
     }
     return directory;
+  }
+
+  @override
+  Future<void> setDirectoryPath(String? path) async {
+    final normalized = path?.trim();
+    _customDirectoryPath =
+        normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   @override

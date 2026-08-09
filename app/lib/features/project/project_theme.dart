@@ -23,14 +23,19 @@ class ProjectThemePreset {
   final String name;
   final Color seedLight;
   final Color seedDark;
-  /// 重急（重要且紧急）
+
+  /// 重要紧急
   final Color labelImportantUrgent;
-  /// 重缓（重要不紧急）
+
+  /// 重要不急
   final Color labelImportantNotUrgent;
-  /// 轻急（紧急不重要）
+
+  /// 次要紧急
   final Color labelUrgentNotImportant;
-  /// 轻缓（不重要不紧急）
+
+  /// 次要不急
   final Color labelNeither;
+
   /// 缺外部资源 / 暂不具备开工条件
   final Color labelNeedResource;
   final Color priorityLow;
@@ -48,29 +53,28 @@ class ProjectThemePreset {
       };
 
   /// 当前预置：艾森豪威尔四象限 + 缺资源。
-  /// 短名见 [KanbanLabel] 文件头注释；description 供 Tooltip 展示完整象限含义。
   List<KanbanLabel> get presetLabels => [
         KanbanLabel(
           key: 'important_urgent',
-          name: '重急',
+          name: '重要紧急',
           description: '重要且紧急',
           color: labelImportantUrgent,
         ),
         KanbanLabel(
           key: 'important_not_urgent',
-          name: '重缓',
+          name: '重要不急',
           description: '重要不紧急',
           color: labelImportantNotUrgent,
         ),
         KanbanLabel(
           key: 'urgent_not_important',
-          name: '轻急',
+          name: '次要紧急',
           description: '紧急不重要',
           color: labelUrgentNotImportant,
         ),
         KanbanLabel(
           key: 'not_urgent_not_important',
-          name: '轻缓',
+          name: '次要不急',
           description: '不重要不紧急',
           color: labelNeither,
         ),
@@ -267,7 +271,8 @@ ProjectThemePreset projectThemeForId(String? id) {
 }
 
 ThemeData buildKanbanTheme(ProjectThemePreset preset, Brightness brightness) {
-  final seed = brightness == Brightness.dark ? preset.seedDark : preset.seedLight;
+  final seed =
+      brightness == Brightness.dark ? preset.seedDark : preset.seedLight;
   final colorScheme = ColorScheme.fromSeed(
     seedColor: seed,
     brightness: brightness,

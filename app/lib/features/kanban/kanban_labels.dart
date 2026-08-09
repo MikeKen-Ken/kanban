@@ -4,12 +4,9 @@ import '../project/project_theme.dart';
 
 /// note: 预置标签，卡片上存 key
 ///
-/// ## 短名取舍（艾森豪威尔四象限）
-/// 完整象限名（「重要且紧急」等）在卡片 Chip / 泳道标题上过长，易挤爆布局。
-/// 采用国内效率圈常见二字缩写：
-/// - **重** = 重要，**轻** = 不重要；**急** = 紧急，**缓** = 不紧急
-/// - 重急 / 重缓 / 轻急 / 轻缓
-/// 完整含义放在 [KanbanLabel.description]，UI 用 Tooltip 展示。
+/// ## 预置标签（艾森豪威尔四象限）
+/// 使用四字名称直接表达重要性与紧急性：重要紧急、重要不急、次要紧急、次要不急。
+/// [KanbanLabel.description] 仍可为辅助说明。
 ///
 /// ## 旧预置兼容
 /// 历史 key：`work` / `personal` / `urgent` / `idea` 不再出现在新预设列表，
@@ -23,9 +20,11 @@ class KanbanLabel {
   });
 
   final String key;
+
   /// 短展示名（Chip / 列表主标题）
   final String name;
   final Color color;
+
   /// 完整说明（Tooltip / 副标题）；自定义标签通常为空
   final String? description;
 

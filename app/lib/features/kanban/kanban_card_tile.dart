@@ -98,7 +98,8 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     final showComplete = shouldShowCompleteInCardContextMenu(
       isInDoneColumn: controller.isDoneColumn(widget.columnId),
     );
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
     final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
     final selected = await showMenu<String>(
       context: context,
@@ -176,8 +177,8 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           toColumnId: done.id,
           toDisplayIndex: done.cards.length,
           completed: true,
-          completedAt: live.completedAt ??
-              DateTime.now().millisecondsSinceEpoch,
+          completedAt:
+              live.completedAt ?? DateTime.now().millisecondsSinceEpoch,
         );
         if (moveError != null && mounted) {
           showAppSnackBar(context, message: moveError);
@@ -199,6 +200,19 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     );
     if (ok && mounted) {
       await controller.deleteCard(widget.columnId, widget.card.id);
+    }
+  }
+
+  Future<void> _removeCustomLabel(String key) async {
+    final labels = widget.card.labels.where((item) => item != key).toList();
+    if (labels.length == widget.card.labels.length) return;
+    final error = await context.read<BoardController>().updateCardFull(
+          widget.columnId,
+          widget.card.id,
+          labels: labels,
+        );
+    if (error != null && mounted) {
+      showAppSnackBar(context, message: error);
     }
   }
 
@@ -254,6 +268,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
             immediateDrag: immediateDrag,
           ),
           showContextMenuButton: touchMenuButton,
+          onRemoveCustomLabel: _removeCustomLabel,
         );
 
         // 拖起后原位只保留占位尺寸，不绘制幽灵卡面，避免与反馈层叠成两层
@@ -327,6 +342,7 @@ class _CardContent extends StatelessWidget {
     this.onContextMenu,
     this.enableLongPressContextMenu = false,
     this.showContextMenuButton = false,
+    this.onRemoveCustomLabel,
   });
 
   final KanbanCard card;
@@ -341,8 +357,10 @@ class _CardContent extends StatelessWidget {
   final VoidCallback? onOpenDetail;
   final void Function(Offset globalPosition)? onContextMenu;
   final bool enableLongPressContextMenu;
+
   /// Android / iOS：显式「⋯」入口（见 [shouldShowCardContextMenuButton]）
   final bool showContextMenuButton;
+  final Future<void> Function(String key)? onRemoveCustomLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -356,8 +374,7 @@ class _CardContent extends StatelessWidget {
     final cover = card.coverAttachment;
     final extraImageCount =
         card.attachments.length > 1 ? card.attachments.length - 1 : 0;
-    final cardColor =
-        card.colorValue != null ? Color(card.colorValue!) : null;
+    final cardColor = card.colorValue != null ? Color(card.colorValue!) : null;
     final opacity = ProjectSettings.clampCardSurfaceOpacity(surfaceOpacity);
     // note: 卡片底色带不透明度，降低后可透过整张卡片看到壁纸；文字仍用不透明前景色
     final solidBackground = cardColor != null
@@ -378,9 +395,7 @@ class _CardContent extends StatelessWidget {
               );
     return Card(
       // 拖拽反馈去掉列间距 margin，尺寸与可见卡片本体一致
-      margin: dragging
-          ? EdgeInsets.zero
-          : const EdgeInsets.only(bottom: 8),
+      margin: dragging ? EdgeInsets.zero : const EdgeInsets.only(bottom: 8),
       color: cardBackground,
       surfaceTintColor: Colors.transparent,
       // 仅反馈层抬升阴影；列表态 elevation 0，避免本体再垫一层阴影板
@@ -401,11 +416,10 @@ class _CardContent extends StatelessWidget {
         onTap: dragging || columnId == null || onOpenDetail == null
             ? null
             : onOpenDetail,
-        onSecondaryTapDown: dragging ||
-                columnId == null ||
-                onContextMenu == null
-            ? null
-            : (details) => onContextMenu!(details.globalPosition),
+        onSecondaryTapDown:
+            dragging || columnId == null || onContextMenu == null
+                ? null
+                : (details) => onContextMenu!(details.globalPosition),
         onLongPress: dragging ||
                 columnId == null ||
                 onContextMenu == null ||
@@ -424,7 +438,8 @@ class _CardContent extends StatelessWidget {
             if (hasConflict)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 color: colorScheme.errorContainer,
                 child: Text(
                   '冲突',
@@ -550,9 +565,17 @@ class _CardContent extends StatelessWidget {
                                     if (label == null) {
                                       return const SizedBox.shrink();
                                     }
+                                    final isCustom = customLabels.any(
+                                      (custom) => custom.key == key,
+                                    );
                                     final chip = Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
+                                      padding: EdgeInsets.only(
+                                        left: 6,
+                                        right: isCustom &&
+                                                onRemoveCustomLabel != null &&
+                                                !dragging
+                                            ? 1
+                                            : 6,
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
@@ -560,13 +583,42 @@ class _CardContent extends StatelessWidget {
                                             label.color.withValues(alpha: 0.2),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
-                                      child: Text(
-                                        label.name,
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                          color: label.color,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            label.name,
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                              color: label.color,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          if (isCustom &&
+                                              onRemoveCustomLabel != null &&
+                                              !dragging)
+                                            Tooltip(
+                                              message: '从卡片移除标签',
+                                              child: IconButton(
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints
+                                                        .tightFor(
+                                                  width: 18,
+                                                  height: 18,
+                                                ),
+                                                onPressed: () =>
+                                                    onRemoveCustomLabel!(key),
+                                                icon: Icon(
+                                                  Icons.close,
+                                                  size: 14,
+                                                  color: label.color,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     );
                                     final tip = label.description;
@@ -726,9 +778,8 @@ class _CardContent extends StatelessWidget {
                                       minHeight: 28,
                                     ),
                                     onPressed: () {
-                                      final box =
-                                          buttonContext.findRenderObject()
-                                              as RenderBox?;
+                                      final box = buttonContext
+                                          .findRenderObject() as RenderBox?;
                                       if (box == null || !box.hasSize) {
                                         return;
                                       }

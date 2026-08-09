@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
+import 'backup_file_picker.dart';
 import 'backup_history_store.dart';
 
 /// 远端备份列表超时，避免 WebDAV 挂起导致整页永久转圈。
@@ -128,7 +129,34 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     }
   }
 
-  Future<void> _restore(BackupSnapshotInfo snapshot, {required bool remote}) async {
+  Future<void> _chooseBackupDirectory() async {
+    final path = await pickBackupDirectory();
+    if (path == null || !mounted) return;
+    try {
+      await context.read<BoardController>().setAutoBackupDirectory(path);
+      if (!mounted) return;
+      showAppSnackBar(context, message: '自动备份将保存到所选文件夹');
+      await _reload();
+    } catch (error) {
+      if (!mounted) return;
+      showAppSnackBar(context, message: '设置备份文件夹失败：$error');
+    }
+  }
+
+  Future<void> _resetBackupDirectory() async {
+    try {
+      await context.read<BoardController>().setAutoBackupDirectory(null);
+      if (!mounted) return;
+      showAppSnackBar(context, message: '已恢复默认自动备份文件夹');
+      await _reload();
+    } catch (error) {
+      if (!mounted) return;
+      showAppSnackBar(context, message: '恢复默认文件夹失败：$error');
+    }
+  }
+
+  Future<void> _restore(BackupSnapshotInfo snapshot,
+      {required bool remote}) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -196,7 +224,8 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+              child:
+                  Text(title, style: Theme.of(context).textTheme.titleMedium),
             ),
             if (loading)
               const Padding(
@@ -244,6 +273,8 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedDirectory =
+        context.watch<BoardController>().appSettings.autoBackupDirectory;
     return Scaffold(
       appBar: AppBar(
         title: const Text('时间点备份'),
@@ -252,6 +283,27 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
             tooltip: '刷新',
             onPressed: _working || _loading ? null : _reload,
             icon: const Icon(Icons.refresh),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '自动备份文件夹',
+            onSelected: (value) {
+              if (value == 'choose') {
+                _chooseBackupDirectory();
+              } else {
+                _resetBackupDirectory();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'choose',
+                child: Text('选择自动备份文件夹'),
+              ),
+              if (selectedDirectory != null)
+                const PopupMenuItem(
+                  value: 'reset',
+                  child: Text('恢复默认文件夹'),
+                ),
+            ],
           ),
         ],
       ),
@@ -274,7 +326,11 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
               key: const ValueKey('backup-history-content'),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
               children: [
-                const Text('数据有更新时每 10 分钟自动备份，仅保留最近 7 天。'),
+                Text(
+                  selectedDirectory == null
+                      ? '数据有更新时每 10 分钟自动备份，仅保留最近 7 天。'
+                      : '自动备份文件夹：$selectedDirectory\n数据有更新时每 10 分钟自动备份，仅保留最近 7 天。',
+                ),
                 const SizedBox(height: 12),
                 _section(
                   '本地备份',

@@ -6,11 +6,13 @@ BackupHistoryStore createBackupHistoryStore({Object? baseDirectory}) =>
     _UnsupportedBackupHistoryStore();
 
 class _UnsupportedBackupHistoryStore implements BackupHistoryStore {
-  Never _unsupported() =>
-      throw UnsupportedError('当前平台暂不支持本地备份历史');
+  Never _unsupported() => throw UnsupportedError('当前平台暂不支持本地备份历史');
 
   @override
   bool get isSupported => false;
+
+  @override
+  Future<void> setDirectoryPath(String? path) async => _unsupported();
 
   @override
   Future<void> delete(String id) async => _unsupported();

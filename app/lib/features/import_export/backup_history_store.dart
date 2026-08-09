@@ -22,6 +22,9 @@ abstract class BackupHistoryStore {
 
   bool get isSupported;
 
+  /// 切换自动备份目录；`null` 恢复应用默认目录。
+  Future<void> setDirectoryPath(String? path);
+
   Future<BackupSnapshotInfo> save(
     Uint8List bytes, {
     required DateTime createdAt,

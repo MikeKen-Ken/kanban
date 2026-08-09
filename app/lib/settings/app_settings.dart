@@ -23,6 +23,7 @@ class AppSettings {
     this.mcpPort = McpConstants.defaultPort,
     this.completedAutoClearDays = 0,
     this.confirmBeforeDeleteCard = false,
+    this.autoBackupDirectory,
   });
 
   /// 拖拽前按压时长（毫秒）。0 表示按下即拖。
@@ -61,6 +62,9 @@ class AppSettings {
   /// 删除卡片前是否弹出确认对话框（默认关闭：直接进回收站）
   final bool confirmBeforeDeleteCard;
 
+  /// 自动时间点备份的自定义目录；为空时使用应用默认目录（仅本机）。
+  final String? autoBackupDirectory;
+
   /// 0ms：按下并移动即拖
   bool get immediateDrag => dragLongPressMs <= 0;
 
@@ -79,15 +83,15 @@ class AppSettings {
     int? mcpPort,
     int? completedAutoClearDays,
     bool? confirmBeforeDeleteCard,
+    Object? autoBackupDirectory = _sentinel,
   }) {
     return AppSettings(
       dragLongPressMs: dragLongPressMs ?? this.dragLongPressMs,
       themeMode: themeMode ?? this.themeMode,
       hasCompletedOnboarding:
           hasCompletedOnboarding ?? this.hasCompletedOnboarding,
-      hasRequestedNotificationPermission:
-          hasRequestedNotificationPermission ??
-              this.hasRequestedNotificationPermission,
+      hasRequestedNotificationPermission: hasRequestedNotificationPermission ??
+          this.hasRequestedNotificationPermission,
       projectSortMode: projectSortMode ?? this.projectSortMode,
       pinnedProjectIds: pinnedProjectIds ?? this.pinnedProjectIds,
       projectLastUsedAt: projectLastUsedAt ?? this.projectLastUsedAt,
@@ -98,6 +102,9 @@ class AppSettings {
           completedAutoClearDays ?? this.completedAutoClearDays,
       confirmBeforeDeleteCard:
           confirmBeforeDeleteCard ?? this.confirmBeforeDeleteCard,
+      autoBackupDirectory: autoBackupDirectory == _sentinel
+          ? this.autoBackupDirectory
+          : autoBackupDirectory as String?,
     );
   }
 
@@ -116,6 +123,8 @@ class AppSettings {
         'mcpPort': mcpPort,
         'completedAutoClearDays': completedAutoClearDays,
         'confirmBeforeDeleteCard': confirmBeforeDeleteCard,
+        if (autoBackupDirectory != null)
+          'autoBackupDirectory': autoBackupDirectory,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -127,8 +136,8 @@ class AppSettings {
         ? clearDaysRaw
         : (clearDaysRaw is num ? clearDaysRaw.toInt() : 0);
     return AppSettings(
-      dragLongPressMs: json['dragLongPressMs'] as int? ??
-          defaults.dragLongPressMs,
+      dragLongPressMs:
+          json['dragLongPressMs'] as int? ?? defaults.dragLongPressMs,
       themeMode: ThemeMode.values.firstWhere(
         (mode) => mode.name == json['themeMode'],
         orElse: () => ThemeMode.system,
@@ -155,6 +164,7 @@ class AppSettings {
       completedAutoClearDays: clearDays < 0 ? 0 : clearDays,
       confirmBeforeDeleteCard:
           json['confirmBeforeDeleteCard'] as bool? ?? false,
+      autoBackupDirectory: json['autoBackupDirectory'] as String?,
     );
   }
 
@@ -171,6 +181,8 @@ class AppSettings {
     );
   }
 }
+
+const Object _sentinel = Object();
 
 extension AppSettingsRepository on SharedPreferences {
   static const _appSettingsKey = 'app_settings';

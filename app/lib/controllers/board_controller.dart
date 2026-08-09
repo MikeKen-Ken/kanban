@@ -60,7 +60,8 @@ class BoardController extends ChangeNotifier {
     required WebDavSyncService syncService,
     required BackupHistoryStore backupHistoryStore,
   })  : _repository = repository,
-        _syncService = syncService {
+        _syncService = syncService,
+        _backupHistoryStore = backupHistoryStore {
     _backupHistorySupported = backupHistoryStore.isSupported;
     _backupCoordinator = BackupCoordinator(
       localStore: backupHistoryStore,
@@ -73,6 +74,7 @@ class BoardController extends ChangeNotifier {
 
   final BoardRepository _repository;
   final WebDavSyncService _syncService;
+  final BackupHistoryStore _backupHistoryStore;
   late final bool _backupHistorySupported;
   late final BackupCoordinator _backupCoordinator;
   final ReminderScheduler _reminderScheduler = ReminderScheduler();
@@ -128,6 +130,7 @@ class BoardController extends ChangeNotifier {
       _uiProjectSettings = value;
     }
   }
+
   /// 各项目 themeId 缓存（供项目切换菜单等展示；权威数据仍在 settings.json）
   Map<String, String> projectThemeIds = {};
   SharedContent sharedContent = SharedContent.empty;
@@ -145,6 +148,7 @@ class BoardController extends ChangeNotifier {
       _uiActiveProjectTrash = value;
     }
   }
+
   TrashBin appTrash = TrashBin.empty;
   Map<String, TrashBin> projectTrashes = {};
   List<TrashItem> labelTrash = const [];
@@ -202,8 +206,7 @@ class BoardController extends ChangeNotifier {
   Future<NotificationPermissionResult> enableRemindersFromSettings() async {
     try {
       await _reminderScheduler.initialize();
-      final alreadyEnabled =
-          await _reminderScheduler.areNotificationsEnabled();
+      final alreadyEnabled = await _reminderScheduler.areNotificationsEnabled();
       if (alreadyEnabled) {
         await _rescheduleReminders();
         return NotificationPermissionResult.enabled;
@@ -216,8 +219,7 @@ class BoardController extends ChangeNotifier {
       }
 
       // 再请求仍未授权，多半是永久拒绝，引导系统设置。
-      final opened =
-          await _reminderScheduler.openSystemNotificationSettings();
+      final opened = await _reminderScheduler.openSystemNotificationSettings();
       return opened
           ? NotificationPermissionResult.openedSystemSettings
           : NotificationPermissionResult.denied;
@@ -581,38 +583,39 @@ class BoardController extends ChangeNotifier {
     required FilterSpec filter,
   }) async {
     return _withBoardMutation(() async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final viewId = id ?? const Uuid().v4();
-    final existing =
-        sharedContent.savedViews.where((view) => view.id == viewId).firstOrNull;
-    final view = SavedView(
-      id: viewId,
-      name: name.trim(),
-      filter: filter,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    );
-    await _persistSharedContent(
-      sharedContent.copyWith(
-        savedViews: [
-          for (final item in sharedContent.savedViews)
-            if (item.id != viewId) item,
-          view,
-        ],
-      ),
-    );
-      });
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final viewId = id ?? const Uuid().v4();
+      final existing = sharedContent.savedViews
+          .where((view) => view.id == viewId)
+          .firstOrNull;
+      final view = SavedView(
+        id: viewId,
+        name: name.trim(),
+        filter: filter,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      );
+      await _persistSharedContent(
+        sharedContent.copyWith(
+          savedViews: [
+            for (final item in sharedContent.savedViews)
+              if (item.id != viewId) item,
+            view,
+          ],
+        ),
+      );
+    });
   }
 
   Future<void> deleteSavedView(String id) async {
     return _withBoardMutation(() async {
-    await _persistSharedContent(
-      sharedContent.copyWith(
-        savedViews:
-            sharedContent.savedViews.where((view) => view.id != id).toList(),
-      ),
-    );
-      });
+      await _persistSharedContent(
+        sharedContent.copyWith(
+          savedViews:
+              sharedContent.savedViews.where((view) => view.id != id).toList(),
+        ),
+      );
+    });
   }
 
   Future<String> saveCardAsTemplate({
@@ -620,20 +623,20 @@ class BoardController extends ChangeNotifier {
     required String name,
   }) async {
     return _withBoardMutation(() async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final template = CardTemplate.fromCard(
-      id: const Uuid().v4(),
-      name: name.trim(),
-      card: card,
-      updatedAt: now,
-    );
-    await _persistSharedContent(
-      sharedContent.copyWith(
-        cardTemplates: [...sharedContent.cardTemplates, template],
-      ),
-    );
-    return template.id;
-      });
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final template = CardTemplate.fromCard(
+        id: const Uuid().v4(),
+        name: name.trim(),
+        card: card,
+        updatedAt: now,
+      );
+      await _persistSharedContent(
+        sharedContent.copyWith(
+          cardTemplates: [...sharedContent.cardTemplates, template],
+        ),
+      );
+      return template.id;
+    });
   }
 
   Future<String?> createCardFromTemplate({
@@ -641,111 +644,113 @@ class BoardController extends ChangeNotifier {
     required String columnId,
   }) async {
     return _withBoardMutation(() async {
-    final template = sharedContent.cardTemplates
-        .where((item) => item.id == templateId)
-        .firstOrNull;
-    if (template == null || board == null) return null;
-    final cardId = const Uuid().v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final card = template.createCard(
-      cardId: cardId,
-      createdAt: now,
-      checklistIds: [
-        for (var i = 0; i < template.checklist.length; i++) const Uuid().v4(),
-      ],
-    );
-    final columns = board!.columns.map((column) {
-      if (column.id != columnId) return column;
-      return column.copyWith(
-        cards: [
-          ...column.cards,
-          card.copyWith(order: column.cards.length),
+      final template = sharedContent.cardTemplates
+          .where((item) => item.id == templateId)
+          .firstOrNull;
+      if (template == null || board == null) return null;
+      final cardId = const Uuid().v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final card = template.createCard(
+        cardId: cardId,
+        createdAt: now,
+        checklistIds: [
+          for (var i = 0; i < template.checklist.length; i++) const Uuid().v4(),
         ],
       );
-    }).toList();
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-    String? trashId;
-    _pushUndo(
-      '新建「${card.title}」',
-      () async {
-        trashId = await deleteCard(columnId, cardId);
-      },
-      redo: () async {
-        final id = trashId;
-        if (id == null) return;
-        final error = await restoreTrashItem(id);
-        if (error != null) throw StateError(error);
-      },
-    );
-    await _recordActivity(
-      entityId: cardId,
-      entityTitle: card.title,
-      action: ActivityAction.created,
-    );
-    return cardId;
-      });
+      final columns = board!.columns.map((column) {
+        if (column.id != columnId) return column;
+        return column.copyWith(
+          cards: [
+            ...column.cards,
+            card.copyWith(order: column.cards.length),
+          ],
+        );
+      }).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      String? trashId;
+      _pushUndo(
+        '新建「${card.title}」',
+        () async {
+          trashId = await deleteCard(columnId, cardId);
+        },
+        redo: () async {
+          final id = trashId;
+          if (id == null) return;
+          final error = await restoreTrashItem(id);
+          if (error != null) throw StateError(error);
+        },
+      );
+      await _recordActivity(
+        entityId: cardId,
+        entityTitle: card.title,
+        action: ActivityAction.created,
+      );
+      return cardId;
+    });
   }
 
   Future<void> deleteCardTemplate(String id) async {
     return _withBoardMutation(() async {
-    await _persistSharedContent(
-      sharedContent.copyWith(
-        cardTemplates: removeCardTemplateById(sharedContent.cardTemplates, id),
-      ),
-    );
-      });
+      await _persistSharedContent(
+        sharedContent.copyWith(
+          cardTemplates:
+              removeCardTemplateById(sharedContent.cardTemplates, id),
+        ),
+      );
+    });
   }
 
   Future<String?> quickCapture(QuickCaptureDraft draft) async {
     return _withBoardMutation(() async {
-    if (board == null || draft.title.trim().isEmpty) return null;
-    final desiredColumn = draft.columnName?.trim();
-    final column = board!.columns.cast<KanbanColumn?>().firstWhere(
-          (item) =>
-              desiredColumn != null &&
-              item!.title.toLowerCase() == desiredColumn.toLowerCase(),
-          orElse: () => board!.columns.cast<KanbanColumn?>().firstWhere(
-                (item) => item!.id == 'todo',
-                orElse: () =>
-                    board!.columns.isEmpty ? null : board!.columns.first,
-              ),
-        );
-    if (column == null) return null;
-
-    final labelKeys = <String>[];
-    for (final name in draft.labels) {
-      final existing = appSettings.customLabels.cast<KanbanLabel?>().firstWhere(
-            (label) => label!.name.toLowerCase() == name.toLowerCase(),
-            orElse: () => null,
+      if (board == null || draft.title.trim().isEmpty) return null;
+      final desiredColumn = draft.columnName?.trim();
+      final column = board!.columns.cast<KanbanColumn?>().firstWhere(
+            (item) =>
+                desiredColumn != null &&
+                item!.title.toLowerCase() == desiredColumn.toLowerCase(),
+            orElse: () => board!.columns.cast<KanbanColumn?>().firstWhere(
+                  (item) => item!.id == 'todo',
+                  orElse: () =>
+                      board!.columns.isEmpty ? null : board!.columns.first,
+                ),
           );
-      if (existing != null) {
-        labelKeys.add(existing.key);
-      } else {
-        labelKeys.add(
-          await addCustomLabel(
-            name,
-            projectThemeForId(projectSettings.themeId)
-                .defaultLabelColor
-                .toARGB32(),
-          ),
-        );
-      }
-    }
+      if (column == null) return null;
 
-    final priority = switch (draft.priority) {
-      QuickCapturePriority.low => CardPriority.low,
-      QuickCapturePriority.medium => CardPriority.medium,
-      QuickCapturePriority.high => CardPriority.high,
-      null => CardPriority.none,
-    };
-    return addCard(
-      column.id,
-      draft.title.trim(),
-      dueDate: draft.dueDate?.millisecondsSinceEpoch,
-      priority: priority,
-      labels: labelKeys,
-    );
-      });
+      final labelKeys = <String>[];
+      for (final name in draft.labels) {
+        final existing =
+            appSettings.customLabels.cast<KanbanLabel?>().firstWhere(
+                  (label) => label!.name.toLowerCase() == name.toLowerCase(),
+                  orElse: () => null,
+                );
+        if (existing != null) {
+          labelKeys.add(existing.key);
+        } else {
+          labelKeys.add(
+            await addCustomLabel(
+              name,
+              projectThemeForId(projectSettings.themeId)
+                  .defaultLabelColor
+                  .toARGB32(),
+            ),
+          );
+        }
+      }
+
+      final priority = switch (draft.priority) {
+        QuickCapturePriority.low => CardPriority.low,
+        QuickCapturePriority.medium => CardPriority.medium,
+        QuickCapturePriority.high => CardPriority.high,
+        null => CardPriority.none,
+      };
+      return addCard(
+        column.id,
+        draft.title.trim(),
+        dueDate: draft.dueDate?.millisecondsSinceEpoch,
+        priority: priority,
+        labels: labelKeys,
+      );
+    });
   }
 
   int get unresolvedConflictCount {
@@ -815,7 +820,6 @@ class BoardController extends ChangeNotifier {
     super.notifyListeners();
   }
 
-
   /// 看板突变临界区：同一异步调用链可重入，UI、MCP 与同步之间严格串行。
   Future<T> _withBoardMutation<T>(Future<T> Function() action) =>
       _boardMutationMutex.guard(action);
@@ -853,10 +857,8 @@ class BoardController extends ChangeNotifier {
   }) {
     if (_applyingAutomation) return;
     final source = _mutationOrigin;
-    final displayLabel =
-        source == ActivitySource.mcp ? 'MCP：$label' : label;
-    final scopedProjectId =
-        _mutatingForeignProject ? activeProjectId : null;
+    final displayLabel = source == ActivitySource.mcp ? 'MCP：$label' : label;
+    final scopedProjectId = _mutatingForeignProject ? activeProjectId : null;
     if (scopedProjectId != null) {
       _undoStack.push(
         UndoEntry(
@@ -987,13 +989,15 @@ class BoardController extends ChangeNotifier {
         board = workspace.boards[currentId];
         projectSettings =
             workspace.settings[currentId] ?? const ProjectSettings();
-        activeProjectTrash = workspace.projectTrash[currentId] ?? TrashBin.empty;
+        activeProjectTrash =
+            workspace.projectTrash[currentId] ?? TrashBin.empty;
       } else if (workspace.manifest.projects.isNotEmpty) {
         final first = workspace.manifest.projects.first;
         activeProjectId = first.id;
         await _repository.saveActiveProjectId(first.id);
         board = workspace.boards[first.id];
-        projectSettings = workspace.settings[first.id] ?? const ProjectSettings();
+        projectSettings =
+            workspace.settings[first.id] ?? const ProjectSettings();
         activeProjectTrash = workspace.projectTrash[first.id] ?? TrashBin.empty;
       }
       _backupCoordinator.markChanged();
@@ -1048,6 +1052,9 @@ class BoardController extends ChangeNotifier {
     try {
       webDavConfig = await _repository.loadWebDavConfig();
       appSettings = _repository.loadAppSettings();
+      await _backupHistoryStore.setDirectoryPath(
+        appSettings.autoBackupDirectory,
+      );
       await _repository.ensureInitialized();
 
       manifest = await _repository.loadManifest();
@@ -1345,36 +1352,36 @@ class BoardController extends ChangeNotifier {
 
   Future<void> setColumnSortMode(String columnId, CardSortMode mode) async {
     return _withBoardMutation(() async {
-    final current = columnPreferencesFor(columnId);
-    if (current.sortMode == mode) return;
-    await _saveColumnPreferences(
-      columnId,
-      current.copyWith(sortMode: mode),
-    );
-      });
+      final current = columnPreferencesFor(columnId);
+      if (current.sortMode == mode) return;
+      await _saveColumnPreferences(
+        columnId,
+        current.copyWith(sortMode: mode),
+      );
+    });
   }
 
   Future<void> toggleCardPin(String columnId, String cardId) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
-    final column = board!.columns.cast<KanbanColumn?>().firstWhere(
-          (col) => col!.id == columnId,
-          orElse: () => null,
-        );
-    if (column == null || !column.cards.any((card) => card.id == cardId)) {
-      return;
-    }
+      if (board == null) return;
+      final column = board!.columns.cast<KanbanColumn?>().firstWhere(
+            (col) => col!.id == columnId,
+            orElse: () => null,
+          );
+      if (column == null || !column.cards.any((card) => card.id == cardId)) {
+        return;
+      }
 
-    final prefs = columnPreferencesFor(columnId);
-    final pinned = [...prefs.pinnedCardIds];
-    if (pinned.contains(cardId)) {
-      pinned.remove(cardId);
-    } else {
-      pinned.insert(0, cardId);
-    }
-    await _saveColumnPreferences(
-        columnId, prefs.copyWith(pinnedCardIds: pinned));
-      });
+      final prefs = columnPreferencesFor(columnId);
+      final pinned = [...prefs.pinnedCardIds];
+      if (pinned.contains(cardId)) {
+        pinned.remove(cardId);
+      } else {
+        pinned.insert(0, cardId);
+      }
+      await _saveColumnPreferences(
+          columnId, prefs.copyWith(pinnedCardIds: pinned));
+    });
   }
 
   ({List<String> pinned, Map<String, int> orders}) _pinnedAndOrdersFromDisplay(
@@ -1426,26 +1433,26 @@ class BoardController extends ChangeNotifier {
 
   Future<void> switchProject(String projectId) async {
     return _withBoardMutation(() async {
-    if (manifest?.findById(projectId) == null) return;
-    if (projectId == activeProjectId) return;
+      if (manifest?.findById(projectId) == null) return;
+      if (projectId == activeProjectId) return;
 
-    activeProjectId = projectId;
-    await _repository.saveActiveProjectId(projectId);
-    board = await _repository.loadBoard(projectId);
-    projectSettings = await _repository.loadProjectSettings(projectId);
-    await _ensureReworkColumnPersisted();
-    projectThemeIds[projectId] = projectSettings.themeId;
-    activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
-    await _recordProjectUsed(projectId);
-    notifyListeners();
-      });
+      activeProjectId = projectId;
+      await _repository.saveActiveProjectId(projectId);
+      board = await _repository.loadBoard(projectId);
+      projectSettings = await _repository.loadProjectSettings(projectId);
+      await _ensureReworkColumnPersisted();
+      projectThemeIds[projectId] = projectSettings.themeId;
+      activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
+      await _recordProjectUsed(projectId);
+      notifyListeners();
+    });
   }
 
   Future<void> createProject(String title) async {
     return _withBoardMutation(() async {
-    final projectId = await createProjectData(title);
-    await switchProject(projectId);
-      });
+      final projectId = await createProjectData(title);
+      await switchProject(projectId);
+    });
   }
 
   /// 创建项目数据但不改变界面当前项目，供 MCP 等后台调用。
@@ -1470,176 +1477,176 @@ class BoardController extends ChangeNotifier {
   /// 重命名任意项目，并保持项目清单与看板标题一致。
   Future<void> renameProject(String projectId, String title) async {
     return _withBoardMutation(() async {
-    final normalized = title.trim();
-    final entry = manifest?.findById(projectId);
-    if (entry == null || normalized.isEmpty) return;
+      final normalized = title.trim();
+      final entry = manifest?.findById(projectId);
+      if (entry == null || normalized.isEmpty) return;
 
-    final isActive = projectId == activeProjectId;
-    final targetBoard =
-        isActive ? board : await _repository.loadBoard(projectId);
-    if (targetBoard == null) return;
-    if (entry.title == normalized && targetBoard.title == normalized) return;
+      final isActive = projectId == activeProjectId;
+      final targetBoard =
+          isActive ? board : await _repository.loadBoard(projectId);
+      if (targetBoard == null) return;
+      if (entry.title == normalized && targetBoard.title == normalized) return;
 
-    final nextBoard = _bump(
-      targetBoard.copyWith(
-        title: normalized,
-        clearConflictTitle: true,
-      ),
-    );
-    await _repository.saveBoard(projectId, nextBoard);
-    if (isActive) {
-      board = nextBoard;
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final projects = manifest!.projects.map((project) {
-      if (project.id != projectId) return project;
-      return project.copyWith(
-        title: normalized,
-        updatedAt: now,
-        revision: project.revision + 1,
-        clearConflictTitle: true,
+      final nextBoard = _bump(
+        targetBoard.copyWith(
+          title: normalized,
+          clearConflictTitle: true,
+        ),
       );
-    }).toList();
-    manifest = manifest!.bump().copyWith(projects: projects);
-    await _repository.saveManifest(manifest!);
-    notifyListeners();
-    _markWorkspaceChanged();
-      });
+      await _repository.saveBoard(projectId, nextBoard);
+      if (isActive) {
+        board = nextBoard;
+      }
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final projects = manifest!.projects.map((project) {
+        if (project.id != projectId) return project;
+        return project.copyWith(
+          title: normalized,
+          updatedAt: now,
+          revision: project.revision + 1,
+          clearConflictTitle: true,
+        );
+      }).toList();
+      manifest = manifest!.bump().copyWith(projects: projects);
+      await _repository.saveManifest(manifest!);
+      notifyListeners();
+      _markWorkspaceChanged();
+    });
   }
 
   Future<void> saveProjectSettings(ProjectSettings settings) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
-    final bumped = settings.bump();
-    final oldName = projectSettings.doneColumnName;
-    final newName = bumped.doneColumnName;
+      if (board == null) return;
+      final bumped = settings.bump();
+      final oldName = projectSettings.doneColumnName;
+      final newName = bumped.doneColumnName;
 
-    if (oldName != newName) {
-      final doneColumn = _findDoneColumn(board!);
-      if (doneColumn != null && doneColumn.title != newName) {
-        await renameColumn(doneColumn.id, newName);
+      if (oldName != newName) {
+        final doneColumn = _findDoneColumn(board!);
+        if (doneColumn != null && doneColumn.title != newName) {
+          await renameColumn(doneColumn.id, newName);
+        }
       }
-    }
 
-    await _persistProjectSettings(bumped);
-      });
+      await _persistProjectSettings(bumped);
+    });
   }
 
   /// 为当前看板选择背景图（立即落盘并调度同步）
   Future<String?> setBoardBackgroundFromGallery() async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return '看板未就绪';
-    final store = attachmentStore;
-    if (store == null) return '当前平台不支持图片背景';
+      if (board == null || activeProjectId == null) return '看板未就绪';
+      final store = attachmentStore;
+      if (store == null) return '当前平台不支持图片背景';
 
-    final picked = await pickCardImagesFromGallery();
-    if (picked.isEmpty) return null;
+      final picked = await pickCardImagesFromGallery();
+      if (picked.isEmpty) return null;
 
-    final image = picked.first;
-    final CardAttachment attachment;
-    try {
-      attachment = await store.saveImage(
-        projectId: activeProjectId!,
-        sourceBytes: image.bytes,
-        fileName: image.fileName,
-        order: 0,
+      final image = picked.first;
+      final CardAttachment attachment;
+      try {
+        attachment = await store.saveImage(
+          projectId: activeProjectId!,
+          sourceBytes: image.bytes,
+          fileName: image.fileName,
+          order: 0,
+        );
+      } catch (_) {
+        return '图片处理失败';
+      }
+
+      final previousId = projectSettings.backgroundAttachmentId;
+      await _persistProjectSettings(
+        projectSettings
+            .copyWith(
+              backgroundAttachmentId: attachment.id,
+              clearConflictSide: true,
+            )
+            .bump(),
       );
-    } catch (_) {
-      return '图片处理失败';
-    }
 
-    final previousId = projectSettings.backgroundAttachmentId;
-    await _persistProjectSettings(
-      projectSettings
-          .copyWith(
-            backgroundAttachmentId: attachment.id,
-            clearConflictSide: true,
-          )
-          .bump(),
-    );
-
-    if (previousId.isNotEmpty && previousId != attachment.id) {
-      await store.deleteAttachment(
-        projectId: activeProjectId!,
-        attachmentId: previousId,
-      );
-    }
-    await refreshMissingAttachments();
-    return null;
-      });
+      if (previousId.isNotEmpty && previousId != attachment.id) {
+        await store.deleteAttachment(
+          projectId: activeProjectId!,
+          attachmentId: previousId,
+        );
+      }
+      await refreshMissingAttachments();
+      return null;
+    });
   }
 
   /// 清除当前看板背景图
   Future<void> clearBoardBackground() async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return;
-    final previousId = projectSettings.backgroundAttachmentId;
-    if (previousId.isEmpty) return;
+      if (board == null || activeProjectId == null) return;
+      final previousId = projectSettings.backgroundAttachmentId;
+      if (previousId.isEmpty) return;
 
-    await _persistProjectSettings(
-      projectSettings
-          .copyWith(
-            backgroundAttachmentId: '',
-            clearConflictSide: true,
-          )
-          .bump(),
-    );
-
-    final store = attachmentStore;
-    if (store != null) {
-      await store.deleteAttachment(
-        projectId: activeProjectId!,
-        attachmentId: previousId,
+      await _persistProjectSettings(
+        projectSettings
+            .copyWith(
+              backgroundAttachmentId: '',
+              clearConflictSide: true,
+            )
+            .bump(),
       );
-    }
-    await refreshMissingAttachments();
-      });
+
+      final store = attachmentStore;
+      if (store != null) {
+        await store.deleteAttachment(
+          projectId: activeProjectId!,
+          attachmentId: previousId,
+        );
+      }
+      await refreshMissingAttachments();
+    });
   }
 
   /// 调整背景遮罩强度（立即落盘并调度同步）
   Future<void> setBoardBackgroundOverlayOpacity(double opacity) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
-    final next = ProjectSettings.clampOverlayOpacity(opacity);
-    if ((projectSettings.backgroundOverlayOpacity - next).abs() < 0.001) {
-      return;
-    }
-    await _persistProjectSettings(
-      projectSettings
-          .copyWith(
-            backgroundOverlayOpacity: next,
-            clearConflictSide: true,
-          )
-          .bump(),
-    );
-      });
+      if (board == null) return;
+      final next = ProjectSettings.clampOverlayOpacity(opacity);
+      if ((projectSettings.backgroundOverlayOpacity - next).abs() < 0.001) {
+        return;
+      }
+      await _persistProjectSettings(
+        projectSettings
+            .copyWith(
+              backgroundOverlayOpacity: next,
+              clearConflictSide: true,
+            )
+            .bump(),
+      );
+    });
   }
 
   /// 调整看板卡片表面不透明度（立即落盘并调度同步）
   Future<void> setCardSurfaceOpacity(double opacity) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
-    final next = ProjectSettings.clampCardSurfaceOpacity(opacity);
-    if ((projectSettings.cardSurfaceOpacity - next).abs() < 0.001) {
-      return;
-    }
-    await _persistProjectSettings(
-      projectSettings
-          .copyWith(
-            cardSurfaceOpacity: next,
-            clearConflictSide: true,
-          )
-          .bump(),
-    );
-      });
+      if (board == null) return;
+      final next = ProjectSettings.clampCardSurfaceOpacity(opacity);
+      if ((projectSettings.cardSurfaceOpacity - next).abs() < 0.001) {
+        return;
+      }
+      await _persistProjectSettings(
+        projectSettings
+            .copyWith(
+              cardSurfaceOpacity: next,
+              clearConflictSide: true,
+            )
+            .bump(),
+      );
+    });
   }
 
   Future<void> updateTitle(String title) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
-    await _persistAndSync(_bump(board!.copyWith(title: title)));
-      });
+      if (board == null) return;
+      await _persistAndSync(_bump(board!.copyWith(title: title)));
+    });
   }
 
   /// 新增列；标题 trim 后与现有列精确同名则拒绝，返回错误文案。
@@ -1649,38 +1656,38 @@ class BoardController extends ChangeNotifier {
     String? beforeColumnId,
   }) async {
     return _withBoardMutation(() async {
-    if (board == null) return '看板未就绪';
-    final normalized = title.trim();
-    if (normalized.isEmpty) return '列名称不能为空';
-    final columns = [...board!.columns]
-      ..sort((a, b) => a.order.compareTo(b.order));
-    if (columns.any((col) => col.title == normalized)) {
-      return '已存在同名列「$normalized」';
-    }
-    var index = columns.length;
-    if (beforeColumnId != null && beforeColumnId.isNotEmpty) {
-      final before = columns.indexWhere((col) => col.id == beforeColumnId);
-      if (before >= 0) index = before;
-    } else if (insertIndex != null) {
-      index = insertIndex.clamp(0, columns.length);
-    }
-    columns.insert(
-      index,
-      KanbanColumn(
-        id: const Uuid().v4(),
-        title: normalized,
-        order: index,
-        cards: [],
-      ),
-    );
-    final normalizedColumns = [
-      for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
-    ];
-    await _persistAndSync(
-      _bump(board!.copyWith(columns: normalizedColumns)),
-    );
-    return null;
-      });
+      if (board == null) return '看板未就绪';
+      final normalized = title.trim();
+      if (normalized.isEmpty) return '列名称不能为空';
+      final columns = [...board!.columns]
+        ..sort((a, b) => a.order.compareTo(b.order));
+      if (columns.any((col) => col.title == normalized)) {
+        return '已存在同名列「$normalized」';
+      }
+      var index = columns.length;
+      if (beforeColumnId != null && beforeColumnId.isNotEmpty) {
+        final before = columns.indexWhere((col) => col.id == beforeColumnId);
+        if (before >= 0) index = before;
+      } else if (insertIndex != null) {
+        index = insertIndex.clamp(0, columns.length);
+      }
+      columns.insert(
+        index,
+        KanbanColumn(
+          id: const Uuid().v4(),
+          title: normalized,
+          order: index,
+          cards: [],
+        ),
+      );
+      final normalizedColumns = [
+        for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
+      ];
+      await _persistAndSync(
+        _bump(board!.copyWith(columns: normalizedColumns)),
+      );
+      return null;
+    });
   }
 
   /// 为当前看板补齐「待返工」列（已有板迁移）；无变更则跳过。
@@ -1710,56 +1717,56 @@ class BoardController extends ChangeNotifier {
   /// 重命名列；与其他列标题冲突时拒绝，返回错误文案。
   Future<String?> renameColumn(String columnId, String title) async {
     return _withBoardMutation(() async {
-    if (board == null) return '看板未就绪';
-    final normalized = title.trim();
-    if (normalized.isEmpty) return '列名称不能为空';
-    if (board!.columns.any(
-      (col) => col.id != columnId && col.title == normalized,
-    )) {
-      return '已存在同名列「$normalized」';
-    }
-    final columns = board!.columns.map((col) {
-      if (col.id != columnId) return col;
-      return col.copyWith(title: normalized);
-    }).toList();
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-    return null;
-      });
+      if (board == null) return '看板未就绪';
+      final normalized = title.trim();
+      if (normalized.isEmpty) return '列名称不能为空';
+      if (board!.columns.any(
+        (col) => col.id != columnId && col.title == normalized,
+      )) {
+        return '已存在同名列「$normalized」';
+      }
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        return col.copyWith(title: normalized);
+      }).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      return null;
+    });
   }
 
   Future<void> reorderColumn(int oldIndex, int newIndex) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
-    final columns = [...board!.columns];
-    if (oldIndex < 0 ||
-        oldIndex >= columns.length ||
-        newIndex < 0 ||
-        newIndex > columns.length) {
-      return;
-    }
+      if (board == null) return;
+      final columns = [...board!.columns];
+      if (oldIndex < 0 ||
+          oldIndex >= columns.length ||
+          newIndex < 0 ||
+          newIndex > columns.length) {
+        return;
+      }
 
-    var targetIndex = newIndex;
-    if (targetIndex > oldIndex) targetIndex -= 1;
-    if (targetIndex == oldIndex) return;
+      var targetIndex = newIndex;
+      if (targetIndex > oldIndex) targetIndex -= 1;
+      if (targetIndex == oldIndex) return;
 
-    final moved = columns.removeAt(oldIndex);
-    columns.insert(targetIndex, moved);
-    final reordered = [
-      for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
-    ];
-    await _persistAndSync(_bump(board!.copyWith(columns: reordered)));
-      });
+      final moved = columns.removeAt(oldIndex);
+      columns.insert(targetIndex, moved);
+      final reordered = [
+        for (var i = 0; i < columns.length; i++) columns[i].copyWith(order: i),
+      ];
+      await _persistAndSync(_bump(board!.copyWith(columns: reordered)));
+    });
   }
 
   Future<void> updateColumnColor(String columnId, int? colorValue) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
-    final columns = board!.columns.map((col) {
-      if (col.id != columnId) return col;
-      return col.copyWith(colorValue: colorValue);
-    }).toList();
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-      });
+      if (board == null) return;
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        return col.copyWith(colorValue: colorValue);
+      }).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    });
   }
 
   Future<void> saveAppSettings(AppSettings settings) async {
@@ -1778,21 +1785,32 @@ class BoardController extends ChangeNotifier {
     }
   }
 
+  /// 设置自动时间点备份目录；传入 `null` 时恢复应用默认目录。
+  Future<void> setAutoBackupDirectory(String? path) async {
+    final normalized = path?.trim();
+    final directory =
+        normalized == null || normalized.isEmpty ? null : normalized;
+    await _backupHistoryStore.setDirectoryPath(directory);
+    await saveAppSettings(
+      appSettings.copyWith(autoBackupDirectory: directory),
+    );
+  }
+
   Future<String> addCustomLabel(String name, int colorValue) async {
     return _withBoardMutation(() async {
-    final key = const Uuid().v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final label = SharedLabel(
-      id: key,
-      name: name,
-      colorValue: colorValue,
-      updatedAt: now,
-    );
-    await _persistSharedContent(
-      sharedContent.copyWith(labels: [...sharedContent.labels, label]),
-    );
-    return key;
-      });
+      final key = const Uuid().v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final label = SharedLabel(
+        id: key,
+        name: name,
+        colorValue: colorValue,
+        updatedAt: now,
+      );
+      await _persistSharedContent(
+        sharedContent.copyWith(labels: [...sharedContent.labels, label]),
+      );
+      return key;
+    });
   }
 
   /// 修改自定义标签名称或颜色；标签 key 不变，已有卡片引用无需迁移。
@@ -1802,51 +1820,52 @@ class BoardController extends ChangeNotifier {
     required int colorValue,
   }) async {
     return _withBoardMutation(() async {
-    final normalized = name.trim();
-    if (normalized.isEmpty) return false;
-    final index =
-        appSettings.customLabels.indexWhere((label) => label.key == key);
-    if (index < 0) return false;
+      final normalized = name.trim();
+      if (normalized.isEmpty) return false;
+      final index =
+          appSettings.customLabels.indexWhere((label) => label.key == key);
+      if (index < 0) return false;
 
-    final labels = [...sharedContent.labels];
-    final sharedIndex = labels.indexWhere((label) => label.id == key);
-    if (sharedIndex < 0) return false;
-    labels[sharedIndex] = SharedLabel(
-      id: key,
-      name: normalized,
-      colorValue: colorValue,
-      updatedAt: DateTime.now().millisecondsSinceEpoch,
-    );
-    await _persistSharedContent(sharedContent.copyWith(labels: labels));
-    return true;
-      });
+      final labels = [...sharedContent.labels];
+      final sharedIndex = labels.indexWhere((label) => label.id == key);
+      if (sharedIndex < 0) return false;
+      labels[sharedIndex] = SharedLabel(
+        id: key,
+        name: normalized,
+        colorValue: colorValue,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+      await _persistSharedContent(sharedContent.copyWith(labels: labels));
+      return true;
+    });
   }
 
   Future<void> removeCustomLabel(String key) async {
     return _withBoardMutation(() async {
-    final label = appSettings.customLabels.cast<KanbanLabel?>().firstWhere(
-          (item) => item!.key == key,
-          orElse: () => null,
-        );
-    if (label == null) return;
+      final label = appSettings.customLabels.cast<KanbanLabel?>().firstWhere(
+            (item) => item!.key == key,
+            orElse: () => null,
+          );
+      if (label == null) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    labelTrash = [
-      TrashItem.forCustomLabel(
-        trashId: const Uuid().v4(),
-        deletedAt: now,
-        label: label,
-      ),
-      ...labelTrash,
-    ];
-    await _persistLabelTrash();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      labelTrash = [
+        TrashItem.forCustomLabel(
+          trashId: const Uuid().v4(),
+          deletedAt: now,
+          label: label,
+        ),
+        ...labelTrash,
+      ];
+      await _persistLabelTrash();
 
-    await _persistSharedContent(
-      sharedContent.copyWith(
-        labels: sharedContent.labels.where((label) => label.id != key).toList(),
-      ),
-    );
-      });
+      await _persistSharedContent(
+        sharedContent.copyWith(
+          labels:
+              sharedContent.labels.where((label) => label.id != key).toList(),
+        ),
+      );
+    });
   }
 
   Future<void> setProjectSortMode(ProjectSortMode mode) async {
@@ -1874,81 +1893,82 @@ class BoardController extends ChangeNotifier {
 
   Future<void> deleteColumn(String columnId) async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return;
-    final column = board!.columns.cast<KanbanColumn?>().firstWhere(
-          (col) => col!.id == columnId,
-          orElse: () => null,
-        );
-    if (column == null) return;
+      if (board == null || activeProjectId == null) return;
+      final column = board!.columns.cast<KanbanColumn?>().firstWhere(
+            (col) => col!.id == columnId,
+            orElse: () => null,
+          );
+      if (column == null) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await _addToActiveProjectTrash(
-      TrashItem.forColumn(
-        trashId: const Uuid().v4(),
-        deletedAt: now,
-        projectId: activeProjectId!,
-        projectTitle: board!.title,
-        column: column,
-      ),
-    );
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _addToActiveProjectTrash(
+        TrashItem.forColumn(
+          trashId: const Uuid().v4(),
+          deletedAt: now,
+          projectId: activeProjectId!,
+          projectTitle: board!.title,
+          column: column,
+        ),
+      );
 
-    final columns = board!.columns.where((col) => col.id != columnId).toList();
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-      });
+      final columns =
+          board!.columns.where((col) => col.id != columnId).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    });
   }
 
   Future<bool> deleteProject(String projectId) async {
     return _withBoardMutation(() async {
-    if (manifest == null || manifest!.projects.length <= 1) return false;
+      if (manifest == null || manifest!.projects.length <= 1) return false;
 
-    final entry = manifest!.findById(projectId);
-    if (entry == null) return false;
+      final entry = manifest!.findById(projectId);
+      if (entry == null) return false;
 
-    final projectBoard = projectId == activeProjectId
-        ? board!
-        : await _repository.loadBoard(projectId);
-    final settings = projectId == activeProjectId
-        ? projectSettings
-        : await _repository.loadProjectSettings(projectId);
-    final trash = projectTrashes[projectId] ??
-        await _repository.loadProjectTrash(projectId);
+      final projectBoard = projectId == activeProjectId
+          ? board!
+          : await _repository.loadBoard(projectId);
+      final settings = projectId == activeProjectId
+          ? projectSettings
+          : await _repository.loadProjectSettings(projectId);
+      final trash = projectTrashes[projectId] ??
+          await _repository.loadProjectTrash(projectId);
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    appTrash = appTrash.bump().copyWith(
-      items: [
-        TrashItem.forProject(
-          trashId: const Uuid().v4(),
-          deletedAt: now,
-          entry: entry,
-          board: projectBoard,
-          settings: settings,
-          projectTrash: trash,
-        ),
-        ...appTrash.items,
-      ],
-    );
+      final now = DateTime.now().millisecondsSinceEpoch;
+      appTrash = appTrash.bump().copyWith(
+        items: [
+          TrashItem.forProject(
+            trashId: const Uuid().v4(),
+            deletedAt: now,
+            entry: entry,
+            board: projectBoard,
+            settings: settings,
+            projectTrash: trash,
+          ),
+          ...appTrash.items,
+        ],
+      );
 
-    final remaining =
-        manifest!.projects.where((p) => p.id != projectId).toList();
-    manifest = manifest!.bump().copyWith(projects: remaining);
-    await _repository.saveManifest(manifest!);
-    projectTrashes.remove(projectId);
-    projectThemeIds.remove(projectId);
+      final remaining =
+          manifest!.projects.where((p) => p.id != projectId).toList();
+      manifest = manifest!.bump().copyWith(projects: remaining);
+      await _repository.saveManifest(manifest!);
+      projectTrashes.remove(projectId);
+      projectThemeIds.remove(projectId);
 
-    if (activeProjectId == projectId) {
-      final next = remaining.first;
-      activeProjectId = next.id;
-      await _repository.saveActiveProjectId(next.id);
-      board = await _repository.loadBoard(next.id);
-      projectSettings = await _repository.loadProjectSettings(next.id);
-      projectThemeIds[next.id] = projectSettings.themeId;
-      activeProjectTrash = projectTrashes[next.id] ?? TrashBin.empty;
-    }
+      if (activeProjectId == projectId) {
+        final next = remaining.first;
+        activeProjectId = next.id;
+        await _repository.saveActiveProjectId(next.id);
+        board = await _repository.loadBoard(next.id);
+        projectSettings = await _repository.loadProjectSettings(next.id);
+        projectThemeIds[next.id] = projectSettings.themeId;
+        activeProjectTrash = projectTrashes[next.id] ?? TrashBin.empty;
+      }
 
-    await _persistAppTrash();
-    notifyListeners();
-    return true;
-      });
+      await _persistAppTrash();
+      notifyListeners();
+      return true;
+    });
   }
 
   /// 后台删除项目，但绝不删除或切换界面当前项目。
@@ -1970,64 +1990,65 @@ class BoardController extends ChangeNotifier {
     List<String> labels = const [],
   }) async {
     return _withBoardMutation(() async {
-    if (board == null) return null;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final cardId = const Uuid().v4();
-    var added = false;
-    final columns = board!.columns.map((col) {
-      if (col.id != columnId) return col;
-      added = true;
-      final cards = [
-        ...col.cards,
-        KanbanCard(
-          id: cardId,
-          title: title,
-          description: description,
-          order: col.cards.length,
-          createdAt: now,
-          updatedAt: now,
-          dueDate: dueDate,
-          reminderAt: reminderAt,
-          recurrence: recurrence,
-          recurrenceSeriesId: recurrence == CardRecurrence.none ? null : cardId,
-          priority: priority,
-          labels: labels,
-        ),
-      ];
-      return col.copyWith(cards: cards);
-    }).toList();
-    if (!added) return null;
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-    String? trashId;
-    _pushUndo(
-      '新建「$title」',
-      () async {
-        trashId = await deleteCard(columnId, cardId);
-      },
-      redo: () async {
-        final id = trashId;
-        if (id == null) return;
-        final error = await restoreTrashItem(id);
-        if (error != null) throw StateError(error);
-      },
-    );
-    if (reminderAt != null && activeProjectId != null) {
-      await _scheduleCardReminder(
-        projectId: activeProjectId!,
-        columnId: columnId,
-        card: columns
-            .firstWhere((column) => column.id == columnId)
-            .cards
-            .firstWhere((card) => card.id == cardId),
+      if (board == null) return null;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final cardId = const Uuid().v4();
+      var added = false;
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        added = true;
+        final cards = [
+          ...col.cards,
+          KanbanCard(
+            id: cardId,
+            title: title,
+            description: description,
+            order: col.cards.length,
+            createdAt: now,
+            updatedAt: now,
+            dueDate: dueDate,
+            reminderAt: reminderAt,
+            recurrence: recurrence,
+            recurrenceSeriesId:
+                recurrence == CardRecurrence.none ? null : cardId,
+            priority: priority,
+            labels: labels,
+          ),
+        ];
+        return col.copyWith(cards: cards);
+      }).toList();
+      if (!added) return null;
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      String? trashId;
+      _pushUndo(
+        '新建「$title」',
+        () async {
+          trashId = await deleteCard(columnId, cardId);
+        },
+        redo: () async {
+          final id = trashId;
+          if (id == null) return;
+          final error = await restoreTrashItem(id);
+          if (error != null) throw StateError(error);
+        },
       );
-    }
-    await _recordActivity(
-      entityId: cardId,
-      entityTitle: title,
-      action: ActivityAction.created,
-    );
-    return cardId;
-      });
+      if (reminderAt != null && activeProjectId != null) {
+        await _scheduleCardReminder(
+          projectId: activeProjectId!,
+          columnId: columnId,
+          card: columns
+              .firstWhere((column) => column.id == columnId)
+              .cards
+              .firstWhere((card) => card.id == cardId),
+        );
+      }
+      await _recordActivity(
+        entityId: cardId,
+        entityTitle: title,
+        action: ActivityAction.created,
+      );
+      return cardId;
+    });
   }
 
   Future<void> updateCard(
@@ -2070,58 +2091,58 @@ class BoardController extends ChangeNotifier {
     bool clearColor = false,
   }) async {
     return _withBoardMutation(() async {
-    if (board == null) return null;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final original = board!.columns
-        .where((column) => column.id == columnId)
-        .expand((column) => column.cards)
-        .where((card) => card.id == cardId)
-        .firstOrNull;
-    if (original == null) return null;
-    final nextVerificationFeedback =
-        verificationFeedback ?? original.verificationFeedback;
-    if (completed == true &&
-        hasIncompleteVerificationFeedback(nextVerificationFeedback)) {
-      return incompleteVerificationFeedbackBlocksProgressMessage;
-    }
-    // 未完成反馈是流程权威状态：即使旧数据已完成，也必须恢复未完成态。
-    final nextCompleted = hasIncompleteVerificationFeedback(
-      nextVerificationFeedback,
-    )
-        ? false
-        : (completed ?? original.completed);
-    final columns = board!.columns.map((col) {
-      if (col.id != columnId) return col;
-      final cards = col.cards.map((card) {
-        if (card.id != cardId) return card;
-        return card.copyWith(
-          title: title ?? card.title,
-          description:
-              clearDescription ? null : (description ?? card.description),
-          completed: nextCompleted,
-          completedAt: nextCompleted ? (card.completedAt ?? now) : null,
-          dueDate: clearDueDate ? null : (dueDate ?? card.dueDate),
-          reminderAt: clearReminder ? null : (reminderAt ?? card.reminderAt),
-          recurrence: recurrence ?? card.recurrence,
-          recurrenceInterval: recurrenceInterval ?? card.recurrenceInterval,
-          priority: priority ?? card.priority,
-          labels: labels ?? card.labels,
-          checklist: checklist ?? card.checklist,
-          verificationFeedback: nextVerificationFeedback,
-          attachments: attachments ?? card.attachments,
-          links: links ?? card.links,
-          blockedByIds: blockedByIds ?? card.blockedByIds,
-          relatedIds: relatedIds ?? card.relatedIds,
-          colorValue: clearColor ? null : (colorValue ?? card.colorValue),
-          updatedAt: now,
-        );
+      if (board == null) return null;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final original = board!.columns
+          .where((column) => column.id == columnId)
+          .expand((column) => column.cards)
+          .where((card) => card.id == cardId)
+          .firstOrNull;
+      if (original == null) return null;
+      final nextVerificationFeedback =
+          verificationFeedback ?? original.verificationFeedback;
+      if (completed == true &&
+          hasIncompleteVerificationFeedback(nextVerificationFeedback)) {
+        return incompleteVerificationFeedbackBlocksProgressMessage;
+      }
+      // 未完成反馈是流程权威状态：即使旧数据已完成，也必须恢复未完成态。
+      final nextCompleted = hasIncompleteVerificationFeedback(
+        nextVerificationFeedback,
+      )
+          ? false
+          : (completed ?? original.completed);
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        final cards = col.cards.map((card) {
+          if (card.id != cardId) return card;
+          return card.copyWith(
+            title: title ?? card.title,
+            description:
+                clearDescription ? null : (description ?? card.description),
+            completed: nextCompleted,
+            completedAt: nextCompleted ? (card.completedAt ?? now) : null,
+            dueDate: clearDueDate ? null : (dueDate ?? card.dueDate),
+            reminderAt: clearReminder ? null : (reminderAt ?? card.reminderAt),
+            recurrence: recurrence ?? card.recurrence,
+            recurrenceInterval: recurrenceInterval ?? card.recurrenceInterval,
+            priority: priority ?? card.priority,
+            labels: labels ?? card.labels,
+            checklist: checklist ?? card.checklist,
+            verificationFeedback: nextVerificationFeedback,
+            attachments: attachments ?? card.attachments,
+            links: links ?? card.links,
+            blockedByIds: blockedByIds ?? card.blockedByIds,
+            relatedIds: relatedIds ?? card.relatedIds,
+            colorValue: clearColor ? null : (colorValue ?? card.colorValue),
+            updatedAt: now,
+          );
+        }).toList();
+        return col.copyWith(cards: cards);
       }).toList();
-      return col.copyWith(cards: cards);
-    }).toList();
-    await _persistAndSync(
-      _bump(board!.copyWith(columns: _normalizeOrders(columns))),
-    );
-    if (!_applyingAutomation) {
+      await _persistAndSync(
+        _bump(board!.copyWith(columns: _normalizeOrders(columns))),
+      );
+      if (!_applyingAutomation) {
         final restoredTitle = title ?? original.title;
         final restoredDescription =
             clearDescription ? null : (description ?? original.description);
@@ -2148,117 +2169,117 @@ class BoardController extends ChangeNotifier {
           '编辑「${original.title}」',
           () async {
             final error = await updateCardFull(
-            columnId,
-            cardId,
-            title: original.title,
-            description: original.description,
-            clearDescription: original.description == null,
-            completed: original.completed,
-            dueDate: original.dueDate,
-            clearDueDate: original.dueDate == null,
-            reminderAt: original.reminderAt,
-            clearReminder: original.reminderAt == null,
-            recurrence: original.recurrence,
-            recurrenceInterval: original.recurrenceInterval,
-            priority: original.priority,
-            labels: original.labels,
-            checklist: original.checklist,
-            verificationFeedback: original.verificationFeedback,
-            attachments: original.attachments,
-            links: original.links,
-            blockedByIds: original.blockedByIds,
-            relatedIds: original.relatedIds,
-            colorValue: original.colorValue,
-            clearColor: original.colorValue == null,
+              columnId,
+              cardId,
+              title: original.title,
+              description: original.description,
+              clearDescription: original.description == null,
+              completed: original.completed,
+              dueDate: original.dueDate,
+              clearDueDate: original.dueDate == null,
+              reminderAt: original.reminderAt,
+              clearReminder: original.reminderAt == null,
+              recurrence: original.recurrence,
+              recurrenceInterval: original.recurrenceInterval,
+              priority: original.priority,
+              labels: original.labels,
+              checklist: original.checklist,
+              verificationFeedback: original.verificationFeedback,
+              attachments: original.attachments,
+              links: original.links,
+              blockedByIds: original.blockedByIds,
+              relatedIds: original.relatedIds,
+              colorValue: original.colorValue,
+              clearColor: original.colorValue == null,
             );
             if (error != null) throw StateError(error);
           },
           redo: () async {
             final error = await updateCardFull(
-            columnId,
-            cardId,
-            title: restoredTitle,
-            description: restoredDescription,
-            clearDescription: restoredDescription == null,
-            completed: restoredCompleted,
-            dueDate: restoredDueDate,
-            clearDueDate: restoredDueDate == null,
-            reminderAt: restoredReminderAt,
-            clearReminder: restoredReminderAt == null,
-            recurrence: restoredRecurrence,
-            recurrenceInterval: restoredRecurrenceInterval,
-            priority: restoredPriority,
-            labels: restoredLabels,
-            checklist: restoredChecklist,
-            verificationFeedback: restoredVerification,
-            attachments: restoredAttachments,
-            links: restoredLinks,
-            blockedByIds: restoredBlockedBy,
-            relatedIds: restoredRelated,
-            colorValue: restoredColor,
-            clearColor: restoredColor == null,
+              columnId,
+              cardId,
+              title: restoredTitle,
+              description: restoredDescription,
+              clearDescription: restoredDescription == null,
+              completed: restoredCompleted,
+              dueDate: restoredDueDate,
+              clearDueDate: restoredDueDate == null,
+              reminderAt: restoredReminderAt,
+              clearReminder: restoredReminderAt == null,
+              recurrence: restoredRecurrence,
+              recurrenceInterval: restoredRecurrenceInterval,
+              priority: restoredPriority,
+              labels: restoredLabels,
+              checklist: restoredChecklist,
+              verificationFeedback: restoredVerification,
+              attachments: restoredAttachments,
+              links: restoredLinks,
+              blockedByIds: restoredBlockedBy,
+              relatedIds: restoredRelated,
+              colorValue: restoredColor,
+              clearColor: restoredColor == null,
             );
             if (error != null) throw StateError(error);
           },
         );
-    }
-    await _recordActivity(
-      entityId: cardId,
-      entityTitle: title ?? original.title,
-      action: ActivityAction.updated,
-    );
-    await _rescheduleReminders();
+      }
+      await _recordActivity(
+        entityId: cardId,
+        entityTitle: title ?? original.title,
+        action: ActivityAction.updated,
+      );
+      await _rescheduleReminders();
 
-    if (!_applyingAutomation) {
-      final updated = board!.columns
-          .where((column) => column.id == columnId)
-          .expand((column) => column.cards)
-          .where((card) => card.id == cardId)
-          .firstOrNull;
-      if (updated != null) {
-        if (nextCompleted && !original.completed) {
-          await _runAutomations(
-            _automationEngine.effectsForCompleted(
-              rules: projectSettings.automationRules,
-              card: updated,
-            ),
-            columnId: columnId,
-            cardId: cardId,
-          );
+      if (!_applyingAutomation) {
+        final updated = board!.columns
+            .where((column) => column.id == columnId)
+            .expand((column) => column.cards)
+            .where((card) => card.id == cardId)
+            .firstOrNull;
+        if (updated != null) {
+          if (nextCompleted && !original.completed) {
+            await _runAutomations(
+              _automationEngine.effectsForCompleted(
+                rules: projectSettings.automationRules,
+                card: updated,
+              ),
+              columnId: columnId,
+              cardId: cardId,
+            );
+          }
+          final checklistChanged = checklist != null;
+          if (checklistChanged) {
+            await _runAutomations(
+              _automationEngine.effectsForChecklistAllDone(
+                rules: projectSettings.automationRules,
+                card: updated,
+              ),
+              columnId: columnId,
+              cardId: cardId,
+            );
+          }
         }
-        final checklistChanged = checklist != null;
-        if (checklistChanged) {
-          await _runAutomations(
-            _automationEngine.effectsForChecklistAllDone(
-              rules: projectSettings.automationRules,
-              card: updated,
-            ),
-            columnId: columnId,
+      }
+      if (hasIncompleteVerificationFeedback(nextVerificationFeedback)) {
+        await ensureReworkColumn();
+        final currentColumnId = findColumnIdForCard(cardId);
+        final currentBoard = board;
+        final rework = currentBoard == null
+            ? null
+            : findReworkColumn(currentBoard.columns);
+        if (currentColumnId != null &&
+            rework != null &&
+            currentColumnId != rework.id) {
+          await moveCard(
             cardId: cardId,
+            fromColumnId: currentColumnId,
+            toColumnId: rework.id,
+            toDisplayIndex: rework.cards.length,
           );
         }
       }
-    }
-    if (hasIncompleteVerificationFeedback(nextVerificationFeedback)) {
-      await ensureReworkColumn();
-      final currentColumnId = findColumnIdForCard(cardId);
-      final currentBoard = board;
-      final rework = currentBoard == null
-          ? null
-          : findReworkColumn(currentBoard.columns);
-      if (currentColumnId != null &&
-          rework != null &&
-          currentColumnId != rework.id) {
-        await moveCard(
-          cardId: cardId,
-          fromColumnId: currentColumnId,
-          toColumnId: rework.id,
-          toDisplayIndex: rework.cards.length,
-        );
-      }
-    }
-    return null;
-      });
+      return null;
+    });
   }
 
   /// 按卡片 id 查找所属列。
@@ -2364,19 +2385,19 @@ class BoardController extends ChangeNotifier {
     CardImageAddSource source,
   ) async {
     return _withBoardMutation(() async {
-    final picked = await pickImagesForSource(source);
-    if (picked.isEmpty) {
-      return switch (source) {
-        CardImageAddSource.clipboard => '剪贴板中没有图片',
-        _ => null,
-      };
-    }
-    return addCardAttachments(
-      columnId,
-      cardId,
-      pickImages: () async => picked,
-    );
-      });
+      final picked = await pickImagesForSource(source);
+      if (picked.isEmpty) {
+        return switch (source) {
+          CardImageAddSource.clipboard => '剪贴板中没有图片',
+          _ => null,
+        };
+      }
+      return addCardAttachments(
+        columnId,
+        cardId,
+        pickImages: () async => picked,
+      );
+    });
   }
 
   Future<String?> addCardAttachments(
@@ -2385,61 +2406,63 @@ class BoardController extends ChangeNotifier {
     Future<List<PickedImageBytes>> Function()? pickImages,
   }) async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return '看板未就绪';
+      if (board == null || activeProjectId == null) return '看板未就绪';
 
-    KanbanCard? target;
-    for (final col in board!.columns) {
-      if (col.id != columnId) continue;
-      for (final card in col.cards) {
-        if (card.id == cardId) {
-          target = card;
-          break;
+      KanbanCard? target;
+      for (final col in board!.columns) {
+        if (col.id != columnId) continue;
+        for (final card in col.cards) {
+          if (card.id == cardId) {
+            target = card;
+            break;
+          }
         }
       }
-    }
-    if (target == null) return '卡片不存在';
+      if (target == null) return '卡片不存在';
 
-    final store = attachmentStore;
-    if (store == null) return '当前平台不支持图片附件';
+      final store = attachmentStore;
+      if (store == null) return '当前平台不支持图片附件';
 
-    final remaining = KanbanCard.maxAttachments - target.attachments.length;
-    if (remaining <= 0) {
-      return '每张卡片最多 ${KanbanCard.maxAttachments} 张图片';
-    }
-
-    final picked = await (pickImages ?? pickCardImagesFromGallery)();
-    if (picked.isEmpty) return null;
-
-    final nextAttachments = [...target.attachments];
-    var nextOrder = nextAttachments.isEmpty
-        ? 0
-        : nextAttachments.map((a) => a.order).reduce((a, b) => a > b ? a : b) +
-            1;
-
-    try {
-      for (final image in picked) {
-        if (nextAttachments.length >= KanbanCard.maxAttachments) break;
-        final attachment = await store.saveImage(
-          projectId: activeProjectId!,
-          sourceBytes: image.bytes,
-          fileName: image.fileName,
-          order: nextOrder,
-        );
-        nextAttachments.add(attachment);
-        nextOrder++;
+      final remaining = KanbanCard.maxAttachments - target.attachments.length;
+      if (remaining <= 0) {
+        return '每张卡片最多 ${KanbanCard.maxAttachments} 张图片';
       }
-    } catch (e) {
-      return '图片处理失败';
-    }
 
-    await updateCardFull(
-      columnId,
-      cardId,
-      attachments: nextAttachments,
-    );
-    await refreshMissingAttachments();
-    return null;
-      });
+      final picked = await (pickImages ?? pickCardImagesFromGallery)();
+      if (picked.isEmpty) return null;
+
+      final nextAttachments = [...target.attachments];
+      var nextOrder = nextAttachments.isEmpty
+          ? 0
+          : nextAttachments
+                  .map((a) => a.order)
+                  .reduce((a, b) => a > b ? a : b) +
+              1;
+
+      try {
+        for (final image in picked) {
+          if (nextAttachments.length >= KanbanCard.maxAttachments) break;
+          final attachment = await store.saveImage(
+            projectId: activeProjectId!,
+            sourceBytes: image.bytes,
+            fileName: image.fileName,
+            order: nextOrder,
+          );
+          nextAttachments.add(attachment);
+          nextOrder++;
+        }
+      } catch (e) {
+        return '图片处理失败';
+      }
+
+      await updateCardFull(
+        columnId,
+        cardId,
+        attachments: nextAttachments,
+      );
+      await refreshMissingAttachments();
+      return null;
+    });
   }
 
   Future<void> reorderCardAttachments(
@@ -2448,12 +2471,12 @@ class BoardController extends ChangeNotifier {
     List<CardAttachment> ordered,
   ) async {
     return _withBoardMutation(() async {
-    await updateCardFull(
-      columnId,
-      cardId,
-      attachments: _reindexAttachments(ordered),
-    );
-      });
+      await updateCardFull(
+        columnId,
+        cardId,
+        attachments: _reindexAttachments(ordered),
+      );
+    });
   }
 
   Future<void> removeCardAttachment(
@@ -2462,37 +2485,37 @@ class BoardController extends ChangeNotifier {
     String attachmentId,
   ) async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return;
+      if (board == null || activeProjectId == null) return;
 
-    KanbanCard? target;
-    for (final col in board!.columns) {
-      if (col.id != columnId) continue;
-      for (final card in col.cards) {
-        if (card.id == cardId) {
-          target = card;
-          break;
+      KanbanCard? target;
+      for (final col in board!.columns) {
+        if (col.id != columnId) continue;
+        for (final card in col.cards) {
+          if (card.id == cardId) {
+            target = card;
+            break;
+          }
         }
       }
-    }
-    if (target == null) return;
+      if (target == null) return;
 
-    final nextAttachments = target.attachments
-        .where((attachment) => attachment.id != attachmentId)
-        .toList();
-    if (nextAttachments.length == target.attachments.length) return;
+      final nextAttachments = target.attachments
+          .where((attachment) => attachment.id != attachmentId)
+          .toList();
+      if (nextAttachments.length == target.attachments.length) return;
 
-    await updateCardFull(
-      columnId,
-      cardId,
-      attachments: _reindexAttachments(nextAttachments),
-    );
-    await attachmentStore?.deleteAttachment(
-      projectId: activeProjectId!,
-      attachmentId: attachmentId,
-    );
-    await refreshMissingAttachments();
-    _markWorkspaceChanged();
-      });
+      await updateCardFull(
+        columnId,
+        cardId,
+        attachments: _reindexAttachments(nextAttachments),
+      );
+      await attachmentStore?.deleteAttachment(
+        projectId: activeProjectId!,
+        attachmentId: attachmentId,
+      );
+      await refreshMissingAttachments();
+      _markWorkspaceChanged();
+    });
   }
 
   Future<void> setCardAttachmentCover(
@@ -2501,41 +2524,42 @@ class BoardController extends ChangeNotifier {
     String attachmentId,
   ) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
+      if (board == null) return;
 
-    KanbanCard? target;
-    for (final col in board!.columns) {
-      if (col.id != columnId) continue;
-      for (final card in col.cards) {
-        if (card.id == cardId) {
-          target = card;
-          break;
+      KanbanCard? target;
+      for (final col in board!.columns) {
+        if (col.id != columnId) continue;
+        for (final card in col.cards) {
+          if (card.id == cardId) {
+            target = card;
+            break;
+          }
         }
       }
-    }
-    if (target == null) return;
+      if (target == null) return;
 
-    final selected = target.attachments
-        .where((attachment) => attachment.id == attachmentId)
-        .toList();
-    if (selected.isEmpty) return;
+      final selected = target.attachments
+          .where((attachment) => attachment.id == attachmentId)
+          .toList();
+      if (selected.isEmpty) return;
 
-    final others = target.attachments
-        .where((attachment) => attachment.id != attachmentId)
-        .toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
+      final others = target.attachments
+          .where((attachment) => attachment.id != attachmentId)
+          .toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
 
-    final nextAttachments = [
-      selected.first.copyWith(order: 0),
-      for (var i = 0; i < others.length; i++) others[i].copyWith(order: i + 1),
-    ];
+      final nextAttachments = [
+        selected.first.copyWith(order: 0),
+        for (var i = 0; i < others.length; i++)
+          others[i].copyWith(order: i + 1),
+      ];
 
-    await updateCardFull(
-      columnId,
-      cardId,
-      attachments: nextAttachments,
-    );
-      });
+      await updateCardFull(
+        columnId,
+        cardId,
+        attachments: nextAttachments,
+      );
+    });
   }
 
   List<CardAttachment> _reindexAttachments(List<CardAttachment> attachments) {
@@ -2548,80 +2572,80 @@ class BoardController extends ChangeNotifier {
   /// 切换完成状态。仍有未完成验证反馈时拒绝完成并返回原因。
   Future<String?> toggleCardCompleted(String columnId, String cardId) async {
     return _withBoardMutation(() async {
-    if (board == null) return null;
-    final current = board!;
-    KanbanCard? target;
-    for (final col in current.columns) {
-      for (final card in col.cards) {
-        if (col.id == columnId && card.id == cardId) {
-          target = card;
-          break;
+      if (board == null) return null;
+      final current = board!;
+      KanbanCard? target;
+      for (final col in current.columns) {
+        for (final card in col.cards) {
+          if (col.id == columnId && card.id == cardId) {
+            target = card;
+            break;
+          }
         }
       }
-    }
-    if (target == null) return null;
+      if (target == null) return null;
 
-    final nextCompleted = !target.completed;
-    if (nextCompleted &&
-        hasIncompleteVerificationFeedback(target.verificationFeedback)) {
-      return incompleteVerificationFeedbackBlocksProgressMessage;
-    }
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final doneColumn = _findDoneColumn(current);
+      final nextCompleted = !target.completed;
+      if (nextCompleted &&
+          hasIncompleteVerificationFeedback(target.verificationFeedback)) {
+        return incompleteVerificationFeedbackBlocksProgressMessage;
+      }
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final doneColumn = _findDoneColumn(current);
 
-    if (nextCompleted && doneColumn != null && doneColumn.id != columnId) {
-      final moveError = await moveCard(
-        cardId: cardId,
-        fromColumnId: columnId,
-        toColumnId: doneColumn.id,
-        toDisplayIndex: doneColumn.cards.length,
-        completed: true,
-        completedAt: now,
-      );
-      if (moveError != null) return moveError;
-      await _afterCompletionChanged(
-        target,
-        sourceColumnId: columnId,
-        completed: true,
-      );
-      return null;
-    }
-
-    if (!nextCompleted && doneColumn?.id == columnId) {
-      final todoColumn = current.columns.cast<KanbanColumn?>().firstWhere(
-            (col) => col!.id == 'todo',
-            orElse: () =>
-                current.columns.isNotEmpty ? current.columns.first : null,
-          );
-      if (todoColumn != null && todoColumn.id != columnId) {
+      if (nextCompleted && doneColumn != null && doneColumn.id != columnId) {
         final moveError = await moveCard(
           cardId: cardId,
           fromColumnId: columnId,
-          toColumnId: todoColumn.id,
-          toDisplayIndex: todoColumn.cards.length,
-          completed: false,
-          completedAt: null,
+          toColumnId: doneColumn.id,
+          toDisplayIndex: doneColumn.cards.length,
+          completed: true,
+          completedAt: now,
         );
         if (moveError != null) return moveError;
         await _afterCompletionChanged(
           target,
           sourceColumnId: columnId,
-          completed: false,
+          completed: true,
         );
         return null;
       }
-    }
 
-    final updateError =
-        await updateCardFull(columnId, cardId, completed: nextCompleted);
-    if (updateError != null) return updateError;
-    await _afterCompletionChanged(
-      target,
-      sourceColumnId: columnId,
-      completed: nextCompleted,
-    );
-    return null;
-      });
+      if (!nextCompleted && doneColumn?.id == columnId) {
+        final todoColumn = current.columns.cast<KanbanColumn?>().firstWhere(
+              (col) => col!.id == 'todo',
+              orElse: () =>
+                  current.columns.isNotEmpty ? current.columns.first : null,
+            );
+        if (todoColumn != null && todoColumn.id != columnId) {
+          final moveError = await moveCard(
+            cardId: cardId,
+            fromColumnId: columnId,
+            toColumnId: todoColumn.id,
+            toDisplayIndex: todoColumn.cards.length,
+            completed: false,
+            completedAt: null,
+          );
+          if (moveError != null) return moveError;
+          await _afterCompletionChanged(
+            target,
+            sourceColumnId: columnId,
+            completed: false,
+          );
+          return null;
+        }
+      }
+
+      final updateError =
+          await updateCardFull(columnId, cardId, completed: nextCompleted);
+      if (updateError != null) return updateError;
+      await _afterCompletionChanged(
+        target,
+        sourceColumnId: columnId,
+        completed: nextCompleted,
+      );
+      return null;
+    });
   }
 
   Future<void> _afterCompletionChanged(
@@ -2665,62 +2689,62 @@ class BoardController extends ChangeNotifier {
 
   Future<String?> deleteCard(String columnId, String cardId) async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return null;
+      if (board == null || activeProjectId == null) return null;
 
-    KanbanCard? target;
-    KanbanColumn? sourceColumn;
-    for (final col in board!.columns) {
-      if (col.id != columnId) continue;
-      sourceColumn = col;
-      for (final card in col.cards) {
-        if (card.id == cardId) {
-          target = card;
-          break;
+      KanbanCard? target;
+      KanbanColumn? sourceColumn;
+      for (final col in board!.columns) {
+        if (col.id != columnId) continue;
+        sourceColumn = col;
+        for (final card in col.cards) {
+          if (card.id == cardId) {
+            target = card;
+            break;
+          }
         }
       }
-    }
-    if (target == null || sourceColumn == null) return null;
+      if (target == null || sourceColumn == null) return null;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final trashId = const Uuid().v4();
-    await _addToActiveProjectTrash(
-      TrashItem.forCard(
-        trashId: trashId,
-        deletedAt: now,
-        projectId: activeProjectId!,
-        projectTitle: board!.title,
-        columnId: columnId,
-        columnTitle: sourceColumn.title,
-        card: target,
-      ),
-    );
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final trashId = const Uuid().v4();
+      await _addToActiveProjectTrash(
+        TrashItem.forCard(
+          trashId: trashId,
+          deletedAt: now,
+          projectId: activeProjectId!,
+          projectTitle: board!.title,
+          columnId: columnId,
+          columnTitle: sourceColumn.title,
+          card: target,
+        ),
+      );
 
-    final columns = board!.columns.map((col) {
-      if (col.id != columnId) return col;
-      final cards = col.cards.where((c) => c.id != cardId).toList();
-      return col.copyWith(cards: cards);
-    }).toList();
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-    await _reminderScheduler.cancel(cardId);
-    var currentTrashId = trashId;
-    _pushUndo(
-      '删除「${target.title}」',
-      () async {
-        final error = await restoreTrashItem(currentTrashId);
-        if (error != null) throw StateError(error);
-      },
-      redo: () async {
-        final id = await deleteCard(columnId, cardId);
-        if (id != null) currentTrashId = id;
-      },
-    );
-    await _recordActivity(
-      entityId: cardId,
-      entityTitle: target.title,
-      action: ActivityAction.deleted,
-    );
-    return trashId;
-      });
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        final cards = col.cards.where((c) => c.id != cardId).toList();
+        return col.copyWith(cards: cards);
+      }).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      await _reminderScheduler.cancel(cardId);
+      var currentTrashId = trashId;
+      _pushUndo(
+        '删除「${target.title}」',
+        () async {
+          final error = await restoreTrashItem(currentTrashId);
+          if (error != null) throw StateError(error);
+        },
+        redo: () async {
+          final id = await deleteCard(columnId, cardId);
+          if (id != null) currentTrashId = id;
+        },
+      );
+      await _recordActivity(
+        entityId: cardId,
+        entityTitle: target.title,
+        action: ActivityAction.deleted,
+      );
+      return trashId;
+    });
   }
 
   /// 将卡片从源项目转移到目标项目（默认落入目标「待办」列）。
@@ -3014,75 +3038,75 @@ class BoardController extends ChangeNotifier {
   /// 返回实际清空的卡片数量。
   Future<int> clearDoneColumnCards(String columnId) async {
     return _withBoardMutation(() async {
-    if (board == null || activeProjectId == null) return 0;
+      if (board == null || activeProjectId == null) return 0;
 
-    final doneColumn = _findDoneColumn(board!);
-    if (doneColumn == null || doneColumn.id != columnId) return 0;
-    if (doneColumn.cards.isEmpty) return 0;
+      final doneColumn = _findDoneColumn(board!);
+      if (doneColumn == null || doneColumn.id != columnId) return 0;
+      if (doneColumn.cards.isEmpty) return 0;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final trashIds = <String>[];
-    final newTrashItems = <TrashItem>[];
-    final clearedCards = List<KanbanCard>.from(doneColumn.cards);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final trashIds = <String>[];
+      final newTrashItems = <TrashItem>[];
+      final clearedCards = List<KanbanCard>.from(doneColumn.cards);
 
-    for (final card in clearedCards) {
-      final trashId = const Uuid().v4();
-      trashIds.add(trashId);
-      newTrashItems.add(
-        TrashItem.forCard(
-          trashId: trashId,
-          deletedAt: now,
-          projectId: activeProjectId!,
-          projectTitle: board!.title,
-          columnId: columnId,
-          columnTitle: doneColumn.title,
-          card: card,
-        ),
+      for (final card in clearedCards) {
+        final trashId = const Uuid().v4();
+        trashIds.add(trashId);
+        newTrashItems.add(
+          TrashItem.forCard(
+            trashId: trashId,
+            deletedAt: now,
+            projectId: activeProjectId!,
+            projectTitle: board!.title,
+            columnId: columnId,
+            columnTitle: doneColumn.title,
+            card: card,
+          ),
+        );
+      }
+
+      activeProjectTrash = activeProjectTrash.bump().copyWith(
+        items: [...newTrashItems, ...activeProjectTrash.items],
       );
-    }
+      await _persistActiveProjectTrash();
 
-    activeProjectTrash = activeProjectTrash.bump().copyWith(
-      items: [...newTrashItems, ...activeProjectTrash.items],
-    );
-    await _persistActiveProjectTrash();
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        return col.copyWith(cards: const <KanbanCard>[]);
+      }).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
 
-    final columns = board!.columns.map((col) {
-      if (col.id != columnId) return col;
-      return col.copyWith(cards: const <KanbanCard>[]);
-    }).toList();
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+      for (final card in clearedCards) {
+        await _reminderScheduler.cancel(card.id);
+        await _recordActivity(
+          entityId: card.id,
+          entityTitle: card.title,
+          action: ActivityAction.deleted,
+        );
+      }
 
-    for (final card in clearedCards) {
-      await _reminderScheduler.cancel(card.id);
-      await _recordActivity(
-        entityId: card.id,
-        entityTitle: card.title,
-        action: ActivityAction.deleted,
+      final count = clearedCards.length;
+      final clearedCardIds = [for (final card in clearedCards) card.id];
+      var currentTrashIds = List<String>.from(trashIds);
+      _pushUndo(
+        '清空「${doneColumn.title}」($count)',
+        () async {
+          for (final trashId in currentTrashIds.reversed) {
+            final error = await restoreTrashItem(trashId);
+            if (error != null) throw StateError(error);
+          }
+        },
+        redo: () async {
+          final nextIds = <String>[];
+          for (final cardId in clearedCardIds) {
+            final id = await deleteCard(columnId, cardId);
+            if (id != null) nextIds.add(id);
+          }
+          currentTrashIds = nextIds;
+        },
       );
-    }
-
-    final count = clearedCards.length;
-    final clearedCardIds = [for (final card in clearedCards) card.id];
-    var currentTrashIds = List<String>.from(trashIds);
-    _pushUndo(
-      '清空「${doneColumn.title}」($count)',
-      () async {
-        for (final trashId in currentTrashIds.reversed) {
-          final error = await restoreTrashItem(trashId);
-          if (error != null) throw StateError(error);
-        }
-      },
-      redo: () async {
-        final nextIds = <String>[];
-        for (final cardId in clearedCardIds) {
-          final id = await deleteCard(columnId, cardId);
-          if (id != null) nextIds.add(id);
-        }
-        currentTrashIds = nextIds;
-      },
-    );
-    return count;
-      });
+      return count;
+    });
   }
 
   /// 扫描全部项目，将超过保留天数的已完成列卡片移入回收站。
@@ -3204,289 +3228,292 @@ class BoardController extends ChangeNotifier {
     int? completedAt,
   }) async {
     return _withBoardMutation(() async {
-    if (board == null) return null;
+      if (board == null) return null;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final fromPrefs = columnPreferencesFor(fromColumnId);
-    final toPrefs = columnPreferencesFor(toColumnId);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final fromPrefs = columnPreferencesFor(fromColumnId);
+      final toPrefs = columnPreferencesFor(toColumnId);
 
-    if (fromColumnId == toColumnId &&
-        fromPrefs.sortMode != CardSortMode.custom) {
-      return null;
-    }
+      if (fromColumnId == toColumnId &&
+          fromPrefs.sortMode != CardSortMode.custom) {
+        return null;
+      }
 
-    KanbanCard? moving;
-    final stripped = board!.columns.map((col) {
-      if (col.id != fromColumnId) return col;
-      final remaining = <KanbanCard>[];
-      for (final card in col.cards) {
-        if (card.id == cardId) {
-          moving = card;
-        } else {
-          remaining.add(card);
+      KanbanCard? moving;
+      final stripped = board!.columns.map((col) {
+        if (col.id != fromColumnId) return col;
+        final remaining = <KanbanCard>[];
+        for (final card in col.cards) {
+          if (card.id == cardId) {
+            moving = card;
+          } else {
+            remaining.add(card);
+          }
         }
-      }
-      return col.copyWith(cards: remaining);
-    }).toList();
+        return col.copyWith(cards: remaining);
+      }).toList();
 
-    if (moving == null) return null;
+      if (moving == null) return null;
 
-    final reworkRejection = reworkMoveRejectionReason(
-      fromColumnId: fromColumnId,
-      toColumnId: toColumnId,
-      verificationFeedback: moving!.verificationFeedback,
-      columns: board!.columns,
-      doneColumnName: projectSettings.doneColumnName,
-    );
-    if (reworkRejection != null) return reworkRejection;
-
-    final doneColumn = _findDoneColumn(board!);
-    var cardToInsert = moving!;
-    if (completed != null) {
-      cardToInsert = cardToInsert.copyWith(
-        completed: completed,
-        completedAt: completedAt,
-        updatedAt: now,
+      final reworkRejection = reworkMoveRejectionReason(
+        fromColumnId: fromColumnId,
+        toColumnId: toColumnId,
+        verificationFeedback: moving!.verificationFeedback,
+        columns: board!.columns,
+        doneColumnName: projectSettings.doneColumnName,
       );
-    } else if (doneColumn != null) {
-      final markDone = toColumnId == doneColumn.id;
-      cardToInsert = cardToInsert.copyWith(
-        completed: markDone,
-        completedAt: markDone ? (cardToInsert.completedAt ?? now) : null,
-        updatedAt: now,
-      );
-    } else {
-      cardToInsert = cardToInsert.copyWith(updatedAt: now);
-    }
+      if (reworkRejection != null) return reworkRejection;
 
-    var nextPinnedByColumn = Map<String, ColumnCardPreferences>.from(
-      projectSettings.columnPreferences,
-    );
-
-    if (fromColumnId != toColumnId) {
-      final fromPinned = [...fromPrefs.pinnedCardIds]..remove(cardId);
-      nextPinnedByColumn[fromColumnId] =
-          fromPrefs.copyWith(pinnedCardIds: fromPinned);
-    }
-
-    final inserted = stripped.map((col) {
-      if (col.id != toColumnId) return col;
-
-      if (toPrefs.sortMode != CardSortMode.custom) {
-        final cards = [
-          ...col.cards,
-          cardToInsert.copyWith(order: col.cards.length),
-        ];
-        return col.copyWith(cards: cards);
-      }
-
-      final targetPinned = nextPinnedByColumn[toColumnId]?.pinnedCardIds ??
-          toPrefs.pinnedCardIds;
-      final pinnedCount = pinnedCardCount(targetPinned, col.cards);
-      var display = sortColumnCards(
-        col.cards,
-        sortMode: CardSortMode.custom,
-        pinnedCardIds: targetPinned,
-      );
-
-      var index = toDisplayIndex.clamp(0, display.length);
-      final movingPinned = targetPinned.contains(cardId);
-      if (movingPinned) {
-        index = index.clamp(0, pinnedCount);
+      final doneColumn = _findDoneColumn(board!);
+      var cardToInsert = moving!;
+      if (completed != null) {
+        cardToInsert = cardToInsert.copyWith(
+          completed: completed,
+          completedAt: completedAt,
+          updatedAt: now,
+        );
+      } else if (doneColumn != null) {
+        final markDone = toColumnId == doneColumn.id;
+        cardToInsert = cardToInsert.copyWith(
+          completed: markDone,
+          completedAt: markDone ? (cardToInsert.completedAt ?? now) : null,
+          updatedAt: now,
+        );
       } else {
-        index = index.clamp(pinnedCount, display.length);
+        cardToInsert = cardToInsert.copyWith(updatedAt: now);
       }
 
-      if (fromColumnId == toColumnId) {
-        final before = sortColumnCards(
-          [...col.cards, cardToInsert],
+      var nextPinnedByColumn = Map<String, ColumnCardPreferences>.from(
+        projectSettings.columnPreferences,
+      );
+
+      if (fromColumnId != toColumnId) {
+        final fromPinned = [...fromPrefs.pinnedCardIds]..remove(cardId);
+        nextPinnedByColumn[fromColumnId] =
+            fromPrefs.copyWith(pinnedCardIds: fromPinned);
+      }
+
+      final inserted = stripped.map((col) {
+        if (col.id != toColumnId) return col;
+
+        if (toPrefs.sortMode != CardSortMode.custom) {
+          final cards = [
+            ...col.cards,
+            cardToInsert.copyWith(order: col.cards.length),
+          ];
+          return col.copyWith(cards: cards);
+        }
+
+        final targetPinned = nextPinnedByColumn[toColumnId]?.pinnedCardIds ??
+            toPrefs.pinnedCardIds;
+        final pinnedCount = pinnedCardCount(targetPinned, col.cards);
+        var display = sortColumnCards(
+          col.cards,
           sortMode: CardSortMode.custom,
           pinnedCardIds: targetPinned,
         );
-        final oldIndex = before.indexWhere((card) => card.id == cardId);
-        if (oldIndex >= 0 && oldIndex < index) {
-          index -= 1;
+
+        var index = toDisplayIndex.clamp(0, display.length);
+        final movingPinned = targetPinned.contains(cardId);
+        if (movingPinned) {
+          index = index.clamp(0, pinnedCount);
+        } else {
+          index = index.clamp(pinnedCount, display.length);
         }
-      }
 
-      display = [...display]..insert(index, cardToInsert);
-      final derived = _pinnedAndOrdersFromDisplay(display, targetPinned);
-      final cards = _applyPinnedAndOrders(
-        [
-          ...col.cards.where((card) => card.id != cardId),
-          cardToInsert,
-        ],
-        derived.orders,
-        now,
-        cardId,
-      );
-
-      nextPinnedByColumn[toColumnId] =
-          (nextPinnedByColumn[toColumnId] ?? toPrefs)
-              .copyWith(pinnedCardIds: derived.pinned);
-
-      return col.copyWith(cards: cards);
-    }).toList();
-
-    if (nextPinnedByColumn != projectSettings.columnPreferences) {
-      projectSettings = projectSettings.bump().copyWith(
-            columnPreferences: nextPinnedByColumn,
+        if (fromColumnId == toColumnId) {
+          final before = sortColumnCards(
+            [...col.cards, cardToInsert],
+            sortMode: CardSortMode.custom,
+            pinnedCardIds: targetPinned,
           );
-      if (activeProjectId != null) {
-        await _repository.saveProjectSettings(
-            activeProjectId!, projectSettings);
-      }
-    }
+          final oldIndex = before.indexWhere((card) => card.id == cardId);
+          if (oldIndex >= 0 && oldIndex < index) {
+            index -= 1;
+          }
+        }
 
-    await _persistAndSync(
-      _bump(board!.copyWith(columns: _normalizeOrders(inserted))),
-    );
-    if (fromColumnId != toColumnId) {
-      final originalIndex = moving!.order;
-      if (!_applyingAutomation) {
-        _pushUndo(
-          '移动「${moving!.title}」',
-          () => moveCard(
-            cardId: cardId,
-            fromColumnId: toColumnId,
-            toColumnId: fromColumnId,
-            toDisplayIndex: originalIndex,
-          ),
-          redo: () => moveCard(
-            cardId: cardId,
-            fromColumnId: fromColumnId,
-            toColumnId: toColumnId,
-            toDisplayIndex: toDisplayIndex,
-            completed: completed,
-            completedAt: completedAt,
-          ),
+        display = [...display]..insert(index, cardToInsert);
+        final derived = _pinnedAndOrdersFromDisplay(display, targetPinned);
+        final cards = _applyPinnedAndOrders(
+          [
+            ...col.cards.where((card) => card.id != cardId),
+            cardToInsert,
+          ],
+          derived.orders,
+          now,
+          cardId,
         );
-      }
-      await _recordActivity(
-        entityId: cardId,
-        entityTitle: moving!.title,
-        action: ActivityAction.moved,
-        details: {
-          'fromColumnId': fromColumnId,
-          'toColumnId': toColumnId,
-        },
-      );
-      if (!_applyingAutomation) {
-        final card = findCardById(cardId);
-        if (card != null) {
-          await _runAutomations(
-            _automationEngine.effectsForMove(
-              rules: projectSettings.automationRules,
-              toColumnId: toColumnId,
-              card: card,
-            ),
-            columnId: toColumnId,
-            cardId: cardId,
-          );
+
+        nextPinnedByColumn[toColumnId] =
+            (nextPinnedByColumn[toColumnId] ?? toPrefs)
+                .copyWith(pinnedCardIds: derived.pinned);
+
+        return col.copyWith(cards: cards);
+      }).toList();
+
+      if (nextPinnedByColumn != projectSettings.columnPreferences) {
+        projectSettings = projectSettings.bump().copyWith(
+              columnPreferences: nextPinnedByColumn,
+            );
+        if (activeProjectId != null) {
+          await _repository.saveProjectSettings(
+              activeProjectId!, projectSettings);
         }
       }
-    }
-    return null;
-      });
+
+      await _persistAndSync(
+        _bump(board!.copyWith(columns: _normalizeOrders(inserted))),
+      );
+      if (fromColumnId != toColumnId) {
+        final originalIndex = moving!.order;
+        if (!_applyingAutomation) {
+          _pushUndo(
+            '移动「${moving!.title}」',
+            () => moveCard(
+              cardId: cardId,
+              fromColumnId: toColumnId,
+              toColumnId: fromColumnId,
+              toDisplayIndex: originalIndex,
+            ),
+            redo: () => moveCard(
+              cardId: cardId,
+              fromColumnId: fromColumnId,
+              toColumnId: toColumnId,
+              toDisplayIndex: toDisplayIndex,
+              completed: completed,
+              completedAt: completedAt,
+            ),
+          );
+        }
+        await _recordActivity(
+          entityId: cardId,
+          entityTitle: moving!.title,
+          action: ActivityAction.moved,
+          details: {
+            'fromColumnId': fromColumnId,
+            'toColumnId': toColumnId,
+          },
+        );
+        if (!_applyingAutomation) {
+          final card = findCardById(cardId);
+          if (card != null) {
+            await _runAutomations(
+              _automationEngine.effectsForMove(
+                rules: projectSettings.automationRules,
+                toColumnId: toColumnId,
+                card: card,
+              ),
+              columnId: toColumnId,
+              cardId: cardId,
+            );
+          }
+        }
+      }
+      return null;
+    });
   }
 
   Future<String?> restoreTrashItem(String trashItemId) async {
     return _withBoardMutation(() async {
-    final labelIndex = labelTrash.indexWhere((item) => item.id == trashItemId);
-    if (labelIndex >= 0) {
-      return _restoreLabel(labelTrash[labelIndex]);
-    }
-
-    final appIndex =
-        appTrash.items.indexWhere((item) => item.id == trashItemId);
-    if (appIndex >= 0) {
-      return _restoreProject(appTrash.items[appIndex]);
-    }
-
-    for (final entry in projectTrashes.entries) {
-      final index =
-          entry.value.items.indexWhere((item) => item.id == trashItemId);
-      if (index >= 0) {
-        return _restoreProjectItem(entry.key, entry.value.items[index]);
+      final labelIndex =
+          labelTrash.indexWhere((item) => item.id == trashItemId);
+      if (labelIndex >= 0) {
+        return _restoreLabel(labelTrash[labelIndex]);
       }
-    }
 
-    return '未找到该回收项';
-      });
+      final appIndex =
+          appTrash.items.indexWhere((item) => item.id == trashItemId);
+      if (appIndex >= 0) {
+        return _restoreProject(appTrash.items[appIndex]);
+      }
+
+      for (final entry in projectTrashes.entries) {
+        final index =
+            entry.value.items.indexWhere((item) => item.id == trashItemId);
+        if (index >= 0) {
+          return _restoreProjectItem(entry.key, entry.value.items[index]);
+        }
+      }
+
+      return '未找到该回收项';
+    });
   }
 
   Future<void> permanentlyDeleteTrashItem(String trashItemId) async {
     return _withBoardMutation(() async {
-    TrashItem? target;
-    for (final item in allTrashItems) {
-      if (item.id == trashItemId) {
-        target = item;
-        break;
+      TrashItem? target;
+      for (final item in allTrashItems) {
+        if (item.id == trashItemId) {
+          target = item;
+          break;
+        }
       }
-    }
 
-    if (labelTrash.any((item) => item.id == trashItemId)) {
-      labelTrash = labelTrash.where((item) => item.id != trashItemId).toList();
-      await _persistLabelTrash();
-      notifyListeners();
-      return;
-    }
+      if (labelTrash.any((item) => item.id == trashItemId)) {
+        labelTrash =
+            labelTrash.where((item) => item.id != trashItemId).toList();
+        await _persistLabelTrash();
+        notifyListeners();
+        return;
+      }
 
-    if (appTrash.items.any((item) => item.id == trashItemId)) {
-      if (target != null) {
-        await _deleteTrashItemAttachments(target);
+      if (appTrash.items.any((item) => item.id == trashItemId)) {
+        if (target != null) {
+          await _deleteTrashItemAttachments(target);
+        }
+        appTrash = appTrash.bump().copyWith(
+              items: appTrash.items
+                  .where((item) => item.id != trashItemId)
+                  .toList(),
+            );
+        await _persistAppTrash();
+        return;
       }
-      appTrash = appTrash.bump().copyWith(
-            items:
-                appTrash.items.where((item) => item.id != trashItemId).toList(),
-          );
-      await _persistAppTrash();
-      return;
-    }
 
-    for (final entry in projectTrashes.entries.toList()) {
-      if (!entry.value.items.any((item) => item.id == trashItemId)) continue;
-      if (target != null) {
-        await _deleteTrashItemAttachments(target);
+      for (final entry in projectTrashes.entries.toList()) {
+        if (!entry.value.items.any((item) => item.id == trashItemId)) continue;
+        if (target != null) {
+          await _deleteTrashItemAttachments(target);
+        }
+        final next = entry.value.bump().copyWith(
+              items: entry.value.items
+                  .where((item) => item.id != trashItemId)
+                  .toList(),
+            );
+        projectTrashes[entry.key] = next;
+        if (entry.key == activeProjectId) {
+          activeProjectTrash = next;
+        }
+        await _repository.saveProjectTrash(entry.key, next);
+        notifyListeners();
+        _markWorkspaceChanged();
+        return;
       }
-      final next = entry.value.bump().copyWith(
-            items: entry.value.items
-                .where((item) => item.id != trashItemId)
-                .toList(),
-          );
-      projectTrashes[entry.key] = next;
-      if (entry.key == activeProjectId) {
-        activeProjectTrash = next;
-      }
-      await _repository.saveProjectTrash(entry.key, next);
-      notifyListeners();
-      _markWorkspaceChanged();
-      return;
-    }
-      });
+    });
   }
 
   Future<void> emptyTrash() async {
     return _withBoardMutation(() async {
-    for (final item in allTrashItems) {
-      await _deleteTrashItemAttachments(item);
-    }
+      for (final item in allTrashItems) {
+        await _deleteTrashItemAttachments(item);
+      }
 
-    activeProjectTrash = TrashBin.empty.bump();
-    appTrash = TrashBin.empty.bump();
-    labelTrash = const [];
+      activeProjectTrash = TrashBin.empty.bump();
+      appTrash = TrashBin.empty.bump();
+      labelTrash = const [];
 
-    for (final entry in manifest?.projects ?? const <ProjectEntry>[]) {
-      final empty = TrashBin.empty.bump();
-      projectTrashes[entry.id] = empty;
-      await _repository.saveProjectTrash(entry.id, empty);
-    }
+      for (final entry in manifest?.projects ?? const <ProjectEntry>[]) {
+        final empty = TrashBin.empty.bump();
+        projectTrashes[entry.id] = empty;
+        await _repository.saveProjectTrash(entry.id, empty);
+      }
 
-    await _repository.saveAppTrash(appTrash);
-    await _persistLabelTrash();
-    notifyListeners();
-    _markWorkspaceChanged();
-      });
+      await _repository.saveAppTrash(appTrash);
+      await _persistLabelTrash();
+      notifyListeners();
+      _markWorkspaceChanged();
+    });
   }
 
   Future<String?> _restoreLabel(TrashItem item) async {
@@ -3744,96 +3771,96 @@ class BoardController extends ChangeNotifier {
     CardConflictResolution resolution,
   ) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
+      if (board == null) return;
 
-    KanbanCard? target;
-    String? targetColumnId;
-    for (final col in board!.columns) {
-      for (final card in col.cards) {
-        if (card.id == cardId) {
-          target = card;
-          targetColumnId = col.id;
-          break;
+      KanbanCard? target;
+      String? targetColumnId;
+      for (final col in board!.columns) {
+        for (final card in col.cards) {
+          if (card.id == cardId) {
+            target = card;
+            targetColumnId = col.id;
+            break;
+          }
         }
+        if (target != null) break;
       }
-      if (target != null) break;
-    }
-    if (target == null || !target.hasConflict) return;
+      if (target == null || !target.hasConflict) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    late KanbanCard resolved;
-    var resolvedColumnId = targetColumnId!;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      late KanbanCard resolved;
+      var resolvedColumnId = targetColumnId!;
 
-    if (resolution == CardConflictResolution.keepPrimary) {
-      if (target.conflictDeleted) {
-        // note: 主侧是「仍存在」版本，选择主侧即保留卡片并清除删除冲突
-        resolved = target.copyWith(clearConflict: true, updatedAt: now);
+      if (resolution == CardConflictResolution.keepPrimary) {
+        if (target.conflictDeleted) {
+          // note: 主侧是「仍存在」版本，选择主侧即保留卡片并清除删除冲突
+          resolved = target.copyWith(clearConflict: true, updatedAt: now);
+        } else {
+          resolved = target.copyWith(clearConflict: true, updatedAt: now);
+        }
       } else {
-        resolved = target.copyWith(clearConflict: true, updatedAt: now);
+        if (target.conflictDeleted) {
+          // 选择另一侧删除意图与普通删除一致，保留可恢复快照。
+          await deleteCard(targetColumnId, cardId);
+          return;
+        }
+        final other = target.conflictSide;
+        if (other == null) return;
+        resolved = other.copyWith(clearConflict: true, updatedAt: now);
+        resolvedColumnId = target.conflictColumnId ?? targetColumnId;
       }
-    } else {
-      if (target.conflictDeleted) {
-        // 选择另一侧删除意图与普通删除一致，保留可恢复快照。
-        await deleteCard(targetColumnId, cardId);
-        return;
-      }
-      final other = target.conflictSide;
-      if (other == null) return;
-      resolved = other.copyWith(clearConflict: true, updatedAt: now);
-      resolvedColumnId = target.conflictColumnId ?? targetColumnId;
-    }
 
-    var columns = board!.columns.map((col) {
-      return col.copyWith(
-        cards: col.cards.where((c) => c.id != cardId).toList(),
-      );
-    }).toList();
-
-    columns = columns.map((col) {
-      if (col.id != resolvedColumnId) return col;
-      final cards = [...col.cards, resolved]
-        ..sort((a, b) => a.order.compareTo(b.order));
-      return col.copyWith(cards: cards);
-    }).toList();
-
-    // 若目标列不存在，放回原列
-    if (!columns.any((c) => c.id == resolvedColumnId)) {
-      columns = columns.map((col) {
-        if (col.id != targetColumnId) return col;
-        return col.copyWith(cards: [...col.cards, resolved]);
+      var columns = board!.columns.map((col) {
+        return col.copyWith(
+          cards: col.cards.where((c) => c.id != cardId).toList(),
+        );
       }).toList();
-    }
 
-    await _persistAndSync(_bump(board!.copyWith(columns: columns)));
-      });
+      columns = columns.map((col) {
+        if (col.id != resolvedColumnId) return col;
+        final cards = [...col.cards, resolved]
+          ..sort((a, b) => a.order.compareTo(b.order));
+        return col.copyWith(cards: cards);
+      }).toList();
+
+      // 若目标列不存在，放回原列
+      if (!columns.any((c) => c.id == resolvedColumnId)) {
+        columns = columns.map((col) {
+          if (col.id != targetColumnId) return col;
+          return col.copyWith(cards: [...col.cards, resolved]);
+        }).toList();
+      }
+
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+    });
   }
 
   Future<void> resolveSettingsConflict({required bool keepPrimary}) async {
     return _withBoardMutation(() async {
-    if (!projectSettings.hasConflict) return;
-    final next = keepPrimary
-        ? projectSettings.copyWith(clearConflictSide: true)
-        : (projectSettings.conflictSide ?? projectSettings)
-            .copyWith(clearConflictSide: true);
-    await _persistProjectSettings(next.bump());
-      });
+      if (!projectSettings.hasConflict) return;
+      final next = keepPrimary
+          ? projectSettings.copyWith(clearConflictSide: true)
+          : (projectSettings.conflictSide ?? projectSettings)
+              .copyWith(clearConflictSide: true);
+      await _persistProjectSettings(next.bump());
+    });
   }
 
   /// 解决当前看板的标题冲突。
   Future<void> resolveBoardTitleConflict({required bool keepPrimary}) async {
     return _withBoardMutation(() async {
-    final current = board;
-    if (current == null || current.conflictTitle == null) return;
-    final title = keepPrimary ? current.title : current.conflictTitle!;
-    await _persistAndSync(
-      _bump(
-        current.copyWith(
-          title: title,
-          clearConflictTitle: true,
+      final current = board;
+      if (current == null || current.conflictTitle == null) return;
+      final title = keepPrimary ? current.title : current.conflictTitle!;
+      await _persistAndSync(
+        _bump(
+          current.copyWith(
+            title: title,
+            clearConflictTitle: true,
+          ),
         ),
-      ),
-    );
-      });
+      );
+    });
   }
 
   /// 解决项目清单条目的标题冲突。
@@ -3842,25 +3869,25 @@ class BoardController extends ChangeNotifier {
     required bool keepPrimary,
   }) async {
     return _withBoardMutation(() async {
-    final entry = manifest?.findById(projectId);
-    if (entry == null || entry.conflictTitle == null) return;
+      final entry = manifest?.findById(projectId);
+      if (entry == null || entry.conflictTitle == null) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final title = keepPrimary ? entry.title : entry.conflictTitle!;
-    final projects = manifest!.projects.map((project) {
-      if (project.id != projectId) return project;
-      return project.copyWith(
-        title: title,
-        updatedAt: now,
-        revision: project.revision + 1,
-        clearConflictTitle: true,
-      );
-    }).toList();
-    manifest = manifest!.bump().copyWith(projects: projects);
-    await _repository.saveManifest(manifest!);
-    notifyListeners();
-    _markWorkspaceChanged();
-      });
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final title = keepPrimary ? entry.title : entry.conflictTitle!;
+      final projects = manifest!.projects.map((project) {
+        if (project.id != projectId) return project;
+        return project.copyWith(
+          title: title,
+          updatedAt: now,
+          revision: project.revision + 1,
+          clearConflictTitle: true,
+        );
+      }).toList();
+      manifest = manifest!.bump().copyWith(projects: projects);
+      await _repository.saveManifest(manifest!);
+      notifyListeners();
+      _markWorkspaceChanged();
+    });
   }
 
   /// 解决项目删改冲突：保留项目或确认删除
@@ -3869,29 +3896,29 @@ class BoardController extends ChangeNotifier {
     required bool keepProject,
   }) async {
     return _withBoardMutation(() async {
-    if (manifest == null) return;
-    final entry = manifest!.findById(projectId);
-    if (entry == null || !entry.conflictDeleted) return;
+      if (manifest == null) return;
+      final entry = manifest!.findById(projectId);
+      if (entry == null || !entry.conflictDeleted) return;
 
-    if (!keepProject) {
-      await deleteProject(projectId);
-      return;
-    }
+      if (!keepProject) {
+        await deleteProject(projectId);
+        return;
+      }
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final projects = manifest!.projects.map((p) {
-      if (p.id != projectId) return p;
-      return p.copyWith(
-        clearConflict: true,
-        updatedAt: now,
-        revision: p.revision + 1,
-      );
-    }).toList();
-    manifest = manifest!.bump().copyWith(projects: projects);
-    await _repository.saveManifest(manifest!);
-    notifyListeners();
-    _markWorkspaceChanged();
-      });
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final projects = manifest!.projects.map((p) {
+        if (p.id != projectId) return p;
+        return p.copyWith(
+          clearConflict: true,
+          updatedAt: now,
+          revision: p.revision + 1,
+        );
+      }).toList();
+      manifest = manifest!.bump().copyWith(projects: projects);
+      await _repository.saveManifest(manifest!);
+      notifyListeners();
+      _markWorkspaceChanged();
+    });
   }
 
   @override

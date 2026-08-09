@@ -100,9 +100,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   bool _persisted = false;
   bool _skipPersist = false;
   late bool _previewMarkdown;
+
   /// 备注全屏放大打开时，详情页暂不挂载备注 TextField，避免双绑定同一 controller。
   bool _descriptionExpanded = false;
   bool _resolvingConflict = false;
+
   /// 解决成功后即使弹层未立刻关闭，也隐藏冲突条（widget.card 是打开时快照）。
   bool _conflictResolved = false;
 
@@ -149,14 +151,17 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _boardController.addListener(_onBoardChanged);
   }
 
-  /// 当前卡是否仍在「待验证」列（用于完成按钮显隐）。
-  bool get _isInVerifyColumn {
+  /// 当前卡是否仍在「已完成」列（已完成卡不再展示重复的完成操作）。
+  bool get _isInDoneColumn {
     final board = _boardController.board;
     if (board == null) return false;
     final columnId =
-        _boardController.findColumnIdForCard(widget.card.id) ??
-            widget.columnId;
-    return isVerifyColumnId(columnId: columnId, columns: board.columns);
+        _boardController.findColumnIdForCard(widget.card.id) ?? widget.columnId;
+    return isDoneColumnId(
+      columnId: columnId,
+      columns: board.columns,
+      doneColumnName: _boardController.projectSettings.doneColumnName,
+    );
   }
 
   @override
@@ -406,8 +411,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final board = _boardController.board;
     if (board == null) return;
     final fromColumnId =
-        _boardController.findColumnIdForCard(widget.card.id) ??
-            widget.columnId;
+        _boardController.findColumnIdForCard(widget.card.id) ?? widget.columnId;
     final toColumnId = targetReworkColumnIdIfNeeded(
       originalFeedback: widget.card.verificationFeedback,
       nextFeedback: nextFeedback,
@@ -447,8 +451,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     // 完成移动由 toggle/move 负责；避免 _persist 仅打勾却仍留在待验证。
     final markCompletedLocally = _completed;
     _completed = widget.card.completed;
-    final feedbackSnapshot =
-        List<ChecklistItem>.from(_verificationFeedback);
+    final feedbackSnapshot = List<ChecklistItem>.from(_verificationFeedback);
     try {
       await _persist();
     } catch (error) {
@@ -474,8 +477,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _completed = true;
 
     final columnId =
-        _boardController.findColumnIdForCard(widget.card.id) ??
-            widget.columnId;
+        _boardController.findColumnIdForCard(widget.card.id) ?? widget.columnId;
     final live = _boardController.findCardById(widget.card.id);
     if (live == null) {
       if (mounted) _closeWithoutPersist();
@@ -505,8 +507,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
               toColumnId: done.id,
               toDisplayIndex: done.cards.length,
               completed: true,
-              completedAt: live.completedAt ??
-                  DateTime.now().millisecondsSinceEpoch,
+              completedAt:
+                  live.completedAt ?? DateTime.now().millisecondsSinceEpoch,
             );
             if (moveError != null) throw StateError(moveError);
           }
@@ -529,8 +531,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final board = _boardController.board;
     if (board == null) return;
     final fromColumnId =
-        _boardController.findColumnIdForCard(widget.card.id) ??
-            widget.columnId;
+        _boardController.findColumnIdForCard(widget.card.id) ?? widget.columnId;
     final toColumnId = targetReworkColumnIdIfIncompleteFeedback(
       feedback: feedback,
       currentColumnId: fromColumnId,
@@ -1194,7 +1195,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   Future<void> _pickAttachments() async {
     if (_attachments.length >= KanbanCard.maxAttachments) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '每张卡片最多 ${KanbanCard.maxAttachments} 张图片');
+      showAppSnackBar(context,
+          message: '每张卡片最多 ${KanbanCard.maxAttachments} 张图片');
       return;
     }
 
@@ -1580,8 +1582,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                       color: Color(_colorValue!),
                                       borderRadius: BorderRadius.circular(6),
                                       border: Border.all(
-                                        color:
-                                            theme.colorScheme.outlineVariant,
+                                        color: theme.colorScheme.outlineVariant,
                                       ),
                                     ),
                                   ),
@@ -1922,8 +1923,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           children: [
                             Text('链接', style: theme.textTheme.titleSmall),
                             const HelpTipIcon(
-                              message:
-                                  '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
+                              message: '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
                             ),
                             const Spacer(),
                             TextButton.icon(
@@ -1965,8 +1965,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               style: theme.textTheme.titleSmall,
                             ),
                             const HelpTipIcon(
-                              message:
-                                  '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
+                              message: '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
                             ),
                             const Spacer(),
                             TextButton.icon(
@@ -2018,8 +2017,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                     return;
                                   }
                                   _safeSetState(
-                                    () =>
-                                        _relatedIds = [..._relatedIds, id],
+                                    () => _relatedIds = [..._relatedIds, id],
                                   );
                                 },
                               ),
@@ -2106,7 +2104,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                           ),
                         ),
-                        if (_isInVerifyColumn) ...[
+                        if (!_isInDoneColumn) ...[
                           const SizedBox(width: 8),
                           FilledButton.icon(
                             key: const ValueKey('card-detail-complete'),
