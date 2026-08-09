@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
@@ -32,6 +33,17 @@ class KanbanApp extends StatefulWidget {
 }
 
 class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  void _dismissWithEscape() {
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+    final isEditingText =
+        focusedContext?.widget is EditableText ||
+        focusedContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+    if (isEditingText) return;
+    unawaited(_navigatorKey.currentState?.maybePop());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -75,6 +87,14 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
           return MaterialApp(
             title: '看板',
             debugShowCheckedModeBanner: false,
+            navigatorKey: _navigatorKey,
+            builder: (context, child) => CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.escape):
+                    _dismissWithEscape,
+              },
+              child: child ?? const SizedBox.shrink(),
+            ),
             theme: buildKanbanTheme(preset, Brightness.light),
             darkTheme: buildKanbanTheme(preset, Brightness.dark),
             themeMode: selected.themeMode,
