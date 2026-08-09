@@ -85,7 +85,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     );
   }
 
-  /// 卡片上下文菜单（完成 / 转移到… / 删除）。
+  /// 卡片上下文菜单（完成 / 复制 / 转移到… / 删除）。
   ///
   /// 触发方式：
   /// - 桌面：右键（secondary tap）
@@ -115,6 +115,10 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
             value: 'complete',
             child: Text('完成'),
           ),
+        const PopupMenuItem<String>(
+          value: 'duplicate',
+          child: Text('复制'),
+        ),
         PopupMenuItem<String>(
           value: 'transfer',
           enabled: canTransfer,
@@ -132,6 +136,8 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     if (!mounted) return;
     if (selected == 'complete') {
       await _completeCardFromMenu();
+    } else if (selected == 'duplicate') {
+      await _duplicateCard();
     } else if (selected == 'transfer') {
       await showTransferCardToProjectFlow(
         context: context,
@@ -141,6 +147,16 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       );
     } else if (selected == 'delete') {
       await _confirmAndDeleteCard();
+    }
+  }
+
+  /// 在当前列创建副本，字段与附件均使用独立标识。
+  Future<void> _duplicateCard() async {
+    final copiedId = await context
+        .read<BoardController>()
+        .duplicateCard(widget.columnId, widget.card.id);
+    if (copiedId == null && mounted) {
+      showAppSnackBar(context, message: '复制失败：卡片不存在');
     }
   }
 

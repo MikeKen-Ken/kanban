@@ -2051,6 +2051,114 @@ class BoardController extends ChangeNotifier {
     });
   }
 
+  /// 在同一列创建一张字段副本；新卡片使用独立的标识、重复系列和附件文件。
+  Future<String?> duplicateCard(String columnId, String cardId) async {
+    return _withBoardMutation(() async {
+      if (board == null) return null;
+      final sourceColumn =
+          board!.columns.where((column) => column.id == columnId).firstOrNull;
+      if (sourceColumn == null) return null;
+      final source =
+          sourceColumn.cards.where((card) => card.id == cardId).firstOrNull;
+      if (source == null) return null;
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final duplicatedId = const Uuid().v4();
+      final copiedAttachments = await _copyCardAttachments(source.attachments);
+      final duplicated = source.copyWith(
+        id: duplicatedId,
+        order: sourceColumn.cards.length,
+        createdAt: now,
+        updatedAt: now,
+        recurrenceSeriesId:
+            source.recurrence == CardRecurrence.none ? null : duplicatedId,
+        checklist: [
+          for (final item in source.checklist)
+            item.copyWith(id: const Uuid().v4()),
+        ],
+        verificationFeedback: [
+          for (final item in source.verificationFeedback)
+            item.copyWith(id: const Uuid().v4()),
+        ],
+        attachments: copiedAttachments,
+        links: [
+          for (final link in source.links)
+            link.copyWith(id: const Uuid().v4(), createdAt: now),
+        ],
+        clearConflict: true,
+      );
+      final columns = board!.columns.map((column) {
+        if (column.id != columnId) return column;
+        return column.copyWith(cards: [...column.cards, duplicated]);
+      }).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+
+      String? trashId;
+      _pushUndo(
+        '复制「${source.title}」',
+        () async {
+          trashId = await deleteCard(columnId, duplicatedId);
+        },
+        redo: () async {
+          final id = trashId;
+          if (id == null) return;
+          final error = await restoreTrashItem(id);
+          if (error != null) throw StateError(error);
+        },
+      );
+      if (duplicated.reminderAt != null && activeProjectId != null) {
+        await _scheduleCardReminder(
+          projectId: activeProjectId!,
+          columnId: columnId,
+          card: duplicated,
+        );
+      }
+      await _recordActivity(
+        entityId: duplicatedId,
+        entityTitle: duplicated.title,
+        action: ActivityAction.created,
+      );
+      await refreshMissingAttachments();
+      return duplicatedId;
+    });
+  }
+
+  /// 为副本生成独立附件，避免删除或同步其中一张卡片时影响原卡片。
+  Future<List<CardAttachment>> _copyCardAttachments(
+    List<CardAttachment> sourceAttachments,
+  ) async {
+    final store = attachmentStore;
+    final projectId = activeProjectId;
+    if (store == null || projectId == null || sourceAttachments.isEmpty) {
+      return const [];
+    }
+
+    final orderedAttachments = [...sourceAttachments]
+      ..sort((a, b) => a.order.compareTo(b.order));
+    final copied = <CardAttachment>[];
+    for (final attachment in orderedAttachments) {
+      try {
+        final bytes = await store.readBytes(
+          projectId: projectId,
+          attachmentId: attachment.id,
+          thumb: false,
+        );
+        if (bytes == null) continue;
+        copied.add(
+          await store.saveImage(
+            projectId: projectId,
+            sourceBytes: bytes,
+            fileName: attachment.fileName,
+            order: copied.length,
+          ),
+        );
+      } catch (error) {
+        debugPrint('复制卡片附件失败：$error');
+      }
+    }
+    return copied;
+  }
+
   Future<void> updateCard(
     String columnId,
     String cardId, {
