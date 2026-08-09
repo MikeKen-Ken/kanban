@@ -338,6 +338,8 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
     'move_card',
     description:
         '将卡片移动到另一列（可改显示位置）。'
+        '仍有未完成验证反馈时不可移入项目设置中的已完成列（列名可自定义，默认「已完成」），'
+        '但可移到进行中、阻塞中等其他列。'
         '省略 projectId 时按 cardId 定位所属项目，不依赖当前激活项目',
     inputSchema: JsonSchema.object(
       properties: {
@@ -403,6 +405,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
     'complete_card',
     description:
         '将卡片标记为完成（会按项目设置移入已完成列）。'
+        '仍有未完成验证反馈时拒绝。'
         '省略 projectId 时按 cardId 定位所属项目',
     inputSchema: JsonSchema.object(
       properties: {

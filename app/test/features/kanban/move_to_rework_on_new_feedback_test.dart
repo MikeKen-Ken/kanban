@@ -180,7 +180,7 @@ void main() {
       );
     });
 
-    test('有未完成反馈时移入非待返工列 → 拒绝', () {
+    test('有未完成反馈时移入已完成列 → 拒绝', () {
       expect(
         reworkMoveRejectionReason(
           fromColumnId: 'rework',
@@ -194,7 +194,48 @@ void main() {
       );
     });
 
-    test('反馈全部完成后可移入非待返工列', () {
+    test('有未完成反馈时可移入进行中等非完成列', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'doing',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '仍需修复'),
+          ],
+          columns: [
+            ...columns,
+            KanbanColumn(id: 'doing', title: '进行中', order: 3, cards: const []),
+          ],
+        ),
+        isNull,
+      );
+    });
+
+    test('有未完成反馈时移入自定义名已完成列 → 拒绝', () {
+      final customDone = [
+        KanbanColumn(
+          id: KanbanBoard.defaultReworkColumnId,
+          title: KanbanBoard.defaultReworkColumnTitle,
+          order: 0,
+          cards: const [],
+        ),
+        KanbanColumn(id: 'done', title: '交付区', order: 1, cards: const []),
+      ];
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'done',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '仍需修复'),
+          ],
+          columns: customDone,
+          doneColumnName: '交付区',
+        ),
+        incompleteVerificationFeedbackBlocksProgressMessage,
+      );
+    });
+
+    test('反馈全部完成后可移入已完成列', () {
       expect(
         reworkMoveRejectionReason(
           fromColumnId: 'rework',

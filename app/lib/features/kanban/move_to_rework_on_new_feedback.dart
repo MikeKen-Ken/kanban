@@ -1,4 +1,6 @@
+import '../completed_auto_clear/completed_auto_clear.dart';
 import '../../models/kanban_models.dart';
+import '../project/project_settings.dart';
 
 /// 相对打开详情时的快照，[next] 是否含有新增的验证反馈项（按 id）。
 ///
@@ -41,23 +43,30 @@ bool isReworkColumnId({
 /// 无验证反馈时禁止移入「待返工」的提示文案。
 const reworkMoveRequiresFeedbackMessage = '需要添加反馈才可以进入待返工';
 
-/// 仍有验证反馈未完成时，卡片不能离开「待返工」或被标记完成。
+/// 仍有验证反馈未完成时，卡片不能移入已完成列或被标记完成。
 const incompleteVerificationFeedbackBlocksProgressMessage =
-    '请先完成所有验证反馈，卡片才能离开待返工或标记完成';
+    '请先完成所有验证反馈，才能移入已完成列或标记完成';
 
-/// 跨列移入「待返工」且 [verificationFeedback] 为空时返回拒绝原因；否则 `null`。
+/// 跨列移卡门禁：无反馈不可入待返工；有未完成反馈不可入已完成列。
 ///
-/// 同列内重排不校验。已有反馈（含仅已勾选项）允许进入。
+/// 同列内重排不校验。已有反馈（含仅已勾选项）允许进入待返工。
+/// 返工过程中可移到进行中、阻塞中等非完成列；已完成列按 [doneColumnName] 识别
+///（项目设置可自定义，默认「已完成」）。
 /// 不覆盖「新增反馈后自动移入」：该路径会先写入反馈再调用移卡。
 String? reworkMoveRejectionReason({
   required String fromColumnId,
   required String toColumnId,
   required List<ChecklistItem> verificationFeedback,
   required Iterable<KanbanColumn> columns,
+  String doneColumnName = ProjectSettings.defaultDoneColumnName,
 }) {
   if (fromColumnId == toColumnId) return null;
   if (hasIncompleteVerificationFeedback(verificationFeedback) &&
-      !isReworkColumnId(columnId: toColumnId, columns: columns)) {
+      isDoneColumnId(
+        columnId: toColumnId,
+        columns: columns,
+        doneColumnName: doneColumnName,
+      )) {
     return incompleteVerificationFeedbackBlocksProgressMessage;
   }
   if (!isReworkColumnId(columnId: toColumnId, columns: columns)) return null;

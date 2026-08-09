@@ -3236,6 +3236,7 @@ class BoardController extends ChangeNotifier {
       toColumnId: toColumnId,
       verificationFeedback: moving!.verificationFeedback,
       columns: board!.columns,
+      doneColumnName: projectSettings.doneColumnName,
     );
     if (reworkRejection != null) return reworkRejection;
 
