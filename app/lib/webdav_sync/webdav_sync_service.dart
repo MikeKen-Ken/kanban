@@ -1552,52 +1552,54 @@ class WebDavSyncService {
     });
   }
 
-  Future<List<BackupSnapshotInfo>> listRemoteBackupSnapshots() {
-    return _backupMutex.guard(() async {
-      final config = await _loadConfig();
-      if (!config.enabled || !config.isConfigured) return const [];
-      final client = _client(config);
-      if (client == null) return const [];
-      final directory = KanbanPaths.remoteBackupsDir(_remoteBase(config));
-      final result = <BackupSnapshotInfo>[];
-      List<File> entries;
+  /// 列出远端时间点备份。
+  ///
+  /// 不占用 [_backupMutex]，避免上传/清理进行中时设置页永久等待列表。
+  /// 未写完完成标记的目录会被跳过，与上传并发时结果仍安全。
+  Future<List<BackupSnapshotInfo>> listRemoteBackupSnapshots() async {
+    final config = await _loadConfig();
+    if (!config.enabled || !config.isConfigured) return const [];
+    final client = _client(config);
+    if (client == null) return const [];
+    final directory = KanbanPaths.remoteBackupsDir(_remoteBase(config));
+    final result = <BackupSnapshotInfo>[];
+    List<File> entries;
+    try {
+      entries = await client.readDir(directory);
+    } catch (error) {
+      if (_isRemoteNotFound(error)) return const [];
+      rethrow;
+    }
+    for (final file in entries) {
+      if (file.isDir != true) continue;
+      final name = file.name ?? file.path?.split('/').last ?? '';
+      final id = name;
+      if (!_isSafeBackupId(id)) continue;
+      final timestamp = int.tryParse(id.split('-').first);
+      if (timestamp == null) continue;
       try {
-        entries = await client.readDir(directory);
+        final markerBytes = await client.read(
+          KanbanPaths.remoteBackupMarkerPath(_remoteBase(config), id),
+        );
+        final marker = tryDecodeJsonBytes(markerBytes);
+        if (marker == null || marker['id'] != id) continue;
+        result.add(
+          BackupSnapshotInfo(
+            id: id,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(
+              timestamp,
+              isUtc: true,
+            ),
+            sizeBytes: (marker['sizeBytes'] as num?)?.toInt() ?? 0,
+          ),
+        );
       } catch (error) {
-        if (_isRemoteNotFound(error)) return const [];
+        if (_isRemoteNotFound(error)) continue;
         rethrow;
       }
-      for (final file in entries) {
-        if (file.isDir != true) continue;
-        final name = file.name ?? file.path?.split('/').last ?? '';
-        final id = name;
-        if (!_isSafeBackupId(id)) continue;
-        final timestamp = int.tryParse(id.split('-').first);
-        if (timestamp == null) continue;
-        try {
-          final markerBytes = await client.read(
-            KanbanPaths.remoteBackupMarkerPath(_remoteBase(config), id),
-          );
-          final marker = tryDecodeJsonBytes(markerBytes);
-          if (marker == null || marker['id'] != id) continue;
-          result.add(
-            BackupSnapshotInfo(
-              id: id,
-              createdAt: DateTime.fromMillisecondsSinceEpoch(
-                timestamp,
-                isUtc: true,
-              ),
-              sizeBytes: (marker['sizeBytes'] as num?)?.toInt() ?? 0,
-            ),
-          );
-        } catch (error) {
-          if (_isRemoteNotFound(error)) continue;
-          rethrow;
-        }
-      }
-      result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return result;
-    });
+    }
+    result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
   }
 
   Future<Uint8List?> readRemoteBackupSnapshot(String id) {

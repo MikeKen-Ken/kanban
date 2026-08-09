@@ -1,13 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import 'backup_history_store.dart';
-import '../../common/app_snack_bar.dart';
+
+/// 远端备份列表超时，避免 WebDAV 挂起导致整页永久转圈。
+const Duration kRemoteBackupListTimeout = Duration(seconds: 20);
 
 class BackupHistoryScreen extends StatefulWidget {
-  const BackupHistoryScreen({super.key});
+  const BackupHistoryScreen({
+    super.key,
+    this.listLocalBackups,
+    this.listRemoteBackups,
+    this.createBackup,
+    this.restoreBackup,
+  });
+
+  /// 测试注入；默认走 [BoardController]。
+  final Future<List<BackupSnapshotInfo>> Function()? listLocalBackups;
+  final Future<List<BackupSnapshotInfo>> Function()? listRemoteBackups;
+  final Future<void> Function()? createBackup;
+  final Future<void> Function(String id, {required bool remote})? restoreBackup;
 
   @override
   State<BackupHistoryScreen> createState() => _BackupHistoryScreenState();
@@ -17,7 +34,9 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
   List<BackupSnapshotInfo> _local = const [];
   List<BackupSnapshotInfo> _remote = const [];
   bool _loading = true;
+  bool _remoteLoading = false;
   bool _working = false;
+  String? _localError;
   String? _remoteMessage;
 
   @override
@@ -26,34 +45,78 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     _reload();
   }
 
+  Future<List<BackupSnapshotInfo>> _listLocal() {
+    final override = widget.listLocalBackups;
+    if (override != null) return override();
+    return context.read<BoardController>().listLocalTimePointBackups();
+  }
+
+  Future<List<BackupSnapshotInfo>> _listRemote() {
+    final override = widget.listRemoteBackups;
+    if (override != null) return override();
+    return context.read<BoardController>().listRemoteTimePointBackups();
+  }
+
   Future<void> _reload() async {
     setState(() {
       _loading = true;
+      _remoteLoading = true;
+      _localError = null;
       _remoteMessage = null;
     });
-    final controller = context.read<BoardController>();
-    final local = await controller.listLocalTimePointBackups();
-    List<BackupSnapshotInfo> remote = const [];
-    String? remoteMessage;
+
+    // 本地列表先结束整页 loading；远端独立加载，避免 WebDAV 挂起拖死页面。
     try {
-      remote = await controller.listRemoteTimePointBackups();
+      final local = await _listLocal();
+      if (!mounted) return;
+      setState(() {
+        _local = local;
+        _loading = false;
+      });
     } catch (error) {
-      remoteMessage = 'WebDAV 备份暂时无法读取：$error';
+      if (!mounted) return;
+      setState(() {
+        _local = const [];
+        _localError = '本地备份无法读取：$error';
+        _loading = false;
+      });
     }
-    if (!mounted) return;
-    setState(() {
-      _local = local;
-      _remote = remote;
-      _remoteMessage = remoteMessage;
-      _loading = false;
-    });
+
+    try {
+      final remote = await _listRemote().timeout(kRemoteBackupListTimeout);
+      if (!mounted) return;
+      setState(() {
+        _remote = remote;
+        _remoteMessage = null;
+        _remoteLoading = false;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _remote = const [];
+        _remoteMessage = 'WebDAV 备份读取超时，请稍后重试';
+        _remoteLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _remote = const [];
+        _remoteMessage = 'WebDAV 备份暂时无法读取：$error';
+        _remoteLoading = false;
+      });
+    }
   }
 
   Future<void> _createBackup() async {
     if (_working) return;
     setState(() => _working = true);
     try {
-      await context.read<BoardController>().createTimePointBackup();
+      final override = widget.createBackup;
+      if (override != null) {
+        await override();
+      } else {
+        await context.read<BoardController>().createTimePointBackup();
+      }
       if (!mounted) return;
       showAppSnackBar(context, message: '本地备份已创建，WebDAV 可用时会自动镜像');
       await _reload();
@@ -89,10 +152,15 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     if (confirmed != true || !mounted) return;
     setState(() => _working = true);
     try {
-      await context.read<BoardController>().restoreTimePointBackup(
-            snapshot.id,
-            remote: remote,
-          );
+      final override = widget.restoreBackup;
+      if (override != null) {
+        await override(snapshot.id, remote: remote);
+      } else {
+        await context.read<BoardController>().restoreTimePointBackup(
+              snapshot.id,
+              remote: remote,
+            );
+      }
       if (!mounted) return;
       showAppSnackBar(context, message: '工作区已恢复');
       await _reload();
@@ -117,6 +185,8 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     String title,
     List<BackupSnapshotInfo> items, {
     required bool remote,
+    bool loading = false,
+    String? error,
   }) {
     return Card(
       child: Padding(
@@ -128,10 +198,31 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(title, style: Theme.of(context).textTheme.titleMedium),
             ),
-            if (items.isEmpty)
+            if (loading)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('暂无备份'),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (error != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  error,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              )
+            else if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  remote ? '暂无 WebDAV 备份' : '暂无本地备份',
+                  key: ValueKey(remote ? 'remote-empty' : 'local-empty'),
+                ),
               )
             else
               for (final snapshot in items)
@@ -159,13 +250,13 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
         actions: [
           IconButton(
             tooltip: '刷新',
-            onPressed: _working ? null : _reload,
+            onPressed: _working || _loading ? null : _reload,
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _working ? null : _createBackup,
+        onPressed: _working || _loading ? null : _createBackup,
         icon: _working
             ? const SizedBox.square(
                 dimension: 18,
@@ -175,24 +266,30 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
         label: const Text('立即备份'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              key: ValueKey('backup-history-loading'),
+              child: CircularProgressIndicator(),
+            )
           : ListView(
+              key: const ValueKey('backup-history-content'),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
               children: [
                 const Text('数据有更新时每 10 分钟自动备份，仅保留最近 7 天。'),
                 const SizedBox(height: 12),
-                _section('本地备份', _local, remote: false),
+                _section(
+                  '本地备份',
+                  _local,
+                  remote: false,
+                  error: _localError,
+                ),
                 const SizedBox(height: 12),
-                _section('WebDAV 备份', _remote, remote: true),
-                if (_remoteMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _remoteMessage!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
+                _section(
+                  'WebDAV 备份',
+                  _remote,
+                  remote: true,
+                  loading: _remoteLoading,
+                  error: _remoteLoading ? null : _remoteMessage,
+                ),
               ],
             ),
     );
