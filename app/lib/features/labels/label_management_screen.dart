@@ -147,7 +147,10 @@ class LabelManagementScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<BoardController>(
       builder: (context, controller, _) {
-        final labels = controller.appSettings.customLabels;
+        final presetLabels = presetKanbanLabels(
+          controller.projectSettings.themeId,
+        );
+        final customLabels = controller.appSettings.customLabels;
         return Scaffold(
           appBar: AppBar(
             title: const Text('标签管理'),
@@ -159,68 +162,56 @@ class LabelManagementScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: labels.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.label_outline,
-                        size: 52,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text('还没有自定义标签'),
-                      const SizedBox(height: 8),
-                      FilledButton.icon(
-                        onPressed: () => _create(context),
-                        icon: const Icon(Icons.add),
-                        label: const Text('新建标签'),
-                      ),
-                    ],
+          body: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text('默认标签'),
+              ),
+              for (final label in presetLabels)
+                ListTile(
+                  leading: CircleAvatar(backgroundColor: label.color),
+                  title: Text(label.name),
+                  subtitle: const Text('默认标签，不可删除'),
+                ),
+              const Divider(height: 24),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: Text(
+                  '自定义标签',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              if (customLabels.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text('还没有自定义标签'),
+                ),
+              for (final label in customLabels)
+                ListTile(
+                  leading: CircleAvatar(backgroundColor: label.color),
+                  title: Text(label.name),
+                  subtitle: Text(
+                    '#${label.colorValue.toRadixString(16).substring(2).toUpperCase()}',
                   ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: labels.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final label = labels[index];
-                    return ListTile(
-                      leading: CircleAvatar(backgroundColor: label.color),
-                      title: Text(label.name),
-                      subtitle: Text(
-                        '#${label.colorValue.toRadixString(16).substring(2).toUpperCase()}',
-                      ),
-                      onTap: () => _update(context, label),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: '改名或改色',
-                            onPressed: () => _update(context, label),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(
-                            tooltip: '删除标签',
-                            onPressed: () => _delete(context, label),
-                            icon: Icon(
-                              Icons.delete_outline,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  onTap: () => _update(context, label),
+                  trailing: IconButton(
+                    tooltip: '删除标签',
+                    onPressed: () => _delete(context, label),
+                    icon: Icon(
+                      Icons.close,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ),
-          floatingActionButton: labels.isEmpty
-              ? null
-              : FloatingActionButton.extended(
-                  onPressed: () => _create(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('新建标签'),
-                ),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => _create(context),
+            icon: const Icon(Icons.add),
+            label: const Text('新建标签'),
+          ),
         );
       },
     );

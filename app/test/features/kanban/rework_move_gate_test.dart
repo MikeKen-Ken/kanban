@@ -49,6 +49,31 @@ void main() {
     expect(rework.cards.any((c) => c.id == cardId), isFalse);
   });
 
+  test('验证反馈全部完成时 moveCard 入待返工失败且不落盘', () async {
+    final cardId = await controller.addCard('verify', '反馈已完成卡');
+    expect(cardId, isNotNull);
+    await controller.updateCardFull(
+      'verify',
+      cardId!,
+      verificationFeedback: [
+        ChecklistItem(id: 'vf1', text: '已修复', completed: true),
+      ],
+    );
+
+    final err = await controller.moveCard(
+      cardId: cardId,
+      fromColumnId: 'verify',
+      toColumnId: KanbanBoard.defaultReworkColumnId,
+      toDisplayIndex: 0,
+    );
+
+    expect(err, reworkMoveRequiresFeedbackMessage);
+    expect(controller.findColumnIdForCard(cardId), 'verify');
+    final rework = controller.board!.columns
+        .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
+    expect(rework.cards.any((c) => c.id == cardId), isFalse);
+  });
+
   test('写入未完成验证反馈后由控制器自动移入待返工', () async {
     final cardId = await controller.addCard('verify', '有反馈卡');
     expect(cardId, isNotNull);

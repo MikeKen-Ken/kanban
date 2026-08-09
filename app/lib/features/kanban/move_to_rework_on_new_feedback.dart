@@ -17,9 +17,8 @@ bool hasAddedVerificationFeedbackItems({
 ///
 /// 存在多个同名「待返工」时取顺序中的第一个，避免误建或误绑到仅 id 匹配、标题已改名的列。
 KanbanColumn? findReworkColumn(Iterable<KanbanColumn> columns) {
-  final list = columns is List<KanbanColumn>
-      ? columns
-      : List<KanbanColumn>.of(columns);
+  final list =
+      columns is List<KanbanColumn> ? columns : List<KanbanColumn>.of(columns);
   for (final col in list) {
     if (col.title == KanbanBoard.defaultReworkColumnTitle) return col;
   }
@@ -40,16 +39,16 @@ bool isReworkColumnId({
   return columnId == KanbanBoard.defaultReworkColumnId;
 }
 
-/// 无验证反馈时禁止移入「待返工」的提示文案。
-const reworkMoveRequiresFeedbackMessage = '需要添加反馈才可以进入待返工';
+/// 没有未完成验证反馈时禁止移入「待返工」的提示文案。
+const reworkMoveRequiresFeedbackMessage = '需要添加未完成的反馈才可以进入待返工';
 
 /// 仍有验证反馈未完成时，卡片不能移入已完成列或被标记完成。
 const incompleteVerificationFeedbackBlocksProgressMessage =
     '请先完成所有验证反馈，才能移入已完成列或标记完成';
 
-/// 跨列移卡门禁：无反馈不可入待返工；有未完成反馈不可入已完成列。
+/// 跨列移卡门禁：没有未完成反馈不可入待返工；有未完成反馈不可入已完成列。
 ///
-/// 同列内重排不校验。已有反馈（含仅已勾选项）允许进入待返工。
+/// 同列内重排不校验。仅已完成的反馈不能进入待返工。
 /// 返工过程中可移到进行中、阻塞中等非完成列；已完成列按 [doneColumnName] 识别
 ///（项目设置可自定义，默认「已完成」）。
 /// 不覆盖「新增反馈后自动移入」：该路径会先写入反馈再调用移卡。
@@ -70,7 +69,7 @@ String? reworkMoveRejectionReason({
     return incompleteVerificationFeedbackBlocksProgressMessage;
   }
   if (!isReworkColumnId(columnId: toColumnId, columns: columns)) return null;
-  if (verificationFeedback.isNotEmpty) return null;
+  if (hasIncompleteVerificationFeedback(verificationFeedback)) return null;
   return reworkMoveRequiresFeedbackMessage;
 }
 

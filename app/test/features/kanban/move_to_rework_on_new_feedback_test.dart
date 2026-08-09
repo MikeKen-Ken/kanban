@@ -142,7 +142,7 @@ void main() {
       );
     });
 
-    test('有反馈移入待返工 → 允许', () {
+    test('仅有已完成反馈移入待返工 → 拒绝', () {
       expect(
         reworkMoveRejectionReason(
           fromColumnId: 'verify',
@@ -150,6 +150,18 @@ void main() {
           verificationFeedback: [
             ChecklistItem(id: 'vf', text: '请返工', completed: true),
           ],
+          columns: columns,
+        ),
+        reworkMoveRequiresFeedbackMessage,
+      );
+    });
+
+    test('有未完成反馈移入待返工 → 允许', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'verify',
+          toColumnId: 'rework',
+          verificationFeedback: [ChecklistItem(id: 'vf', text: '请返工')],
           columns: columns,
         ),
         isNull,

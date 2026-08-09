@@ -219,19 +219,6 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     }
   }
 
-  Future<void> _removeCustomLabel(String key) async {
-    final labels = widget.card.labels.where((item) => item != key).toList();
-    if (labels.length == widget.card.labels.length) return;
-    final error = await context.read<BoardController>().updateCardFull(
-          widget.columnId,
-          widget.card.id,
-          labels: labels,
-        );
-    if (error != null && mounted) {
-      showAppSnackBar(context, message: error);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BoardController>();
@@ -284,7 +271,6 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
             immediateDrag: immediateDrag,
           ),
           showContextMenuButton: touchMenuButton,
-          onRemoveCustomLabel: _removeCustomLabel,
         );
 
         // 拖起后原位只保留占位尺寸，不绘制幽灵卡面，避免与反馈层叠成两层
@@ -358,7 +344,6 @@ class _CardContent extends StatelessWidget {
     this.onContextMenu,
     this.enableLongPressContextMenu = false,
     this.showContextMenuButton = false,
-    this.onRemoveCustomLabel,
   });
 
   final KanbanCard card;
@@ -376,7 +361,6 @@ class _CardContent extends StatelessWidget {
 
   /// Android / iOS：显式「⋯」入口（见 [shouldShowCardContextMenuButton]）
   final bool showContextMenuButton;
-  final Future<void> Function(String key)? onRemoveCustomLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -581,19 +565,10 @@ class _CardContent extends StatelessWidget {
                                     if (label == null) {
                                       return const SizedBox.shrink();
                                     }
-                                    final isCustom = customLabels.any(
-                                      (custom) => custom.key == key,
-                                    );
                                     final chip = Container(
-                                      padding: EdgeInsets.only(
-                                        left: 6,
-                                        right: isCustom &&
-                                                onRemoveCustomLabel != null &&
-                                                !dragging
-                                            ? 1
-                                            : 6,
-                                        top: 2,
-                                        bottom: 2,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
                                         color:
@@ -611,30 +586,6 @@ class _CardContent extends StatelessWidget {
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
-                                          if (isCustom &&
-                                              onRemoveCustomLabel != null &&
-                                              !dragging)
-                                            Tooltip(
-                                              message: '从卡片移除标签',
-                                              child: IconButton(
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints:
-                                                    const BoxConstraints
-                                                        .tightFor(
-                                                  width: 18,
-                                                  height: 18,
-                                                ),
-                                                onPressed: () =>
-                                                    onRemoveCustomLabel!(key),
-                                                icon: Icon(
-                                                  Icons.close,
-                                                  size: 14,
-                                                  color: label.color,
-                                                ),
-                                              ),
-                                            ),
                                         ],
                                       ),
                                     );
