@@ -375,12 +375,13 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
         final toIndex =
             (args['toIndex'] as num?)?.toInt() ?? toColumn.cards.length;
-        await controller.moveCard(
+        final moveError = await controller.moveCard(
           cardId: cardId,
           fromColumnId: fromColumnId,
           toColumnId: toColumnId,
           toDisplayIndex: toIndex.clamp(0, toColumn.cards.length),
         );
+        if (moveError != null) return mcpErrorResult(moveError);
         return mcpJsonResult({
           'ok': true,
           'cardId': cardId,

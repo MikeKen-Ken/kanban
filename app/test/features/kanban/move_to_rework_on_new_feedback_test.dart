@@ -118,6 +118,90 @@ void main() {
     });
   });
 
+  group('reworkMoveRejectionReason', () {
+    final columns = [
+      KanbanColumn(id: 'verify', title: '待验证', order: 0, cards: const []),
+      KanbanColumn(
+        id: KanbanBoard.defaultReworkColumnId,
+        title: KanbanBoard.defaultReworkColumnTitle,
+        order: 1,
+        cards: const [],
+      ),
+      KanbanColumn(id: 'done', title: '已完成', order: 2, cards: const []),
+    ];
+
+    test('无反馈移入待返工 → 拒绝', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'verify',
+          toColumnId: 'rework',
+          verificationFeedback: const [],
+          columns: columns,
+        ),
+        reworkMoveRequiresFeedbackMessage,
+      );
+    });
+
+    test('有反馈移入待返工 → 允许', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'verify',
+          toColumnId: 'rework',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '请返工', completed: true),
+          ],
+          columns: columns,
+        ),
+        isNull,
+      );
+    });
+
+    test('同列重排不校验', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'rework',
+          verificationFeedback: const [],
+          columns: columns,
+        ),
+        isNull,
+      );
+    });
+
+    test('移入非待返工列不校验', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'verify',
+          toColumnId: 'done',
+          verificationFeedback: const [],
+          columns: columns,
+        ),
+        isNull,
+      );
+    });
+
+    test('自定义 id 的待返工标题列同样门禁', () {
+      final custom = [
+        KanbanColumn(id: 'verify', title: '待验证', order: 0, cards: const []),
+        KanbanColumn(
+          id: 'uuid-rework',
+          title: KanbanBoard.defaultReworkColumnTitle,
+          order: 1,
+          cards: const [],
+        ),
+      ];
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'verify',
+          toColumnId: 'uuid-rework',
+          verificationFeedback: const [],
+          columns: custom,
+        ),
+        reworkMoveRequiresFeedbackMessage,
+      );
+    });
+  });
+
   group('targetReworkColumnIdIfNeeded', () {
     final columns = [
       KanbanColumn(id: 'doing', title: '进行中', order: 0, cards: const []),

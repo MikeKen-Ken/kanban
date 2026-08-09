@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../common/app_snack_bar.dart';
 import '../../models/kanban_models.dart';
 import 'column_card_preferences.dart';
 import 'kanban_card_tile.dart';
@@ -81,7 +82,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
     return insertIndex.clamp(_pinnedCount, widget.cards.length);
   }
 
-  void _acceptDrop(KanbanCard dragged, int insertIndex) {
+  Future<void> _acceptDrop(KanbanCard dragged, int insertIndex) async {
     final controller = context.read<BoardController>();
     final fromColumn = _findColumnId(controller, dragged.id);
     if (fromColumn == null) return;
@@ -90,12 +91,15 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
       return;
     }
 
-    controller.moveCard(
+    final error = await controller.moveCard(
       cardId: dragged.id,
       fromColumnId: fromColumn,
       toColumnId: widget.columnId,
       toDisplayIndex: _clampInsertIndex(dragged, insertIndex),
     );
+    if (error != null && mounted) {
+      showAppSnackBar(context, message: error);
+    }
   }
 
   @override

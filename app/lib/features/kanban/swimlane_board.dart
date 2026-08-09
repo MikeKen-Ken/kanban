@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../common/app_snack_bar.dart';
 import '../../models/kanban_models.dart';
 import '../../widgets/kanban_column_widget.dart';
 import 'swimlane.dart';
@@ -128,12 +129,15 @@ class _SwimlaneRow extends StatelessWidget {
                       );
                     }
                     if (fromColumnId != column.id) {
-                      await controller.moveCard(
+                      final error = await controller.moveCard(
                         cardId: card.id,
                         fromColumnId: fromColumnId,
                         toColumnId: column.id,
                         toDisplayIndex: column.cards.length,
                       );
+                      if (error != null && context.mounted) {
+                        showAppSnackBar(context, message: error);
+                      }
                     }
                   },
                   builder: (context, candidate, _) {

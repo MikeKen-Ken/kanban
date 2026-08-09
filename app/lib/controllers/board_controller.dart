@@ -35,6 +35,7 @@ import '../features/views/views.dart';
 import '../models/kanban_models.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_labels.dart';
+import '../features/kanban/move_to_rework_on_new_feedback.dart';
 import '../features/kanban/transfer_card.dart';
 import '../features/trash/trash_models.dart';
 import '../settings/app_settings.dart';
@@ -3148,7 +3149,8 @@ class BoardController extends ChangeNotifier {
     return expired.length;
   }
 
-  Future<void> moveCard({
+  /// 移动卡片。失败时返回简体中文原因（例如无反馈不可入待返工），成功返回 `null`。
+  Future<String?> moveCard({
     required String cardId,
     required String fromColumnId,
     required String toColumnId,
@@ -3157,7 +3159,7 @@ class BoardController extends ChangeNotifier {
     int? completedAt,
   }) async {
     return _withBoardMutation(() async {
-    if (board == null) return;
+    if (board == null) return null;
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final fromPrefs = columnPreferencesFor(fromColumnId);
@@ -3165,7 +3167,7 @@ class BoardController extends ChangeNotifier {
 
     if (fromColumnId == toColumnId &&
         fromPrefs.sortMode != CardSortMode.custom) {
-      return;
+      return null;
     }
 
     KanbanCard? moving;
@@ -3182,7 +3184,15 @@ class BoardController extends ChangeNotifier {
       return col.copyWith(cards: remaining);
     }).toList();
 
-    if (moving == null) return;
+    if (moving == null) return null;
+
+    final reworkRejection = reworkMoveRejectionReason(
+      fromColumnId: fromColumnId,
+      toColumnId: toColumnId,
+      verificationFeedback: moving!.verificationFeedback,
+      columns: board!.columns,
+    );
+    if (reworkRejection != null) return reworkRejection;
 
     final doneColumn = _findDoneColumn(board!);
     var cardToInsert = moving!;
@@ -3330,6 +3340,7 @@ class BoardController extends ChangeNotifier {
         }
       }
     }
+    return null;
       });
   }
 

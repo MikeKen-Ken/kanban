@@ -38,6 +38,25 @@ bool isReworkColumnId({
   return columnId == KanbanBoard.defaultReworkColumnId;
 }
 
+/// 无验证反馈时禁止移入「待返工」的提示文案。
+const reworkMoveRequiresFeedbackMessage = '需要添加反馈才可以进入待返工';
+
+/// 跨列移入「待返工」且 [verificationFeedback] 为空时返回拒绝原因；否则 `null`。
+///
+/// 同列内重排不校验。已有反馈（含仅已勾选项）允许进入。
+/// 不覆盖「新增反馈后自动移入」：该路径会先写入反馈再调用移卡。
+String? reworkMoveRejectionReason({
+  required String fromColumnId,
+  required String toColumnId,
+  required List<ChecklistItem> verificationFeedback,
+  required Iterable<KanbanColumn> columns,
+}) {
+  if (fromColumnId == toColumnId) return null;
+  if (!isReworkColumnId(columnId: toColumnId, columns: columns)) return null;
+  if (verificationFeedback.isNotEmpty) return null;
+  return reworkMoveRequiresFeedbackMessage;
+}
+
 /// 是否存在未勾选完成的验证反馈项。
 bool hasIncompleteVerificationFeedback(List<ChecklistItem> feedback) {
   return feedback.any((item) => !item.completed);
