@@ -44,17 +44,20 @@ class KanbanColumnWidget extends StatelessWidget {
     }
 
     final colorMarkerWidth = hasColor ? 12.0 : 0.0;
-    final countWidth = measure(countLabel, countStyle) + 12;
+    // 数量徽章：左右各 8 的内边距。
+    final countWidth = measure(countLabel, countStyle) + 16;
     const dragHandleWidth = 24.0;
     const menuButtonWidth = 48.0;
+    // 标题行仅左侧 12 内边距（右侧为 0）。
     const horizontalPadding = 12.0;
+    // 末项余量：覆盖字体度量与各平台 IconButton 细微差异，避免收缩后 Row 溢出。
     final headerWidth = measure(column.title, titleStyle) +
         colorMarkerWidth +
         countWidth +
         dragHandleWidth +
         menuButtonWidth +
         horizontalPadding +
-        3;
+        8;
 
     // 空列下限：保证「添加卡片」按钮单行显示，不被压成两行。
     // OutlinedButton.icon + VisualDensity.compact：外边距 8*2、内边距约 16*2、
@@ -354,7 +357,7 @@ class KanbanColumnWidget extends StatelessWidget {
           )
         : width;
 
-    return Container(
+    final columnBody = Container(
       width: effectiveWidth,
       decoration: BoxDecoration(
         color: columnColor != null
@@ -505,6 +508,21 @@ class KanbanColumnWidget extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    // 安卓窄屏走 PageView，子项宽度为紧约束；仅设 Container.width 会被撑满，
+    // 表现为标题行工具靠左但列宽不变。用 Align 放开子约束后空列才能真正收缩。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.hasTightWidth &&
+            constraints.maxWidth > effectiveWidth) {
+          return Align(
+            alignment: Alignment.topLeft,
+            child: columnBody,
+          );
+        }
+        return columnBody;
+      },
     );
   }
 }
