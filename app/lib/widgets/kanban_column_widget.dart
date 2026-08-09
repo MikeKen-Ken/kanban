@@ -7,6 +7,7 @@ import '../controllers/board_controller.dart';
 import '../features/kanban/card_detail_sheet.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_column_list.dart';
+import '../features/templates/create_card_choice_sheet.dart';
 import '../models/kanban_models.dart';
 import '../settings/column_color_picker.dart';
 import '../common/app_snack_bar.dart';
@@ -124,72 +125,27 @@ class KanbanColumnWidget extends StatelessWidget {
   Future<void> _addCard(BuildContext context) async {
     final controller = context.read<BoardController>();
 
-    // 有模板时先选创建方式，避免丢掉「从模板」入口。
+    // 有模板时用单一列表（空白默认选中 + 模板），并可删除模板。
     if (controller.cardTemplates.isNotEmpty) {
-      final choice = await showModalBottomSheet<String>(
+      final choice = await showCreateCardChoiceSheet(
         context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Text(
-                  '在「${column.title}」添加卡片',
-                  style: Theme.of(ctx).textTheme.titleMedium,
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.note_add_outlined),
-                title: const Text('空白卡片'),
-                subtitle: const Text('创建后打开详情编辑'),
-                onTap: () => Navigator.pop(ctx, 'blank'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.dashboard_customize_outlined),
-                title: const Text('从模板'),
-                onTap: () => Navigator.pop(ctx, 'template'),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
+        columnTitle: column.title,
+        templates: controller.cardTemplates,
+        onDeleteTemplate: controller.deleteCardTemplate,
       );
       if (choice == null || !context.mounted) return;
-      if (choice == 'template') {
-        await _addCardFromTemplate(context, controller);
+      if (!choice.isBlank) {
+        final cardId = await controller.createCardFromTemplate(
+          templateId: choice.templateId!,
+          columnId: column.id,
+        );
+        if (!context.mounted) return;
+        await _openCreatedCardDetail(context, controller, cardId);
         return;
       }
     }
 
     final cardId = await controller.addCard(column.id, '');
-    if (!context.mounted) return;
-    await _openCreatedCardDetail(context, controller, cardId);
-  }
-
-  Future<void> _addCardFromTemplate(
-    BuildContext context,
-    BoardController controller,
-  ) async {
-    final templateId = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('选择卡片模板'),
-        children: [
-          for (final template in controller.cardTemplates)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, template.id),
-              child: Text(template.name),
-            ),
-        ],
-      ),
-    );
-    if (templateId == null || !context.mounted) return;
-    final cardId = await controller.createCardFromTemplate(
-      templateId: templateId,
-      columnId: column.id,
-    );
     if (!context.mounted) return;
     await _openCreatedCardDetail(context, controller, cardId);
   }

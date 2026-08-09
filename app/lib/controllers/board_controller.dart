@@ -29,6 +29,7 @@ import '../features/shared_content/shared_content.dart';
 import '../features/statistics/statistics_service.dart';
 import '../features/sync_conflict/sync_conflict.dart';
 import '../features/templates/card_template.dart';
+import '../features/templates/create_card_choice.dart';
 import '../features/undo/undo_stack.dart';
 import '../features/views/views.dart';
 import '../models/kanban_models.dart';
@@ -688,9 +689,7 @@ class BoardController extends ChangeNotifier {
     return _withBoardMutation(() async {
     await _persistSharedContent(
       sharedContent.copyWith(
-        cardTemplates: sharedContent.cardTemplates
-            .where((template) => template.id != id)
-            .toList(),
+        cardTemplates: removeCardTemplateById(sharedContent.cardTemplates, id),
       ),
     );
       });
