@@ -148,10 +148,14 @@ void main() {
       );
       expect(
         shouldDefaultPreviewMarkdown(
-          columnId: 'blocked',
+          columnId: 'e808b509-90fb-497e-8ad9-71b2c6b97e42',
           columns: [
             KanbanColumn(
-                id: 'blocked', title: '阻塞中', order: 0, cards: const []),
+              id: 'e808b509-90fb-497e-8ad9-71b2c6b97e42',
+              title: '阻塞中',
+              order: 0,
+              cards: const [],
+            ),
           ],
         ),
         isTrue,
