@@ -84,6 +84,7 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       a.reminderAt == b.reminderAt &&
       a.recurrence == b.recurrence &&
       a.recurrenceSeriesId == b.recurrenceSeriesId &&
+      a.recurrenceInterval == b.recurrenceInterval &&
       a.priority == b.priority &&
       a.colorValue == b.colorValue &&
       _listEq(a.labels, b.labels) &&
@@ -209,6 +210,7 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
       local.reminderAt != remote.reminderAt ||
       local.recurrence != remote.recurrence ||
       local.recurrenceSeriesId != remote.recurrenceSeriesId ||
+      local.recurrenceInterval != remote.recurrenceInterval ||
       local.priority != remote.priority ||
       local.colorValue != remote.colorValue ||
       !_listEq(local.labels, remote.labels) ||
@@ -345,6 +347,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.recurrenceSeriesId,
     eq: (a, b) => a == b,
   );
+  final recurrenceIntervalConflict = _fieldConflict(
+    base: base.card.recurrenceInterval,
+    local: loc.card.recurrenceInterval,
+    remote: rem.card.recurrenceInterval,
+    eq: (a, b) => a == b,
+  );
   final priorityConflict = _fieldConflict(
     base: base.card.priority,
     local: loc.card.priority,
@@ -414,6 +422,7 @@ CardMergeResult mergeCardThreeWay({
       reminderConflict ||
       recurrenceConflict ||
       recurrenceSeriesConflict ||
+      recurrenceIntervalConflict ||
       priorityConflict ||
       colorConflict ||
       labelsConflict ||
@@ -482,6 +491,11 @@ CardMergeResult mergeCardThreeWay({
     base: base.card.recurrenceSeriesId,
     local: loc.card.recurrenceSeriesId,
     remote: rem.card.recurrenceSeriesId,
+  );
+  final mergedRecurrenceInterval = _threeWayValue(
+    base: base.card.recurrenceInterval,
+    local: loc.card.recurrenceInterval,
+    remote: rem.card.recurrenceInterval,
   );
   final mergedPriority = _threeWayValue(
     base: base.card.priority,
@@ -561,6 +575,7 @@ CardMergeResult mergeCardThreeWay({
     reminderAt: mergedReminder,
     recurrence: mergedRecurrence,
     recurrenceSeriesId: mergedRecurrenceSeries,
+    recurrenceInterval: mergedRecurrenceInterval,
     priority: mergedPriority,
     labels: mergedLabels,
     checklist: mergedChecklist,

@@ -4,24 +4,29 @@ import '../../models/kanban_models.dart';
 class RecurrenceService {
   const RecurrenceService();
 
-  DateTime? nextDate(DateTime current, CardRecurrence recurrence) {
+  DateTime? nextDate(
+    DateTime current,
+    CardRecurrence recurrence, {
+    int interval = 1,
+  }) {
+    final step = normalizeRecurrenceInterval(interval);
     return switch (recurrence) {
       CardRecurrence.none => null,
       CardRecurrence.daily => DateTime(
           current.year,
           current.month,
-          current.day + 1,
+          current.day + step,
           current.hour,
           current.minute,
         ),
       CardRecurrence.weekly => DateTime(
           current.year,
           current.month,
-          current.day + 7,
+          current.day + (7 * step),
           current.hour,
           current.minute,
         ),
-      CardRecurrence.monthly => _nextMonth(current),
+      CardRecurrence.monthly => _nextMonth(current, step),
     };
   }
 
@@ -32,7 +37,11 @@ class RecurrenceService {
     }
 
     final currentDue = DateTime.fromMillisecondsSinceEpoch(dueAt);
-    final nextDue = nextDate(currentDue, completedCard.recurrence);
+    final nextDue = nextDate(
+      currentDue,
+      completedCard.recurrence,
+      interval: completedCard.recurrenceInterval,
+    );
     if (nextDue == null) return null;
 
     final seriesId = completedCard.recurrenceSeriesId ?? completedCard.id;
@@ -52,6 +61,7 @@ class RecurrenceService {
       reminderAt: reminderOffset == null ? null : nextDueAt - reminderOffset,
       recurrence: completedCard.recurrence,
       recurrenceSeriesId: seriesId,
+      recurrenceInterval: completedCard.recurrenceInterval,
       priority: completedCard.priority,
       labels: [...completedCard.labels],
       checklist: [
@@ -66,10 +76,10 @@ class RecurrenceService {
     );
   }
 
-  DateTime _nextMonth(DateTime current) {
+  DateTime _nextMonth(DateTime current, int interval) {
     final firstOfTarget = DateTime(
       current.year,
-      current.month + 1,
+      current.month + interval,
       1,
       current.hour,
       current.minute,

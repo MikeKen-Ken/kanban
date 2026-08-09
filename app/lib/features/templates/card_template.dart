@@ -12,6 +12,7 @@ class CardTemplate {
     this.labels = const [],
     this.checklist = const [],
     this.recurrence = CardRecurrence.none,
+    this.recurrenceInterval = 1,
     this.colorValue,
     required this.updatedAt,
   });
@@ -24,6 +25,7 @@ class CardTemplate {
   final List<String> labels;
   final List<String> checklist;
   final CardRecurrence recurrence;
+  final int recurrenceInterval;
   final int? colorValue;
   final int updatedAt;
 
@@ -42,6 +44,7 @@ class CardTemplate {
       labels: [...card.labels],
       checklist: [for (final item in card.checklist) item.text],
       recurrence: card.recurrence,
+      recurrenceInterval: card.recurrenceInterval,
       colorValue: card.colorValue,
       updatedAt: updatedAt,
     );
@@ -70,6 +73,8 @@ class CardTemplate {
       ],
       recurrence: recurrence,
       recurrenceSeriesId: recurrence == CardRecurrence.none ? null : cardId,
+      recurrenceInterval:
+          recurrence == CardRecurrence.none ? 1 : recurrenceInterval,
       colorValue: colorValue,
     );
   }
@@ -83,6 +88,8 @@ class CardTemplate {
         if (labels.isNotEmpty) 'labels': labels,
         if (checklist.isNotEmpty) 'checklist': checklist,
         if (recurrence != CardRecurrence.none) 'recurrence': recurrence.name,
+        if (recurrence != CardRecurrence.none && recurrenceInterval != 1)
+          'recurrenceInterval': recurrenceInterval,
         if (colorValue != null) 'color': colorValue,
         'updatedAt': updatedAt,
       };
@@ -101,6 +108,9 @@ class CardTemplate {
           .map((value) => value as String)
           .toList(),
       recurrence: CardRecurrence.fromString(json['recurrence'] as String?),
+      recurrenceInterval: normalizeRecurrenceInterval(
+        json['recurrenceInterval'] as int?,
+      ),
       colorValue: json['color'] as int?,
       updatedAt: json['updatedAt'] as int? ?? 0,
     );

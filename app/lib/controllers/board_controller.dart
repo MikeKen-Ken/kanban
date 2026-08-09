@@ -2056,6 +2056,7 @@ class BoardController extends ChangeNotifier {
     int? reminderAt,
     bool clearReminder = false,
     CardRecurrence? recurrence,
+    int? recurrenceInterval,
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
@@ -2089,6 +2090,7 @@ class BoardController extends ChangeNotifier {
           dueDate: clearDueDate ? null : (dueDate ?? card.dueDate),
           reminderAt: clearReminder ? null : (reminderAt ?? card.reminderAt),
           recurrence: recurrence ?? card.recurrence,
+          recurrenceInterval: recurrenceInterval ?? card.recurrenceInterval,
           priority: priority ?? card.priority,
           labels: labels ?? card.labels,
           checklist: checklist ?? card.checklist,
@@ -2118,6 +2120,8 @@ class BoardController extends ChangeNotifier {
         final restoredReminderAt =
             clearReminder ? null : (reminderAt ?? original.reminderAt);
         final restoredRecurrence = recurrence ?? original.recurrence;
+        final restoredRecurrenceInterval =
+            recurrenceInterval ?? original.recurrenceInterval;
         final restoredPriority = priority ?? original.priority;
         final restoredLabels = labels ?? original.labels;
         final restoredChecklist = checklist ?? original.checklist;
@@ -2143,6 +2147,7 @@ class BoardController extends ChangeNotifier {
             reminderAt: original.reminderAt,
             clearReminder: original.reminderAt == null,
             recurrence: original.recurrence,
+            recurrenceInterval: original.recurrenceInterval,
             priority: original.priority,
             labels: original.labels,
             checklist: original.checklist,
@@ -2166,6 +2171,7 @@ class BoardController extends ChangeNotifier {
             reminderAt: restoredReminderAt,
             clearReminder: restoredReminderAt == null,
             recurrence: restoredRecurrence,
+            recurrenceInterval: restoredRecurrenceInterval,
             priority: restoredPriority,
             labels: restoredLabels,
             checklist: restoredChecklist,

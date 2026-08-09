@@ -539,6 +539,7 @@ class KanbanCard {
     this.reminderAt,
     this.recurrence = CardRecurrence.none,
     this.recurrenceSeriesId,
+    int recurrenceInterval = 1,
     this.priority = CardPriority.none,
     this.labels = const [],
     this.checklist = const [],
@@ -551,7 +552,8 @@ class KanbanCard {
     this.conflictSide,
     this.conflictColumnId,
     this.conflictDeleted = false,
-  }) : updatedAt = updatedAt ?? createdAt;
+  })  : recurrenceInterval = normalizeRecurrenceInterval(recurrenceInterval),
+        updatedAt = updatedAt ?? createdAt;
 
   final String id;
   final String title;
@@ -565,6 +567,9 @@ class KanbanCard {
   final int? reminderAt;
   final CardRecurrence recurrence;
   final String? recurrenceSeriesId;
+
+  /// 重复间隔：每 N 天/周/月；旧数据缺省视为 1。
+  final int recurrenceInterval;
   final CardPriority priority;
   final List<String> labels;
   final List<ChecklistItem> checklist;
@@ -639,6 +644,7 @@ class KanbanCard {
     Object? reminderAt = _sentinel,
     CardRecurrence? recurrence,
     Object? recurrenceSeriesId = _sentinel,
+    int? recurrenceInterval,
     CardPriority? priority,
     List<String>? labels,
     List<ChecklistItem>? checklist,
@@ -670,6 +676,7 @@ class KanbanCard {
       recurrenceSeriesId: recurrenceSeriesId == _sentinel
           ? this.recurrenceSeriesId
           : recurrenceSeriesId as String?,
+      recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
       priority: priority ?? this.priority,
       labels: labels ?? this.labels,
       checklist: checklist ?? this.checklist,
@@ -712,6 +719,8 @@ class KanbanCard {
       if (reminderAt != null) 'reminderAt': reminderAt,
       if (recurrence != CardRecurrence.none) 'recurrence': recurrence.name,
       if (recurrenceSeriesId != null) 'recurrenceSeriesId': recurrenceSeriesId,
+      if (recurrence != CardRecurrence.none && recurrenceInterval != 1)
+        'recurrenceInterval': recurrenceInterval,
       if (priority != CardPriority.none) 'priority': priority.name,
       if (labels.isNotEmpty) 'labels': labels,
       if (checklist.isNotEmpty)
@@ -753,6 +762,9 @@ class KanbanCard {
       reminderAt: json['reminderAt'] as int?,
       recurrence: CardRecurrence.fromString(json['recurrence'] as String?),
       recurrenceSeriesId: json['recurrenceSeriesId'] as String?,
+      recurrenceInterval: normalizeRecurrenceInterval(
+        json['recurrenceInterval'] as int?,
+      ),
       priority: CardPriority.fromString(json['priority'] as String?),
       labels: (json['labels'] as List<dynamic>? ?? [])
           .map((e) => e as String)
@@ -820,10 +832,40 @@ enum CardRecurrence {
         CardRecurrence.monthly => '每月',
       };
 
+  /// 详情菜单展示顺序：周期在前，「不重复」最后。
+  static const List<CardRecurrence> menuOrder = [
+    CardRecurrence.daily,
+    CardRecurrence.weekly,
+    CardRecurrence.monthly,
+    CardRecurrence.none,
+  ];
+
+  /// 间隔选择器单位文案（天/周/月）。
+  String get intervalUnitLabel => switch (this) {
+        CardRecurrence.none => '',
+        CardRecurrence.daily => '天',
+        CardRecurrence.weekly => '周',
+        CardRecurrence.monthly => '月',
+      };
+
+  /// 「每 N 天/周/月」展示文案；N=1 时回落到每天/每周/每月。
+  String intervalLabel(int interval) {
+    final n = normalizeRecurrenceInterval(interval);
+    if (this == CardRecurrence.none) return label;
+    if (n == 1) return label;
+    return '每$n$intervalUnitLabel';
+  }
+
   static CardRecurrence fromString(String? value) {
     return CardRecurrence.values.firstWhere(
       (item) => item.name == value,
       orElse: () => CardRecurrence.none,
     );
   }
+}
+
+/// 重复间隔安全默认：缺失或非法值视为 1。
+int normalizeRecurrenceInterval(int? value) {
+  if (value == null || value < 1) return 1;
+  return value;
 }

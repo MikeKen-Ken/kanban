@@ -85,6 +85,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   DateTime? _dueDate;
   DateTime? _reminderAt;
   late CardRecurrence _recurrence;
+  late int _recurrenceInterval;
   late CardPriority _priority;
   late List<String> _labels;
   late List<ChecklistItem> _checklist;
@@ -126,6 +127,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         ? DateTime.fromMillisecondsSinceEpoch(widget.card.reminderAt!)
         : null;
     _recurrence = widget.card.recurrence;
+    _recurrenceInterval = widget.card.recurrenceInterval;
     _priority = widget.card.priority;
     _labels = [...widget.card.labels];
     _checklist = [...widget.card.checklist];
@@ -209,6 +211,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (nextDue != originalDue) return true;
     if (nextReminder != originalReminder) return true;
     if (_recurrence != widget.card.recurrence) return true;
+    if (_recurrenceInterval != widget.card.recurrenceInterval) return true;
     if (_priority != widget.card.priority) return true;
     if (!_listEquals(_labels, widget.card.labels)) return true;
     if (!_checklistEquals(_checklist, widget.card.checklist)) return true;
@@ -270,6 +273,15 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     return true;
   }
 
+  /// 间隔可选上限：天 30、周/月 12。
+  static int _maxRecurrenceInterval(CardRecurrence recurrence) {
+    return switch (recurrence) {
+      CardRecurrence.daily => 30,
+      CardRecurrence.weekly || CardRecurrence.monthly => 12,
+      CardRecurrence.none => 1,
+    };
+  }
+
   /// 当前编辑态是否含标题/备注以外的可感知内容（清单、标签、日期等）。
   bool _hasOtherMetadata() {
     if (_completed) return true;
@@ -328,6 +340,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final reminderAt = _reminderAt?.millisecondsSinceEpoch;
     final clearReminder = _reminderAt == null;
     final recurrence = _recurrence;
+    final recurrenceInterval =
+        recurrence == CardRecurrence.none ? 1 : _recurrenceInterval;
     final priority = _priority;
     final labels = List<String>.from(_labels);
     final checklist = List<ChecklistItem>.from(_checklist);
@@ -355,6 +369,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         reminderAt: reminderAt,
         clearReminder: clearReminder,
         recurrence: recurrence,
+        recurrenceInterval: recurrenceInterval,
         priority: priority,
         labels: labels,
         checklist: checklist,
@@ -1680,16 +1695,63 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            for (final recurrence in CardRecurrence.values)
+                            for (final recurrence in CardRecurrence.menuOrder)
                               ChoiceChip(
                                 label: Text(recurrence.label),
                                 selected: _recurrence == recurrence,
-                                onSelected: (_) => _safeSetState(
-                                  () => _recurrence = recurrence,
-                                ),
+                                onSelected: (_) => _safeSetState(() {
+                                  _recurrence = recurrence;
+                                  if (recurrence == CardRecurrence.none) {
+                                    _recurrenceInterval = 1;
+                                  } else {
+                                    final max =
+                                        _maxRecurrenceInterval(recurrence);
+                                    if (_recurrenceInterval > max) {
+                                      _recurrenceInterval = max;
+                                    }
+                                  }
+                                }),
                               ),
                           ],
                         ),
+                        if (_recurrence != CardRecurrence.none) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Text(
+                                '每隔',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              const SizedBox(width: 8),
+                              DropdownButton<int>(
+                                value: () {
+                                  final max =
+                                      _maxRecurrenceInterval(_recurrence);
+                                  return _recurrenceInterval > max
+                                      ? max
+                                      : _recurrenceInterval;
+                                }(),
+                                items: [
+                                  for (var i = 1;
+                                      i <= _maxRecurrenceInterval(_recurrence);
+                                      i++)
+                                    DropdownMenuItem(
+                                      value: i,
+                                      child: Text(
+                                        _recurrence.intervalLabel(i),
+                                      ),
+                                    ),
+                                ],
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  _safeSetState(
+                                    () => _recurrenceInterval = value,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         Row(
                           children: [
