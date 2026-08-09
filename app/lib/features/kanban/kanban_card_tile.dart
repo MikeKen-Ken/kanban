@@ -530,7 +530,7 @@ class _CardContent extends StatelessWidget {
                                 if (label == null) {
                                   return const SizedBox.shrink();
                                 }
-                                return Container(
+                                final chip = Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 6,
                                     vertical: 2,
@@ -548,6 +548,9 @@ class _CardContent extends StatelessWidget {
                                     ),
                                   ),
                                 );
+                                final tip = label.description;
+                                if (tip == null || tip.isEmpty) return chip;
+                                return Tooltip(message: tip, child: chip);
                               }).toList(),
                             ),
                           ),

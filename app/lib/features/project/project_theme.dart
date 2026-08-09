@@ -9,10 +9,10 @@ class ProjectThemePreset {
     required this.name,
     required this.seedLight,
     required this.seedDark,
-    required this.labelWork,
-    required this.labelPersonal,
-    required this.labelUrgent,
-    required this.labelIdea,
+    required this.labelImportantUrgent,
+    required this.labelImportantNotUrgent,
+    required this.labelUrgentNotImportant,
+    required this.labelNeither,
     required this.labelNeedResource,
     required this.priorityLow,
     required this.priorityMedium,
@@ -23,11 +23,15 @@ class ProjectThemePreset {
   final String name;
   final Color seedLight;
   final Color seedDark;
-  final Color labelWork;
-  final Color labelPersonal;
-  final Color labelUrgent;
-  final Color labelIdea;
-  /// 缺外部资源 / 暂不具备开工条件（与「紧急」区分的沉稳色）
+  /// 重急（重要且紧急）
+  final Color labelImportantUrgent;
+  /// 重缓（重要不紧急）
+  final Color labelImportantNotUrgent;
+  /// 轻急（紧急不重要）
+  final Color labelUrgentNotImportant;
+  /// 轻缓（不重要不紧急）
+  final Color labelNeither;
+  /// 缺外部资源 / 暂不具备开工条件
   final Color labelNeedResource;
   final Color priorityLow;
   final Color priorityMedium;
@@ -43,15 +47,66 @@ class ProjectThemePreset {
         CardPriority.high => priorityHigh,
       };
 
+  /// 当前预置：艾森豪威尔四象限 + 缺资源。
+  /// 短名见 [KanbanLabel] 文件头注释；description 供 Tooltip 展示完整象限含义。
   List<KanbanLabel> get presetLabels => [
-        KanbanLabel(key: 'work', name: '工作', color: labelWork),
-        KanbanLabel(key: 'personal', name: '个人', color: labelPersonal),
-        KanbanLabel(key: 'urgent', name: '紧急', color: labelUrgent),
-        KanbanLabel(key: 'idea', name: '想法', color: labelIdea),
+        KanbanLabel(
+          key: 'important_urgent',
+          name: '重急',
+          description: '重要且紧急',
+          color: labelImportantUrgent,
+        ),
+        KanbanLabel(
+          key: 'important_not_urgent',
+          name: '重缓',
+          description: '重要不紧急',
+          color: labelImportantNotUrgent,
+        ),
+        KanbanLabel(
+          key: 'urgent_not_important',
+          name: '轻急',
+          description: '紧急不重要',
+          color: labelUrgentNotImportant,
+        ),
+        KanbanLabel(
+          key: 'not_urgent_not_important',
+          name: '轻缓',
+          description: '不重要不紧急',
+          color: labelNeither,
+        ),
         KanbanLabel(
           key: 'need_resource',
           name: '缺资源',
           color: labelNeedResource,
+        ),
+      ];
+
+  /// 旧预置（工作/个人/紧急/想法）：仅解析显示，不进入新选标签列表。
+  /// 颜色复用象限色槽，避免为主题再维护一套废弃色。
+  List<KanbanLabel> get legacyPresetLabels => [
+        KanbanLabel(
+          key: 'work',
+          name: '工作（旧）',
+          description: '旧预置标签，新项目请改用象限标签',
+          color: labelImportantNotUrgent,
+        ),
+        KanbanLabel(
+          key: 'personal',
+          name: '个人（旧）',
+          description: '旧预置标签，新项目请改用象限标签',
+          color: labelUrgentNotImportant,
+        ),
+        KanbanLabel(
+          key: 'urgent',
+          name: '紧急（旧）',
+          description: '旧预置标签，新项目请改用象限标签',
+          color: labelImportantUrgent,
+        ),
+        KanbanLabel(
+          key: 'idea',
+          name: '想法（旧）',
+          description: '旧预置标签，新项目请改用象限标签',
+          color: labelNeither,
         ),
       ];
 }
@@ -64,10 +119,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '靛蓝',
     seedLight: Color(0xFF4F6BED),
     seedDark: Color(0xFF8BA4FF),
-    labelWork: Color(0xFF4F6BED),
-    labelPersonal: Color(0xFF2E9E6A),
-    labelUrgent: Color(0xFFE05252),
-    labelIdea: Color(0xFF9B59B6),
+    labelImportantUrgent: Color(0xFFE05252),
+    labelImportantNotUrgent: Color(0xFF4F6BED),
+    labelUrgentNotImportant: Color(0xFF2E9E6A),
+    labelNeither: Color(0xFF9B59B6),
     labelNeedResource: Color(0xFF8B7355),
     priorityLow: Color(0xFF2E9E6A),
     priorityMedium: Color(0xFFE09A2E),
@@ -78,10 +133,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '森林',
     seedLight: Color(0xFF2E7D56),
     seedDark: Color(0xFF6BBF8A),
-    labelWork: Color(0xFF2E7D56),
-    labelPersonal: Color(0xFF5A9E6E),
-    labelUrgent: Color(0xFFC45C4A),
-    labelIdea: Color(0xFF7A9B4F),
+    labelImportantUrgent: Color(0xFFC45C4A),
+    labelImportantNotUrgent: Color(0xFF2E7D56),
+    labelUrgentNotImportant: Color(0xFF5A9E6E),
+    labelNeither: Color(0xFF7A9B4F),
     labelNeedResource: Color(0xFF8A7A4E),
     priorityLow: Color(0xFF4A9B6E),
     priorityMedium: Color(0xFFD4A03C),
@@ -92,10 +147,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '暮色',
     seedLight: Color(0xFFE07A3A),
     seedDark: Color(0xFFFFB07C),
-    labelWork: Color(0xFFE07A3A),
-    labelPersonal: Color(0xFFD4A03C),
-    labelUrgent: Color(0xFFD64550),
-    labelIdea: Color(0xFFB565A7),
+    labelImportantUrgent: Color(0xFFD64550),
+    labelImportantNotUrgent: Color(0xFFE07A3A),
+    labelUrgentNotImportant: Color(0xFFD4A03C),
+    labelNeither: Color(0xFFB565A7),
     labelNeedResource: Color(0xFF9A6B4A),
     priorityLow: Color(0xFFD4A03C),
     priorityMedium: Color(0xFFE07A3A),
@@ -106,10 +161,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '海洋',
     seedLight: Color(0xFF1A8FAD),
     seedDark: Color(0xFF5EC4E0),
-    labelWork: Color(0xFF1A8FAD),
-    labelPersonal: Color(0xFF2E9E9E),
-    labelUrgent: Color(0xFFE05252),
-    labelIdea: Color(0xFF5B7FBD),
+    labelImportantUrgent: Color(0xFFE05252),
+    labelImportantNotUrgent: Color(0xFF1A8FAD),
+    labelUrgentNotImportant: Color(0xFF2E9E9E),
+    labelNeither: Color(0xFF5B7FBD),
     labelNeedResource: Color(0xFF7A6E58),
     priorityLow: Color(0xFF2E9E9E),
     priorityMedium: Color(0xFFE09A2E),
@@ -120,10 +175,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '石墨',
     seedLight: Color(0xFF5C6B7A),
     seedDark: Color(0xFF9AA8B5),
-    labelWork: Color(0xFF5C6B7A),
-    labelPersonal: Color(0xFF6E8B74),
-    labelUrgent: Color(0xFFB85C5C),
-    labelIdea: Color(0xFF7A6E9B),
+    labelImportantUrgent: Color(0xFFB85C5C),
+    labelImportantNotUrgent: Color(0xFF5C6B7A),
+    labelUrgentNotImportant: Color(0xFF6E8B74),
+    labelNeither: Color(0xFF7A6E9B),
     labelNeedResource: Color(0xFF8A7B68),
     priorityLow: Color(0xFF6E8B74),
     priorityMedium: Color(0xFFB8956A),
@@ -134,10 +189,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '玫瑰',
     seedLight: Color(0xFFC45B7A),
     seedDark: Color(0xFFE89BB4),
-    labelWork: Color(0xFFC45B7A),
-    labelPersonal: Color(0xFFD4896A),
-    labelUrgent: Color(0xFFD64550),
-    labelIdea: Color(0xFF9B6EAD),
+    labelImportantUrgent: Color(0xFFD64550),
+    labelImportantNotUrgent: Color(0xFFC45B7A),
+    labelUrgentNotImportant: Color(0xFFD4896A),
+    labelNeither: Color(0xFF9B6EAD),
     labelNeedResource: Color(0xFF9A7A62),
     priorityLow: Color(0xFF6E9B7A),
     priorityMedium: Color(0xFFD4896A),
@@ -148,10 +203,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '紫罗兰',
     seedLight: Color(0xFF7B5EA7),
     seedDark: Color(0xFFB69AD9),
-    labelWork: Color(0xFF7B5EA7),
-    labelPersonal: Color(0xFF5B8FA8),
-    labelUrgent: Color(0xFFC45C6A),
-    labelIdea: Color(0xFF9B7EBD),
+    labelImportantUrgent: Color(0xFFC45C6A),
+    labelImportantNotUrgent: Color(0xFF7B5EA7),
+    labelUrgentNotImportant: Color(0xFF5B8FA8),
+    labelNeither: Color(0xFF9B7EBD),
     labelNeedResource: Color(0xFF8B735F),
     priorityLow: Color(0xFF5B8FA8),
     priorityMedium: Color(0xFFC9A04A),
@@ -162,10 +217,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '琥珀',
     seedLight: Color(0xFFC9922E),
     seedDark: Color(0xFFE8C06A),
-    labelWork: Color(0xFFC9922E),
-    labelPersonal: Color(0xFF7A9B4F),
-    labelUrgent: Color(0xFFD45C3A),
-    labelIdea: Color(0xFFB07A4A),
+    labelImportantUrgent: Color(0xFFD45C3A),
+    labelImportantNotUrgent: Color(0xFFC9922E),
+    labelUrgentNotImportant: Color(0xFF7A9B4F),
+    labelNeither: Color(0xFFB07A4A),
     labelNeedResource: Color(0xFF8A6E48),
     priorityLow: Color(0xFF7A9B4F),
     priorityMedium: Color(0xFFC9922E),
@@ -176,10 +231,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '陶土',
     seedLight: Color(0xFFB86B4A),
     seedDark: Color(0xFFE0A888),
-    labelWork: Color(0xFFB86B4A),
-    labelPersonal: Color(0xFF8B7355),
-    labelUrgent: Color(0xFFC24A3A),
-    labelIdea: Color(0xFF9B6E5A),
+    labelImportantUrgent: Color(0xFFC24A3A),
+    labelImportantNotUrgent: Color(0xFFB86B4A),
+    labelUrgentNotImportant: Color(0xFF8B7355),
+    labelNeither: Color(0xFF9B6E5A),
     labelNeedResource: Color(0xFF7A6A55),
     priorityLow: Color(0xFF7A8B5A),
     priorityMedium: Color(0xFFC9922E),
@@ -190,10 +245,10 @@ const kProjectThemePresets = <ProjectThemePreset>[
     name: '薄荷',
     seedLight: Color(0xFF2E9E8A),
     seedDark: Color(0xFF6FD4C0),
-    labelWork: Color(0xFF2E9E8A),
-    labelPersonal: Color(0xFF5BA88E),
-    labelUrgent: Color(0xFFD45C5C),
-    labelIdea: Color(0xFF5B8FBD),
+    labelImportantUrgent: Color(0xFFD45C5C),
+    labelImportantNotUrgent: Color(0xFF2E9E8A),
+    labelUrgentNotImportant: Color(0xFF5BA88E),
+    labelNeither: Color(0xFF5B8FBD),
     labelNeedResource: Color(0xFF8A7A5A),
     priorityLow: Color(0xFF5BA88E),
     priorityMedium: Color(0xFFD4A03C),

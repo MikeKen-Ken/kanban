@@ -1288,7 +1288,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final customLabels = _boardController.appSettings.customLabels;
     final themeId = _boardController.projectSettings.themeId;
     final themePreset = projectThemeForId(themeId);
-    final allLabels = allKanbanLabels(customLabels, themeId: themeId);
+    final allLabels = labelsForEditing(
+      customLabels,
+      themeId: themeId,
+      selectedKeys: _labels,
+    );
     final missingCount = countMissingAttachmentsForCard(
       widget.card.copyWith(attachments: _attachments),
       _boardController.missingAttachmentIds,
@@ -1770,15 +1774,18 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           runSpacing: 8,
                           children: [
                             for (final label in allLabels)
-                              FilterChip(
-                                label: Text(label.name),
-                                selected: _labels.contains(label.key),
-                                onSelected: (_) => _toggleLabel(label.key),
-                                backgroundColor:
-                                    label.color.withValues(alpha: 0.12),
-                                selectedColor:
-                                    label.color.withValues(alpha: 0.35),
-                                checkmarkColor: label.color,
+                              Tooltip(
+                                message: label.description ?? label.name,
+                                child: FilterChip(
+                                  label: Text(label.name),
+                                  selected: _labels.contains(label.key),
+                                  onSelected: (_) => _toggleLabel(label.key),
+                                  backgroundColor:
+                                      label.color.withValues(alpha: 0.12),
+                                  selectedColor:
+                                      label.color.withValues(alpha: 0.35),
+                                  checkmarkColor: label.color,
+                                ),
                               ),
                           ],
                         ),

@@ -92,9 +92,21 @@ void main() {
       ],
     );
     expect(card.matchesSearch('报告'), isTrue);
-    expect(card.matchesSearch('工作'), isTrue);
+    expect(card.matchesSearch('工作'), isTrue); // 旧 key work →「工作（旧）」
     expect(card.matchesSearch('截图'), isTrue);
     expect(card.matchesSearch('不存在'), isFalse);
+  });
+
+  test('card matches search by quadrant description', () {
+    final card = KanbanCard(
+      id: 'c2',
+      title: '规划',
+      order: 0,
+      createdAt: 0,
+      labels: ['important_not_urgent'],
+    );
+    expect(card.matchesSearch('重缓'), isTrue);
+    expect(card.matchesSearch('重要不紧急'), isTrue);
   });
 
   test('ensureReworkColumn inserts between verify and done', () {

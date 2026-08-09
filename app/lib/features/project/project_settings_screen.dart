@@ -558,10 +558,10 @@ class _ThemeOptionTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final swatches = [
       preset.seedLight,
-      preset.labelWork,
-      preset.labelPersonal,
-      preset.labelUrgent,
-      preset.labelIdea,
+      preset.labelImportantUrgent,
+      preset.labelImportantNotUrgent,
+      preset.labelUrgentNotImportant,
+      preset.labelNeither,
       preset.labelNeedResource,
     ];
 

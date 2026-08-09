@@ -813,7 +813,10 @@ class KanbanCard {
     }
     for (final key in labels) {
       final label = findKanbanLabel(key, customLabels);
-      if (label != null && label.name.toLowerCase().contains(q)) return true;
+      if (label == null) continue;
+      if (label.name.toLowerCase().contains(q)) return true;
+      final desc = label.description;
+      if (desc != null && desc.toLowerCase().contains(q)) return true;
     }
     return false;
   }

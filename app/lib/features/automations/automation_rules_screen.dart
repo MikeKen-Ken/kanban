@@ -137,9 +137,10 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
                         : draft.actionLabelKey,
                     decoration: const InputDecoration(labelText: '标签'),
                     items: [
-                      for (final label in allKanbanLabels(
+                      for (final label in labelsForEditing(
                         controller.appSettings.customLabels,
                         themeId: controller.projectSettings.themeId,
+                        selectedKeys: [draft.actionLabelKey],
                       ))
                         DropdownMenuItem(
                           value: label.key,
