@@ -576,7 +576,8 @@ class _CardContent extends StatelessWidget {
                                                 !dragging
                                             ? 1
                                             : 6,
-                                        vertical: 2,
+                                        top: 2,
+                                        bottom: 2,
                                       ),
                                       decoration: BoxDecoration(
                                         color:

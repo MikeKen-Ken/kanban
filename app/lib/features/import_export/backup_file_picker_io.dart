@@ -23,6 +23,6 @@ Future<Uint8List?> pickBackupFile() async {
   return result?.files.single.bytes;
 }
 
-Future<String?> pickBackupDirectory() => FilePicker.platform.getDirectoryPath(
+Future<String?> pickBackupDirectory() => FilePicker.getDirectoryPath(
       dialogTitle: '选择自动备份文件夹',
     );
