@@ -1791,16 +1791,40 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             for (final label in allLabels)
                               Tooltip(
                                 message: label.description ?? label.name,
-                                child: FilterChip(
-                                  label: Text(label.name),
-                                  selected: _labels.contains(label.key),
-                                  onSelected: (_) => _toggleLabel(label.key),
-                                  backgroundColor:
-                                      label.color.withValues(alpha: 0.12),
-                                  selectedColor:
-                                      label.color.withValues(alpha: 0.35),
-                                  checkmarkColor: label.color,
-                                ),
+                                child: customLabels.any(
+                                  (custom) => custom.key == label.key,
+                                )
+                                    ? InputChip(
+                                        key: ValueKey(
+                                          'card-detail-custom-label-${label.key}',
+                                        ),
+                                        label: Text(label.name),
+                                        selected: _labels.contains(label.key),
+                                        onSelected: (_) =>
+                                            _toggleLabel(label.key),
+                                        // 自定义标签可快捷移出当前卡片；预置标签
+                                        // 仍只保留勾选操作，避免误导为可删除预置。
+                                        onDeleted: _labels.contains(label.key)
+                                            ? () => _toggleLabel(label.key)
+                                            : null,
+                                        deleteButtonTooltipMessage: '从卡片移除标签',
+                                        backgroundColor: label.color
+                                            .withValues(alpha: 0.12),
+                                        selectedColor: label.color
+                                            .withValues(alpha: 0.35),
+                                        checkmarkColor: label.color,
+                                      )
+                                    : FilterChip(
+                                        label: Text(label.name),
+                                        selected: _labels.contains(label.key),
+                                        onSelected: (_) =>
+                                            _toggleLabel(label.key),
+                                        backgroundColor: label.color
+                                            .withValues(alpha: 0.12),
+                                        selectedColor: label.color
+                                            .withValues(alpha: 0.35),
+                                        checkmarkColor: label.color,
+                                      ),
                               ),
                           ],
                         ),
