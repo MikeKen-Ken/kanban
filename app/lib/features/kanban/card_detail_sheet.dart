@@ -515,6 +515,12 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         }
       }
     } catch (error) {
+      // 卡片状态和移列已先于提醒、重复任务、活动记录等附带处理完成时，
+      // 不能因后续附带处理报错把已完成的详情页留在界面上。
+      if (_boardController.findCardById(widget.card.id)?.completed ?? false) {
+        if (mounted) _closeWithoutPersist();
+        return;
+      }
       if (!mounted) return;
       showAppSnackBar(context, message: '完成失败：$error');
       return;
