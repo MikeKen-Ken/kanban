@@ -8,6 +8,11 @@ import '../project/project_theme.dart';
 /// 使用四字名称直接表达重要性与紧急性：重要紧急、重要不急、次要紧急、次要不急。
 /// [KanbanLabel.description] 仍可为辅助说明。
 ///
+/// 工作类型另用「开发 / 咨询 / 文档」标识，和优先级维度可同时选择：
+/// - 开发：可由代理实施的代码类需求；
+/// - 咨询：只需答复、解释或建议；
+/// - 文档：可在卡片 Markdown 中交付的内容。
+///
 /// ## 旧预置兼容
 /// 历史 key：`work` / `personal` / `urgent` / `idea` 不再出现在新预设列表，
 /// 但 [findKanbanLabel] 仍可解析为带「（旧）」后缀的友好名，避免静默丢显示。
@@ -54,6 +59,9 @@ const kPresetLabelKeys = <String>{
   'urgent_not_important',
   'not_urgent_not_important',
   'need_resource',
+  'development',
+  'consultation',
+  'documentation',
 };
 
 /// 已废弃但仍可解析显示的旧预置 key

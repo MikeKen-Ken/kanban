@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/kanban/kanban_labels.dart';
+import 'package:kanban/features/project/project_theme.dart';
 
 void main() {
-  group('预设标签（艾森豪威尔）', () {
-    test('新预设为四象限 + 缺资源，含短名与完整说明', () {
+  group('预设标签', () {
+    test('预设包含四象限、缺资源和工作类型，含完整说明', () {
       final presets = presetKanbanLabels();
       expect(presets.map((l) => l.key).toList(), [
         'important_urgent',
@@ -12,20 +13,34 @@ void main() {
         'urgent_not_important',
         'not_urgent_not_important',
         'need_resource',
+        'development',
+        'consultation',
+        'documentation',
       ]);
       expect(presets.map((l) => l.name).toList(), [
-        '重急',
-        '重缓',
-        '轻急',
-        '轻缓',
+        '重要紧急',
+        '重要不急',
+        '次要紧急',
+        '次要不急',
         '缺资源',
+        '开发',
+        '咨询',
+        '文档',
       ]);
       expect(
         presets
             .where((l) => l.key != 'need_resource')
             .map((l) => l.description)
             .toList(),
-        ['重要且紧急', '重要不紧急', '紧急不重要', '不重要不紧急'],
+        [
+          '重要且紧急',
+          '重要不紧急',
+          '紧急不重要',
+          '不重要不紧急',
+          '可由代理实施的代码类需求',
+          '只需答复、解释或建议',
+          '可在卡片 Markdown 中交付的内容',
+        ],
       );
       expect(
         presets.singleWhere((l) => l.key == 'need_resource').description,
@@ -37,6 +52,16 @@ void main() {
       final keys = allKanbanLabels(const []).map((l) => l.key).toSet();
       expect(keys.intersection(kLegacyPresetLabelKeys), isEmpty);
       expect(keys.containsAll(kPresetLabelKeys), isTrue);
+    });
+
+    test('每个主题都提供相同的当前预置 key', () {
+      for (final theme in kProjectThemePresets) {
+        expect(
+          theme.presetLabels.map((label) => label.key).toSet(),
+          kPresetLabelKeys,
+          reason: theme.id,
+        );
+      }
     });
 
     test('编辑列表在已选旧 key 时追加该项', () {
@@ -71,10 +96,10 @@ void main() {
 
     test('自定义标签优先于预置与旧预置', () {
       final custom = [
-        KanbanLabel(
+        const KanbanLabel(
           key: 'work',
           name: '我的工作',
-          color: const Color(0xFF112233),
+          color: Color(0xFF112233),
         ),
       ];
       expect(findKanbanLabel('work', custom)?.name, '我的工作');
