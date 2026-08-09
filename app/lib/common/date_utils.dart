@@ -45,19 +45,64 @@ String? formatEpochMsAsLocalDateTime(int epochMs) {
       '${two(local.hour)}:${two(local.minute)}';
 }
 
+const _weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+String _weekdayLabel(int weekday) => _weekdayLabels[weekday - DateTime.monday];
+
+String _hhmm(DateTime local) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(local.hour)}:${two(local.minute)}';
+}
+
+/// 智能紧凑本地日期时间（一律含周几）。
+///
+/// - 今天：`HH:mm 周X`
+/// - 本月非今天：`D日 周X HH:mm`
+/// - 本年非本月：`M月D日 周X HH:mm`
+/// - 更早：`YYYY年M月D日 周X HH:mm`
+///
+/// 无效（≤0）返回 null。[now] 可注入以便测试。
+String? formatSmartCompactDateTime(int epochMs, {DateTime? now}) {
+  if (epochMs <= 0) return null;
+  final local = DateTime.fromMillisecondsSinceEpoch(epochMs).toLocal();
+  final reference = (now ?? DateTime.now()).toLocal();
+  final weekday = _weekdayLabel(local.weekday);
+  final time = _hhmm(local);
+
+  final sameDay = local.year == reference.year &&
+      local.month == reference.month &&
+      local.day == reference.day;
+  if (sameDay) {
+    return '$time $weekday';
+  }
+
+  final sameMonth =
+      local.year == reference.year && local.month == reference.month;
+  if (sameMonth) {
+    return '${local.day}日 $weekday $time';
+  }
+
+  if (local.year == reference.year) {
+    return '${local.month}月${local.day}日 $weekday $time';
+  }
+
+  return '${local.year}年${local.month}月${local.day}日 $weekday $time';
+}
+
 /// 卡片详情只读时间元信息（简体中文）。全无效时返回 null。
 String? formatCardDetailTimestamps({
   required int createdAt,
   required int updatedAt,
   int? completedAt,
+  DateTime? now,
 }) {
   final parts = <String>[];
-  final created = formatEpochMsAsLocalDateTime(createdAt);
+  final created = formatSmartCompactDateTime(createdAt, now: now);
   if (created != null) parts.add('创建于 $created');
-  final updated = formatEpochMsAsLocalDateTime(updatedAt);
+  final updated = formatSmartCompactDateTime(updatedAt, now: now);
   if (updated != null) parts.add('更新于 $updated');
   if (completedAt != null) {
-    final done = formatEpochMsAsLocalDateTime(completedAt);
+    final done = formatSmartCompactDateTime(completedAt, now: now);
     if (done != null) parts.add('完成于 $done');
   }
   if (parts.isEmpty) return null;

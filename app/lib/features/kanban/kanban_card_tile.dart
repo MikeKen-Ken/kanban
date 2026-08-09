@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../common/app_snack_bar.dart';
+import '../../common/date_utils.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/project/project_settings.dart';
 import '../../features/project/project_theme.dart';
@@ -475,248 +476,285 @@ class _CardContent extends StatelessWidget {
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-              child: Row(
-                // note: 仅标题时与勾选框垂直居中；有标签/描述等时仍顶对齐
-                crossAxisAlignment: _isTitleOnlyContent(dueInfo, descriptionSummary)
-                    ? CrossAxisAlignment.center
-                    : CrossAxisAlignment.start,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (columnId != null)
-                    Checkbox(
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                      value: card.completed,
-                      onChanged: (_) => context
-                          .read<BoardController>()
-                          .toggleCardCompleted(columnId!, card.id),
-                    )
-                  else
-                    const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (isPinned)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.push_pin,
-                                  size: 14,
-                                  color: colorScheme.primary,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '已置顶',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (card.labels.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
-                              children: card.labels.map((key) {
-                                final label = findKanbanLabel(
-                                    key, customLabels, themeId);
-                                if (label == null) {
-                                  return const SizedBox.shrink();
-                                }
-                                final chip = Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: label.color.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    label.name,
-                                    style:
-                                        theme.textTheme.labelSmall?.copyWith(
-                                      color: label.color,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                );
-                                final tip = label.description;
-                                if (tip == null || tip.isEmpty) return chip;
-                                return Tooltip(message: tip, child: chip);
-                              }).toList(),
-                            ),
-                          ),
-                        Text(
-                          card.title,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            height: 1.25,
-                            leadingDistribution: TextLeadingDistribution.even,
-                            decoration: card.completed
-                                ? TextDecoration.lineThrough
-                                : null,
-                            color: card.completed
-                                ? colorScheme.onSurface.withValues(alpha: 0.5)
-                                : null,
-                          ),
-                        ),
-                        if (descriptionSummary != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            descriptionSummary,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            softWrap: true,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                        if (dueInfo != null ||
-                            card.priority != CardPriority.none ||
-                            card.hasChecklist ||
-                            card.hasLinks ||
-                            card.hasRelations) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              if (dueInfo != null) dueInfo,
-                              if (card.priority != CardPriority.none)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
+                  Row(
+                    // note: 仅标题时与勾选框垂直居中；有标签/描述等时仍顶对齐
+                    crossAxisAlignment:
+                        _isTitleOnlyContent(dueInfo, descriptionSummary)
+                            ? CrossAxisAlignment.center
+                            : CrossAxisAlignment.start,
+                    children: [
+                      if (columnId != null)
+                        Checkbox(
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          value: card.completed,
+                          onChanged: (_) => context
+                              .read<BoardController>()
+                              .toggleCardCompleted(columnId!, card.id),
+                        )
+                      else
+                        const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isPinned)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
                                   children: [
                                     Icon(
-                                      Icons.flag,
+                                      Icons.push_pin,
                                       size: 14,
-                                      color: card.priority.color(
-                                        colorScheme,
-                                        theme: themePreset,
-                                      ),
+                                      color: colorScheme.primary,
                                     ),
-                                    const SizedBox(width: 2),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      card.priority.label,
+                                      '已置顶',
                                       style:
                                           theme.textTheme.labelSmall?.copyWith(
-                                        color: card.priority.color(
-                                          colorScheme,
-                                          theme: themePreset,
-                                        ),
+                                        color: colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
                                 ),
-                              if (card.hasChecklist)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.checklist,
-                                      size: 14,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      '${card.checklistDone}/${card.checklist.length}',
-                                      style: theme.textTheme.labelSmall,
-                                    ),
-                                  ],
+                              ),
+                            if (card.labels.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  children: card.labels.map((key) {
+                                    final label = findKanbanLabel(
+                                        key, customLabels, themeId);
+                                    if (label == null) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final chip = Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            label.color.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        label.name,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: label.color,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    );
+                                    final tip = label.description;
+                                    if (tip == null || tip.isEmpty) {
+                                      return chip;
+                                    }
+                                    return Tooltip(message: tip, child: chip);
+                                  }).toList(),
                                 ),
-                              if (card.hasLinks)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.link,
-                                      size: 14,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      '${card.links.length}',
-                                      style: theme.textTheme.labelSmall,
-                                    ),
-                                  ],
-                                ),
-                              if (card.hasRelations)
-                                Icon(
-                                  Icons.account_tree_outlined,
-                                  size: 14,
+                              ),
+                            Text(
+                              card.title,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                height: 1.25,
+                                leadingDistribution:
+                                    TextLeadingDistribution.even,
+                                decoration: card.completed
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                                color: card.completed
+                                    ? colorScheme.onSurface
+                                        .withValues(alpha: 0.5)
+                                    : null,
+                              ),
+                            ),
+                            if (descriptionSummary != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                descriptionSummary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: true,
+                                style: theme.textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                 ),
+                              ),
                             ],
-                          ),
-                        ],
-                      ],
-                    ),
+                            if (dueInfo != null ||
+                                card.priority != CardPriority.none ||
+                                card.hasChecklist ||
+                                card.hasLinks ||
+                                card.hasRelations) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  if (dueInfo != null) dueInfo,
+                                  if (card.priority != CardPriority.none)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.flag,
+                                          size: 14,
+                                          color: card.priority.color(
+                                            colorScheme,
+                                            theme: themePreset,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          card.priority.label,
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                            color: card.priority.color(
+                                              colorScheme,
+                                              theme: themePreset,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  if (card.hasChecklist)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.checklist,
+                                          size: 14,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          '${card.checklistDone}/${card.checklist.length}',
+                                          style: theme.textTheme.labelSmall,
+                                        ),
+                                      ],
+                                    ),
+                                  if (card.hasLinks)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.link,
+                                          size: 14,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          '${card.links.length}',
+                                          style: theme.textTheme.labelSmall,
+                                        ),
+                                      ],
+                                    ),
+                                  if (card.hasRelations)
+                                    Icon(
+                                      Icons.account_tree_outlined,
+                                      size: 14,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      // 操作列：置顶在上，三点菜单紧挨其正下方，尽量不拉宽卡片横向布局
+                      if (!dragging && columnId != null)
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: isPinned ? '取消置顶' : '置顶',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 28,
+                                minHeight: 28,
+                              ),
+                              onPressed: () => context
+                                  .read<BoardController>()
+                                  .toggleCardPin(columnId!, card.id),
+                              icon: Icon(
+                                isPinned
+                                    ? Icons.push_pin
+                                    : Icons.push_pin_outlined,
+                                size: 18,
+                                color: isPinned
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.55),
+                              ),
+                            ),
+                            if (showContextMenuButton && onContextMenu != null)
+                              Builder(
+                                builder: (buttonContext) {
+                                  return IconButton(
+                                    key: const ValueKey(
+                                        'card-context-menu-button'),
+                                    tooltip: '更多（转移/删除）',
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 28,
+                                      minHeight: 28,
+                                    ),
+                                    onPressed: () {
+                                      final box =
+                                          buttonContext.findRenderObject()
+                                              as RenderBox?;
+                                      if (box == null || !box.hasSize) {
+                                        return;
+                                      }
+                                      final anchor = box.localToGlobal(
+                                        box.size.center(Offset.zero),
+                                      );
+                                      onContextMenu!(anchor);
+                                    },
+                                    icon: Icon(
+                                      Icons.more_vert,
+                                      size: 18,
+                                      color: colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.55),
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        ),
+                    ],
                   ),
-                  // 操作列：置顶在上，三点菜单紧挨其正下方，尽量不拉宽卡片横向布局
-                  if (!dragging && columnId != null)
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: isPinned ? '取消置顶' : '置顶',
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          onPressed: () => context
-                              .read<BoardController>()
-                              .toggleCardPin(columnId!, card.id),
-                          icon: Icon(
-                            isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                            size: 18,
-                            color: isPinned
-                                ? colorScheme.primary
-                                : colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.55),
+                  if (_updatedAtLabel() case final updatedLabel?) ...[
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          updatedLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.72),
+                            fontSize: 11,
                           ),
                         ),
-                        if (showContextMenuButton && onContextMenu != null)
-                          Builder(
-                            builder: (buttonContext) {
-                              return IconButton(
-                                key: const ValueKey('card-context-menu-button'),
-                                tooltip: '更多（转移/删除）',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 28,
-                                  minHeight: 28,
-                                ),
-                                onPressed: () {
-                                  final box = buttonContext.findRenderObject()
-                                      as RenderBox?;
-                                  if (box == null || !box.hasSize) return;
-                                  final anchor = box.localToGlobal(
-                                    box.size.center(Offset.zero),
-                                  );
-                                  onContextMenu!(anchor);
-                                },
-                                icon: Icon(
-                                  Icons.more_vert,
-                                  size: 18,
-                                  color: colorScheme.onSurfaceVariant
-                                      .withValues(alpha: 0.55),
-                                ),
-                              );
-                            },
-                          ),
-                      ],
+                      ),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -724,6 +762,13 @@ class _CardContent extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 右下角「更新于」文案；无效时间戳不展示。
+  String? _updatedAtLabel() {
+    final formatted = formatSmartCompactDateTime(card.updatedAt);
+    if (formatted == null) return null;
+    return '更新于 $formatted';
   }
 
   /// 仅标题（无置顶徽标/标签/描述/元信息）时，与勾选框垂直居中
