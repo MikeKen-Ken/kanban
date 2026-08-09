@@ -3,6 +3,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 import '../../controllers/board_controller.dart';
 import 'mcp_tools_automations.dart';
 import 'mcp_tools_cards.dart';
+import 'mcp_tools_attachments.dart';
 import 'mcp_tools_labels.dart';
 import 'mcp_tools_productivity.dart';
 import 'mcp_tools_query.dart';
@@ -12,6 +13,7 @@ import 'mcp_tools_structure.dart';
 void registerKanbanMcpTools(McpServer server, BoardController controller) {
   registerKanbanMcpStructureTools(server, controller);
   registerKanbanMcpCardTools(server, controller);
+  registerKanbanMcpAttachmentTools(server, controller);
   registerKanbanMcpQueryTools(server, controller);
   registerKanbanMcpLabelTools(server, controller);
   registerKanbanMcpProductivityTools(server, controller);

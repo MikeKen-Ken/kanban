@@ -918,6 +918,28 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     }
   }
 
+  Future<void> _removeCustomLabelDefinition(KanbanLabel label) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除自定义标签？'),
+        content: Text('「${label.name}」将移入回收站，默认标签不会受影响。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _boardController.removeCustomLabel(label.key);
+  }
+
   Future<void> _addLink() async {
     final titleController = TextEditingController();
     final urlController = TextEditingController(text: 'https://');
@@ -1791,15 +1813,51 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             for (final label in allLabels)
                               Tooltip(
                                 message: label.description ?? label.name,
-                                child: FilterChip(
-                                  label: Text(label.name),
-                                  selected: _labels.contains(label.key),
-                                  onSelected: (_) => _toggleLabel(label.key),
-                                  backgroundColor:
-                                      label.color.withValues(alpha: 0.12),
-                                  selectedColor:
-                                      label.color.withValues(alpha: 0.35),
-                                  checkmarkColor: label.color,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    FilterChip(
+                                      label: Text(label.name),
+                                      selected: _labels.contains(label.key),
+                                      onSelected: (_) =>
+                                          _toggleLabel(label.key),
+                                      backgroundColor:
+                                          label.color.withValues(alpha: 0.12),
+                                      selectedColor:
+                                          label.color.withValues(alpha: 0.35),
+                                      checkmarkColor: label.color,
+                                    ),
+                                    if (customLabels.any(
+                                      (custom) => custom.key == label.key,
+                                    ))
+                                      Positioned(
+                                        top: -8,
+                                        right: -8,
+                                        child: Material(
+                                          color: theme.colorScheme.surface,
+                                          shape: const CircleBorder(),
+                                          elevation: 1,
+                                          child: IconButton(
+                                            tooltip: '删除自定义标签',
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            padding: EdgeInsets.zero,
+                                            constraints:
+                                                const BoxConstraints.tightFor(
+                                                    width: 20, height: 20),
+                                            iconSize: 14,
+                                            onPressed: () =>
+                                                _removeCustomLabelDefinition(
+                                              label,
+                                            ),
+                                            icon: Icon(
+                                              Icons.close,
+                                              color: theme.colorScheme.error,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                           ],

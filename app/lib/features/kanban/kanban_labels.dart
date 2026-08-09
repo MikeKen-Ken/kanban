@@ -13,6 +13,9 @@ import '../project/project_theme.dart';
 /// - 咨询：只需答复、解释或建议；
 /// - 文档：可在卡片 Markdown 中交付的内容。
 ///
+/// 「验收」（key=`needs_verify`）表示需要代理做本地验收与适用验证；
+/// 无此标签时 skill 默认不做本地自检，卡片仍进「待验证」交由人工确认。
+///
 /// ## 旧预置兼容
 /// 历史 key：`work` / `personal` / `urgent` / `idea` 不再出现在新预设列表，
 /// 但 [findKanbanLabel] 仍可解析为带「（旧）」后缀的友好名，避免静默丢显示。
@@ -62,6 +65,7 @@ const kPresetLabelKeys = <String>{
   'development',
   'consultation',
   'documentation',
+  'needs_verify',
 };
 
 /// 已废弃但仍可解析显示的旧预置 key
