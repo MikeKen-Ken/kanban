@@ -6,7 +6,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 CallToolResult mcpJsonResult(Object data) {
   return CallToolResult(
     content: [
-      TextContent(text: const JsonEncoder.withIndent('  ').convert(data)),
+      TextContent(text: jsonEncode(data)),
     ],
   );
 }

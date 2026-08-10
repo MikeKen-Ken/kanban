@@ -246,16 +246,23 @@ void registerKanbanMcpProductivityTools(
 
   server.registerTool(
     'list_trash',
-    description: '列出回收站条目',
-    inputSchema: JsonSchema.object(properties: const {}),
+    description: '分页列出回收站条目摘要',
+    inputSchema: JsonSchema.object(
+      properties: {
+        'limit': JsonSchema.number(description: '最多返回条数，默认 30'),
+      },
+    ),
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
       final items = controller.allTrashItems;
+      final limit = mcpLimit(args['limit']);
+      final sliced = items.take(limit).toList();
       return mcpJsonResult({
-        'count': items.length,
+        'count': sliced.length,
+        'totalMatched': items.length,
         'items': [
-          for (final item in items)
+          for (final item in sliced)
             {
               'id': item.id,
               'type': item.type.name,

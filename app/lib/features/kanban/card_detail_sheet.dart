@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -79,6 +80,7 @@ class _CardDetailSheet extends StatefulWidget {
 class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
+  late final FocusNode _titleFocusNode;
   final FocusNode _descFocusNode = FocusNode();
   late BoardController _boardController;
   late bool _completed;
@@ -118,6 +120,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   @override
   void initState() {
     super.initState();
+    _titleFocusNode = FocusNode(onKeyEvent: _onTitleKeyEvent);
     _titleController = TextEditingController(text: widget.card.title);
     _descController =
         TextEditingController(text: widget.card.description ?? '');
@@ -141,13 +144,17 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
-    // 进行中 / 待验证 / 待返工 / 阻塞中 / 已完成打开详情时备注默认预览，便于阅读长文本；仍可切回编辑。
+    // 进行中 / 待验证 / 待返工 / 阻塞中 / 已完成打开详情时备注默认预览，便于阅读长文本；
+    // 备注为空时默认进入编辑态，便于直接输入；仍可手动切换。
     final columns = _boardController.board?.columns ?? const <KanbanColumn>[];
-    _previewMarkdown = shouldDefaultPreviewMarkdown(
-      columnId: widget.columnId,
-      columns: columns,
-      doneColumnName: _boardController.projectSettings.doneColumnName,
-    );
+    final descriptionEmpty = widget.card.description?.trim().isEmpty ?? true;
+    _previewMarkdown = descriptionEmpty
+        ? false
+        : shouldDefaultPreviewMarkdown(
+            columnId: widget.columnId,
+            columns: columns,
+            doneColumnName: _boardController.projectSettings.doneColumnName,
+          );
     _boardController.addListener(_onBoardChanged);
   }
 
@@ -168,6 +175,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void dispose() {
     _boardController.removeListener(_onBoardChanged);
     _titleController.dispose();
+    _titleFocusNode.dispose();
     _descController.dispose();
     _descFocusNode.dispose();
     _checklistInput.dispose();
@@ -175,15 +183,34 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     super.dispose();
   }
 
-  /// 标题框回车：切到可编辑备注并聚焦，便于连续输入。
+  /// 标题框 Tab：切到备注输入框（与回车行为一致）。
+  KeyEventResult _onTitleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
+      _focusDescriptionFromTitle();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// 标题框回车/Tab：先结束标题框的 IME 组字（与回车提交一致），
+  /// 再退出 Markdown 预览并聚焦备注，便于连续输入。
+  ///
+  /// 备注 TextField 仅在非预览、非展开时才挂载；ImeGuard 在组字期间会延迟 setState，
+  /// 若不先结束组字，预览→编辑的重建会被推迟到组字结束，备注框迟迟无法挂载，
+  /// 焦点请求只能等重建后才生效，表现为「按 Tab 延迟」。这里先清除标题框的组字
+  /// 区间，让后续 [_safeSetState] 立即生效；随后直接 requestFocus——备注框已挂载时
+  /// 立即聚焦，尚未挂载（重建中）时 Flutter 会在其挂载后自动补上该焦点请求，
+  /// 不再依赖帧回调的时序。
   void _focusDescriptionFromTitle() {
+    if (!mounted || _descriptionExpanded) return;
+    final titleValue = _titleController.value;
+    if (titleValue.composing.isValid) {
+      _titleController.value = titleValue.copyWith(composing: TextRange.empty);
+    }
     if (_previewMarkdown) {
       _safeSetState(() => _previewMarkdown = false);
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _descriptionExpanded) return;
-      _descFocusNode.requestFocus();
-    });
+    _descFocusNode.requestFocus();
   }
 
   void _onBoardChanged() => deferRebuildIfComposing(_textControllers);
@@ -1369,6 +1396,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           child: TextField(
                             key: const ValueKey('card-detail-title'),
                             controller: _titleController,
+                            focusNode: _titleFocusNode,
                             autofocus: widget.autofocusTitle,
                             textInputAction: TextInputAction.next,
                             onSubmitted: (_) => _focusDescriptionFromTitle(),
