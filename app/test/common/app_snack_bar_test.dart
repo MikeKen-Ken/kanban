@@ -28,30 +28,140 @@ void main() {
     );
 
     await tester.tap(find.text('触发'));
-    await tester.pump(); // 开始 SnackBar 动画
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('顶部提示'), findsOneWidget);
 
-    final snackFinder = find.byType(SnackBar);
-    expect(snackFinder, findsOneWidget);
-
-    final snackBar = tester.widget<SnackBar>(snackFinder);
-    expect(snackBar.behavior, SnackBarBehavior.floating);
-    expect(snackBar.dismissDirection, DismissDirection.up);
-
-    final margin = snackBar.margin! as EdgeInsets;
-    // 大 bottom margin：贴顶而非贴底
-    expect(margin.bottom, greaterThan(200));
+    final alignFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Align && widget.alignment == Alignment.topCenter,
+    );
+    expect(alignFinder, findsOneWidget);
 
     final scheme = theme.colorScheme;
     final material = tester.widget<Material>(
       find.descendant(
-        of: snackFinder,
+        of: alignFinder,
         matching: find.byType(Material),
       ).first,
     );
     expect(material.color, scheme.primaryContainer);
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets('showAppSnackBar 空消息或纯空白不展示', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Column(
+              children: [
+                FilledButton(
+                  onPressed: () => showAppSnackBar(context, message: ''),
+                  child: const Text('空消息'),
+                ),
+                FilledButton(
+                  onPressed: () => showAppSnackBar(context, message: '   '),
+                  child: const Text('空白消息'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final topAlign = find.byWidgetPredicate(
+      (widget) =>
+          widget is Align && widget.alignment == Alignment.topCenter,
+    );
+
+    await tester.tap(find.text('空消息'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(topAlign, findsNothing);
+
+    await tester.tap(find.text('空白消息'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(topAlign, findsNothing);
+  });
+
+  testWidgets('showAppSnackBar 支持操作按钮', (tester) async {
+    var actionPressed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: FilledButton(
+                onPressed: () => showAppSnackBar(
+                  context,
+                  message: '可撤销',
+                  action: SnackBarAction(
+                    label: '撤销',
+                    onPressed: () => actionPressed = true,
+                  ),
+                ),
+                child: const Text('触发'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('触发'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('可撤销'), findsOneWidget);
+    expect(find.text('撤销'), findsOneWidget);
+
+    await tester.tap(find.text('撤销'));
+    await tester.pump();
+    expect(actionPressed, isTrue);
+  });
+
+  testWidgets('showAppSnackBar clearExisting 替换已有提示', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Column(
+              children: [
+                FilledButton(
+                  onPressed: () =>
+                      showAppSnackBar(context, message: '第一条'),
+                  child: const Text('第一条'),
+                ),
+                FilledButton(
+                  onPressed: () => showAppSnackBar(
+                    context,
+                    message: '第二条',
+                    clearExisting: true,
+                  ),
+                  child: const Text('第二条'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('第一条'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('第一条'), findsOneWidget);
+
+    await tester.tap(find.text('第二条'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('第一条'), findsNothing);
+    expect(find.text('第二条'), findsOneWidget);
   });
 
   testWidgets('showAppSnackBar 在刘海屏避开顶部与底部安全区', (tester) async {
