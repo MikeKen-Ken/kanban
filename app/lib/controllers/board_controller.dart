@@ -2413,6 +2413,133 @@ class BoardController extends ChangeNotifier {
     return null;
   }
 
+  /// 原子建立或解除两张卡的双向关联。
+  ///
+  /// 两张卡必须位于当前项目；一次落盘同时更新两侧，避免只写入单侧回链。
+  Future<String?> setCardsRelated({
+    required String firstCardId,
+    required String secondCardId,
+    required bool related,
+  }) {
+    return _withBoardMutation(() async {
+      final firstId = firstCardId.trim();
+      final secondId = secondCardId.trim();
+      if (firstId.isEmpty || secondId.isEmpty) {
+        return '关联卡片 id 不能为空';
+      }
+      if (firstId == secondId) return '卡片不能关联自身';
+
+      final first = findCardById(firstId);
+      final second = findCardById(secondId);
+      if (first == null) return '卡片不存在：$firstId';
+      if (second == null) return '卡片不存在：$secondId';
+
+      List<String> nextIds(
+        List<String> current,
+        String selfId,
+        String otherId,
+      ) {
+        final next = <String>[];
+        for (final id in current) {
+          if (id == selfId || id == otherId) continue;
+          if (!next.contains(id)) next.add(id);
+        }
+        if (related && !next.contains(otherId)) next.add(otherId);
+        return next;
+      }
+
+      final nextByCardId = <String, List<String>>{
+        firstId: nextIds(first.relatedIds, firstId, secondId),
+        secondId: nextIds(second.relatedIds, secondId, firstId),
+      };
+      final action = related ? '关联' : '解除关联';
+      return _replaceCardRelatedIds(
+        nextByCardId,
+        undoLabel: '$action「${first.title}」与「${second.title}」',
+      );
+    });
+  }
+
+  Future<String?> _replaceCardRelatedIds(
+    Map<String, List<String>> relatedByCardId, {
+    required String undoLabel,
+    bool recordUndo = true,
+  }) {
+    return _withBoardMutation(() async {
+      final currentBoard = board;
+      if (currentBoard == null) return '看板未就绪';
+
+      final originals = <String, KanbanCard>{};
+      for (final cardId in relatedByCardId.keys) {
+        final card = findCardById(cardId);
+        if (card == null) return '卡片不存在：$cardId';
+        originals[cardId] = card;
+      }
+      final changedIds = originals.keys
+          .where((cardId) => !listEquals(
+                originals[cardId]!.relatedIds,
+                relatedByCardId[cardId],
+              ))
+          .toList();
+      if (changedIds.isEmpty) return null;
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final columns = currentBoard.columns.map((column) {
+        final cards = column.cards.map((card) {
+          final relatedIds = relatedByCardId[card.id];
+          if (relatedIds == null) return card;
+          return card.copyWith(
+            relatedIds: List<String>.from(relatedIds),
+            updatedAt: now,
+          );
+        }).toList();
+        return column.copyWith(cards: cards);
+      }).toList();
+      await _persistAndSync(_bump(currentBoard.copyWith(columns: columns)));
+
+      if (recordUndo) {
+        final before = <String, List<String>>{
+          for (final entry in originals.entries)
+            entry.key: List<String>.from(entry.value.relatedIds),
+        };
+        final after = <String, List<String>>{
+          for (final entry in relatedByCardId.entries)
+            entry.key: List<String>.from(entry.value),
+        };
+        _pushUndo(
+          undoLabel,
+          () async {
+            final error = await _replaceCardRelatedIds(
+              before,
+              undoLabel: undoLabel,
+              recordUndo: false,
+            );
+            if (error != null) throw StateError(error);
+          },
+          redo: () async {
+            final error = await _replaceCardRelatedIds(
+              after,
+              undoLabel: undoLabel,
+              recordUndo: false,
+            );
+            if (error != null) throw StateError(error);
+          },
+        );
+      }
+
+      for (final cardId in changedIds) {
+        final card = originals[cardId]!;
+        await _recordActivity(
+          entityId: cardId,
+          entityTitle: card.title,
+          action: ActivityAction.updated,
+          details: {'field': 'relatedIds'},
+        );
+      }
+      return null;
+    });
+  }
+
   Future<void> _runAutomations(
     List<AutomationEffect> effects, {
     required String columnId,

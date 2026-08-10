@@ -130,8 +130,8 @@ class _AppTopSnackBarState extends State<_AppTopSnackBar>
     final shape = snackBarTheme.shape ??
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
     final elevation = snackBarTheme.elevation ?? 3;
-    final contentPadding = snackBarTheme.contentPadding ??
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14);
+    // SnackBarThemeData 无 contentPadding；与 SnackBar floating 默认内边距对齐
+    const contentPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 14);
 
     // 宽屏两侧留白，避免又长又满的一条
     final horizontal = media.size.width > 560

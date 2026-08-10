@@ -7,12 +7,16 @@ import 'mcp_tools_attachments.dart';
 import 'mcp_tools_labels.dart';
 import 'mcp_tools_productivity.dart';
 import 'mcp_tools_query.dart';
+import 'mcp_tools_relations.dart';
+import 'mcp_tools_run_context.dart';
 import 'mcp_tools_structure.dart';
 
 /// 向 [McpServer] 注册看板工具；所有写入经 [BoardController]。
 void registerKanbanMcpTools(McpServer server, BoardController controller) {
   registerKanbanMcpStructureTools(server, controller);
   registerKanbanMcpCardTools(server, controller);
+  registerKanbanMcpRelationTools(server, controller);
+  registerKanbanMcpRunContextTools(server, controller);
   registerKanbanMcpAttachmentTools(server, controller);
   registerKanbanMcpQueryTools(server, controller);
   registerKanbanMcpLabelTools(server, controller);
