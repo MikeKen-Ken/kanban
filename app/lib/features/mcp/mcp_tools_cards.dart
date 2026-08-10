@@ -5,6 +5,7 @@ import '../../models/kanban_models.dart';
 import '../kanban/move_to_rework_on_new_feedback.dart';
 import '../views/card_reference.dart';
 import 'mcp_arg_parsers.dart';
+import 'mcp_card_payloads.dart';
 import 'mcp_tool_results.dart';
 
 /// 注册卡片读写、移动与完成相关 MCP 工具。
@@ -34,21 +35,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         break;
       }
       if (match == null) return mcpErrorResult('未找到卡片：$cardId');
-      final payload = match.toJson();
-      final source = match.source;
-      if (source is KanbanCard) {
-        if (source.checklist.isNotEmpty) {
-          payload['checklist'] = [
-            for (final item in source.checklist) item.toJson(),
-          ];
-        }
-        if (source.verificationFeedback.isNotEmpty) {
-          payload['verificationFeedback'] = [
-            for (final item in source.verificationFeedback) item.toJson(),
-          ];
-        }
-      }
-      return mcpJsonResult(payload);
+      return mcpJsonResult(mcpCardDetails(match));
     },
   );
 

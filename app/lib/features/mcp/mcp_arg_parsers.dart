@@ -6,6 +6,7 @@ import '../../models/kanban_models.dart';
 import '../activity/activity_models.dart';
 import '../kanban/kanban_labels.dart';
 import '../views/filter_spec.dart';
+import 'mcp_card_payloads.dart';
 import 'mcp_tool_results.dart';
 
 /// 解析优先级字符串；未知值回退为 none。
@@ -343,44 +344,13 @@ Future<CallToolResult> runMcpForProject(
   );
 }
 
-/// 卡片摘要（用于 list_board，备注截断）。
+/// 兼容旧调用；新列表实现统一使用 [mcpBoardCardSummary]。
 Map<String, dynamic> mcpCardSummary(
   KanbanCard card, {
   int descriptionMax = 120,
-}) {
-  final description = card.description;
-  String? truncated;
-  if (description != null && description.isNotEmpty) {
-    truncated = description.length <= descriptionMax
-        ? description
-        : '${description.substring(0, descriptionMax)}…';
-  }
-  return {
-    'id': card.id,
-    'title': card.title,
-    'completed': card.completed,
-    'priority': card.priority.name,
-    if (card.dueDate != null) 'dueDate': card.dueDate,
-    if (card.labels.isNotEmpty) 'labels': card.labels,
-    if (card.hasChecklist)
-      'checklist': {
-        'done': card.checklistDone,
-        'total': card.checklist.length,
-      },
-    if (card.hasVerificationFeedback)
-      'verificationFeedback': {
-        'done': card.verificationFeedbackDone,
-        'total': card.verificationFeedback.length,
-      },
-    if (truncated != null) 'description': truncated,
-    if (card.colorValue != null) 'colorValue': card.colorValue,
-    if (card.attachments.isNotEmpty)
-      'attachmentCount': card.attachments.length,
-    if (card.blockedByIds.isNotEmpty) 'blockedByIds': card.blockedByIds,
-    if (card.relatedIds.isNotEmpty) 'relatedIds': card.relatedIds,
-    if (card.links.isNotEmpty)
-      'links': [
-        for (final link in card.sortedLinks) link.toJson(),
-      ],
-  };
-}
+}) =>
+    mcpBoardCardSummary(
+      card,
+      includeDetails: true,
+      descriptionMax: descriptionMax,
+    );

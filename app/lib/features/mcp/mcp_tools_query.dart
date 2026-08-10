@@ -4,16 +4,20 @@ import '../../common/date_utils.dart';
 import '../../controllers/board_controller.dart';
 import '../views/views.dart';
 import 'mcp_arg_parsers.dart';
+import 'mcp_card_payloads.dart';
 import 'mcp_tool_results.dart';
 
 /// 注册搜索、整板、今日、统计、活动与保存视图相关工具。
 void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'list_board',
-    description: '列出指定项目整板快照（列 + 卡片摘要）',
+    description: '列出指定项目整板快照；默认卡片摘要不含备注和关联详情',
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(description: '省略则用界面当前项目'),
+        'detail': JsonSchema.string(
+          description: 'compact | summary，默认 compact；summary 增加备注片段和关联',
+        ),
       },
     ),
     annotations:
@@ -26,17 +30,25 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
       if (board == null) {
         return mcpErrorResult('项目不存在或未加载：$projectId');
       }
+      final includeDetails =
+          mcpTrimmedString(args['detail'])?.toLowerCase() == 'summary';
       return mcpJsonResult({
         'projectId': projectId,
         'title': board.title,
+        'detail': includeDetails ? 'summary' : 'compact',
         'columns': [
           for (final column in board.columns)
             {
               'id': column.id,
               'title': column.title,
+              'cardCount': column.cards.length,
               if (column.colorValue != null) 'colorValue': column.colorValue,
               'cards': [
-                for (final card in column.cards) mcpCardSummary(card),
+                for (final card in column.cards)
+                  mcpBoardCardSummary(
+                    card,
+                    includeDetails: includeDetails,
+                  ),
               ],
             },
         ],
@@ -46,7 +58,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'search_cards',
-    description: '跨项目组合筛选搜索卡片（关键词、标签、优先级、到期、列、排序）',
+    description: '组合筛选卡片；默认返回摘要，实施前再用 get_card 读取详情',
     inputSchema: JsonSchema.object(
       properties: {
         'keyword': JsonSchema.string(description: '标题/备注/标签关键词'),
@@ -68,6 +80,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
         ),
         'sortDirection': JsonSchema.string(description: 'ascending | descending'),
         'limit': JsonSchema.number(description: '最多返回条数，默认 30'),
+        'detail': JsonSchema.string(description: 'summary | full，默认 summary'),
       },
     ),
     annotations:
@@ -80,10 +93,15 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
       final limit = mcpLimit(args['limit']);
       final refs = await controller.loadAllCardReferences();
       final filtered = const CardQueryService().query(refs, filter);
-      final sliced = filtered.take(limit).map((card) => card.toJson()).toList();
+      final full = mcpTrimmedString(args['detail'])?.toLowerCase() == 'full';
+      final sliced = filtered
+          .take(limit)
+          .map((card) => mcpCardReferencePayload(card, full: full))
+          .toList();
       return mcpJsonResult({
         'count': sliced.length,
         'totalMatched': filtered.length,
+        'detail': full ? 'full' : 'summary',
         'filter': filter.toJson(),
         'cards': sliced,
       });
@@ -93,7 +111,12 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'today_cards',
     description: '列出今日视图：已逾期、今天到期、本周稍后的未完成卡片',
-    inputSchema: JsonSchema.object(properties: const {}),
+    inputSchema: JsonSchema.object(
+      properties: {
+        'limit': JsonSchema.number(description: '每组最多返回条数，默认 10'),
+        'detail': JsonSchema.string(description: 'summary | full，默认 summary'),
+      },
+    ),
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
@@ -115,10 +138,25 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
                 isDueThisWeek(card.dueDate!, now),
           )
           .toList();
+      final limit = mcpLimit(args['limit'], fallback: 10, max: 50);
+      final full = mcpTrimmedString(args['detail'])?.toLowerCase() == 'full';
+      List<Map<String, dynamic>> payload(List<CardReference> cards) => cards
+          .take(limit)
+          .map(
+            (card) => mcpCardReferencePayload(card, full: full),
+          )
+          .toList();
       return mcpJsonResult({
-        'overdue': overdue.map((card) => card.toJson()).toList(),
-        'today': today.map((card) => card.toJson()).toList(),
-        'thisWeek': thisWeek.map((card) => card.toJson()).toList(),
+        'detail': full ? 'full' : 'summary',
+        'limitPerGroup': limit,
+        'totalMatched': {
+          'overdue': overdue.length,
+          'today': today.length,
+          'thisWeek': thisWeek.length,
+        },
+        'overdue': payload(overdue),
+        'today': payload(today),
+        'thisWeek': payload(thisWeek),
       });
     },
   );
@@ -215,6 +253,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
       properties: {
         'id': JsonSchema.string(),
         'limit': JsonSchema.number(description: '最多返回条数，默认 30'),
+        'detail': JsonSchema.string(description: 'summary | full，默认 summary'),
       },
       required: ['id'],
     ),
@@ -234,11 +273,16 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
       final limit = mcpLimit(args['limit']);
       final refs = await controller.loadAllCardReferences();
       final filtered = const CardQueryService().query(refs, view.filter);
-      final sliced = filtered.take(limit).map((card) => card.toJson()).toList();
+      final full = mcpTrimmedString(args['detail'])?.toLowerCase() == 'full';
+      final sliced = filtered
+          .take(limit)
+          .map((card) => mcpCardReferencePayload(card, full: full))
+          .toList();
       return mcpJsonResult({
         'view': view.toJson(),
         'count': sliced.length,
         'totalMatched': filtered.length,
+        'detail': full ? 'full' : 'summary',
         'cards': sliced,
       });
     },
@@ -271,7 +315,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(description: '省略则用当前项目'),
-        'limit': JsonSchema.number(description: '最多返回条数，默认 50'),
+        'limit': JsonSchema.number(description: '最多返回条数，默认 20，上限 50'),
       },
     ),
     annotations:
@@ -281,11 +325,13 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
           resolveMcpProjectId(controller, args['projectId'] as String?);
       if (resolved.error != null) return resolved.error!;
       final projectId = resolved.projectId!;
-      final limit = mcpLimit(args['limit'], fallback: 50);
-      final events = controller.activityForProject(projectId).take(limit).toList();
+      final allEvents = controller.activityForProject(projectId);
+      final limit = mcpLimit(args['limit'], fallback: 20, max: 50);
+      final events = allEvents.take(limit).toList();
       return mcpJsonResult({
         'projectId': projectId,
         'count': events.length,
+        'totalMatched': allEvents.length,
         'events': [for (final event in events) event.toJson()],
       });
     },
