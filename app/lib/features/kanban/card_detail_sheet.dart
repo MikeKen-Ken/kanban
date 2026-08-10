@@ -18,6 +18,7 @@ import '../attachments/card_attachment_viewer.dart';
 import '../attachments/card_image_add_sheet.dart';
 import '../attachments/attachment_missing.dart';
 import '../completed_auto_clear/completed_auto_clear.dart';
+import '../labels/label_editor_dialog.dart';
 import 'confirm_delete_card.dart';
 import 'description_expand_dialog.dart';
 import 'description_markdown_preview.dart';
@@ -859,112 +860,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         _labels.add(key);
       }
     });
-  }
-
-  Future<void> _showAddLabelDialog() async {
-    final nameController = TextEditingController();
-    int labelColor = projectThemeForId(
-      _boardController.projectSettings.themeId,
-    ).defaultLabelColor.toARGB32();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('新建标签'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: '标签名称',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Color(labelColor),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () async {
-                        final picked = await showColumnColorPicker(
-                          context: context,
-                          currentColorValue: labelColor,
-                          title: '标签颜色',
-                          allowDefault: false,
-                        );
-                        if (picked != null) {
-                          setDialogState(() => labelColor = picked);
-                        }
-                      },
-                      child: const Text('选择颜色'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (nameController.text.trim().isEmpty) return;
-                  Navigator.pop(ctx, true);
-                },
-                child: const Text('创建'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    final name = nameController.text.trim();
-    nameController.dispose();
-
-    if (result == true && name.isNotEmpty && mounted) {
-      final controller = context.read<BoardController>();
-      final key = await controller.addCustomLabel(name, labelColor);
-      _safeSetState(() => _labels.add(key));
-    }
-  }
-
-  Future<void> _removeCustomLabelDefinition(KanbanLabel label) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('删除自定义标签？'),
-        content: Text('「${label.name}」将移入回收站，默认标签不会受影响。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    await _boardController.removeCustomLabel(label.key);
   }
 
   Future<void> _addLink() async {
@@ -1827,9 +1722,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             Text('标签', style: theme.textTheme.titleSmall),
                             const Spacer(),
                             TextButton.icon(
-                              onPressed: _showAddLabelDialog,
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('新建'),
+                              onPressed: () => showLabelEditorDialog(context),
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: const Text('编辑'),
                             ),
                           ],
                         ),
@@ -1841,51 +1736,15 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             for (final label in allLabels)
                               Tooltip(
                                 message: label.description ?? label.name,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    FilterChip(
-                                      label: Text(label.name),
-                                      selected: _labels.contains(label.key),
-                                      onSelected: (_) =>
-                                          _toggleLabel(label.key),
-                                      backgroundColor:
-                                          label.color.withValues(alpha: 0.12),
-                                      selectedColor:
-                                          label.color.withValues(alpha: 0.35),
-                                      checkmarkColor: label.color,
-                                    ),
-                                    if (customLabels.any(
-                                      (custom) => custom.key == label.key,
-                                    ))
-                                      Positioned(
-                                        top: -8,
-                                        right: -8,
-                                        child: Material(
-                                          color: theme.colorScheme.surface,
-                                          shape: const CircleBorder(),
-                                          elevation: 1,
-                                          child: IconButton(
-                                            tooltip: '删除自定义标签',
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            padding: EdgeInsets.zero,
-                                            constraints:
-                                                const BoxConstraints.tightFor(
-                                                    width: 20, height: 20),
-                                            iconSize: 14,
-                                            onPressed: () =>
-                                                _removeCustomLabelDefinition(
-                                              label,
-                                            ),
-                                            icon: Icon(
-                                              Icons.close,
-                                              color: theme.colorScheme.error,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                                child: FilterChip(
+                                  label: Text(label.name),
+                                  selected: _labels.contains(label.key),
+                                  onSelected: (_) => _toggleLabel(label.key),
+                                  backgroundColor:
+                                      label.color.withValues(alpha: 0.12),
+                                  selectedColor:
+                                      label.color.withValues(alpha: 0.35),
+                                  checkmarkColor: label.color,
                                 ),
                               ),
                           ],
