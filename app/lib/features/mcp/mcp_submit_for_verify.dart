@@ -55,6 +55,9 @@ Future<CallToolResult> mcpSubmitCardForVerify(
       return mcpErrorResult('未找到卡片：$cardId');
     }
 
+    // 在勾选反馈前生成提交信息，返工时仅含本轮未完成的反馈原文。
+    final commitMessage = buildCardCommitMessage(card);
+
     List<ChecklistItem>? feedbackToApply = verificationFeedback;
     if (completedFeedbackIds != null) {
       if (completedFeedbackIds.isEmpty) {
@@ -104,9 +107,6 @@ Future<CallToolResult> mcpSubmitCardForVerify(
     if (verifyColumn == null) {
       return mcpErrorResult('未找到「待验证」列');
     }
-
-    final cardAfter = controller.findCardById(cardId) ?? card;
-    final commitMessage = buildCardCommitMessage(cardAfter);
 
     if (fromColumnId == verifyColumn.id) {
       return mcpJsonResult({

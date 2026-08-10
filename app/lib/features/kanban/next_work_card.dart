@@ -98,11 +98,12 @@ List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
   return items;
 }
 
-/// 提交信息：返工用全部验证反馈原文；普通用标题 + 备注。
+/// 提交信息：返工仅用未完成验证反馈原文；普通用标题 + 备注。
 String buildCardCommitMessage(KanbanCard card) {
-  if (card.verificationFeedback.isNotEmpty) {
+  if (isReworkWorkMode(card)) {
     return [
-      for (final item in card.verificationFeedback) item.text.trim(),
+      for (final item in card.verificationFeedback)
+        if (!item.completed) item.text.trim(),
     ].where((text) => text.isNotEmpty).join('\n');
   }
 

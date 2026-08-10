@@ -15,8 +15,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     description:
         '取下一条可实施卡：优先「待办」最新未完成卡，否则「待返工」。'
         '返回 workMode（normal|rework）、workItems（本轮工作范围）、'
-        'suggestedCommitMessage，以及 card 详情。'
-        '返工时 workItems 仅为未完成 verificationFeedback，勿用标题/备注当任务。'
+        'suggestedCommitMessage 与 cardId；不返回完整 card 详情以节省 token。'
         '无需指定列；省略 projectId 时用界面当前项目。',
     inputSchema: JsonSchema.object(
       properties: {
@@ -45,30 +44,18 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
         });
       }
 
-      final refs = await controller.loadAllCardReferences();
-      CardReference? match;
-      for (final card in refs) {
-        if (card.cardId != picked.card.id) continue;
-        if (card.projectId != projectId) continue;
-        match = card;
-        break;
-      }
-      if (match == null) {
-        return mcpErrorResult('未找到卡片：${picked.card.id}');
-      }
-
       final card = picked.card;
       final rework = isReworkWorkMode(card);
       return mcpJsonResult({
         'found': true,
         'projectId': projectId,
+        'cardId': card.id,
         'sourceColumn': picked.sourceColumn,
         'columnId': picked.column.id,
         'columnTitle': picked.column.title,
         'workMode': rework ? 'rework' : 'normal',
         'workItems': buildCardWorkItems(card),
         'suggestedCommitMessage': buildCardCommitMessage(card),
-        'card': mcpCardDetails(match),
       });
     },
   );

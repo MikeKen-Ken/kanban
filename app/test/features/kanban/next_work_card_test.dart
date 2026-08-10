@@ -141,7 +141,7 @@ void main() {
         'text': '问题一',
       },
     ]);
-    expect(buildCardCommitMessage(card), '问题一\n问题二');
+    expect(buildCardCommitMessage(card), '问题一');
   });
 
   test('普通模式 workItems 含标题备注与 checklist', () {
