@@ -144,13 +144,17 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
-    // 进行中 / 待验证 / 待返工 / 阻塞中 / 已完成打开详情时备注默认预览，便于阅读长文本；仍可切回编辑。
+    // 进行中 / 待验证 / 待返工 / 阻塞中 / 已完成打开详情时备注默认预览，便于阅读长文本；
+    // 备注为空时默认进入编辑态，便于直接输入；仍可手动切换。
     final columns = _boardController.board?.columns ?? const <KanbanColumn>[];
-    _previewMarkdown = shouldDefaultPreviewMarkdown(
-      columnId: widget.columnId,
-      columns: columns,
-      doneColumnName: _boardController.projectSettings.doneColumnName,
-    );
+    final descriptionEmpty = widget.card.description?.trim().isEmpty ?? true;
+    _previewMarkdown = descriptionEmpty
+        ? false
+        : shouldDefaultPreviewMarkdown(
+            columnId: widget.columnId,
+            columns: columns,
+            doneColumnName: _boardController.projectSettings.doneColumnName,
+          );
     _boardController.addListener(_onBoardChanged);
   }
 

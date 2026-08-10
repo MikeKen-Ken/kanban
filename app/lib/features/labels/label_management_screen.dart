@@ -143,6 +143,108 @@ class LabelManagementScreen extends StatelessWidget {
     showAppSnackBar(context, message: '已删除标签「${label.name}」');
   }
 
+  /// 标签编辑界面：集中提供「新增 / 编辑 / 删除」自定义标签操作。
+  Future<void> _editLabels(BuildContext context) async {
+    final controller = context.read<BoardController>();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final customLabels = controller.appSettings.customLabels;
+          return AlertDialog(
+            title: const Text('编辑标签'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (customLabels.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      '还没有自定义标签',
+                      style: Theme.of(dialogContext).textTheme.bodyMedium
+                          ?.copyWith(
+                            color: Theme.of(dialogContext)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final label in customLabels)
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: CircleAvatar(
+                                backgroundColor: label.color,
+                                radius: 10,
+                              ),
+                              title: Text(label.name),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: '编辑「${label.name}」',
+                                    visualDensity: VisualDensity.compact,
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                    ),
+                                    onPressed: () async {
+                                      await _update(context, label);
+                                      setDialogState(() {});
+                                    },
+                                  ),
+                                  IconButton(
+                                    tooltip: '删除「${label.name}」',
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: Theme.of(dialogContext)
+                                          .colorScheme
+                                          .error,
+                                    ),
+                                    onPressed: () async {
+                                      await _delete(context, label);
+                                      setDialogState(() {});
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton.icon(
+                onPressed: () async {
+                  await _create(context);
+                  setDialogState(() {});
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('新增标签'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('完成'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _presetLabelChip(KanbanLabel label) {
     return Chip(
       label: Text(label.name),
@@ -162,13 +264,6 @@ class LabelManagementScreen extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       avatar: CircleAvatar(backgroundColor: label.color, radius: 8),
       onPressed: () => _update(context, label),
-      deleteButtonTooltipMessage: '删除标签「${label.name}」',
-      deleteIcon: Icon(
-        Icons.close,
-        size: 20,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      onDeleted: () => _delete(context, label),
     );
   }
 
@@ -186,9 +281,9 @@ class LabelManagementScreen extends StatelessWidget {
             title: const Text('标签管理'),
             actions: [
               IconButton(
-                tooltip: '新建标签',
-                onPressed: () => _create(context),
-                icon: const Icon(Icons.add),
+                tooltip: '编辑标签',
+                onPressed: () => _editLabels(context),
+                icon: const Icon(Icons.edit_outlined),
               ),
             ],
           ),
@@ -233,9 +328,9 @@ class LabelManagementScreen extends StatelessWidget {
             ],
           ),
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => _create(context),
-            icon: const Icon(Icons.add),
-            label: const Text('新建标签'),
+            onPressed: () => _editLabels(context),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('编辑标签'),
           ),
         );
       },
