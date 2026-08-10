@@ -22,8 +22,8 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
   late final TextEditingController _pathController;
 
   bool _enabled = false;
-  bool _autoSync = true;
-  bool _autoPull = true;
+  bool _autoSync = false;
+  bool _autoPull = false;
   int _pollSeconds = WebDavConfig.defaultPollIntervalSeconds;
   int _pushDebounceSeconds = WebDavConfig.defaultPushDebounceSeconds;
   bool _obscurePassword = true;

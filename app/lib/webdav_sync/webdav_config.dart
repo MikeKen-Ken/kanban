@@ -111,9 +111,9 @@ class WebDavConfig {
       username: json['username'] as String? ?? '',
       password: json['password'] as String? ?? '',
       remotePath: json['remotePath'] as String? ?? '/KanbanApp',
-      autoSync: json['autoSync'] as bool? ?? true,
-      // 旧配置无此字段时默认开启，与原先「autoSync 兼控拉取」行为一致
-      autoPull: json['autoPull'] as bool? ?? true,
+      // 同步默认为手动：旧配置无此字段时也按手动处理
+      autoSync: json['autoSync'] as bool? ?? false,
+      autoPull: json['autoPull'] as bool? ?? false,
       pollIntervalSeconds: clampPollIntervalSeconds(
         json['pollIntervalSeconds'] as int? ?? defaultPollIntervalSeconds,
       ),
@@ -129,8 +129,8 @@ class WebDavConfig {
     username: '',
     password: '',
     remotePath: '/KanbanApp',
-    autoSync: true,
-    autoPull: true,
+    autoSync: false,
+    autoPull: false,
     pollIntervalSeconds: defaultPollIntervalSeconds,
     pushDebounceSeconds: defaultPushDebounceSeconds,
   );

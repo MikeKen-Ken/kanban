@@ -1098,14 +1098,8 @@ class BoardController extends ChangeNotifier {
     });
     unawaited(_syncService.refreshPendingUploadCount());
 
-    if (webDavConfig.enabled && webDavConfig.isConfigured) {
-      if (webDavConfig.autoPull) {
-        _syncService.startPolling();
-        unawaited(_syncInBackground());
-      } else {
-        _syncService.stopPolling();
-      }
-    }
+    // 同步改为手动：启动与后台不再自动拉取
+    _syncService.stopPolling();
 
     unawaited(_syncMcpHost());
   }
@@ -1137,17 +1131,6 @@ class BoardController extends ChangeNotifier {
       if (!await _repository.storage.hasProjectBoard(projectId)) return null;
       return _repository.loadBoard(projectId);
     });
-  }
-
-  Future<void> _syncInBackground() async {
-    try {
-      // 网络阶段不持看板突变锁；服务内部仅在捕获/落盘时短持锁。
-      await _syncService.pullAndMerge();
-      await _reloadUiAfterSync();
-    } catch (e) {
-      errorMessage = e.toString();
-      notifyListeners();
-    }
   }
 
   Future<void> _reloadUiAfterSync() {
