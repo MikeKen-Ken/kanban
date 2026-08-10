@@ -2,6 +2,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../common/date_utils.dart';
 import '../../controllers/board_controller.dart';
+import '../kanban/next_work_card.dart';
 import '../views/views.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_card_payloads.dart';
@@ -9,6 +10,69 @@ import 'mcp_tool_results.dart';
 
 /// 注册搜索、整板、今日、统计、活动与保存视图相关工具。
 void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
+  server.registerTool(
+    'pick_next_card',
+    description:
+        '取下一条可实施卡：优先「待办」最新未完成卡，否则「待返工」。'
+        '返回 workMode（normal|rework）、workItems（本轮工作范围）、'
+        'suggestedCommitMessage，以及 card 详情。'
+        '返工时 workItems 仅为未完成 verificationFeedback，勿用标题/备注当任务。'
+        '无需指定列；省略 projectId 时用界面当前项目。',
+    inputSchema: JsonSchema.object(
+      properties: {
+        'projectId': JsonSchema.string(description: '省略则用界面当前项目'),
+      },
+    ),
+    annotations:
+        const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
+    callback: (args, extra) async {
+      final resolved =
+          resolveMcpProjectId(controller, args['projectId'] as String?);
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId!;
+
+      final board = await controller.loadBoardSnapshot(projectId);
+      if (board == null) {
+        return mcpErrorResult('项目不存在或未加载：$projectId');
+      }
+
+      final picked = pickNextWorkCard(board);
+      if (picked == null) {
+        return mcpJsonResult({
+          'found': false,
+          'projectId': projectId,
+          'reason': '待办与待返工均无未完成卡片',
+        });
+      }
+
+      final refs = await controller.loadAllCardReferences();
+      CardReference? match;
+      for (final card in refs) {
+        if (card.cardId != picked.card.id) continue;
+        if (card.projectId != projectId) continue;
+        match = card;
+        break;
+      }
+      if (match == null) {
+        return mcpErrorResult('未找到卡片：${picked.card.id}');
+      }
+
+      final card = picked.card;
+      final rework = isReworkWorkMode(card);
+      return mcpJsonResult({
+        'found': true,
+        'projectId': projectId,
+        'sourceColumn': picked.sourceColumn,
+        'columnId': picked.column.id,
+        'columnTitle': picked.column.title,
+        'workMode': rework ? 'rework' : 'normal',
+        'workItems': buildCardWorkItems(card),
+        'suggestedCommitMessage': buildCardCommitMessage(card),
+        'card': mcpCardDetails(match),
+      });
+    },
+  );
+
   server.registerTool(
     'list_board',
     description: '列出指定项目整板快照；默认卡片摘要不含备注和关联详情',

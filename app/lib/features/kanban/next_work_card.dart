@@ -1,0 +1,122 @@
+import '../../models/kanban_models.dart';
+import 'move_to_rework_on_new_feedback.dart';
+
+/// 默认「待办」列标题（与 [KanbanBoard.empty] 一致）。
+const defaultTodoColumnTitle = '待办';
+
+/// 默认「待办」列 id。
+const defaultTodoColumnId = 'todo';
+
+/// 有未完成验证反馈时视为返工模式。
+bool isReworkWorkMode(KanbanCard card) =>
+    card.verificationFeedback.any((item) => !item.completed);
+
+/// 解析「待办」列：标题优先，再回退默认 id。
+KanbanColumn? findTodoColumn(Iterable<KanbanColumn> columns) {
+  final list =
+      columns is List<KanbanColumn> ? columns : List<KanbanColumn>.of(columns);
+  for (final col in list) {
+    if (col.title == defaultTodoColumnTitle) return col;
+  }
+  for (final col in list) {
+    if (col.id == defaultTodoColumnId) return col;
+  }
+  return null;
+}
+
+/// 列内按 `updatedAt` 降序取最新未完成卡；同时间戳再比 `createdAt`。
+KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
+  KanbanCard? best;
+  for (final card in cards) {
+    if (card.completed) continue;
+    if (best == null ||
+        card.updatedAt > best.updatedAt ||
+        (card.updatedAt == best.updatedAt &&
+            card.createdAt > best.createdAt)) {
+      best = card;
+    }
+  }
+  return best;
+}
+
+/// 「待办」最新未完成卡；若无则「待返工」最新未完成卡。
+({KanbanColumn column, KanbanCard card, String sourceColumn})? pickNextWorkCard(
+  KanbanBoard board,
+) {
+  final todo = findTodoColumn(board.columns);
+  if (todo != null) {
+    final card = pickLatestIncompleteCard(todo.cards);
+    if (card != null) {
+      return (column: todo, card: card, sourceColumn: defaultTodoColumnTitle);
+    }
+  }
+
+  final rework = findReworkColumn(board.columns);
+  if (rework != null) {
+    final card = pickLatestIncompleteCard(rework.cards);
+    if (card != null) {
+      return (
+        column: rework,
+        card: card,
+        sourceColumn: KanbanBoard.defaultReworkColumnTitle,
+      );
+    }
+  }
+
+  return null;
+}
+
+/// 本轮应实施的工作项（返工只含未完成验证反馈）。
+List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
+  if (isReworkWorkMode(card)) {
+    return [
+      for (final item in card.verificationFeedback)
+        if (!item.completed)
+          {
+            'kind': 'verificationFeedback',
+            'id': item.id,
+            'text': item.text,
+          },
+    ];
+  }
+
+  final items = <Map<String, dynamic>>[
+    {'kind': 'title', 'text': card.title},
+  ];
+  final description = card.description?.trim();
+  if (description != null && description.isNotEmpty) {
+    items.add({'kind': 'description', 'text': description});
+  }
+  for (final item in card.checklist) {
+    items.add({
+      'kind': 'checklist',
+      'id': item.id,
+      'text': item.text,
+      'completed': item.completed,
+    });
+  }
+  return items;
+}
+
+/// 提交信息：返工用全部验证反馈原文；普通用标题 + 备注。
+String buildCardCommitMessage(KanbanCard card) {
+  if (card.verificationFeedback.isNotEmpty) {
+    return [
+      for (final item in card.verificationFeedback) item.text.trim(),
+    ].where((text) => text.isNotEmpty).join('\n');
+  }
+
+  final title = card.title.trim();
+  final description = card.description?.trim();
+  if (description == null || description.isEmpty) return title;
+  return '$title\n\n$description';
+}
+
+/// 把所有未完成验证反馈勾为完成；无未完成项时返回 null。
+List<ChecklistItem>? markAllIncompleteFeedbackDone(KanbanCard card) {
+  if (!card.verificationFeedback.any((item) => !item.completed)) return null;
+  return [
+    for (final item in card.verificationFeedback)
+      item.completed ? item : item.copyWith(completed: true),
+  ];
+}

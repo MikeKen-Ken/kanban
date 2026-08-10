@@ -6,6 +6,7 @@ import '../kanban/move_to_rework_on_new_feedback.dart';
 import '../views/card_reference.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_card_payloads.dart';
+import 'mcp_submit_for_verify.dart';
 import 'mcp_tool_results.dart';
 
 /// 注册卡片读写、移动与完成相关 MCP 工具。
@@ -385,6 +386,73 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           'projectId': projectId,
         });
       });
+    },
+  );
+
+  server.registerTool(
+    'submit_card_for_verify',
+    description:
+        '将卡片移入「待验证」。只需 cardId 即可：有未完成验证反馈时默认全部勾完成再移列。'
+        '可选 completeAllIncompleteFeedback / completedFeedbackIds / verificationFeedback（三选一）。'
+        '成功时返回 suggestedCommitMessage（直接用作 git commit 信息）。'
+        '省略 projectId 时按 cardId 定位所属项目',
+    inputSchema: JsonSchema.object(
+      properties: {
+        'cardId': JsonSchema.string(description: '卡片 id'),
+        'projectId': JsonSchema.string(
+          description: '目标项目；省略则按 cardId 跨项目定位',
+        ),
+        'completeAllIncompleteFeedback': JsonSchema.boolean(
+          description:
+              '可选；true=勾选全部未完成反馈。省略且仅传 cardId 时：有未完成反馈则默认勾全选',
+        ),
+        'verificationFeedback': JsonSchema.array(
+          items: JsonSchema.object(properties: {
+            'id': JsonSchema.string(),
+            'text': JsonSchema.string(),
+            'completed': JsonSchema.boolean(),
+          }),
+          description: '可选；移列前整表替换验证反馈（与另两种反馈参数互斥）',
+        ),
+        'completedFeedbackIds': JsonSchema.array(
+          items: JsonSchema.string(),
+          description: '可选；只勾选指定验证反馈 id（与另两种反馈参数互斥）',
+        ),
+      },
+      required: ['cardId'],
+    ),
+    annotations: const ToolAnnotations(
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    ),
+    callback: (args, extra) async {
+      final cardId = mcpTrimmedString(args['cardId']) ?? '';
+      if (cardId.isEmpty) return mcpErrorResult('cardId 不能为空');
+      final verificationFeedback = args.containsKey('verificationFeedback')
+          ? parseMcpChecklist(args['verificationFeedback'])
+          : null;
+      if (args.containsKey('verificationFeedback') &&
+          verificationFeedback == null) {
+        return mcpErrorResult('verificationFeedback 格式无效');
+      }
+      final completedFeedbackIds = args.containsKey('completedFeedbackIds')
+          ? parseMcpIdList(args['completedFeedbackIds'])
+          : null;
+      if (args.containsKey('completedFeedbackIds') &&
+          completedFeedbackIds == null) {
+        return mcpErrorResult('completedFeedbackIds 格式无效');
+      }
+      final completeAllRaw = args['completeAllIncompleteFeedback'];
+      final bool? completeAll = completeAllRaw is bool ? completeAllRaw : null;
+      return mcpSubmitCardForVerify(
+        controller,
+        cardId: cardId,
+        projectId: args['projectId'] as String?,
+        verificationFeedback: verificationFeedback,
+        completedFeedbackIds: completedFeedbackIds,
+        completeAllIncompleteFeedback: completeAll,
+      );
     },
   );
 
