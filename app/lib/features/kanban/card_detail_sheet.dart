@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -79,6 +80,7 @@ class _CardDetailSheet extends StatefulWidget {
 class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
+  late final FocusNode _titleFocusNode;
   final FocusNode _descFocusNode = FocusNode();
   late BoardController _boardController;
   late bool _completed;
@@ -118,6 +120,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   @override
   void initState() {
     super.initState();
+    _titleFocusNode = FocusNode(onKeyEvent: _onTitleKeyEvent);
     _titleController = TextEditingController(text: widget.card.title);
     _descController =
         TextEditingController(text: widget.card.description ?? '');
@@ -168,11 +171,21 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void dispose() {
     _boardController.removeListener(_onBoardChanged);
     _titleController.dispose();
+    _titleFocusNode.dispose();
     _descController.dispose();
     _descFocusNode.dispose();
     _checklistInput.dispose();
     _verificationFeedbackInput.dispose();
     super.dispose();
+  }
+
+  /// 标题框 Tab：切到备注输入框（与回车行为一致）。
+  KeyEventResult _onTitleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
+      _focusDescriptionFromTitle();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   /// 标题框回车：切到可编辑备注并聚焦，便于连续输入。
@@ -1369,6 +1382,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           child: TextField(
                             key: const ValueKey('card-detail-title'),
                             controller: _titleController,
+                            focusNode: _titleFocusNode,
                             autofocus: widget.autofocusTitle,
                             textInputAction: TextInputAction.next,
                             onSubmitted: (_) => _focusDescriptionFromTitle(),

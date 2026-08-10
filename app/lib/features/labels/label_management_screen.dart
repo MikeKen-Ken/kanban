@@ -143,6 +143,34 @@ class LabelManagementScreen extends StatelessWidget {
     showAppSnackBar(context, message: '已删除标签「${label.name}」');
   }
 
+  Widget _presetLabelChip(KanbanLabel label) {
+    return Chip(
+      label: Text(label.name),
+      backgroundColor: label.color.withValues(alpha: 0.12),
+      side: BorderSide(color: label.color.withValues(alpha: 0.35)),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _customLabelChip(BuildContext context, KanbanLabel label) {
+    return InputChip(
+      label: Text(label.name),
+      backgroundColor: label.color.withValues(alpha: 0.12),
+      side: BorderSide(color: label.color.withValues(alpha: 0.35)),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      visualDensity: VisualDensity.compact,
+      avatar: CircleAvatar(backgroundColor: label.color, radius: 8),
+      onPressed: () => _update(context, label),
+      deleteIcon: Icon(
+        Icons.close,
+        size: 16,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      onDeleted: () => _delete(context, label),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<BoardController>(
@@ -151,6 +179,7 @@ class LabelManagementScreen extends StatelessWidget {
           controller.projectSettings.themeId,
         );
         final customLabels = controller.appSettings.customLabels;
+        final theme = Theme.of(context);
         return Scaffold(
           appBar: AppBar(
             title: const Text('标签管理'),
@@ -163,47 +192,42 @@ class LabelManagementScreen extends StatelessWidget {
             ],
           ),
           body: ListView(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Text('默认标签'),
-              ),
-              for (final label in presetLabels)
-                ListTile(
-                  leading: CircleAvatar(backgroundColor: label.color),
-                  title: Text(label.name),
-                  subtitle: const Text('默认标签，不可删除'),
-                ),
-              const Divider(height: 24),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: Text(
-                  '自定义标签',
-                  style: Theme.of(context).textTheme.titleSmall,
+              Text('预置标签', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                '内置标签，不可编辑或删除',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final label in presetLabels) _presetLabelChip(label),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text('自定义标签', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 10),
               if (customLabels.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Text('还没有自定义标签'),
-                ),
-              for (final label in customLabels)
-                ListTile(
-                  leading: CircleAvatar(backgroundColor: label.color),
-                  title: Text(label.name),
-                  subtitle: Text(
-                    '#${label.colorValue.toRadixString(16).substring(2).toUpperCase()}',
+                Text(
+                  '还没有自定义标签',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-                  onTap: () => _update(context, label),
-                  trailing: IconButton(
-                    tooltip: '删除标签',
-                    onPressed: () => _delete(context, label),
-                    icon: Icon(
-                      Icons.close,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final label in customLabels)
+                      _customLabelChip(context, label),
+                  ],
                 ),
             ],
           ),
