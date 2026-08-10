@@ -162,9 +162,10 @@ class LabelManagementScreen extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       avatar: CircleAvatar(backgroundColor: label.color, radius: 8),
       onPressed: () => _update(context, label),
+      deleteButtonTooltipMessage: '删除标签「${label.name}」',
       deleteIcon: Icon(
         Icons.close,
-        size: 16,
+        size: 20,
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
       onDeleted: () => _delete(context, label),
