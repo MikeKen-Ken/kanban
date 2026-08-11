@@ -168,6 +168,7 @@ class KanbanColumnWidget extends StatelessWidget {
       columnId: column.id,
       card: card,
       autofocusTitle: true,
+      isNewCard: true,
     );
   }
 

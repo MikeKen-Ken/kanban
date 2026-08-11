@@ -41,6 +41,7 @@ Future<void> showCardDetailSheet({
   required String columnId,
   required KanbanCard card,
   bool autofocusTitle = false,
+  bool isNewCard = false,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -55,6 +56,7 @@ Future<void> showCardDetailSheet({
       columnId: columnId,
       card: card,
       autofocusTitle: autofocusTitle,
+      isNewCard: isNewCard,
     ),
   );
 }
@@ -64,11 +66,13 @@ class _CardDetailSheet extends StatefulWidget {
     required this.columnId,
     required this.card,
     this.autofocusTitle = false,
+    this.isNewCard = false,
   });
 
   final String columnId;
   final KanbanCard card;
   final bool autofocusTitle;
+  final bool isNewCard;
 
   @override
   State<_CardDetailSheet> createState() => _CardDetailSheetState();
@@ -1241,7 +1245,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                     columnId: widget.columnId,
                     cardId: widget.card.id,
                     cardTitle: widget.card.title,
-                    showComplete: !_isInDoneColumn,
+                    // 新建卡详情不展示「完成」：刚建卡时用户可能误把「完成」当「保存」，
+                    // 导致卡片被直接标记完成并移入已完成列。
+                    showComplete: !widget.isNewCard && !_isInDoneColumn,
                     onSaveAsTemplate: _saveAsTemplate,
                     onTransfer: _transferToOtherProject,
                     onDeleted: _closeWithoutPersist,
