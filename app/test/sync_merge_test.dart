@@ -65,7 +65,12 @@ void main() {
       columnId: 'todo',
     );
     final remote = PlacedCard(
-      card: _card(id: 'c1', title: '原', description: '远端备注', createdAt: 90, updatedAt: 110),
+      card: _card(
+          id: 'c1',
+          title: '原',
+          description: '远端备注',
+          createdAt: 90,
+          updatedAt: 110),
       columnId: 'todo',
     );
     final result = mergeCardThreeWay(base: base, local: local, remote: remote);
@@ -75,7 +80,8 @@ void main() {
   });
 
   test('仅一侧新增列不丢', () {
-    final local = KanbanBoard.empty(id: '1').copyWith(revision: 5, updatedAt: 100);
+    final local =
+        KanbanBoard.empty(id: '1').copyWith(revision: 5, updatedAt: 100);
     final remote = _board(
       revision: 6,
       updatedAt: 200,
@@ -125,7 +131,8 @@ void main() {
   });
 
   test('不同字段三路自动合且无冲突标记', () {
-    final baseCard = _card(id: 'c1', title: '原标题', description: '原备注', updatedAt: 50);
+    final baseCard =
+        _card(id: 'c1', title: '原标题', description: '原备注', updatedAt: 50);
     final base = _board(
       revision: 1,
       updatedAt: 50,
@@ -219,7 +226,8 @@ void main() {
   });
 
   test('仅一侧新增待返工列不丢', () {
-    final local = KanbanBoard.empty(id: '1').copyWith(revision: 5, updatedAt: 100);
+    final local =
+        KanbanBoard.empty(id: '1').copyWith(revision: 5, updatedAt: 100);
     final remote = _board(
       revision: 6,
       updatedAt: 200,
@@ -556,6 +564,17 @@ void main() {
       settings.cardSurfaceOpacity,
       ProjectSettings.defaultCardSurfaceOpacity,
     );
+    expect(settings.wallpaperPlaybackMode, WallpaperPlaybackMode.fixed);
+    expect(
+      settings.wallpaperIntervalSeconds,
+      ProjectSettings.legacyWallpaperIntervalSeconds,
+    );
+  });
+
+  test('新项目默认每 10 秒随机轮播', () {
+    const settings = ProjectSettings();
+    expect(settings.wallpaperPlaybackMode, WallpaperPlaybackMode.random);
+    expect(settings.wallpaperIntervalSeconds, 10);
   });
 
   test('Settings 一侧为空默认桩时不制造冲突', () {
@@ -616,8 +635,10 @@ void main() {
         ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
     const goneEntry =
         ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
-    final keepBoard = KanbanBoard.empty(id: 'a').copyWith(revision: 1, updatedAt: 1);
-    final goneBoard = KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
+    final keepBoard =
+        KanbanBoard.empty(id: 'a').copyWith(revision: 1, updatedAt: 1);
+    final goneBoard =
+        KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
     final base = ProjectWorkspaceSnapshot(
       manifest: const ProjectsManifest(
         projects: [keepEntry, goneEntry],
@@ -672,9 +693,12 @@ void main() {
         ProjectEntry(id: 'a', title: 'A', updatedAt: 1, revision: 1);
     const goneEntry =
         ProjectEntry(id: 'b', title: 'B', updatedAt: 1, revision: 1);
-    final keepBoard = KanbanBoard.empty(id: 'a').copyWith(revision: 1, updatedAt: 1);
-    final goneBase = KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
-    final goneLocal = goneBase.copyWith(revision: 5, updatedAt: 500, title: '本地板');
+    final keepBoard =
+        KanbanBoard.empty(id: 'a').copyWith(revision: 1, updatedAt: 1);
+    final goneBase =
+        KanbanBoard.empty(id: 'b').copyWith(revision: 1, updatedAt: 1);
+    final goneLocal =
+        goneBase.copyWith(revision: 5, updatedAt: 500, title: '本地板');
     final base = ProjectWorkspaceSnapshot(
       manifest: const ProjectsManifest(
         projects: [keepEntry, goneEntry],

@@ -12,7 +12,7 @@ class ProjectSettings {
     this.themeId = '',
     this.backgroundAttachmentId = '',
     this.wallpaperIds = const [],
-    this.wallpaperPlaybackMode = WallpaperPlaybackMode.fixed,
+    this.wallpaperPlaybackMode = WallpaperPlaybackMode.random,
     this.wallpaperIntervalSeconds = defaultWallpaperIntervalSeconds,
     this.backgroundOverlayOpacity = defaultBackgroundOverlayOpacity,
     this.cardSurfaceOpacity = defaultCardSurfaceOpacity,
@@ -79,7 +79,10 @@ class ProjectSettings {
   static const maxBackgroundOverlayOpacity = 0.7;
   static const defaultCardSurfaceOpacity = 1.0;
   static const minCardSurfaceOpacity = 0.35;
-  static const defaultWallpaperIntervalSeconds = 60;
+
+  /// 新项目默认每 10 秒从所选壁纸中随机轮播。
+  static const defaultWallpaperIntervalSeconds = 10;
+  static const legacyWallpaperIntervalSeconds = 60;
   static const minWallpaperIntervalSeconds = 10;
   static const maxWallpaperIntervalSeconds = 86400;
 
@@ -101,6 +104,10 @@ class ProjectSettings {
     Object? conflictSide = _sentinel,
     bool clearConflictSide = false,
   }) {
+    final wallpaperMode = WallpaperPlaybackModeX.fromString(
+      json['wallpaperPlaybackMode'] as String?,
+    );
+    final intervalRaw = (json['wallpaperIntervalSeconds'] as num?)?.toInt();
     return ProjectSettings(
       doneColumnName: doneColumnName ?? this.doneColumnName,
       themeId: themeId ?? this.themeId,
@@ -204,12 +211,12 @@ class ProjectSettings {
           .where((id) => id.isNotEmpty)
           .toSet()
           .toList(growable: false),
-      wallpaperPlaybackMode: WallpaperPlaybackModeX.fromString(
-        json['wallpaperPlaybackMode'] as String?,
-      ),
+      wallpaperPlaybackMode: wallpaperMode,
       wallpaperIntervalSeconds: clampWallpaperIntervalSeconds(
-        (json['wallpaperIntervalSeconds'] as num?)?.toInt() ??
-            defaultWallpaperIntervalSeconds,
+        intervalRaw ??
+            (wallpaperMode == WallpaperPlaybackMode.random
+                ? defaultWallpaperIntervalSeconds
+                : legacyWallpaperIntervalSeconds),
       ),
       backgroundOverlayOpacity: overlay,
       cardSurfaceOpacity: cardOpacity,
