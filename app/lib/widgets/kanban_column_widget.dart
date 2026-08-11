@@ -45,8 +45,10 @@ class KanbanColumnWidget extends StatelessWidget {
     }
 
     final colorMarkerWidth = hasColor ? 12.0 : 0.0;
-    // 数量徽章：左右各 8 的内边距。
+    // 数量徽章：左右各 8、上下各 4 的内边距。
     final countWidth = measure(countLabel, countStyle) + 16;
+    const titleCountGap = 8.0;
+    const countToolsGap = 4.0;
     const dragHandleWidth = 24.0;
     const menuButtonWidth = 48.0;
     // 标题行仅左侧 12 内边距（右侧为 0）。
@@ -54,7 +56,9 @@ class KanbanColumnWidget extends StatelessWidget {
     // 末项余量：覆盖字体度量与各平台 IconButton 细微差异，避免收缩后 Row 溢出。
     final headerWidth = measure(column.title, titleStyle) +
         colorMarkerWidth +
+        titleCountGap +
         countWidth +
+        countToolsGap +
         dragHandleWidth +
         menuButtonWidth +
         horizontalPadding +
@@ -349,6 +353,7 @@ class KanbanColumnWidget extends StatelessWidget {
                   Text(column.title, style: titleStyle)
                 else
                   Expanded(child: Text(column.title, style: titleStyle)),
+                const SizedBox(width: 8),
                 Tooltip(
                   message: wipLimit == null
                       ? '卡片数量'
@@ -356,7 +361,7 @@ class KanbanColumnWidget extends StatelessWidget {
                           '${overWip ? '，已超出' : ''}',
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: overWip
                           ? colorScheme.errorContainer
@@ -369,6 +374,7 @@ class KanbanColumnWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(width: 4),
                 ReorderableDragStartListener(
                   index: columnIndex,
                   child: Tooltip(
