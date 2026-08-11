@@ -195,6 +195,44 @@ void main() {
     expect(resolvedProject.conflictTitle, isNull);
   });
 
+  test('CardFileAttachment serializes round trip', () {
+    final attachment = CardFileAttachment(
+      id: 'file-1',
+      fileName: 'notes.txt',
+      mimeType: 'text/plain',
+      order: 0,
+      createdAt: 100,
+      size: 42,
+    );
+    final json = attachment.toJson();
+    final restored = CardFileAttachment.fromJson(json);
+    expect(restored.id, attachment.id);
+    expect(restored.fileName, attachment.fileName);
+    expect(restored.size, 42);
+  });
+
+  test('KanbanCard keeps fileAttachments in json', () {
+    final card = KanbanCard(
+      id: 'card-1',
+      title: '带文件卡片',
+      order: 0,
+      createdAt: 1,
+      fileAttachments: [
+        CardFileAttachment(
+          id: 'file-1',
+          fileName: 'script.sh',
+          mimeType: 'text/x-shellscript',
+          order: 0,
+          createdAt: 1,
+          size: 128,
+        ),
+      ],
+    );
+    final restored = KanbanCard.fromJson(card.toJson());
+    expect(restored.fileAttachments, hasLength(1));
+    expect(restored.sortedFileAttachments.single.fileName, 'script.sh');
+  });
+
   test('attachmentIdFromRemoteFileName parses main and thumb files', () {
     expect(
       KanbanPaths.attachmentIdFromRemoteFileName(
@@ -208,5 +246,11 @@ void main() {
       '550e8400-e29b-41d4-a716-446655440000',
     );
     expect(KanbanPaths.attachmentIdFromRemoteFileName('notes.txt'), isNull);
+    expect(
+      KanbanPaths.fileAttachmentIdFromRemoteFileName(
+        '550e8400-e29b-41d4-a716-446655440000.bin',
+      ),
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
   });
 }

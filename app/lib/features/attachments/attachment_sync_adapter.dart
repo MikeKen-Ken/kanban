@@ -21,13 +21,27 @@ class AttachmentSyncAdapter {
   }) =>
       collectReferencedAttachmentIds(board, trash, settings: settings);
 
+  ReferencedAttachmentIds referencedIdsByKind(
+    KanbanBoard board,
+    TrashBin trash, {
+    ProjectSettings? settings,
+  }) =>
+      collectReferencedAttachmentsByKind(board, trash, settings: settings);
+
   Future<Uint8List?> readFile(
     String projectId,
     String attachmentId, {
     bool thumb = false,
+    bool isFileAttachment = false,
   }) async {
     final storage = _storage;
     if (storage == null) return null;
+    if (isFileAttachment) {
+      return storage.readFileBytes(
+        projectId: projectId,
+        attachmentId: attachmentId,
+      );
+    }
     return storage.readBytes(
       projectId: projectId,
       attachmentId: attachmentId,
@@ -40,9 +54,18 @@ class AttachmentSyncAdapter {
     String attachmentId,
     Uint8List bytes, {
     bool thumb = false,
+    bool isFileAttachment = false,
   }) async {
     final storage = _storage;
     if (storage == null) return;
+    if (isFileAttachment) {
+      await storage.writeFileBytes(
+        projectId: projectId,
+        attachmentId: attachmentId,
+        bytes: bytes,
+      );
+      return;
+    }
     await storage.writeBytes(
       projectId: projectId,
       attachmentId: attachmentId,
@@ -55,10 +78,17 @@ class AttachmentSyncAdapter {
     String projectId,
     String attachmentId, {
     bool thumb = false,
+    bool isFileAttachment = false,
   }) async {
     final storage = _storage;
     if (storage == null) return false;
-    return storage.exists(
+    if (isFileAttachment) {
+      return storage.existsFile(
+        projectId: projectId,
+        attachmentId: attachmentId,
+      );
+    }
+    return storage.existsImage(
       projectId: projectId,
       attachmentId: attachmentId,
       thumb: thumb,

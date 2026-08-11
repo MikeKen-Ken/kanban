@@ -121,6 +121,14 @@ extension BoardControllerLifecycle on BoardController {
           if (source != null) {
             attachments['attachments/${project.id}/$attachmentId'] = source;
           }
+          final fileSource = await store.readFileBytes(
+            projectId: project.id,
+            attachmentId: attachmentId,
+          );
+          if (fileSource != null) {
+            attachments['attachments/${project.id}/files/$attachmentId'] =
+                fileSource;
+          }
           final thumb = await store.readBytes(
             projectId: project.id,
             attachmentId: attachmentId,
@@ -195,14 +203,25 @@ extension BoardControllerLifecycle on BoardController {
     for (final entry in package.attachments.entries) {
       final segments = entry.key.split('/');
       if (segments.length < 3) continue;
-      final isThumb = segments.length >= 4 && segments[2] == 'thumbs';
-      final attachmentId = isThumb ? segments[3] : segments[2];
-      await store.writeBytes(
-        projectId: segments[1],
-        attachmentId: attachmentId,
-        bytes: entry.value,
-        thumb: isThumb,
-      );
+      final isFile = segments.length >= 4 && segments[2] == 'files';
+      final isThumb = !isFile && segments.length >= 4 && segments[2] == 'thumbs';
+      final attachmentId = isFile
+          ? segments[3]
+          : (isThumb ? segments[3] : segments[2]);
+      if (isFile) {
+        await store.writeFileBytes(
+          projectId: segments[1],
+          attachmentId: attachmentId,
+          bytes: entry.value,
+        );
+      } else {
+        await store.writeBytes(
+          projectId: segments[1],
+          attachmentId: attachmentId,
+          bytes: entry.value,
+          thumb: isThumb,
+        );
+      }
     }
     final restoredProjectIds = {
       for (final project in package.workspace.manifest.projects) project.id,
@@ -212,6 +231,9 @@ extension BoardControllerLifecycle on BoardController {
         for (final path in package.attachments.keys)
           if (path.startsWith('attachments/$projectId/') &&
               !path.contains('/thumbs/'))
+            path.split('/').last,
+        for (final path in package.attachments.keys)
+          if (path.startsWith('attachments/$projectId/files/'))
             path.split('/').last,
       };
       await store.deleteOrphans(projectId: projectId, keepIds: keepIds);

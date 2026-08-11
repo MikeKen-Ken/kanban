@@ -45,6 +45,7 @@ List<CardReference> buildCardReferences({
             order: card.order,
             blockedByIds: [...card.blockedByIds],
             relatedIds: [...card.relatedIds],
+            commitRef: card.commitRef,
             links: [
               for (final link in card.sortedLinks)
                 {

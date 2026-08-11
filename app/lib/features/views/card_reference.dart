@@ -23,6 +23,7 @@ class CardReference {
     this.blockedByIds = const [],
     this.relatedIds = const [],
     this.links = const [],
+    this.commitRef,
     this.source,
   });
 
@@ -45,6 +46,7 @@ class CardReference {
   final int order;
   final List<String> blockedByIds;
   final List<String> relatedIds;
+  final String? commitRef;
 
   /// 外链摘要：`{id, url, title?}`
   final List<Map<String, dynamic>> links;
@@ -71,6 +73,7 @@ class CardReference {
         'order': order,
         if (blockedByIds.isNotEmpty) 'blockedByIds': blockedByIds,
         if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
+        if (commitRef != null && commitRef!.isNotEmpty) 'commitRef': commitRef,
         if (links.isNotEmpty) 'links': links,
       };
 
@@ -98,6 +101,8 @@ class CardReference {
       order: _int(json['order']),
       blockedByIds: _strings(json['blockedByIds']),
       relatedIds: _strings(json['relatedIds']),
+      commitRef:
+          json['commitRef'] is String ? json['commitRef'] as String : null,
       links: _linkMaps(json['links']),
     );
   }

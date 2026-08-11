@@ -277,6 +277,10 @@ extension BoardControllerTrash on BoardController {
         projectId: projectId,
         attachments: card.attachments,
       );
+      await store.deleteFileAttachments(
+        projectId: projectId,
+        attachments: card.fileAttachments,
+      );
       return;
     }
 
@@ -287,19 +291,26 @@ extension BoardControllerTrash on BoardController {
           projectId: projectId,
           attachments: columnCard.attachments,
         );
+        await store.deleteFileAttachments(
+          projectId: projectId,
+          attachments: columnCard.fileAttachments,
+        );
       }
       return;
     }
 
     final project = item.projectPayload;
     if (project != null) {
-      final ids = collectReferencedAttachmentIds(
+      final refs = collectReferencedAttachmentsByKind(
         project.board,
         project.projectTrash,
         settings: project.settings,
       );
-      for (final id in ids) {
+      for (final id in refs.imageIds) {
         await store.deleteAttachment(projectId: projectId, attachmentId: id);
+      }
+      for (final id in refs.fileIds) {
+        await store.deleteFileAttachment(projectId: projectId, attachmentId: id);
       }
     }
   }

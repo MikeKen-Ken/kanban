@@ -14,8 +14,10 @@ import '../completed_auto_clear/completed_auto_clear.dart';
 import '../labels/label_editor_dialog.dart';
 import 'card_detail_actions_bar.dart';
 import 'card_detail_attachments_section.dart';
+import 'card_detail_file_attachments_section.dart';
 import 'card_detail_checklist_section.dart';
 import 'card_detail_conflict_banner.dart';
+import 'card_detail_commit_ref_section.dart';
 import 'card_detail_due_reminder_section.dart';
 import 'card_detail_pin_button.dart';
 import 'card_detail_relations_section.dart';
@@ -94,6 +96,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late List<ChecklistItem> _checklist;
   late List<ChecklistItem> _verificationFeedback;
   late List<CardAttachment> _attachments;
+  late List<CardFileAttachment> _fileAttachments;
   late List<CardLink> _links;
   late List<String> _blockedByIds;
   late List<String> _relatedIds;
@@ -139,6 +142,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _checklist = [...widget.card.checklist];
     _verificationFeedback = [...widget.card.verificationFeedback];
     _attachments = [...widget.card.sortedAttachments];
+    _fileAttachments = [...widget.card.sortedFileAttachments];
     _links = [...widget.card.sortedLinks];
     _blockedByIds = [...widget.card.blockedByIds];
     _relatedIds = [...widget.card.relatedIds];
@@ -256,6 +260,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (!_attachmentIdsEqual(_attachments, widget.card.sortedAttachments)) {
       return true;
     }
+    if (!_fileAttachmentIdsEqual(
+        _fileAttachments, widget.card.sortedFileAttachments)) {
+      return true;
+    }
     if (!_linksEqual(_links, widget.card.sortedLinks)) return true;
     if (!_listEquals(_blockedByIds, widget.card.blockedByIds)) return true;
     if (!_listEquals(_relatedIds, widget.card.relatedIds)) return true;
@@ -306,6 +314,17 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     return true;
   }
 
+  static bool _fileAttachmentIdsEqual(
+    List<CardFileAttachment> a,
+    List<CardFileAttachment> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id || a[i].order != b[i].order) return false;
+    }
+    return true;
+  }
+
   /// 间隔可选上限：天 30、周/月 12。
   static int _maxRecurrenceInterval(CardRecurrence recurrence) {
     return switch (recurrence) {
@@ -326,6 +345,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_checklist.isNotEmpty) return true;
     if (_verificationFeedback.isNotEmpty) return true;
     if (_attachments.isNotEmpty) return true;
+    if (_fileAttachments.isNotEmpty) return true;
     if (_links.isNotEmpty) return true;
     if (_blockedByIds.isNotEmpty || _relatedIds.isNotEmpty) return true;
     if (_colorValue != null) return true;
@@ -381,6 +401,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final verificationFeedback =
         List<ChecklistItem>.from(_verificationFeedback);
     final attachments = List<CardAttachment>.from(_attachments);
+    final fileAttachments = List<CardFileAttachment>.from(_fileAttachments);
     final links = List<CardLink>.from(_links);
     final blockedByIds = List<String>.from(_blockedByIds);
     final relatedIds = List<String>.from(_relatedIds);
@@ -410,6 +431,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         checklist: checklist,
         verificationFeedback: verificationFeedback,
         attachments: attachments,
+        fileAttachments: fileAttachments,
         links: links,
         blockedByIds: blockedByIds,
         relatedIds: relatedIds,
@@ -1088,6 +1110,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _boardController.missingAttachmentIds,
                           onAttachmentsChanged: (next) =>
                               _safeSetState(() => _attachments = next),
+                        ),
+                        const SizedBox(height: 20),
+                        CardDetailFileAttachmentsSection(
+                          columnId: widget.columnId,
+                          cardId: widget.card.id,
+                          attachments: _fileAttachments,
+                          missingAttachmentIds:
+                              _boardController.missingAttachmentIds,
+                          onAttachmentsChanged: (next) =>
+                              _safeSetState(() => _fileAttachments = next),
                         ),
                         const SizedBox(height: 20),
                         CardDetailDueReminderSection(

@@ -6,6 +6,7 @@ import '../kanban/move_to_rework_on_new_feedback.dart';
 import '../views/card_reference.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_card_payloads.dart';
+import 'mcp_set_card_commit_ref.dart';
 import 'mcp_submit_for_verify.dart';
 import 'mcp_tool_results.dart';
 
@@ -233,6 +234,10 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         ),
         'colorValue': JsonSchema.number(),
         'clearColor': JsonSchema.boolean(),
+        'commitRef': JsonSchema.string(
+          description: '完成该任务对应的 Git 提交号（完整或短 hash）',
+        ),
+        'clearCommitRef': JsonSchema.boolean(),
       },
       required: ['cardId', 'columnId'],
     ),
@@ -308,6 +313,12 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           links: links,
           colorValue: (args['colorValue'] as num?)?.toInt(),
           clearColor: args['clearColor'] == true,
+          commitRef: args.containsKey('commitRef')
+              ? mcpTrimmedString(args['commitRef'])
+              : null,
+          clearCommitRef: args['clearCommitRef'] == true ||
+              (args.containsKey('commitRef') &&
+                  (mcpTrimmedString(args['commitRef'])?.isEmpty ?? true)),
         );
         if (updateError != null) return mcpErrorResult(updateError);
         final actualColumnId =
@@ -524,6 +535,45 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           'projectId': projectId,
         });
       });
+    },
+  );
+
+  server.registerTool(
+    'set_card_commit_ref',
+    description:
+        '写入卡片「提交号」（Git commit hash，完整或短均可）。'
+        '只需 cardId 与 commitRef；省略 projectId 时按 cardId 跨项目定位。'
+        '传 clearCommitRef=true 可清除。',
+    inputSchema: JsonSchema.object(
+      properties: {
+        'cardId': JsonSchema.string(description: '卡片 id'),
+        'commitRef': JsonSchema.string(
+          description: 'Git 提交号；与 clearCommitRef 二选一',
+        ),
+        'clearCommitRef': JsonSchema.boolean(
+          description: 'true 时清除已有提交号',
+        ),
+        'projectId': JsonSchema.string(
+          description: '目标项目；省略则按 cardId 跨项目定位',
+        ),
+      },
+      required: ['cardId'],
+    ),
+    annotations: const ToolAnnotations(
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    ),
+    callback: (args, extra) async {
+      final cardId = mcpTrimmedString(args['cardId']) ?? '';
+      if (cardId.isEmpty) return mcpErrorResult('cardId 不能为空');
+      return mcpSetCardCommitRef(
+        controller,
+        cardId: cardId,
+        projectId: args['projectId'] as String?,
+        commitRef: args['commitRef'] as String?,
+        clearCommitRef: args['clearCommitRef'] == true,
+      );
     },
   );
 

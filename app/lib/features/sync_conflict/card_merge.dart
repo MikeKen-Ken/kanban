@@ -61,6 +61,18 @@ bool _attachmentsEq(List<CardAttachment> a, List<CardAttachment> b) {
   return true;
 }
 
+bool _fileAttachmentsEq(List<CardFileAttachment> a, List<CardFileAttachment> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].id != b[i].id ||
+        a[i].fileName != b[i].fileName ||
+        a[i].order != b[i].order) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool _linksEq(List<CardLink> a, List<CardLink> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
@@ -91,9 +103,11 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       _checklistEq(a.checklist, b.checklist) &&
       _checklistEq(a.verificationFeedback, b.verificationFeedback) &&
       _attachmentsEq(a.attachments, b.attachments) &&
+      _fileAttachmentsEq(a.fileAttachments, b.fileAttachments) &&
       _linksEq(a.links, b.links) &&
       _listEq(a.blockedByIds, b.blockedByIds) &&
-      _listEq(a.relatedIds, b.relatedIds);
+      _listEq(a.relatedIds, b.relatedIds) &&
+      a.commitRef == b.commitRef;
 }
 
 KanbanCard stripConflict(KanbanCard card) {
@@ -217,9 +231,11 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
       !_checklistEq(local.checklist, remote.checklist) ||
       !_checklistEq(local.verificationFeedback, remote.verificationFeedback) ||
       !_attachmentsEq(local.attachments, remote.attachments) ||
+      !_fileAttachmentsEq(local.fileAttachments, remote.fileAttachments) ||
       !_linksEq(local.links, remote.links) ||
       !_listEq(local.blockedByIds, remote.blockedByIds) ||
-      !_listEq(local.relatedIds, remote.relatedIds);
+      !_listEq(local.relatedIds, remote.relatedIds) ||
+      local.commitRef != remote.commitRef;
 }
 
 KanbanCard _mergeFieldsAuto(KanbanCard local, KanbanCard remote) {
@@ -389,6 +405,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.attachments,
     eq: _attachmentsEq,
   );
+  final fileAttachmentsConflict = _fieldConflict(
+    base: base.card.fileAttachments,
+    local: loc.card.fileAttachments,
+    remote: rem.card.fileAttachments,
+    eq: _fileAttachmentsEq,
+  );
   final linksConflict = _fieldConflict(
     base: base.card.links,
     local: loc.card.links,
@@ -406,6 +428,12 @@ CardMergeResult mergeCardThreeWay({
     local: loc.card.relatedIds,
     remote: rem.card.relatedIds,
     eq: _listEq,
+  );
+  final commitRefConflict = _fieldConflict(
+    base: base.card.commitRef,
+    local: loc.card.commitRef,
+    remote: rem.card.commitRef,
+    eq: (a, b) => a == b,
   );
   final columnConflict = _fieldConflict(
     base: base.columnId,
@@ -429,9 +457,11 @@ CardMergeResult mergeCardThreeWay({
       checklistConflict ||
       verificationFeedbackConflict ||
       attachmentsConflict ||
+      fileAttachmentsConflict ||
       linksConflict ||
       blockedByConflict ||
       relatedConflict ||
+      commitRefConflict ||
       columnConflict;
 
   if (anyConflict) {
@@ -531,6 +561,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.attachments,
     eq: _attachmentsEq,
   );
+  final mergedFileAttachments = _threeWayValue(
+    base: base.card.fileAttachments,
+    local: loc.card.fileAttachments,
+    remote: rem.card.fileAttachments,
+    eq: _fileAttachmentsEq,
+  );
   final mergedLinks = _threeWayValue(
     base: base.card.links,
     local: loc.card.links,
@@ -548,6 +584,11 @@ CardMergeResult mergeCardThreeWay({
     local: loc.card.relatedIds,
     remote: rem.card.relatedIds,
     eq: _listEq,
+  );
+  final mergedCommitRef = _threeWayValue(
+    base: base.card.commitRef,
+    local: loc.card.commitRef,
+    remote: rem.card.commitRef,
   );
   final columnId = _threeWayValue(
     base: base.columnId,
@@ -581,9 +622,11 @@ CardMergeResult mergeCardThreeWay({
     checklist: mergedChecklist,
     verificationFeedback: mergedVerificationFeedback,
     attachments: mergedAttachments,
+    fileAttachments: mergedFileAttachments,
     links: mergedLinks,
     blockedByIds: mergedBlockedBy,
     relatedIds: mergedRelated,
+    commitRef: mergedCommitRef,
     colorValue: mergedColor,
   );
 

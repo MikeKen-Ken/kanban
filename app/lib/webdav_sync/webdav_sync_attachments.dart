@@ -113,7 +113,7 @@ mixin _WebDavSyncAttachments
     return names;
   }
 
-  Future<bool> _downloadRemoteAttachment(
+  Future<bool> _downloadRemoteImageAttachment(
     Client client,
     String attachmentsDir,
     String base,
@@ -121,7 +121,11 @@ mixin _WebDavSyncAttachments
     String attachmentId, {
     bool thumb = false,
   }) async {
-    if (await _attachmentSync.exists(projectId, attachmentId, thumb: thumb)) {
+    if (await _attachmentSync.exists(
+      projectId,
+      attachmentId,
+      thumb: thumb,
+    )) {
       return true;
     }
 
@@ -142,8 +146,11 @@ mixin _WebDavSyncAttachments
           bytes,
           thumb: thumb,
         );
-        return await _attachmentSync.exists(projectId, attachmentId,
-            thumb: thumb);
+        return await _attachmentSync.exists(
+          projectId,
+          attachmentId,
+          thumb: thumb,
+        );
       }
 
       final expectedName = KanbanPaths.remoteProjectAttachmentFileName(
@@ -164,8 +171,11 @@ mixin _WebDavSyncAttachments
           bytes,
           thumb: thumb,
         );
-        if (await _attachmentSync.exists(projectId, attachmentId,
-            thumb: thumb)) {
+        if (await _attachmentSync.exists(
+          projectId,
+          attachmentId,
+          thumb: thumb,
+        )) {
           return true;
         }
       }
@@ -173,7 +183,84 @@ mixin _WebDavSyncAttachments
       return false;
     }
 
-    return await _attachmentSync.exists(projectId, attachmentId, thumb: thumb);
+    return await _attachmentSync.exists(
+      projectId,
+      attachmentId,
+      thumb: thumb,
+    );
+  }
+
+  Future<bool> _downloadRemoteFileAttachment(
+    Client client,
+    String attachmentsDir,
+    String base,
+    String projectId,
+    String attachmentId,
+  ) async {
+    if (await _attachmentSync.exists(
+      projectId,
+      attachmentId,
+      isFileAttachment: true,
+    )) {
+      return true;
+    }
+
+    try {
+      var bytes = await _readBytes(
+        client,
+        KanbanPaths.remoteProjectFileAttachmentPath(
+          base,
+          projectId,
+          attachmentId,
+        ),
+      );
+      if (bytes != null && bytes.isNotEmpty) {
+        await _attachmentSync.writeFile(
+          projectId,
+          attachmentId,
+          bytes,
+          isFileAttachment: true,
+        );
+        return await _attachmentSync.exists(
+          projectId,
+          attachmentId,
+          isFileAttachment: true,
+        );
+      }
+
+      final expectedName =
+          KanbanPaths.remoteProjectFileAttachmentFileName(attachmentId);
+      final files = await _readDirWithFallback(client, attachmentsDir);
+      for (final file in files) {
+        if (file.isDir == true) continue;
+        final name = file.name ?? file.path?.split('/').last ?? '';
+        if (name != expectedName) continue;
+        final remotePath = _remoteFilePath(attachmentsDir, file);
+        bytes = await _readBytes(client, remotePath);
+        if (bytes == null || bytes.isEmpty) continue;
+        await _attachmentSync.writeFile(
+          projectId,
+          attachmentId,
+          bytes,
+          isFileAttachment: true,
+        );
+        if (await _attachmentSync.exists(
+          projectId,
+          attachmentId,
+          isFileAttachment: true,
+        )) {
+          return true;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return await _attachmentSync.exists(
+      projectId,
+      attachmentId,
+      isFileAttachment: true,
+    );
   }
 
   Future<int> _pushProjectAttachments(
@@ -188,14 +275,18 @@ mixin _WebDavSyncAttachments
     if (!_attachmentSync.isAvailable) return 0;
 
     var failed = 0;
-    final keepIds =
-        _attachmentSync.referencedIds(board, trash, settings: settings);
+    final refs = _attachmentSync.referencedIdsByKind(
+      board,
+      trash,
+      settings: settings,
+    );
+    final keepIds = refs.all;
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
     final remoteNames =
         await _listRemoteAttachmentNames(client, attachmentsDir);
 
-    for (final id in keepIds) {
+    for (final id in refs.imageIds) {
       _ensureNotCancelled();
       for (final thumb in const [false, true]) {
         final localExists = await _attachmentSync.exists(
@@ -246,6 +337,49 @@ mixin _WebDavSyncAttachments
       }
     }
 
+    for (final id in refs.fileIds) {
+      _ensureNotCancelled();
+      final localExists = await _attachmentSync.exists(
+        projectId,
+        id,
+        isFileAttachment: true,
+      );
+      final remoteName = KanbanPaths.remoteProjectFileAttachmentFileName(id);
+      final remoteExists = remoteNames.contains(remoteName);
+      if (!shouldUploadAttachmentFile(
+        localExists: localExists,
+        remoteExists: remoteExists,
+      )) {
+        continue;
+      }
+      final bytes = await _attachmentSync.readFile(
+        projectId,
+        id,
+        isFileAttachment: true,
+      );
+      if (bytes == null) {
+        failed++;
+        continue;
+      }
+      try {
+        await _writeBytesWithRetry(
+          client,
+          KanbanPaths.remoteProjectFileAttachmentPath(
+            base,
+            projectId,
+            id,
+          ),
+          bytes,
+        );
+        remoteNames.add(remoteName);
+      } catch (e) {
+        failed++;
+        _lastAttachmentError ??= e.toString();
+        // ignore: avoid_print
+        print('文件附件上传失败 $projectId/$id: $e');
+      }
+    }
+
     if (cleanupOrphans) {
       try {
         await _cleanupRemoteAttachments(client, attachmentsDir, keepIds);
@@ -272,14 +406,19 @@ mixin _WebDavSyncAttachments
     if (!_attachmentSync.isAvailable) return 0;
 
     var failed = 0;
-    final keepIds =
-        _attachmentSync.referencedIds(board, trash, settings: settings);
+    final refs = _attachmentSync.referencedIdsByKind(
+      board,
+      trash,
+      settings: settings,
+    );
+    final keepIds = refs.all;
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
-    for (final id in keepIds) {
+
+    for (final id in refs.imageIds) {
       _ensureNotCancelled();
       for (final thumb in const [false, true]) {
-        await _downloadRemoteAttachment(
+        await _downloadRemoteImageAttachment(
           client,
           attachmentsDir,
           base,
@@ -289,6 +428,24 @@ mixin _WebDavSyncAttachments
         );
       }
       if (!await _attachmentSync.exists(projectId, id)) {
+        failed++;
+      }
+    }
+
+    for (final id in refs.fileIds) {
+      _ensureNotCancelled();
+      await _downloadRemoteFileAttachment(
+        client,
+        attachmentsDir,
+        base,
+        projectId,
+        id,
+      );
+      if (!await _attachmentSync.exists(
+        projectId,
+        id,
+        isFileAttachment: true,
+      )) {
         failed++;
       }
     }
@@ -310,7 +467,7 @@ mixin _WebDavSyncAttachments
     for (final file in files) {
       if (file.isDir == true) continue;
       final name = file.name ?? file.path?.split('/').last ?? '';
-      final id = KanbanPaths.attachmentIdFromRemoteFileName(name);
+      final id = KanbanPaths.attachmentIdFromAnyRemoteFileName(name);
       if (id == null || keepIds.contains(id)) continue;
       try {
         await client.remove(_remoteFilePath(attachmentsDir, file));
@@ -362,8 +519,8 @@ mixin _WebDavSyncAttachments
     if (failedCount > 0) {
       final detail = _lastAttachmentError;
       attachmentSyncWarning = (detail == null || detail.isEmpty)
-          ? '$failedCount 个图片附件同步失败，可点击同步图标重试'
-          : '$failedCount 个图片附件同步失败：$detail';
+          ? '$failedCount 个附件同步失败，可点击同步图标重试'
+          : '$failedCount 个附件同步失败：$detail';
     } else {
       attachmentSyncWarning = null;
       _lastAttachmentError = null;
