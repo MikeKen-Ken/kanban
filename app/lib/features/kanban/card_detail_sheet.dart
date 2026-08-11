@@ -83,6 +83,7 @@ class _CardDetailSheet extends StatefulWidget {
 class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
+  late final TextEditingController _commitRefController;
   late final FocusNode _titleFocusNode;
   final FocusNode _descFocusNode = FocusNode();
   late BoardController _boardController;
@@ -117,6 +118,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   Iterable<TextEditingController> get _textControllers => [
         _titleController,
         _descController,
+        _commitRefController,
         _checklistInput,
         _verificationFeedbackInput,
       ];
@@ -128,6 +130,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _titleController = TextEditingController(text: widget.card.title);
     _descController =
         TextEditingController(text: widget.card.description ?? '');
+    _commitRefController =
+        TextEditingController(text: widget.card.commitRef ?? '');
     _completed = widget.card.completed;
     _dueDate = widget.card.dueDate != null
         ? DateTime.fromMillisecondsSinceEpoch(widget.card.dueDate!)
@@ -182,6 +186,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _titleController.dispose();
     _titleFocusNode.dispose();
     _descController.dispose();
+    _commitRefController.dispose();
     _descFocusNode.dispose();
     _checklistInput.dispose();
     _verificationFeedbackInput.dispose();
@@ -242,6 +247,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_effectiveTitle != widget.card.title) return true;
     if (nextDesc !=
         (originalDesc == null || originalDesc.isEmpty ? null : originalDesc)) {
+      return true;
+    }
+    final originalCommitRef = widget.card.commitRef?.trim();
+    final nextCommitRef = _commitRefController.text.trim();
+    if (nextCommitRef !=
+        (originalCommitRef == null || originalCommitRef.isEmpty
+            ? ''
+            : originalCommitRef)) {
       return true;
     }
     if (_completed != widget.card.completed) return true;
@@ -349,6 +362,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_links.isNotEmpty) return true;
     if (_blockedByIds.isNotEmpty || _relatedIds.isNotEmpty) return true;
     if (_colorValue != null) return true;
+    if (_commitRefController.text.trim().isNotEmpty) return true;
     return false;
   }
 
@@ -387,6 +401,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     // 在可能 dispose 之前同步快照，再异步写入。
     final title = _effectiveTitle;
     final description = _effectiveDescription;
+    final commitRefText = _commitRefController.text.trim();
+    final commitRef = commitRefText.isEmpty ? null : commitRefText;
+    final clearCommitRef = commitRefText.isEmpty;
     final completed = _completed;
     final dueDate = _dueDate?.millisecondsSinceEpoch;
     final clearDueDate = _dueDate == null;
@@ -417,6 +434,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         title: title,
         description: description,
         clearDescription: description == null,
+        commitRef: commitRef,
+        clearCommitRef: clearCommitRef,
         completed: hasIncompleteVerificationFeedback(verificationFeedback)
             ? false
             : completed,
@@ -1129,6 +1148,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _safeSetState(() => _dueDate = value),
                           onReminderChanged: (value) =>
                               _safeSetState(() => _reminderAt = value),
+                        ),
+                        const SizedBox(height: 20),
+                        CardDetailCommitRefSection(
+                          controller: _commitRefController,
+                          onChanged: () => _safeSetState(() {}),
                         ),
                         const SizedBox(height: 20),
                         Text('重复', style: theme.textTheme.titleSmall),

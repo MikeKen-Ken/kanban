@@ -26,6 +26,8 @@ Map<String, dynamic> mcpBoardCardSummary(
       },
     if (card.attachments.isNotEmpty) 'attachmentCount': card.attachments.length,
     if (card.blockedByIds.isNotEmpty) 'blockedByIds': card.blockedByIds,
+    if (card.commitRef != null && card.commitRef!.isNotEmpty)
+      'commitRef': card.commitRef,
   };
   if (!includeDetails) return payload;
 
