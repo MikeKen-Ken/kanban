@@ -26,6 +26,7 @@
 - `projects.json` — 项目清单
 - `app_trash.json` — 应用级回收站
 - `shared_content.json` — 共享内容（标签等）
+- `wallpapers/` — 工作区级壁纸原图与缩略图；下载后持久化到设备本地缓存，项目仅引用壁纸 id
 - `sync_index.json` — 各 JSON 文件内容指纹（sha256）；拉取时与本地 SyncBase 比对，跳过未变更文件。旧客户端可忽略；无索引时回退全量拉取
 - `projects/{projectId}/board.json` + `columns/*.json` + `settings.json` + `trash.json` + `attachments/`
 

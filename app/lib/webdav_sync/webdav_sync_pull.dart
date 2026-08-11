@@ -1,6 +1,12 @@
 part of 'webdav_sync_service.dart';
 
-mixin _WebDavSyncPull on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClientIo, _WebDavSyncAttachments, _WebDavSyncPush {
+mixin _WebDavSyncPull
+    on
+        _WebDavSyncHost,
+        _WebDavSyncScheduler,
+        _WebDavSyncClientIo,
+        _WebDavSyncAttachments,
+        _WebDavSyncPush {
   Future<KanbanBoard?> _pullLegacyBoard(Client client, String base) async {
     final boardPath = KanbanPaths.remoteBoardPath(base);
     final meta = await _readJson(client, boardPath);
@@ -302,6 +308,11 @@ mixin _WebDavSyncPull on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClien
       var attachmentFailures = 0;
       if (client != null) {
         final base = _remoteBase(config);
+        attachmentFailures += await _pullWallpapers(
+          client,
+          base,
+          merged.sharedContent,
+        );
         final projects = merged.manifest.projects;
         var index = 0;
         for (final entry in projects) {
@@ -345,6 +356,12 @@ mixin _WebDavSyncPull on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClien
             base: base,
             workspace: merged,
             runId: runId,
+            cleanupOrphans: false,
+          );
+          attachmentFailures += await _pushWallpapers(
+            client,
+            base,
+            merged.sharedContent,
             cleanupOrphans: false,
           );
           _applyAttachmentSyncWarning(attachmentFailures);

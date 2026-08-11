@@ -8,6 +8,7 @@ import 'package:kanban/features/sync_conflict/sync_conflict.dart';
 import 'package:kanban/features/templates/card_template.dart';
 import 'package:kanban/features/views/filter_spec.dart';
 import 'package:kanban/features/views/saved_view.dart';
+import 'package:kanban/features/wallpapers/wallpaper_models.dart';
 import 'package:kanban/storage/board_storage.dart';
 import 'package:kanban/storage/board_storage_web.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +18,7 @@ SharedContent _content({
   List<SavedView> views = const [],
   List<CardTemplate> templates = const [],
   Map<String, ActivityLog> activity = const {},
+  List<WallpaperAsset> wallpapers = const [],
   int revision = 1,
   int updatedAt = 1,
 }) {
@@ -25,6 +27,7 @@ SharedContent _content({
     savedViews: views,
     cardTemplates: templates,
     activityByProject: activity,
+    wallpapers: wallpapers,
     revision: revision,
     updatedAt: updatedAt,
   );
@@ -43,7 +46,7 @@ ActivityEvent _event(String id, int occurredAt) {
 }
 
 void main() {
-  test('共享内容 JSON 往返保留标签、视图、模板和活动历史', () {
+  test('共享内容 JSON 往返保留标签、视图、模板、壁纸和活动历史', () {
     final original = _content(
       labels: const [
         SharedLabel(id: 'l1', name: '重要', colorValue: 0xFFFF0000, updatedAt: 2),
@@ -80,6 +83,16 @@ void main() {
           ],
         ),
       },
+      wallpapers: const [
+        WallpaperAsset(
+          id: 'w1',
+          fileName: '海边.jpg',
+          width: 1920,
+          height: 1080,
+          createdAt: 5,
+          updatedAt: 5,
+        ),
+      ],
       revision: 5,
       updatedAt: 6,
     );
@@ -90,6 +103,7 @@ void main() {
     expect(restored.savedViews.single.filter.labelIds, ['l1']);
     expect(restored.cardTemplates.single.title, '填写周报');
     expect(restored.activityByProject['p1']?.events.single.id, 'e1');
+    expect(restored.wallpapers.single.fileName, '海边.jpg');
     expect(
       restored.activityByProject['p1']?.events.single.source,
       ActivitySource.mcp,
@@ -166,6 +180,26 @@ void main() {
     expect(merged.labels.single.name, '本地标签');
     expect(merged.savedViews.single.name, '远端视图');
     expect(merged.cardTemplates.single.title, '新题');
+  });
+
+  test('壁纸按稳定 id 三路合并并传播删除', () {
+    final base = _content(
+      wallpapers: const [
+        WallpaperAsset(id: 'w1', fileName: '旧.jpg', updatedAt: 1),
+        WallpaperAsset(id: 'w2', fileName: '删除.jpg', updatedAt: 1),
+      ],
+    );
+    final local = _content(
+      wallpapers: const [
+        WallpaperAsset(id: 'w1', fileName: '本地.jpg', updatedAt: 20),
+      ],
+      revision: 2,
+      updatedAt: 20,
+    );
+    final merged = mergeSharedContent(local: local, remote: base, base: base);
+
+    expect(merged.wallpapers.map((item) => item.id), ['w1']);
+    expect(merged.wallpapers.single.fileName, '本地.jpg');
   });
 
   test('活动事件按 id 并集并限制长度', () {

@@ -3,6 +3,7 @@ import 'package:kanban/features/kanban/column_card_preferences.dart';
 import 'package:kanban/features/project/project_settings.dart';
 import 'package:kanban/features/project/projects_manifest.dart';
 import 'package:kanban/features/sync_conflict/sync_conflict.dart';
+import 'package:kanban/features/wallpapers/wallpaper_models.dart';
 import 'package:kanban/features/trash/trash_models.dart';
 import 'package:kanban/models/kanban_models.dart';
 
@@ -504,6 +505,40 @@ void main() {
     expect(roundtrip.backgroundOverlayOpacity, closeTo(0.55, 0.001));
     expect(roundtrip.cardSurfaceOpacity, closeTo(0.8, 0.001));
     expect(roundtrip.hasBackgroundImage, isTrue);
+  });
+
+  test('ProjectSettings 随机壁纸配置序列化往返', () {
+    const settings = ProjectSettings(
+      backgroundAttachmentId: 'w1',
+      wallpaperIds: ['w1', 'w2'],
+      wallpaperPlaybackMode: WallpaperPlaybackMode.random,
+      wallpaperIntervalSeconds: 60,
+      updatedAt: 42,
+      revision: 3,
+    );
+    final roundtrip = ProjectSettings.fromJson(settings.toJson());
+    expect(roundtrip.wallpaperIds, ['w1', 'w2']);
+    expect(roundtrip.wallpaperPlaybackMode, WallpaperPlaybackMode.random);
+    expect(roundtrip.wallpaperIntervalSeconds, 60);
+  });
+
+  test('Settings 三路合并可分别采纳壁纸配置与主题', () {
+    const base = ProjectSettings(updatedAt: 1, revision: 1);
+    final local = base.copyWith(
+      backgroundAttachmentId: 'w1',
+      wallpaperIds: ['w1', 'w2'],
+      wallpaperPlaybackMode: WallpaperPlaybackMode.random,
+      wallpaperIntervalSeconds: 30,
+      updatedAt: 2,
+      revision: 2,
+    );
+    final remote = base.copyWith(themeId: 'dark', updatedAt: 3, revision: 2);
+    final merged = mergeSettings(local: local, remote: remote, base: base);
+    expect(merged.wallpaperIds, ['w1', 'w2']);
+    expect(merged.wallpaperPlaybackMode, WallpaperPlaybackMode.random);
+    expect(merged.wallpaperIntervalSeconds, 30);
+    expect(merged.themeId, 'dark');
+    expect(merged.hasConflict, isFalse);
   });
 
   test('旧 settings.json 缺背景字段时使用安全默认值', () {

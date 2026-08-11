@@ -32,6 +32,7 @@ import '../features/templates/card_template.dart';
 import '../features/templates/create_card_choice.dart';
 import '../features/undo/undo_stack.dart';
 import '../features/views/views.dart';
+import '../features/wallpapers/wallpaper_models.dart';
 import '../models/kanban_models.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_labels.dart';
@@ -53,6 +54,7 @@ part 'board_controller_attachments.dart';
 part 'board_controller_trash.dart';
 part 'board_controller_sync.dart';
 part 'board_controller_scope.dart';
+part 'board_controller_wallpapers.dart';
 
 enum CardConflictResolution { keepPrimary, keepOther }
 
@@ -261,4 +263,3 @@ class BoardController extends _BoardControllerBase {
     super.dispose();
   }
 }
-

@@ -84,6 +84,21 @@ class KanbanPathsIo {
     ));
   }
 
+  static Directory wallpapersDirectory(Directory dataDir) =>
+      Directory(p.join(dataDir.path, KanbanPaths.wallpapersDirName));
+
+  static File wallpaperFile(
+    Directory dataDir,
+    String wallpaperId, {
+    bool thumb = false,
+  }) {
+    final name = thumb ? '${wallpaperId}_thumb' : wallpaperId;
+    return File(p.join(
+      wallpapersDirectory(dataDir).path,
+      '$name.${KanbanPaths.attachmentFileExt}',
+    ));
+  }
+
   static File appTrashFile(Directory dataDir) =>
       File(p.join(dataDir.path, KanbanPaths.appTrashFileName));
 

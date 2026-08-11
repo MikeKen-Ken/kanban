@@ -1,6 +1,98 @@
 part of 'webdav_sync_service.dart';
 
-mixin _WebDavSyncAttachments on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClientIo {
+mixin _WebDavSyncAttachments
+    on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClientIo {
+  Future<int> _pushWallpapers(
+    Client client,
+    String base,
+    SharedContent sharedContent, {
+    bool cleanupOrphans = true,
+  }) async {
+    if (!_attachmentSync.isAvailable) return 0;
+    final keepIds = sharedContent.wallpapers.map((item) => item.id).toSet();
+    final remoteDir = KanbanPaths.remoteWallpapersDir(base);
+    try {
+      await client.mkdirAll(remoteDir);
+    } catch (_) {
+      // note: 目录已存在时忽略
+    }
+    final remoteNames = await _listRemoteAttachmentNames(client, remoteDir);
+    var failed = 0;
+    for (final id in keepIds) {
+      _ensureNotCancelled();
+      for (final thumb in const [false, true]) {
+        if (!await _attachmentSync.wallpaperExists(id, thumb: thumb)) {
+          if (!thumb) failed++;
+          continue;
+        }
+        final name = KanbanPaths.remoteProjectAttachmentFileName(
+          id,
+          thumb: thumb,
+        );
+        if (remoteNames.contains(name)) continue;
+        final bytes = await _attachmentSync.readWallpaper(id, thumb: thumb);
+        if (bytes == null) continue;
+        try {
+          await _writeBytesWithRetry(
+            client,
+            KanbanPaths.remoteWallpaperPath(base, id, thumb: thumb),
+            bytes,
+          );
+          remoteNames.add(name);
+        } catch (e) {
+          if (!thumb) {
+            failed++;
+            _lastAttachmentError ??= e.toString();
+            // ignore: avoid_print
+            print('壁纸上传失败 $id: $e');
+          }
+        }
+      }
+    }
+    if (cleanupOrphans) {
+      await _cleanupRemoteAttachments(client, remoteDir, keepIds);
+      await _attachmentSync.deleteOrphanWallpapers(keepIds);
+    }
+    return failed;
+  }
+
+  Future<int> _pullWallpapers(
+    Client client,
+    String base,
+    SharedContent sharedContent,
+  ) async {
+    if (!_attachmentSync.isAvailable) return 0;
+    var failed = 0;
+    for (final asset in sharedContent.wallpapers) {
+      _ensureNotCancelled();
+      for (final thumb in const [false, true]) {
+        if (await _attachmentSync.wallpaperExists(asset.id, thumb: thumb)) {
+          continue;
+        }
+        try {
+          final bytes = await _readBytes(
+            client,
+            KanbanPaths.remoteWallpaperPath(base, asset.id, thumb: thumb),
+          );
+          if (bytes != null && bytes.isNotEmpty) {
+            await _attachmentSync.writeWallpaper(
+              asset.id,
+              bytes,
+              thumb: thumb,
+            );
+          }
+        } catch (_) {
+          // note: 缩略图缺失不阻断原图下载
+        }
+      }
+      if (!await _attachmentSync.wallpaperExists(asset.id)) failed++;
+    }
+    await _attachmentSync.deleteOrphanWallpapers(
+      sharedContent.wallpapers.map((item) => item.id).toSet(),
+    );
+    return failed;
+  }
+
   Future<Set<String>> _listRemoteAttachmentNames(
     Client client,
     String attachmentsDir,

@@ -6,6 +6,7 @@ class KanbanPaths {
   static const boardFileName = 'board.json';
   static const columnsDirName = 'columns';
   static const attachmentsDirName = 'attachments';
+  static const wallpapersDirName = 'wallpapers';
   static const attachmentFileExt = 'jpg';
   static const projectsFileName = 'projects.json';
   static const projectsDirName = 'projects';
@@ -90,6 +91,17 @@ class KanbanPaths {
         '${remoteProjectAttachmentFileName(attachmentId, thumb: thumb)}';
   }
 
+  static String remoteWallpapersDir(String baseDir) =>
+      '$baseDir/$wallpapersDirName';
+
+  static String remoteWallpaperPath(
+    String baseDir,
+    String wallpaperId, {
+    bool thumb = false,
+  }) =>
+      '${remoteWallpapersDir(baseDir)}/'
+      '${remoteProjectAttachmentFileName(wallpaperId, thumb: thumb)}';
+
   static String? attachmentIdFromRemoteFileName(String fileName) {
     if (!fileName.endsWith('.$attachmentFileExt')) return null;
     final base =
@@ -116,8 +128,7 @@ class KanbanPaths {
   static String remoteSyncIndexPath(String baseDir) =>
       '$baseDir/$syncIndexFileName';
 
-  static String remoteBackupsDir(String baseDir) =>
-      '$baseDir/$backupsDirName';
+  static String remoteBackupsDir(String baseDir) => '$baseDir/$backupsDirName';
 
   static String remoteBackupDir(String baseDir, String backupId) =>
       '${remoteBackupsDir(baseDir)}/$backupId';

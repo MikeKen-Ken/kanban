@@ -1,6 +1,11 @@
 part of 'webdav_sync_service.dart';
 
-mixin _WebDavSyncPush on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClientIo, _WebDavSyncAttachments {
+mixin _WebDavSyncPush
+    on
+        _WebDavSyncHost,
+        _WebDavSyncScheduler,
+        _WebDavSyncClientIo,
+        _WebDavSyncAttachments {
   String _remotePathForUploadItem(String base, SyncUploadItem item) {
     switch (item.kind) {
       case SyncUploadKind.projectsManifest:
@@ -221,6 +226,11 @@ mixin _WebDavSyncPush on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClien
         workspace: captured,
         runId: runId,
       );
+      final wallpaperFailures = await _pushWallpapers(
+        client,
+        base,
+        captured.sharedContent,
+      );
 
       if (!_shouldCommit(runId)) {
         throw const SyncCancelledException();
@@ -239,7 +249,7 @@ mixin _WebDavSyncPush on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClien
         }
       });
 
-      _applyAttachmentSyncWarning(attachmentFailures);
+      _applyAttachmentSyncWarning(attachmentFailures + wallpaperFailures);
       _noteSuccess();
       _setStatus(SyncStatus.success);
       unawaited(refreshPendingUploadCount());

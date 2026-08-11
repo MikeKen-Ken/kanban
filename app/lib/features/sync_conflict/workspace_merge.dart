@@ -41,10 +41,24 @@ bool _isUninitializedSettings(ProjectSettings s) =>
 
 bool _overlayEq(double a, double b) => (a - b).abs() < 0.001;
 
+bool _stringListEq(List<String> a, List<String> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool _wallpaperConfigEq(ProjectSettings a, ProjectSettings b) =>
+    _stringListEq(a.wallpaperIds, b.wallpaperIds) &&
+    a.wallpaperPlaybackMode == b.wallpaperPlaybackMode &&
+    a.wallpaperIntervalSeconds == b.wallpaperIntervalSeconds;
+
 bool _settingsContentDiffers(ProjectSettings a, ProjectSettings b) =>
     a.doneColumnName != b.doneColumnName ||
     a.themeId != b.themeId ||
     a.backgroundAttachmentId != b.backgroundAttachmentId ||
+    !_wallpaperConfigEq(a, b) ||
     !_overlayEq(a.backgroundOverlayOpacity, b.backgroundOverlayOpacity) ||
     !_overlayEq(a.cardSurfaceOpacity, b.cardSurfaceOpacity) ||
     !_prefsEq(a.columnPreferences, b.columnPreferences) ||
@@ -115,6 +129,8 @@ ProjectSettings mergeSettings({
       effectiveLocal.backgroundAttachmentId != base.backgroundAttachmentId;
   final bgRemoteChanged =
       effectiveRemote.backgroundAttachmentId != base.backgroundAttachmentId;
+  final wallpaperLocalChanged = !_wallpaperConfigEq(effectiveLocal, base);
+  final wallpaperRemoteChanged = !_wallpaperConfigEq(effectiveRemote, base);
   final overlayLocalChanged = !_overlayEq(
     effectiveLocal.backgroundOverlayOpacity,
     base.backgroundOverlayOpacity,
@@ -139,8 +155,7 @@ ProjectSettings mergeSettings({
       !_intMapEq(effectiveLocal.columnWipLimits, base.columnWipLimits);
   final wipRemoteChanged =
       !_intMapEq(effectiveRemote.columnWipLimits, base.columnWipLimits);
-  final swimlaneLocalChanged =
-      effectiveLocal.swimlaneMode != base.swimlaneMode;
+  final swimlaneLocalChanged = effectiveLocal.swimlaneMode != base.swimlaneMode;
   final swimlaneRemoteChanged =
       effectiveRemote.swimlaneMode != base.swimlaneMode;
   final automationLocalChanged = !AutomationRule.listEquals(
@@ -162,6 +177,9 @@ ProjectSettings mergeSettings({
       bgRemoteChanged &&
       effectiveLocal.backgroundAttachmentId !=
           effectiveRemote.backgroundAttachmentId;
+  final wallpaperConflict = wallpaperLocalChanged &&
+      wallpaperRemoteChanged &&
+      !_wallpaperConfigEq(effectiveLocal, effectiveRemote);
   final overlayConflict = overlayLocalChanged &&
       overlayRemoteChanged &&
       !_overlayEq(
@@ -199,6 +217,7 @@ ProjectSettings mergeSettings({
   if (doneConflict ||
       themeConflict ||
       bgConflict ||
+      wallpaperConflict ||
       overlayConflict ||
       cardOpacityConflict ||
       prefsConflict ||
@@ -235,6 +254,21 @@ ProjectSettings mergeSettings({
         : bgRemoteChanged
             ? effectiveRemote.backgroundAttachmentId
             : base.backgroundAttachmentId,
+    wallpaperIds: wallpaperLocalChanged
+        ? effectiveLocal.wallpaperIds
+        : wallpaperRemoteChanged
+            ? effectiveRemote.wallpaperIds
+            : base.wallpaperIds,
+    wallpaperPlaybackMode: wallpaperLocalChanged
+        ? effectiveLocal.wallpaperPlaybackMode
+        : wallpaperRemoteChanged
+            ? effectiveRemote.wallpaperPlaybackMode
+            : base.wallpaperPlaybackMode,
+    wallpaperIntervalSeconds: wallpaperLocalChanged
+        ? effectiveLocal.wallpaperIntervalSeconds
+        : wallpaperRemoteChanged
+            ? effectiveRemote.wallpaperIntervalSeconds
+            : base.wallpaperIntervalSeconds,
     backgroundOverlayOpacity: overlayLocalChanged
         ? effectiveLocal.backgroundOverlayOpacity
         : overlayRemoteChanged

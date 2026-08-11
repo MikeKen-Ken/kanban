@@ -76,4 +76,25 @@ class AttachmentSyncAdapter {
     if (storage == null) return;
     await storage.deleteOrphans(projectId: projectId, keepIds: keepIds);
   }
+
+  Future<Uint8List?> readWallpaper(String id, {bool thumb = false}) =>
+      _storage?.readWallpaperBytes(id, thumb: thumb) ??
+      Future<Uint8List?>.value(null);
+
+  Future<void> writeWallpaper(
+    String id,
+    Uint8List bytes, {
+    bool thumb = false,
+  }) async =>
+      _storage?.writeWallpaperBytes(
+        wallpaperId: id,
+        bytes: bytes,
+        thumb: thumb,
+      );
+
+  Future<bool> wallpaperExists(String id, {bool thumb = false}) =>
+      _storage?.wallpaperExists(id, thumb: thumb) ?? Future.value(false);
+
+  Future<void> deleteOrphanWallpapers(Set<String> keepIds) async =>
+      _storage?.deleteOrphanWallpapers(keepIds);
 }

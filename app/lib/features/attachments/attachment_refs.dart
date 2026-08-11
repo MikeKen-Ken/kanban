@@ -34,7 +34,10 @@ Set<String> collectReferencedAttachmentIds(
     }
   }
 
-  final bgId = backgroundAttachmentId ?? settings?.backgroundAttachmentId;
+  final hasSharedWallpapers = settings?.wallpaperIds.isNotEmpty == true;
+  final bgId = hasSharedWallpapers
+      ? null
+      : (backgroundAttachmentId ?? settings?.backgroundAttachmentId);
   if (bgId != null && bgId.isNotEmpty) {
     ids.add(bgId);
   }

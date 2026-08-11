@@ -14,6 +14,7 @@ import '../features/quick_capture/quick_capture.dart';
 import '../features/sync_conflict/conflict_center_screen.dart';
 import '../features/trash/trash_screen.dart';
 import '../features/views/views.dart';
+import '../features/wallpapers/wallpaper_models.dart';
 import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
 import '../features/kanban/swimlane_board.dart';
@@ -63,8 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ? null
           : SnackBarAction(
               label: '撤销',
-              onPressed: () =>
-                  context.read<BoardController>().undoLastAction(),
+              onPressed: () => context.read<BoardController>().undoLastAction(),
             ),
     );
   }
@@ -388,8 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             if (!compact)
               IconButton(
-                tooltip:
-                    '泳道：${controller.projectSettings.swimlaneMode.label}',
+                tooltip: '泳道：${controller.projectSettings.swimlaneMode.label}',
                 icon: Icon(
                   controller.projectSettings.swimlaneMode == SwimlaneMode.none
                       ? Icons.view_agenda_outlined
@@ -415,8 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: _openTrash,
                 ),
               ),
-            Selector<
-                BoardController,
+            Selector<BoardController,
                 (SyncStatus, String?, int, DateTime?, SyncProgress?, int)>(
               selector: (_, c) => (
                 c.syncStatus,
@@ -445,8 +443,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 },
-                onCancel:
-                    data.$1 == SyncStatus.syncing ? _cancelSync : null,
+                onCancel: data.$1 == SyncStatus.syncing ? _cancelSync : null,
               ),
             ),
             if (!compact)
@@ -536,8 +533,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         body: _buildBoardBody(
           compact: compact,
-          backgroundAttachmentId:
-              controller.projectSettings.backgroundAttachmentId,
+          wallpaperIds: controller.projectSettings.effectiveWallpaperIds,
+          wallpaperPlaybackMode:
+              controller.projectSettings.wallpaperPlaybackMode,
+          wallpaperIntervalSeconds:
+              controller.projectSettings.wallpaperIntervalSeconds,
           overlayOpacity: controller.projectSettings.backgroundOverlayOpacity,
         ),
       ),
@@ -546,7 +546,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBoardBody({
     required bool compact,
-    required String backgroundAttachmentId,
+    required List<String> wallpaperIds,
+    required WallpaperPlaybackMode wallpaperPlaybackMode,
+    required int wallpaperIntervalSeconds,
     required double overlayOpacity,
   }) {
     final content = Consumer<BoardController>(
@@ -653,13 +655,15 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
 
-    if (backgroundAttachmentId.isEmpty) return content;
+    if (wallpaperIds.isEmpty) return content;
 
     return Stack(
       fit: StackFit.expand,
       children: [
         BoardBackgroundLayer(
-          attachmentId: backgroundAttachmentId,
+          wallpaperIds: wallpaperIds,
+          playbackMode: wallpaperPlaybackMode,
+          intervalSeconds: wallpaperIntervalSeconds,
           overlayOpacity: overlayOpacity,
         ),
         content,
@@ -766,9 +770,8 @@ class _SyncIndicator extends StatelessWidget {
     final lastSuccess = lastSyncedAt == null
         ? '尚未成功同步'
         : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
-    final pendingDetail = pendingUploadCount > 0
-        ? '待同步 $pendingUploadCount 个文件（相对上次成功同步）'
-        : null;
+    final pendingDetail =
+        pendingUploadCount > 0 ? '待同步 $pendingUploadCount 个文件（相对上次成功同步）' : null;
 
     final progressDetail = progress == null
         ? null
@@ -782,9 +785,7 @@ class _SyncIndicator extends StatelessWidget {
     final tooltip = conflictCount > 0
         ? '有未解决的同步冲突，点击进入冲突中心'
         : syncing
-            ? (progressDetail == null
-                ? '正在同步…可点击取消'
-                : '$progressDetail\n可点击取消')
+            ? (progressDetail == null ? '正在同步…可点击取消' : '$progressDetail\n可点击取消')
             : error == null
                 ? [
                     lastSuccess,

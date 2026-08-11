@@ -8,6 +8,7 @@ import '../../models/kanban_models.dart';
 import '../../storage/kanban_paths_io.dart';
 import 'attachment_image_processor.dart';
 import 'attachment_store.dart';
+import '../wallpapers/wallpaper_models.dart';
 
 AttachmentStore? createAttachmentStore({Object? baseDirectory}) {
   return AttachmentStorage(baseDirectory: baseDirectory as Directory?);
@@ -156,6 +157,98 @@ class AttachmentStorage implements AttachmentStore {
     for (final id in localIds) {
       if (keepIds.contains(id)) continue;
       await deleteAttachment(projectId: projectId, attachmentId: id);
+    }
+  }
+
+  Future<Directory> _wallpapersDir() async {
+    final dir = await _dataDir();
+    final wallpapersDir = KanbanPathsIo.wallpapersDirectory(dir);
+    if (!await wallpapersDir.exists()) {
+      await wallpapersDir.create(recursive: true);
+    }
+    return wallpapersDir;
+  }
+
+  Future<File> _wallpaperFile(String id, {bool thumb = false}) async {
+    final dir = await _dataDir();
+    return KanbanPathsIo.wallpaperFile(dir, id, thumb: thumb);
+  }
+
+  @override
+  Future<WallpaperAsset> saveWallpaper({
+    required Uint8List sourceBytes,
+    required String fileName,
+    int? createdAt,
+  }) async {
+    final processed = processAttachmentImage(sourceBytes);
+    if (processed == null) throw StateError('无法解析图片');
+    final id = const Uuid().v4();
+    final now = createdAt ?? DateTime.now().millisecondsSinceEpoch;
+    await _wallpapersDir();
+    await (await _wallpaperFile(id))
+        .writeAsBytes(processed.fullBytes, flush: true);
+    await (await _wallpaperFile(id, thumb: true))
+        .writeAsBytes(processed.thumbBytes, flush: true);
+    return WallpaperAsset(
+      id: id,
+      fileName: fileName,
+      width: processed.width,
+      height: processed.height,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  @override
+  Future<void> writeWallpaperBytes({
+    required String wallpaperId,
+    required Uint8List bytes,
+    bool thumb = false,
+  }) async {
+    await _wallpapersDir();
+    await (await _wallpaperFile(wallpaperId, thumb: thumb))
+        .writeAsBytes(bytes, flush: true);
+  }
+
+  @override
+  Future<Uint8List?> readWallpaperBytes(
+    String wallpaperId, {
+    bool thumb = false,
+  }) async {
+    final file = await _wallpaperFile(wallpaperId, thumb: thumb);
+    return await file.exists() ? file.readAsBytes() : null;
+  }
+
+  @override
+  Future<bool> wallpaperExists(String wallpaperId,
+          {bool thumb = false}) async =>
+      (await _wallpaperFile(wallpaperId, thumb: thumb)).exists();
+
+  @override
+  Future<void> deleteWallpaper(String wallpaperId) async {
+    for (final thumb in const [false, true]) {
+      final file = await _wallpaperFile(wallpaperId, thumb: thumb);
+      if (await file.exists()) await file.delete();
+    }
+  }
+
+  @override
+  Future<Set<String>> listLocalWallpaperIds() async {
+    final dir = await _wallpapersDir();
+    final ids = <String>{};
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      final name = entity.uri.pathSegments.last;
+      if (!name.endsWith('.jpg') || name.endsWith('_thumb.jpg')) continue;
+      ids.add(name.substring(0, name.length - 4));
+    }
+    return ids;
+  }
+
+  @override
+  Future<void> deleteOrphanWallpapers(Set<String> keepIds) async {
+    for (final id in await listLocalWallpaperIds()) {
+      if (!keepIds.contains(id)) await deleteWallpaper(id);
     }
   }
 

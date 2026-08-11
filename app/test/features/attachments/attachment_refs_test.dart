@@ -61,4 +61,23 @@ void main() {
     );
     expect(ids, isEmpty);
   });
+
+  test('工作区壁纸不作为项目附件重复同步', () {
+    final board = KanbanBoard(
+      id: 'p1',
+      title: '板',
+      updatedAt: 1,
+      revision: 1,
+      columns: const [],
+    );
+    final ids = collectReferencedAttachmentIds(
+      board,
+      TrashBin.empty,
+      settings: const ProjectSettings(
+        backgroundAttachmentId: 'w1',
+        wallpaperIds: ['w1', 'w2'],
+      ),
+    );
+    expect(ids, isEmpty);
+  });
 }

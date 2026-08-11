@@ -8,6 +8,9 @@ import '../../settings/settings_section.dart';
 import '../attachments/card_attachment_image.dart';
 import '../automations/automation_rules_screen.dart';
 import '../kanban/swimlane.dart';
+import '../wallpapers/wallpaper_image.dart';
+import '../wallpapers/wallpaper_library_dialog.dart';
+import '../wallpapers/wallpaper_models.dart';
 import 'project_settings.dart';
 import 'project_theme.dart';
 
@@ -75,21 +78,19 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   }
 
   Future<void> _pickBackground() async {
-    setState(() => _backgroundBusy = true);
-    final error =
-        await context.read<BoardController>().setBoardBackgroundFromGallery();
-    if (!mounted) return;
-    setState(() => _backgroundBusy = false);
-    if (error != null) {
-      showAppSnackBar(context, message: error);
-    } else {
-      showAppSnackBar(context, message: '背景已更新，将自动同步');
-    }
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const WallpaperLibraryDialog(),
+    );
   }
 
   Future<void> _clearBackground() async {
     setState(() => _backgroundBusy = true);
-    await context.read<BoardController>().clearBoardBackground();
+    await context.read<BoardController>().setProjectWallpapers(
+      wallpaperIds: const [],
+      mode: WallpaperPlaybackMode.fixed,
+      intervalSeconds: ProjectSettings.defaultWallpaperIntervalSeconds,
+    );
     if (!mounted) return;
     setState(() {
       _backgroundBusy = false;
@@ -264,7 +265,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             SettingsSection(
               icon: Icons.wallpaper_outlined,
               title: '看板背景',
-              subtitle: '每块看板可单独设置背景图，会随项目同步；图片铺满裁切，不会拉伸变形',
+              subtitle: '壁纸库跨项目复用并同步；图片缓存到本地，随机轮播不会重复请求远端',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -279,13 +280,20 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                               ? Stack(
                                   fit: StackFit.expand,
                                   children: [
-                                    CardAttachmentImage(
-                                      attachmentId:
-                                          settings.backgroundAttachmentId,
-                                      thumb: false,
-                                      fit: BoxFit.cover,
-                                      showMissingLabel: true,
-                                    ),
+                                    if (settings.wallpaperIds.isNotEmpty)
+                                      WallpaperImage(
+                                        wallpaperId:
+                                            settings.wallpaperIds.first,
+                                        thumb: false,
+                                      )
+                                    else
+                                      CardAttachmentImage(
+                                        attachmentId:
+                                            settings.backgroundAttachmentId,
+                                        thumb: false,
+                                        fit: BoxFit.cover,
+                                        showMissingLabel: true,
+                                      ),
                                     if (overlayValue > 0)
                                       ColoredBox(
                                         color: Colors.black.withValues(
@@ -300,10 +308,10 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                                   child: Center(
                                     child: Text(
                                       '未设置背景图，使用主题底色',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                        color: theme
-                                            .colorScheme.onSurfaceVariant,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                   ),
@@ -316,8 +324,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                         runSpacing: 8,
                         children: [
                           FilledButton.tonalIcon(
-                            onPressed:
-                                _backgroundBusy ? null : _pickBackground,
+                            onPressed: _backgroundBusy ? null : _pickBackground,
                             icon: _backgroundBusy
                                 ? const SizedBox(
                                     width: 16,
@@ -328,7 +335,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                                   )
                                 : const Icon(Icons.image_outlined),
                             label: Text(
-                              settings.hasBackgroundImage ? '更换图片' : '选择图片',
+                              settings.hasBackgroundImage ? '管理与选择壁纸' : '打开壁纸库',
                             ),
                           ),
                           if (settings.hasBackgroundImage)
@@ -341,6 +348,16 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                         ],
                       ),
                       if (settings.hasBackgroundImage) ...[
+                        if (settings.wallpaperPlaybackMode ==
+                                WallpaperPlaybackMode.random &&
+                            settings.wallpaperIds.length > 1)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              '随机轮播 ${settings.wallpaperIds.length} 张，每 '
+                              '${settings.wallpaperIntervalSeconds} 秒切换',
+                            ),
+                          ),
                         const SizedBox(height: 8),
                         Text(
                           '遮罩：${(overlayValue * 100).round()}%',

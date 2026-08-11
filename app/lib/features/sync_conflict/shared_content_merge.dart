@@ -4,6 +4,7 @@ import '../activity/activity_models.dart';
 import '../shared_content/shared_content.dart';
 import '../templates/card_template.dart';
 import '../views/saved_view.dart';
+import '../wallpapers/wallpaper_models.dart';
 
 typedef _IdOf<T> = String Function(T value);
 typedef _UpdatedAtOf<T> = int Function(T value);
@@ -133,11 +134,20 @@ SharedContent mergeSharedContent({
     updatedAtOf: (item) => item.updatedAt,
     toJson: (item) => item.toJson(),
   );
+  final wallpapers = _mergeEntitiesById<WallpaperAsset>(
+    local: local.wallpapers,
+    remote: remote.wallpapers,
+    base: baseValue.wallpapers,
+    idOf: (item) => item.id,
+    updatedAtOf: (item) => item.updatedAt,
+    toJson: (item) => item.toJson(),
+  );
 
   return SharedContent(
     labels: labels,
     savedViews: savedViews,
     cardTemplates: cardTemplates,
+    wallpapers: wallpapers,
     activityByProject: _mergeActivityLogs(
       local.activityByProject,
       remote.activityByProject,

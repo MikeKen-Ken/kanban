@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../automations/automation_models.dart';
 import '../kanban/column_card_preferences.dart';
 import '../kanban/swimlane.dart';
+import '../wallpapers/wallpaper_models.dart';
 
 /// 单个项目的偏好设置（随项目数据同步到 WebDAV）
 class ProjectSettings {
@@ -10,6 +11,9 @@ class ProjectSettings {
     this.doneColumnName = '已完成',
     this.themeId = '',
     this.backgroundAttachmentId = '',
+    this.wallpaperIds = const [],
+    this.wallpaperPlaybackMode = WallpaperPlaybackMode.fixed,
+    this.wallpaperIntervalSeconds = defaultWallpaperIntervalSeconds,
     this.backgroundOverlayOpacity = defaultBackgroundOverlayOpacity,
     this.cardSurfaceOpacity = defaultCardSurfaceOpacity,
     this.columnPreferences = const {},
@@ -29,6 +33,12 @@ class ProjectSettings {
 
   /// 看板背景图附件 id，空字符串表示无自定义背景
   final String backgroundAttachmentId;
+
+  /// 当前项目选择的工作区壁纸 id；固定模式通常只有一项。
+  final List<String> wallpaperIds;
+
+  final WallpaperPlaybackMode wallpaperPlaybackMode;
+  final int wallpaperIntervalSeconds;
 
   /// 背景图上的半透明遮罩强度（0–[maxBackgroundOverlayOpacity]）
   final double backgroundOverlayOpacity;
@@ -55,18 +65,31 @@ class ProjectSettings {
 
   bool get hasConflict => conflictSide != null;
 
-  bool get hasBackgroundImage => backgroundAttachmentId.isNotEmpty;
+  bool get hasBackgroundImage =>
+      wallpaperIds.isNotEmpty || backgroundAttachmentId.isNotEmpty;
+
+  List<String> get effectiveWallpaperIds => wallpaperIds.isNotEmpty
+      ? wallpaperIds
+      : (backgroundAttachmentId.isEmpty
+          ? const <String>[]
+          : <String>[backgroundAttachmentId]);
 
   static const defaultDoneColumnName = '已完成';
   static const defaultBackgroundOverlayOpacity = 0.4;
   static const maxBackgroundOverlayOpacity = 0.7;
   static const defaultCardSurfaceOpacity = 1.0;
   static const minCardSurfaceOpacity = 0.35;
+  static const defaultWallpaperIntervalSeconds = 60;
+  static const minWallpaperIntervalSeconds = 10;
+  static const maxWallpaperIntervalSeconds = 86400;
 
   ProjectSettings copyWith({
     String? doneColumnName,
     String? themeId,
     String? backgroundAttachmentId,
+    List<String>? wallpaperIds,
+    WallpaperPlaybackMode? wallpaperPlaybackMode,
+    int? wallpaperIntervalSeconds,
     double? backgroundOverlayOpacity,
     double? cardSurfaceOpacity,
     Map<String, ColumnCardPreferences>? columnPreferences,
@@ -83,6 +106,12 @@ class ProjectSettings {
       themeId: themeId ?? this.themeId,
       backgroundAttachmentId:
           backgroundAttachmentId ?? this.backgroundAttachmentId,
+      wallpaperIds: wallpaperIds ?? this.wallpaperIds,
+      wallpaperPlaybackMode:
+          wallpaperPlaybackMode ?? this.wallpaperPlaybackMode,
+      wallpaperIntervalSeconds: wallpaperIntervalSeconds == null
+          ? this.wallpaperIntervalSeconds
+          : clampWallpaperIntervalSeconds(wallpaperIntervalSeconds),
       backgroundOverlayOpacity:
           backgroundOverlayOpacity ?? this.backgroundOverlayOpacity,
       cardSurfaceOpacity: cardSurfaceOpacity ?? this.cardSurfaceOpacity,
@@ -116,12 +145,21 @@ class ProjectSettings {
   static double clampCardSurfaceOpacity(double value) =>
       value.clamp(minCardSurfaceOpacity, defaultCardSurfaceOpacity).toDouble();
 
+  static int clampWallpaperIntervalSeconds(int value) => value
+      .clamp(minWallpaperIntervalSeconds, maxWallpaperIntervalSeconds)
+      .toInt();
+
   Map<String, dynamic> toJson({bool includeConflict = true}) {
     final map = <String, dynamic>{
       'doneColumnName': doneColumnName,
       if (themeId.isNotEmpty) 'themeId': themeId,
       if (backgroundAttachmentId.isNotEmpty)
         'backgroundAttachmentId': backgroundAttachmentId,
+      if (wallpaperIds.isNotEmpty) 'wallpaperIds': wallpaperIds,
+      if (wallpaperPlaybackMode != WallpaperPlaybackMode.fixed)
+        'wallpaperPlaybackMode': wallpaperPlaybackMode.name,
+      if (wallpaperIntervalSeconds != defaultWallpaperIntervalSeconds)
+        'wallpaperIntervalSeconds': wallpaperIntervalSeconds,
       if (backgroundOverlayOpacity != defaultBackgroundOverlayOpacity)
         'backgroundOverlayOpacity': backgroundOverlayOpacity,
       if (cardSurfaceOpacity != defaultCardSurfaceOpacity)
@@ -161,6 +199,18 @@ class ProjectSettings {
           json['doneColumnName'] as String? ?? defaultDoneColumnName,
       themeId: json['themeId'] as String? ?? '',
       backgroundAttachmentId: json['backgroundAttachmentId'] as String? ?? '',
+      wallpaperIds: (json['wallpaperIds'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList(growable: false),
+      wallpaperPlaybackMode: WallpaperPlaybackModeX.fromString(
+        json['wallpaperPlaybackMode'] as String?,
+      ),
+      wallpaperIntervalSeconds: clampWallpaperIntervalSeconds(
+        (json['wallpaperIntervalSeconds'] as num?)?.toInt() ??
+            defaultWallpaperIntervalSeconds,
+      ),
       backgroundOverlayOpacity: overlay,
       cardSurfaceOpacity: cardOpacity,
       columnPreferences: prefsRaw == null

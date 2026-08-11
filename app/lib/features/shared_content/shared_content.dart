@@ -1,6 +1,7 @@
 import '../activity/activity_models.dart';
 import '../templates/card_template.dart';
 import '../views/saved_view.dart';
+import '../wallpapers/wallpaper_models.dart';
 
 /// 跨项目同步的自定义标签定义。
 class SharedLabel {
@@ -43,6 +44,7 @@ class SharedContent {
     this.savedViews = const [],
     this.cardTemplates = const [],
     this.activityByProject = const {},
+    this.wallpapers = const [],
     this.updatedAt = 0,
     this.revision = 0,
   });
@@ -53,6 +55,7 @@ class SharedContent {
   final List<SavedView> savedViews;
   final List<CardTemplate> cardTemplates;
   final Map<String, ActivityLog> activityByProject;
+  final List<WallpaperAsset> wallpapers;
   final int updatedAt;
   final int revision;
 
@@ -62,13 +65,15 @@ class SharedContent {
       labels.isEmpty &&
       savedViews.isEmpty &&
       cardTemplates.isEmpty &&
-      activityByProject.isEmpty;
+      activityByProject.isEmpty &&
+      wallpapers.isEmpty;
 
   SharedContent copyWith({
     List<SharedLabel>? labels,
     List<SavedView>? savedViews,
     List<CardTemplate>? cardTemplates,
     Map<String, ActivityLog>? activityByProject,
+    List<WallpaperAsset>? wallpapers,
     int? updatedAt,
     int? revision,
   }) {
@@ -77,6 +82,7 @@ class SharedContent {
       savedViews: savedViews ?? this.savedViews,
       cardTemplates: cardTemplates ?? this.cardTemplates,
       activityByProject: activityByProject ?? this.activityByProject,
+      wallpapers: wallpapers ?? this.wallpapers,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
     );
@@ -95,6 +101,7 @@ class SharedContent {
         'activityByProject': activityByProject.map(
           (projectId, log) => MapEntry(projectId, log.toJson()),
         ),
+        'wallpapers': wallpapers.map((item) => item.toJson()).toList(),
         'updatedAt': updatedAt,
         'revision': revision,
       };
@@ -121,6 +128,10 @@ class SharedContent {
               : const ActivityLog(),
         ),
       ),
+      wallpapers: _readMapList(json['wallpapers'])
+          .map(WallpaperAsset.fromJson)
+          .where((item) => item.id.isNotEmpty)
+          .toList(growable: false),
       updatedAt: _readInt(json['updatedAt']),
       revision: _readInt(json['revision']),
     );
