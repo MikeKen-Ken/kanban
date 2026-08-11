@@ -104,10 +104,6 @@ class ProjectSettings {
     Object? conflictSide = _sentinel,
     bool clearConflictSide = false,
   }) {
-    final wallpaperMode = WallpaperPlaybackModeX.fromString(
-      json['wallpaperPlaybackMode'] as String?,
-    );
-    final intervalRaw = (json['wallpaperIntervalSeconds'] as num?)?.toInt();
     return ProjectSettings(
       doneColumnName: doneColumnName ?? this.doneColumnName,
       themeId: themeId ?? this.themeId,
@@ -201,6 +197,10 @@ class ProjectSettings {
         ? clampCardSurfaceOpacity(cardOpacityRaw.toDouble())
         : defaultCardSurfaceOpacity;
     final rulesRaw = json['automationRules'] as List<dynamic>?;
+    final wallpaperMode = WallpaperPlaybackModeX.fromString(
+      json['wallpaperPlaybackMode'] as String?,
+    );
+    final intervalRaw = (json['wallpaperIntervalSeconds'] as num?)?.toInt();
     return ProjectSettings(
       doneColumnName:
           json['doneColumnName'] as String? ?? defaultDoneColumnName,
