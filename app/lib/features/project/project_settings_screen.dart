@@ -272,8 +272,8 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      AspectRatio(
-                        aspectRatio: 16 / 9,
+                      SizedBox(
+                        height: 160,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: settings.hasBackgroundImage
@@ -284,13 +284,13 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                                       WallpaperImage(
                                         wallpaperId:
                                             settings.wallpaperIds.first,
-                                        thumb: false,
+                                        thumb: true,
                                       )
                                     else
                                       CardAttachmentImage(
                                         attachmentId:
                                             settings.backgroundAttachmentId,
-                                        thumb: false,
+                                        thumb: true,
                                         fit: BoxFit.cover,
                                         showMissingLabel: true,
                                       ),
