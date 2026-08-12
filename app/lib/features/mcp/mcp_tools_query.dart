@@ -2,10 +2,10 @@ import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../common/date_utils.dart';
 import '../../controllers/board_controller.dart';
-import '../kanban/next_work_card.dart';
 import '../views/views.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_card_payloads.dart';
+import 'mcp_pick_next_card.dart';
 import 'mcp_tool_results.dart';
 
 /// 注册搜索、整板、今日、统计、活动与保存视图相关工具。
@@ -13,50 +13,26 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'pick_next_card',
     description:
-        '取下一条可实施卡：优先「待办」最新未完成卡，否则「待返工」。'
+        '取下一条可实施卡并自动移入「进行中」：优先「待办」最新未完成卡，否则「待返工」。'
         '返回 workMode（normal|rework）、workItems（本轮工作范围）、'
         'suggestedCommitMessage 与 cardId；不返回完整 card 详情以节省 token。'
+        '完成后用 submit_card_for_verify；实施失败用 block_card。'
         '无需指定列；省略 projectId 时用界面当前项目。',
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(description: '省略则用界面当前项目'),
       },
     ),
-    annotations:
-        const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
+    annotations: const ToolAnnotations(
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    ),
     callback: (args, extra) async {
-      final resolved =
-          resolveMcpProjectId(controller, args['projectId'] as String?);
-      if (resolved.error != null) return resolved.error!;
-      final projectId = resolved.projectId!;
-
-      final board = await controller.loadBoardSnapshot(projectId);
-      if (board == null) {
-        return mcpErrorResult('项目不存在或未加载：$projectId');
-      }
-
-      final picked = pickNextWorkCard(board);
-      if (picked == null) {
-        return mcpJsonResult({
-          'found': false,
-          'projectId': projectId,
-          'reason': '待办与待返工均无未完成卡片',
-        });
-      }
-
-      final card = picked.card;
-      final rework = isReworkWorkMode(card);
-      return mcpJsonResult({
-        'found': true,
-        'projectId': projectId,
-        'cardId': card.id,
-        'sourceColumn': picked.sourceColumn,
-        'columnId': picked.column.id,
-        'columnTitle': picked.column.title,
-        'workMode': rework ? 'rework' : 'normal',
-        'workItems': buildCardWorkItems(card),
-        'suggestedCommitMessage': buildCardCommitMessage(card),
-      });
+      return mcpPickNextCard(
+        controller,
+        projectId: args['projectId'] as String?,
+      );
     },
   );
 

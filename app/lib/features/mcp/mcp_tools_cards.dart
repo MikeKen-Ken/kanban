@@ -5,6 +5,7 @@ import '../../models/kanban_models.dart';
 import '../kanban/move_to_rework_on_new_feedback.dart';
 import '../views/card_reference.dart';
 import 'mcp_arg_parsers.dart';
+import 'mcp_block_card.dart';
 import 'mcp_card_payloads.dart';
 import 'mcp_submit_for_verify.dart';
 import 'mcp_tool_results.dart';
@@ -392,9 +393,10 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
   server.registerTool(
     'submit_card_for_verify',
     description:
-        '将卡片移入「待验证」。只需 cardId 即可：有未完成验证反馈时默认全部勾完成再移列。'
+        '将卡片移入「待验证」（实施成功收尾）。只需 cardId 即可：有未完成验证反馈时默认全部勾完成再移列。'
         '可选 completeAllIncompleteFeedback / completedFeedbackIds / verificationFeedback（三选一）。'
         '成功时返回 suggestedCommitMessage（直接用作 git commit 信息）。'
+        '实施失败请改用 block_card。'
         '省略 projectId 时按 cardId 定位所属项目',
     inputSchema: JsonSchema.object(
       properties: {
@@ -452,6 +454,36 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         verificationFeedback: verificationFeedback,
         completedFeedbackIds: completedFeedbackIds,
         completeAllIncompleteFeedback: completeAll,
+      );
+    },
+  );
+
+  server.registerTool(
+    'block_card',
+    description:
+        '将卡片移入「阻塞中」。实施失败或无法继续时使用；只需 cardId。'
+        '省略 projectId 时按 cardId 定位所属项目',
+    inputSchema: JsonSchema.object(
+      properties: {
+        'cardId': JsonSchema.string(description: '卡片 id'),
+        'projectId': JsonSchema.string(
+          description: '目标项目；省略则按 cardId 跨项目定位',
+        ),
+      },
+      required: ['cardId'],
+    ),
+    annotations: const ToolAnnotations(
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    ),
+    callback: (args, extra) async {
+      final cardId = mcpTrimmedString(args['cardId']) ?? '';
+      if (cardId.isEmpty) return mcpErrorResult('cardId 不能为空');
+      return mcpBlockCard(
+        controller,
+        cardId: cardId,
+        projectId: args['projectId'] as String?,
       );
     },
   );

@@ -42,6 +42,49 @@ void main() {
     });
   });
 
+  group('findDoingColumn / findBlockedColumn', () {
+    test('按标题解析，列 id 可自定义', () {
+      final doing = KanbanColumn(
+        id: 'custom-doing',
+        title: defaultDoingColumnTitle,
+        order: 0,
+        cards: const [],
+      );
+      final blocked = KanbanColumn(
+        id: 'custom-blocked',
+        title: defaultBlockedColumnTitle,
+        order: 1,
+        cards: const [],
+      );
+      expect(findDoingColumn([doing, blocked])?.id, doing.id);
+      expect(findBlockedColumn([doing, blocked])?.id, blocked.id);
+      expect(
+        isDoingColumnId(columnId: doing.id, columns: [doing, blocked]),
+        isTrue,
+      );
+    });
+
+    test('标题不符时回退默认 id', () {
+      expect(
+        findDoingColumn([
+          KanbanColumn(id: 'doing', title: 'Doing', order: 0, cards: const []),
+        ])?.id,
+        'doing',
+      );
+      expect(
+        findBlockedColumn([
+          KanbanColumn(
+            id: 'blocked',
+            title: 'Blocked',
+            order: 0,
+            cards: const [],
+          ),
+        ])?.id,
+        'blocked',
+      );
+    });
+  });
+
   group('isVerifyColumnId / shouldDefaultPreviewMarkdown', () {
     final columns = [
       KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
