@@ -11,6 +11,7 @@ import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
 import 'agent_dispatch_log_store.dart';
+import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
 import 'agent_dispatch_platform.dart';
 import 'agent_dispatch_repository_field.dart';
@@ -63,6 +64,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   String? _repoErrorText;
   String? _projectErrorText;
   String? _countErrorText;
+  String? _modelCatalogMessage;
   bool _running = false;
   bool _busy = false;
   Future<void> _logSaveQueue = Future.value();
@@ -76,11 +78,25 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     final loaded = prefs.loadAgentDispatchSettings();
+    final cachedModels = prefs.loadAgentDispatchModelCatalog();
+    final cachedModelId = cachedModels.isEmpty
+        ? loaded.modelId
+        : resolveAgentDispatchModelId(cachedModels, loaded.modelId);
+    final normalized = cachedModelId == loaded.modelId
+        ? loaded
+        : loaded.copyWith(
+            modelId: cachedModelId,
+            modelParamValues: const {},
+          );
+    if (normalized != loaded) {
+      await prefs.saveAgentDispatchSettings(normalized);
+    }
     if (!mounted) return;
     setState(() {
-      _settings = loaded;
-      _repoController.text = loaded.repoPath ?? '';
-      _countController.text = '${loaded.cardLimitCount}';
+      _settings = normalized;
+      _models = cachedModels;
+      _repoController.text = normalized.repoPath ?? '';
+      _countController.text = '${normalized.cardLimitCount}';
       _logController.text = prefs.loadAgentDispatchLog();
     });
     await _refreshSkillPreview();
@@ -209,17 +225,35 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         },
       );
       if (!mounted) return;
+      final uniqueModels = <String, AgentDispatchModelInfo>{
+        for (final model in models) model.id: model,
+      }.values.toList();
+      final selectedId = resolveAgentDispatchModelId(
+        uniqueModels,
+        _settings.modelId,
+      );
+      final selectionChanged = selectedId != _settings.modelId;
       setState(() {
-        _models = models;
+        _models = uniqueModels;
         _busy = false;
+        _modelCatalogMessage = null;
       });
-      _appendLog('已加载 ${models.length} 个模型');
-      if (_settings.modelId == null && models.isNotEmpty) {
-        await _persist(_settings.copyWith(modelId: models.first.id));
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.saveAgentDispatchModelCatalog(uniqueModels);
+      _appendLog('已加载 ${uniqueModels.length} 个模型');
+      if (selectionChanged) {
+        await _persist(_settings.copyWith(
+          modelId: selectedId,
+          modelParamValues: const {},
+        ));
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      setState(() {
+        _busy = false;
+        _modelCatalogMessage =
+            _models.isEmpty ? '刷新失败，未能加载模型目录；请检查网络后重试' : '刷新失败，继续使用上次成功加载的模型目录';
+      });
       _appendLog('拉取模型失败：$e');
     }
   }
@@ -415,10 +449,21 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   if (_settings.engine == AgentDispatchEngine.cursor)
                     TextButton(
                       onPressed: _running || _busy ? null : _loadModels,
-                      child: const Text('从 API 刷新'),
+                      child: Text(_busy ? '刷新中…' : '从 API 刷新'),
                     ),
                 ],
               ),
+              if (_modelCatalogMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    _modelCatalogMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
               if (_settings.engine == AgentDispatchEngine.codex)
                 Text(
                   '使用本机 Codex CLI 的默认模型与登录状态',
@@ -471,6 +516,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   _persist(_settings.copyWith(modelParamValues: values));
                 },
               ),
+              if (_selectedModel != null && modelParameters.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Cursor API 未为此模型提供可调参数',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               const SizedBox(height: 12),
               AgentDispatchCardLimitField(
                 controller: _countController,

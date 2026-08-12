@@ -46,4 +46,16 @@ void main() {
     expect(model.defaultVariant?.displayName, 'Fast');
     expect(model.defaultVariant?.params, {'fast': 'true'});
   });
+
+  test('失效的模型 id 回退到目录首项', () {
+    const models = [
+      AgentDispatchModelInfo(id: 'composer-2.5'),
+      AgentDispatchModelInfo(id: 'gpt-5.5'),
+    ];
+
+    expect(
+        resolveAgentDispatchModelId(models, 'retired-model'), 'composer-2.5');
+    expect(resolveAgentDispatchModelId(models, 'gpt-5.5'), 'gpt-5.5');
+    expect(resolveAgentDispatchModelId(const [], 'gpt-5.5'), isNull);
+  });
 }

@@ -108,6 +108,23 @@ class AgentDispatchModelInfo {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        if (displayName != null) 'displayName': displayName,
+        if (description != null) 'description': description,
+        'parameters':
+            parameters.map((parameter) => parameter.toJson()).toList(),
+        'variants': variants.map((variant) => variant.toJson()).toList(),
+      };
+}
+
+String? resolveAgentDispatchModelId(
+  List<AgentDispatchModelInfo> models,
+  String? currentId,
+) {
+  if (models.any((model) => model.id == currentId)) return currentId;
+  return models.isEmpty ? null : models.first.id;
 }
 
 class AgentDispatchModelParameter {
@@ -136,6 +153,12 @@ class AgentDispatchModelParameter {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        if (displayName != null) 'displayName': displayName,
+        'values': options.map((option) => option.toJson()).toList(),
+      };
 }
 
 class AgentDispatchModelParameterOption {
@@ -157,6 +180,11 @@ class AgentDispatchModelParameterOption {
       displayName: raw is Map ? raw['displayName'] as String? : null,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'value': value,
+        if (displayName != null) 'displayName': displayName,
+      };
 }
 
 class AgentDispatchModelVariant {
@@ -187,4 +215,14 @@ class AgentDispatchModelVariant {
       params: params,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'displayName': displayName,
+        if (description != null) 'description': description,
+        if (isDefault) 'isDefault': true,
+        'params': [
+          for (final entry in params.entries)
+            {'id': entry.key, 'value': entry.value},
+        ],
+      };
 }
