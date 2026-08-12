@@ -32,6 +32,10 @@ class AgentDispatchCredentials {
       throw const FormatException('Cursor API Key 不能为空');
     }
     await _storage.write(key: _cursorApiKey, value: normalized);
+    final stored = await readStoredCursorApiKey();
+    if (stored != normalized) {
+      throw StateError('Cursor API Key 写入后无法从系统安全存储读回');
+    }
   }
 
   Future<void> deleteCursorApiKey() => _storage.delete(key: _cursorApiKey);

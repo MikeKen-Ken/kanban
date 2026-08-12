@@ -59,7 +59,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       setState(() {
         _busy = false;
         _hasStoredKey = true;
-        _message = 'Cursor API Key 已保存到系统安全存储';
+        _message = 'Cursor API Key 已保存，并已通过安全存储读回验证';
       });
     } catch (error) {
       if (!mounted) return;

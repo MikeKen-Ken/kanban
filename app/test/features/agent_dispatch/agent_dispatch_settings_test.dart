@@ -156,6 +156,10 @@ void main() {
 
     await credentials.saveCursorApiKey('  cursor-secret  ');
     expect(await credentials.readStoredCursorApiKey(), 'cursor-secret');
+    expect(
+      await const AgentDispatchCredentials().readStoredCursorApiKey(),
+      'cursor-secret',
+    );
 
     await credentials.deleteCursorApiKey();
     expect(await credentials.readStoredCursorApiKey(), isNull);

@@ -251,8 +251,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _modelCatalogMessage =
-            _models.isEmpty ? '刷新失败，未能加载模型目录；请检查网络后重试' : '刷新失败，继续使用上次成功加载的模型目录';
+        _modelCatalogMessage = _modelRefreshFailureMessage(
+          error: e,
+          hasCache: _models.isNotEmpty,
+        );
       });
       _appendLog('拉取模型失败：$e');
     }
@@ -649,4 +651,23 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       ],
     );
   }
+}
+
+String _modelRefreshFailureMessage({
+  required Object error,
+  required bool hasCache,
+}) {
+  final text = '$error'.toLowerCase();
+  final suffix = hasCache ? '，继续使用上次成功加载的模型目录' : '';
+  if (text.contains('networkerror') ||
+      text.contains('fetch failed') ||
+      text.contains('connect timeout')) {
+    return 'Cursor API 网络连接失败$suffix；无需重新输入 Key';
+  }
+  if (text.contains('authenticationerror') ||
+      text.contains('invalid api key') ||
+      text.contains('unauthorized')) {
+    return 'Cursor API Key 认证失败，请重新保存有效的 Key$suffix';
+  }
+  return hasCache ? '刷新失败，继续使用上次成功加载的模型目录' : '刷新失败，未能加载模型目录；请查看下方日志';
 }
