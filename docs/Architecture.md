@@ -50,6 +50,7 @@
 - 当前项目
 - 明暗模式、拖拽延迟、引导状态等界面偏好
 - Windows 内嵌 MCP 开关与端口
+- Agent 调度偏好（引擎、仓库路径、模型、思考程度等）
 - MCP 代理运行上下文（按项目与卡片保存的 sub-agent / Git 恢复信息）
 - 撤销栈
 - 系统通知调度记录
@@ -88,6 +89,7 @@
 - `undo/`：可撤销命令与本机撤销栈
 - `templates/`：卡片模板与复制
 - `reminders/`：提醒、重复规则和平台调度
+- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec（仅本机偏好）
 - `mcp/`：Windows 内嵌 MCP 与 Cursor/Codex 一键配置（仅本机）
 - `statistics/`：只读统计
 - `wip/`：列上限策略

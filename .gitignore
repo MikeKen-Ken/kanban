@@ -20,3 +20,7 @@ Thumbs.db
 
 # Local overrides
 *.local.json
+
+# Agent dispatch worker
+scripts/agent_dispatch/node_modules/
+
