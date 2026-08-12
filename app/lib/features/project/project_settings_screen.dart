@@ -482,8 +482,10 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             const SizedBox(height: 16),
             SettingsSection(
               icon: Icons.speed_outlined,
-              title: '在制品上限',
+              title: '未完成卡片上限',
               subtitle: '达到上限时高亮并提醒，但不会阻止继续添加或移动',
+              collapsible: true,
+              initiallyExpanded: false,
               children: [
                 for (final column
                     in controller.board?.columns ?? const <KanbanColumn>[])

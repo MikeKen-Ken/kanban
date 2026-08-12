@@ -8,16 +8,51 @@ class SettingsSection extends StatelessWidget {
     this.subtitle,
     this.icon,
     required this.children,
+    this.collapsible = false,
+    this.initiallyExpanded = true,
   });
 
   final String title;
   final String? subtitle;
   final IconData? icon;
   final List<Widget> children;
+  final bool collapsible;
+  final bool initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (collapsible) {
+      return Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerLow,
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          leading: icon == null
+              ? null
+              : Icon(icon, size: 22, color: theme.colorScheme.primary),
+          title: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: subtitle == null
+              ? null
+              : Text(
+                  subtitle!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+          childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          children: children,
+        ),
+      );
+    }
 
     return Card(
       margin: EdgeInsets.zero,
