@@ -232,6 +232,67 @@ void main() {
       expect(controller.offset, 0);
     });
 
+    testWidgets('修饰键会把列内滚轮改为看板横向滚动', (tester) async {
+      late ScrollController boardController;
+      late ScrollController columnController;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 240,
+              child: BoardHorizontalScroll(
+                builder: (context, controller) {
+                  boardController = controller;
+                  return ListView(
+                    controller: controller,
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      SizedBox(
+                        width: 240,
+                        child: ListView.builder(
+                          controller: columnController = ScrollController(),
+                          itemExtent: 48,
+                          itemCount: 12,
+                          itemBuilder: (_, index) => Text('卡片 $index'),
+                        ),
+                      ),
+                      const SizedBox(width: 800),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      addTearDown(columnController.dispose);
+      await tester.pumpAndSettle();
+
+      final columnCenter = tester.getCenter(find.text('卡片 0'));
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: columnCenter,
+          scrollDelta: const Offset(0, 80),
+        ),
+      );
+      await tester.pump();
+      expect(columnController.offset, 80);
+      expect(boardController.offset, 0);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: columnCenter,
+          scrollDelta: const Offset(0, 80),
+        ),
+      );
+      await tester.pump();
+      expect(columnController.offset, 80);
+      expect(boardController.offset, 80);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+    });
+
     testWidgets('TextField 聚焦时空格+滚轮不横滚，且空格可输入', (tester) async {
       final textController = TextEditingController();
       addTearDown(textController.dispose);
