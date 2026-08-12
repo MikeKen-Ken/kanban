@@ -179,16 +179,5 @@ void main() {
       expect(shouldShowCardContextMenuButton(TargetPlatform.windows), isFalse);
       expect(shouldShowCardContextMenuButton(TargetPlatform.macOS), isFalse);
     });
-
-    test('已完成列隐藏「完成」菜单项，其他列展示', () {
-      expect(
-        shouldShowCompleteInCardContextMenu(isInDoneColumn: true),
-        isFalse,
-      );
-      expect(
-        shouldShowCompleteInCardContextMenu(isInDoneColumn: false),
-        isTrue,
-      );
-    });
   });
 }

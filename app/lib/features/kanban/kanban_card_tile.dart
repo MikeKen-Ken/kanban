@@ -10,7 +10,6 @@ import '../../features/project/project_theme.dart';
 import '../../models/kanban_models.dart';
 import '../attachments/card_attachment_image.dart';
 import '../attachments/card_attachment_viewer.dart';
-import '../completed_auto_clear/completed_auto_clear.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
 import 'confirm_delete_card.dart';
@@ -85,7 +84,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     );
   }
 
-  /// 卡片上下文菜单（完成 / 复制 / 转移到… / 删除）。
+  /// 卡片上下文菜单（复制 / 转移到… / 删除）。
   ///
   /// 触发方式：
   /// - 桌面：右键（secondary tap）
@@ -95,9 +94,6 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     if (!mounted || _dragStarted) return;
     final controller = context.read<BoardController>();
     final canTransfer = controller.projects.length > 1;
-    final showComplete = shouldShowCompleteInCardContextMenu(
-      isInDoneColumn: controller.isDoneColumn(widget.columnId),
-    );
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
     final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
@@ -110,11 +106,6 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         overlaySize.height - globalPosition.dy,
       ),
       items: [
-        if (showComplete)
-          const PopupMenuItem<String>(
-            value: 'complete',
-            child: Text('完成'),
-          ),
         const PopupMenuItem<String>(
           value: 'duplicate',
           child: Text('复制'),
@@ -134,9 +125,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       ],
     );
     if (!mounted) return;
-    if (selected == 'complete') {
-      await _completeCardFromMenu();
-    } else if (selected == 'duplicate') {
+    if (selected == 'duplicate') {
       await _duplicateCard();
     } else if (selected == 'transfer') {
       await showTransferCardToProjectFlow(
@@ -157,52 +146,6 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         .duplicateCard(widget.columnId, widget.card.id);
     if (copiedId == null && mounted) {
       showAppSnackBar(context, message: '复制失败：卡片不存在');
-    }
-  }
-
-  /// 与勾选框 / MCP `complete_card` / 详情「完成」一致：标记完成并移入已完成列。
-  Future<void> _completeCardFromMenu() async {
-    final controller = context.read<BoardController>();
-    final columnId = widget.columnId;
-    final cardId = widget.card.id;
-    if (controller.isDoneColumn(columnId)) return;
-
-    final live = controller.findCardById(cardId);
-    if (live == null) return;
-
-    try {
-      if (!live.completed) {
-        final completionError =
-            await controller.toggleCardCompleted(columnId, cardId);
-        if (completionError != null && mounted) {
-          showAppSnackBar(context, message: completionError);
-        }
-        return;
-      }
-      // 已勾选完成但尚未在已完成列时，补一次移入（与详情完成逻辑一致）。
-      final board = controller.board;
-      if (board == null) return;
-      final done = findDoneColumn(
-        board,
-        doneColumnName: controller.projectSettings.doneColumnName,
-      );
-      if (done != null && done.id != columnId) {
-        final moveError = await controller.moveCard(
-          cardId: cardId,
-          fromColumnId: columnId,
-          toColumnId: done.id,
-          toDisplayIndex: done.cards.length,
-          completed: true,
-          completedAt:
-              live.completedAt ?? DateTime.now().millisecondsSinceEpoch,
-        );
-        if (moveError != null && mounted) {
-          showAppSnackBar(context, message: moveError);
-        }
-      }
-    } catch (error) {
-      if (!mounted) return;
-      showAppSnackBar(context, message: '完成失败：$error');
     }
   }
 

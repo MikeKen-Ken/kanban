@@ -44,7 +44,7 @@ bool isTouchPrimaryPlatform(TargetPlatform platform) {
       platform == TargetPlatform.iOS;
 }
 
-/// 是否用长按打开卡片上下文菜单（完成 / 转移 / 删除）。
+/// 是否用长按打开卡片上下文菜单（复制 / 转移 / 删除）。
 ///
 /// 仅「即时拖拽」时可用：此时长按不再启动拖拽。
 /// 默认延迟拖拽下长按留给 [CardLongPressDraggable]，菜单需另寻入口。
@@ -58,13 +58,6 @@ bool shouldEnableLongPressCardContextMenu({required bool immediateDrag}) {
 /// 与桌面右键、详情底栏「转移到…」形成等价可达。
 bool shouldShowCardContextMenuButton(TargetPlatform platform) {
   return isTouchPrimaryPlatform(platform);
-}
-
-/// 卡片上下文菜单是否展示「完成」。
-///
-/// 已在已完成列时隐藏，避免无操作项或误触反完成。
-bool shouldShowCompleteInCardContextMenu({required bool isInDoneColumn}) {
-  return !isInDoneColumn;
 }
 
 /// 长按延迟拖拽：阈值内不因位移自行拒绝，明显滑动时由外层滚动手势胜出。
