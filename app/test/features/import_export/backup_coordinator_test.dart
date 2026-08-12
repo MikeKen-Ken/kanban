@@ -92,6 +92,9 @@ class _MemoryBackupHistoryStore implements BackupHistoryStore {
   bool get isSupported => true;
 
   @override
+  Future<void> setDirectoryPath(String? path) async {}
+
+  @override
   Future<BackupSnapshotInfo> save(
     Uint8List bytes, {
     required DateTime createdAt,

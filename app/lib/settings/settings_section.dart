@@ -181,3 +181,37 @@ class SettingsNavigationTile extends StatelessWidget {
     );
   }
 }
+
+/// 设置页单层导航卡：整张卡片直接进入唯一子页面
+class SettingsNavigationCard extends StatelessWidget {
+  const SettingsNavigationCard({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    required this.onTap,
+  });
+
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: SettingsNavigationTile(
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
+        onTap: onTap,
+      ),
+    );
+  }
+}

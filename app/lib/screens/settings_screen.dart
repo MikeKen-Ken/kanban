@@ -96,8 +96,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _webDavSubtitle(bool enabled, String serverUrl) {
     if (!enabled) return '未启用 · 连接配置仅保存在本机';
     final host = serverUrl.trim();
-    if (host.isEmpty) return '已启用 · 尚未填写服务器地址';
-    return '已启用 · $host';
+    if (host.isEmpty) return '已启用 · 尚未填写服务器地址 · 连接配置仅保存在本机';
+    return '已启用 · $host · 连接配置仅保存在本机';
   }
 
   @override
@@ -202,27 +202,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          SettingsSection(
-            icon: Icons.label_outline,
-            title: '标签',
-            subtitle: '自定义标签会随工作区同步',
-            children: [
-              Selector<BoardController, int>(
-                selector: (_, c) => c.appSettings.customLabels.length,
-                builder: (context, count, _) => SettingsNavigationTile(
-                  icon: Icons.label_important_outline,
-                  title: '标签管理',
-                  subtitle: count > 0 ? '$count 个自定义标签' : '新增、改名、改色或删除',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const LabelManagementScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+          Selector<BoardController, int>(
+            selector: (_, c) => c.appSettings.customLabels.length,
+            builder: (context, count, _) => SettingsNavigationCard(
+              icon: Icons.label_outline,
+              title: '标签',
+              subtitle:
+                  count > 0 ? '$count 个自定义标签 · 随工作区同步' : '新增、改名、改色或删除 · 随工作区同步',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const LabelManagementScreen(),
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(height: 16),
           SettingsSection(
@@ -321,9 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   title: const Text('删除前确认'),
                   subtitle: Text(
-                    confirm
-                        ? '删除卡片前会弹出确认对话框'
-                        : '关闭：右键/详情删除直接进入回收站',
+                    confirm ? '删除卡片前会弹出确认对话框' : '关闭：右键/详情删除直接进入回收站',
                   ),
                   value: confirm,
                   onChanged: (value) {
@@ -352,9 +344,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     title: const Text('自动清空已完成'),
                     subtitle: Text(
-                      days <= 0
-                          ? '关闭：不会自动删除已完成卡片'
-                          : '超过 $days 天的已完成卡片会移入回收站',
+                      days <= 0 ? '关闭：不会自动删除已完成卡片' : '超过 $days 天的已完成卡片会移入回收站',
                     ),
                     trailing: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
@@ -384,89 +374,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
           if (McpPaths.isWindowsSupported)
-            SettingsSection(
-              icon: Icons.hub_outlined,
-              title: 'MCP / AI 控制',
-              subtitle: '本机 Cursor / Codex 读写任务；不同步',
-              children: [
-                ListenableBuilder(
-                  listenable: context.read<BoardController>().mcpHost,
-                  builder: (context, _) {
-                    final controller = context.watch<BoardController>();
-                    final enabled = controller.appSettings.mcpEnabled;
-                    final host = controller.mcpHost;
-                    final status = !enabled
-                        ? '已关闭'
-                        : host.isRunning
-                            ? '运行中'
-                            : (host.status == KanbanMcpStatus.error
-                                ? '启动失败'
-                                : '未运行');
-                    return SettingsNavigationTile(
-                      icon: Icons.smart_toy_outlined,
-                      title: 'MCP 设置',
-                      subtitle:
-                          '$status · ${McpConstants.endpointUrl(controller.appSettings.mcpPort)}',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const McpSettingsScreen(),
-                          ),
-                        );
-                      },
+            ListenableBuilder(
+              listenable: context.read<BoardController>().mcpHost,
+              builder: (context, _) {
+                final controller = context.watch<BoardController>();
+                final enabled = controller.appSettings.mcpEnabled;
+                final host = controller.mcpHost;
+                final status = !enabled
+                    ? '已关闭'
+                    : host.isRunning
+                        ? '运行中'
+                        : (host.status == KanbanMcpStatus.error
+                            ? '启动失败'
+                            : '未运行');
+                return SettingsNavigationCard(
+                  icon: Icons.hub_outlined,
+                  title: 'MCP / AI 控制',
+                  subtitle:
+                      '$status · ${McpConstants.endpointUrl(controller.appSettings.mcpPort)} · 本机配置，不同步',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const McpSettingsScreen(),
+                      ),
                     );
                   },
-                ),
-              ],
+                );
+              },
             ),
           if (McpPaths.isWindowsSupported) const SizedBox(height: 16),
-          SettingsSection(
-            icon: Icons.cloud_outlined,
-            title: 'WebDAV 同步',
-            subtitle: '连接配置仅保存在本机',
-            children: [
-              Selector<BoardController, (bool, String)>(
-                selector: (_, c) => (
-                  c.webDavConfig.enabled,
-                  c.webDavConfig.serverUrl,
-                ),
-                builder: (context, state, _) {
-                  final (enabled, serverUrl) = state;
-                  return SettingsNavigationTile(
-                    icon: Icons.cloud_sync_outlined,
-                    title: 'WebDAV 设置',
-                    subtitle: _webDavSubtitle(enabled, serverUrl),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const WebDavSettingsScreen(),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SettingsSection(
-            icon: Icons.system_update_alt_outlined,
-            title: '关于与更新',
-            subtitle: '从 GitHub Release 下载安装包',
-            children: [
-              SettingsNavigationTile(
-                icon: Icons.download_outlined,
-                title: '检查更新',
-                subtitle: 'Android 安装 APK；Windows 同目录覆盖后重启',
+          Selector<BoardController, (bool, String)>(
+            selector: (_, c) => (
+              c.webDavConfig.enabled,
+              c.webDavConfig.serverUrl,
+            ),
+            builder: (context, state, _) {
+              final (enabled, serverUrl) = state;
+              return SettingsNavigationCard(
+                icon: Icons.cloud_outlined,
+                title: 'WebDAV 同步',
+                subtitle: _webDavSubtitle(enabled, serverUrl),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => const AppUpdateScreen(),
+                      builder: (_) => const WebDavSettingsScreen(),
                     ),
                   );
                 },
-              ),
-            ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          SettingsNavigationCard(
+            icon: Icons.system_update_alt_outlined,
+            title: '检查更新',
+            subtitle: '从 GitHub Release 获取；Android 安装 APK，Windows 同目录覆盖后重启',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AppUpdateScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
