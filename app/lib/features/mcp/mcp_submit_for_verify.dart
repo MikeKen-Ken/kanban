@@ -5,6 +5,7 @@ import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import 'mcp_arg_parsers.dart';
+import 'mcp_set_card_commit_ref.dart';
 import 'mcp_tool_results.dart';
 
 /// 将卡片移入「待验证」；可选在移列前更新验证反馈。
@@ -22,6 +23,7 @@ Future<CallToolResult> mcpSubmitCardForVerify(
   List<ChecklistItem>? verificationFeedback,
   List<String>? completedFeedbackIds,
   bool? completeAllIncompleteFeedback,
+  String? commitRef,
 }) async {
   final located = await resolveMcpProjectIdForCard(
     controller,
@@ -108,34 +110,49 @@ Future<CallToolResult> mcpSubmitCardForVerify(
       return mcpErrorResult('未找到「待验证」列');
     }
 
-    if (fromColumnId == verifyColumn.id) {
-      return mcpJsonResult({
-        'ok': true,
-        'cardId': cardId,
-        'projectId': resolvedProjectId,
-        'fromColumnId': fromColumnId,
-        'toColumnId': verifyColumn.id,
-        'alreadyInVerifyColumn': true,
-        'suggestedCommitMessage': commitMessage,
-      });
+    final wasAlreadyInVerifyColumn = fromColumnId == verifyColumn.id;
+    if (!wasAlreadyInVerifyColumn) {
+      final moveError = await controller.moveCard(
+        cardId: cardId,
+        fromColumnId: fromColumnId,
+        toColumnId: verifyColumn.id,
+        toDisplayIndex: verifyColumn.cards.length,
+      );
+      if (moveError != null) return mcpErrorResult(moveError);
+      fromColumnId = verifyColumn.id;
     }
 
-    final moveError = await controller.moveCard(
-      cardId: cardId,
-      fromColumnId: fromColumnId,
-      toColumnId: verifyColumn.id,
-      toDisplayIndex: verifyColumn.cards.length,
-    );
-    if (moveError != null) return mcpErrorResult(moveError);
+    final columnIdForCommit =
+        controller.findColumnIdForCard(cardId) ?? fromColumnId;
+    String? writtenCommitRef;
+    if (commitRef != null) {
+      final applied = await applyCardCommitRef(
+        controller,
+        columnId: columnIdForCommit,
+        cardId: cardId,
+        commitRef: commitRef,
+      );
+      if (applied.error != null) return mcpErrorResult(applied.error!);
+      writtenCommitRef = applied.value;
+    }
 
+    final refreshed = controller.findCardById(cardId);
     return mcpJsonResult({
       'ok': true,
       'cardId': cardId,
       'projectId': resolvedProjectId,
       'fromColumnId': fromColumnId,
       'toColumnId': verifyColumn.id,
-      'alreadyInVerifyColumn': false,
+      'alreadyInVerifyColumn': wasAlreadyInVerifyColumn,
       'suggestedCommitMessage': commitMessage,
+      if (writtenCommitRef != null) 'commitRef': writtenCommitRef,
+      if (writtenCommitRef == null &&
+          (refreshed?.commitRef == null || refreshed!.commitRef!.isEmpty))
+        'afterGitCommit': {
+          'tool': 'set_card_commit_ref',
+          'cardId': cardId,
+          'hint': 'git commit 后调用，commitRef 传 git rev-parse --short HEAD',
+        },
     });
   });
 }

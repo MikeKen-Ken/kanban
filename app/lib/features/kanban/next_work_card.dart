@@ -72,6 +72,7 @@ Map<String, dynamic> buildCardWorkScope(KanbanCard card) {
   return {
     'workMode': rework ? 'rework' : 'normal',
     'workItems': buildCardWorkItems(card),
+    if (card.labels.isNotEmpty) 'labels': card.labels,
   };
 }
 

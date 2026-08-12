@@ -14,7 +14,6 @@ Future<List<PickedFileBytes>> pickCardFiles() async {
   for (final file in result.files) {
     final bytes = file.bytes;
     if (bytes == null || bytes.isEmpty) continue;
-    if (bytes.length > maxCardFileBytes) continue;
     results.add(
       PickedFileBytes(
         bytes: bytes,

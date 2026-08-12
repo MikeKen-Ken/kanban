@@ -13,11 +13,16 @@ extension BoardControllerCards on BoardController {
   }) async {
     return _withBoardMutation(() async {
       if (board == null) return null;
+      final landingColumnId = resolveColumnIdForNeedResourceLabels(
+        preferredColumnId: columnId,
+        labels: labels,
+        columns: board!.columns,
+      );
       final now = DateTime.now().millisecondsSinceEpoch;
       final cardId = const Uuid().v4();
       var added = false;
       final columns = board!.columns.map((col) {
-        if (col.id != columnId) return col;
+        if (col.id != landingColumnId) return col;
         added = true;
         final cards = [
           ...col.cards,
@@ -45,7 +50,7 @@ extension BoardControllerCards on BoardController {
       _pushUndo(
         '新建「$title」',
         () async {
-          trashId = await deleteCard(columnId, cardId);
+          trashId = await deleteCard(landingColumnId, cardId);
         },
         redo: () async {
           final id = trashId;
@@ -57,9 +62,9 @@ extension BoardControllerCards on BoardController {
       if (reminderAt != null && activeProjectId != null) {
         await _scheduleCardReminder(
           projectId: activeProjectId!,
-          columnId: columnId,
+          columnId: landingColumnId,
           card: columns
-              .firstWhere((column) => column.id == columnId)
+              .firstWhere((column) => column.id == landingColumnId)
               .cards
               .firstWhere((card) => card.id == cardId),
         );
@@ -411,25 +416,43 @@ extension BoardControllerCards on BoardController {
           }
         }
       }
-      if (hasAddedVerificationFeedbackItems(
-        original: original.verificationFeedback,
-        next: nextVerificationFeedback,
-      )) {
-        await ensureReworkColumn();
-        final currentColumnId = findColumnIdForCard(cardId);
-        final currentBoard = board;
-        final rework = currentBoard == null
-            ? null
-            : findReworkColumn(currentBoard.columns);
-        if (currentColumnId != null &&
-            rework != null &&
-            currentColumnId != rework.id) {
+      final nextLabels = labels ?? original.labels;
+      final currentColumnId = findColumnIdForCard(cardId);
+      final currentBoard = board;
+      if (currentColumnId != null && currentBoard != null) {
+        final blockedTargetId = targetBlockedColumnIdIfNeedResource(
+          labels: nextLabels,
+          currentColumnId: currentColumnId,
+          columns: currentBoard.columns,
+        );
+        if (blockedTargetId != null) {
+          final blocked = findBlockedColumn(currentBoard.columns);
           await moveCard(
             cardId: cardId,
             fromColumnId: currentColumnId,
-            toColumnId: rework.id,
-            toDisplayIndex: rework.cards.length,
+            toColumnId: blockedTargetId,
+            toDisplayIndex: blocked?.cards.length ?? 0,
           );
+        } else if (hasAddedVerificationFeedbackItems(
+          original: original.verificationFeedback,
+          next: nextVerificationFeedback,
+        )) {
+          await ensureReworkColumn();
+          final afterColumnId = findColumnIdForCard(cardId);
+          final afterBoard = board;
+          final rework = afterBoard == null
+              ? null
+              : findReworkColumn(afterBoard.columns);
+          if (afterColumnId != null &&
+              rework != null &&
+              afterColumnId != rework.id) {
+            await moveCard(
+              cardId: cardId,
+              fromColumnId: afterColumnId,
+              toColumnId: rework.id,
+              toDisplayIndex: rework.cards.length,
+            );
+          }
         }
       }
       return null;

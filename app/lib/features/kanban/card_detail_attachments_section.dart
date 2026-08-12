@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
+import '../attachments/attachment_add_flow.dart';
 import '../attachments/card_attachment_reorder_grid.dart';
 import '../attachments/card_attachment_viewer.dart';
 import '../attachments/card_image_add_sheet.dart';
@@ -46,10 +47,13 @@ class CardDetailAttachmentsSection extends StatelessWidget {
     if (!context.mounted || source == null) return;
 
     final controller = context.read<BoardController>();
-    final error = await controller.addCardAttachmentsFromSource(
-      columnId,
-      cardId,
-      source,
+    final error = await runCardImageAttachmentAddFlow(
+      context: context,
+      controller: controller,
+      columnId: columnId,
+      cardId: cardId,
+      currentCount: attachments.length,
+      source: source,
     );
     if (!context.mounted) return;
     if (error != null) {

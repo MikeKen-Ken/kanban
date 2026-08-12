@@ -5,6 +5,7 @@ extension BoardControllerFileAttachments on BoardController {
     String columnId,
     String cardId, {
     Future<List<PickedFileBytes>> Function()? pickFiles,
+    bool allowOversized = false,
   }) async {
     return _withBoardMutation(() async {
       if (board == null || activeProjectId == null) return '看板未就绪';
@@ -44,7 +45,7 @@ extension BoardControllerFileAttachments on BoardController {
       try {
         for (final file in picked) {
           if (nextAttachments.length >= KanbanCard.maxFileAttachments) break;
-          if (file.bytes.length > maxCardFileBytes) {
+          if (!allowOversized && file.bytes.length > maxCardFileBytes) {
             return '单个文件不能超过 ${maxCardFileBytes ~/ (1024 * 1024)} MB';
           }
           final attachment = await store.saveFile(

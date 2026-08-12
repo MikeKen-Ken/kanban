@@ -9,6 +9,9 @@ import '../../controllers/board_controller.dart';
 import '../wallpapers/wallpaper_models.dart';
 import 'project_settings.dart';
 
+/// 壁纸轮播切换时的渐变时长。
+const _wallpaperFadeDuration = Duration(milliseconds: 800);
+
 /// 看板全屏背景层。轮播只读取本地持久化缓存，不触发 WebDAV 请求。
 class BoardBackgroundLayer extends StatefulWidget {
   const BoardBackgroundLayer({
@@ -88,21 +91,42 @@ class _BoardBackgroundLayerState extends State<BoardBackgroundLayer> {
     if (widget.wallpaperIds.isEmpty) return const SizedBox.expand();
     if (_index >= widget.wallpaperIds.length) _index = 0;
     final opacity = ProjectSettings.clampOverlayOpacity(widget.overlayOpacity);
-    return _BoardBackgroundImage(
-      attachmentId: widget.wallpaperIds[_index],
-      overlayOpacity: opacity,
+    final wallpaperId = widget.wallpaperIds[_index];
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedSwitcher(
+          duration: _wallpaperFadeDuration,
+          switchInCurve: Curves.easeInOut,
+          switchOutCurve: Curves.easeInOut,
+          layoutBuilder: (currentChild, previousChildren) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                ...previousChildren,
+                if (currentChild != null) currentChild,
+              ],
+            );
+          },
+          child: _BoardBackgroundImage(
+            key: ValueKey(wallpaperId),
+            attachmentId: wallpaperId,
+          ),
+        ),
+        if (opacity > 0)
+          ColoredBox(color: Colors.black.withValues(alpha: opacity)),
+      ],
     );
   }
 }
 
 class _BoardBackgroundImage extends StatefulWidget {
   const _BoardBackgroundImage({
+    super.key,
     required this.attachmentId,
-    required this.overlayOpacity,
   });
 
   final String attachmentId;
-  final double overlayOpacity;
 
   @override
   State<_BoardBackgroundImage> createState() => _BoardBackgroundImageState();
@@ -139,21 +163,12 @@ class _BoardBackgroundImageState extends State<_BoardBackgroundImage> {
       builder: (context, snapshot) {
         final bytes = snapshot.data;
         if (bytes == null) return const SizedBox.expand();
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.memory(
-              bytes,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              gaplessPlayback: true,
-            ),
-            if (widget.overlayOpacity > 0)
-              ColoredBox(
-                color: Colors.black.withValues(alpha: widget.overlayOpacity),
-              ),
-          ],
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          gaplessPlayback: true,
         );
       },
     );

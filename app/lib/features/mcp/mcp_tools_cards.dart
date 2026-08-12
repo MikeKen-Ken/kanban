@@ -409,6 +409,8 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         '将卡片移入「待验证」（实施成功收尾）。只需 cardId 即可：有未完成验证反馈时默认全部勾完成再移列。'
         '可选 completeAllIncompleteFeedback / completedFeedbackIds / verificationFeedback（三选一）。'
         '成功时返回 suggestedCommitMessage（直接用作 git commit 信息）。'
+        'git commit 后请调用 set_card_commit_ref 写入提交号，'
+        '或再次 submit 并传 commitRef。'
         '实施失败请改用 block_card。'
         '省略 projectId 时按 cardId 定位所属项目',
     inputSchema: JsonSchema.object(
@@ -432,6 +434,11 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         'completedFeedbackIds': JsonSchema.array(
           items: JsonSchema.string(),
           description: '可选；只勾选指定验证反馈 id（与另两种反馈参数互斥）',
+        ),
+        'commitRef': JsonSchema.string(
+          description:
+              '可选；git commit 后写入卡片提交号（完整或短 hash）。'
+              '卡片已在待验证列时也可单独传此项补写。',
         ),
       },
       required: ['cardId'],
@@ -467,6 +474,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         verificationFeedback: verificationFeedback,
         completedFeedbackIds: completedFeedbackIds,
         completeAllIncompleteFeedback: completeAll,
+        commitRef: mcpTrimmedString(args['commitRef']),
       );
     },
   );

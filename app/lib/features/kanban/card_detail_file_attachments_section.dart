@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../attachments/attachment_add_flow.dart';
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
@@ -65,7 +66,13 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
     }
 
     final controller = context.read<BoardController>();
-    final error = await controller.addCardFileAttachments(columnId, cardId);
+    final error = await runCardFileAttachmentAddFlow(
+      context: context,
+      controller: controller,
+      columnId: columnId,
+      cardId: cardId,
+      currentCount: attachments.length,
+    );
     if (!context.mounted) return;
     if (error != null) {
       showAppSnackBar(context, message: error);

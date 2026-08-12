@@ -50,7 +50,8 @@ void registerKanbanMcpRunContextTools(
 
   server.registerTool(
     'save_run_context',
-    description: '保存卡片的本机 agent/Git 恢复上下文；整条替换，不修改卡片正文，也不参与 WebDAV 同步。',
+    description: '保存卡片的本机 agent/Git 恢复上下文；整条替换，不修改卡片正文，也不参与 WebDAV 同步。'
+        '若传 lastCommit，会同步写入卡片「提交号」字段（可 WebDAV 同步）。',
     inputSchema: JsonSchema.object(
       properties: {
         ..._identityProperties,
@@ -105,6 +106,17 @@ void registerKanbanMcpRunContextTools(
           updatedAt: DateTime.now().millisecondsSinceEpoch,
         );
         await contextStore.write(context);
+        final lastCommit = context.lastCommit;
+        if (lastCommit != null && lastCommit.isNotEmpty) {
+          final columnId = controller.findColumnIdForCard(ids.cardId!);
+          if (columnId != null) {
+            await controller.updateCardFull(
+              columnId,
+              ids.cardId!,
+              commitRef: lastCommit,
+            );
+          }
+        }
         return mcpJsonResult({'ok': true, 'context': context.toJson()});
       });
     },

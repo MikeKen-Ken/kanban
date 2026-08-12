@@ -66,13 +66,18 @@ extension BoardControllerMoves on BoardController {
           break;
         }
       }
-      final resolvedTargetColumnId = targetColumnId ??
-          resolveTransferTargetColumnId(
-            toBoardLoaded,
-            sourceColumnTitle: sourceColumnTitle,
-            doneColumnName: toSettings.doneColumnName,
-          );
-      if (resolvedTargetColumnId == null) return '目标项目没有可用列';
+      final resolvedTargetColumnId = resolveColumnIdForNeedResourceLabels(
+        preferredColumnId: targetColumnId ??
+            resolveTransferTargetColumnId(
+              toBoardLoaded,
+              sourceColumnTitle: sourceColumnTitle,
+              doneColumnName: toSettings.doneColumnName,
+            ) ??
+            '',
+        labels: moving.labels,
+        columns: toBoardLoaded.columns,
+      );
+      if (resolvedTargetColumnId.isEmpty) return '目标项目没有可用列';
       if (!toBoardLoaded.columns.any((c) => c.id == resolvedTargetColumnId)) {
         return '目标列不存在';
       }
@@ -538,6 +543,14 @@ extension BoardControllerMoves on BoardController {
         doneColumnName: projectSettings.doneColumnName,
       );
       if (reworkRejection != null) return reworkRejection;
+
+      final needResourceRejection = needResourceMoveRejectionReason(
+        fromColumnId: fromColumnId,
+        toColumnId: toColumnId,
+        labels: moving!.labels,
+        columns: board!.columns,
+      );
+      if (needResourceRejection != null) return needResourceRejection;
 
       final doneColumn = _findDoneColumn(board!);
       var cardToInsert = moving!;

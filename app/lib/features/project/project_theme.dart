@@ -82,7 +82,7 @@ class ProjectThemePreset {
         CardPriority.high => priorityHigh,
       };
 
-  /// 当前预置：艾森豪威尔四象限、缺资源和工作类型。
+  /// 当前预置：艾森豪威尔四象限、缺资源、咨询与验收。
   List<KanbanLabel> get presetLabels => [
         KanbanLabel(
           key: 'important_urgent',
@@ -116,23 +116,10 @@ class ProjectThemePreset {
           color: _distinctLabelColor(labelNeedResource, _semanticResource),
         ),
         KanbanLabel(
-          key: 'development',
-          name: '开发',
-          description: '可由代理实施的代码类需求',
-          color: _distinctLabelColor(labelDevelopment, _semanticDevelopment),
-        ),
-        KanbanLabel(
           key: 'consultation',
           name: '咨询',
-          description: '只需答复、解释或建议',
+          description: '答复、解释、建议或非代码说明类交付',
           color: _distinctLabelColor(labelConsultation, _semanticConsultation),
-        ),
-        KanbanLabel(
-          key: 'documentation',
-          name: '文档',
-          description: '可在卡片 Markdown 中交付的内容',
-          color:
-              _distinctLabelColor(labelDocumentation, _semanticDocumentation),
         ),
         KanbanLabel(
           key: 'needs_verify',
@@ -168,6 +155,18 @@ class ProjectThemePreset {
           name: '想法（旧）',
           description: '旧预置标签，新项目请改用象限标签',
           color: labelNeither,
+        ),
+        KanbanLabel(
+          key: 'documentation',
+          name: '文档（旧）',
+          description: '旧预置标签，新项目请改用「咨询」',
+          color: _distinctLabelColor(labelDocumentation, _semanticDocumentation),
+        ),
+        KanbanLabel(
+          key: 'development',
+          name: '开发（旧）',
+          description: '旧预置标签，无标签时即按一般实施流程',
+          color: _distinctLabelColor(labelDevelopment, _semanticDevelopment),
         ),
       ];
 }

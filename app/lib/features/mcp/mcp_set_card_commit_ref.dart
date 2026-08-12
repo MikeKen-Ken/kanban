@@ -4,6 +4,30 @@ import '../../controllers/board_controller.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_tool_results.dart';
 
+/// 解析并写入/清除卡片提交号；成功时返回写入值（清除时为 null）。
+Future<({String? value, String? error})> applyCardCommitRef(
+  BoardController controller, {
+  required String columnId,
+  required String cardId,
+  String? commitRef,
+  bool clearCommitRef = false,
+}) async {
+  final normalized = mcpTrimmedString(commitRef);
+  final shouldClear = clearCommitRef || (normalized?.isEmpty ?? false);
+  if (!shouldClear && normalized == null) {
+    return (value: null, error: 'commitRef 不能为空（或传 clearCommitRef=true 清除）');
+  }
+
+  final updateError = await controller.updateCardFull(
+    columnId,
+    cardId,
+    commitRef: shouldClear ? null : normalized,
+    clearCommitRef: shouldClear,
+  );
+  if (updateError != null) return (value: null, error: updateError);
+  return (value: shouldClear ? null : normalized, error: null);
+}
+
 /// 写入或清除卡片上的 Git 提交号。
 Future<CallToolResult> mcpSetCardCommitRef(
   BoardController controller, {
@@ -24,20 +48,15 @@ Future<CallToolResult> mcpSetCardCommitRef(
     return mcpErrorResult('未找到卡片所在列：$cardId');
   }
 
-  final normalized = mcpTrimmedString(commitRef);
-  final shouldClear = clearCommitRef || (normalized?.isEmpty ?? false);
-  if (!shouldClear && normalized == null) {
-    return mcpErrorResult('commitRef 不能为空（或传 clearCommitRef=true 清除）');
-  }
-
   return runMcpForProject(controller, located.projectId!, (resolvedProjectId) async {
-    final updateError = await controller.updateCardFull(
-      columnId,
-      cardId,
-      commitRef: shouldClear ? null : normalized,
-      clearCommitRef: shouldClear,
+    final applied = await applyCardCommitRef(
+      controller,
+      columnId: columnId,
+      cardId: cardId,
+      commitRef: commitRef,
+      clearCommitRef: clearCommitRef,
     );
-    if (updateError != null) return mcpErrorResult(updateError);
+    if (applied.error != null) return mcpErrorResult(applied.error!);
 
     final actualColumnId =
         controller.findColumnIdForCard(cardId) ?? columnId;
@@ -46,7 +65,7 @@ Future<CallToolResult> mcpSetCardCommitRef(
       'cardId': cardId,
       'columnId': actualColumnId,
       'projectId': resolvedProjectId,
-      'commitRef': shouldClear ? null : normalized,
+      'commitRef': applied.value,
     });
   });
 }

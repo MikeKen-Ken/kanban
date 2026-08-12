@@ -56,6 +56,7 @@ void main() {
     expect(result.isError, isNot(true));
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
     expect(payload['suggestedCommitMessage'], '测试卡\n\n备注内容');
+    expect(payload['afterGitCommit'], isNotNull);
 
     final board = controller.board!;
     final verifyColumn = findVerifyColumn(board.columns)!;
@@ -119,5 +120,45 @@ void main() {
     final card = verifyColumn.cards.firstWhere((c) => c.id == cardId);
     expect(card.verificationFeedback[0].completed, isTrue);
     expect(card.verificationFeedback[1].completed, isFalse);
+  });
+
+  test('可传入 commitRef 写入提交号', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '提交号卡');
+    expect(cardId, isNotNull);
+
+    final result = await mcpSubmitCardForVerify(
+      controller,
+      cardId: cardId!,
+      commitRef: 'abc1234',
+    );
+    expect(result.isError, isNot(true));
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['commitRef'], 'abc1234');
+    expect(payload.containsKey('afterGitCommit'), isFalse);
+
+    final verifyColumn = findVerifyColumn(controller.board!.columns)!;
+    final card = verifyColumn.cards.firstWhere((c) => c.id == cardId);
+    expect(card.commitRef, 'abc1234');
+  });
+
+  test('卡片已在待验证时可单独补写 commitRef', () async {
+    final verifyColumn = findVerifyColumn(controller.board!.columns)!;
+    final cardId = await controller.addCard(verifyColumn.id, '补写提交号');
+    expect(cardId, isNotNull);
+
+    final result = await mcpSubmitCardForVerify(
+      controller,
+      cardId: cardId!,
+      commitRef: 'deadbeef',
+    );
+    expect(result.isError, isNot(true));
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['alreadyInVerifyColumn'], isTrue);
+    expect(payload['commitRef'], 'deadbeef');
+
+    final card = verifyColumn.cards.firstWhere((c) => c.id == cardId);
+    expect(card.commitRef, 'deadbeef');
   });
 }
