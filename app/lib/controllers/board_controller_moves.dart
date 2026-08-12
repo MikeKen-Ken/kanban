@@ -45,6 +45,14 @@ extension BoardControllerMoves on BoardController {
       }
       if (moving == null) return '卡片不存在';
 
+      if (hasIncompleteVerificationFeedback(moving.verificationFeedback) &&
+          isReworkColumnId(
+            columnId: fromColumnId,
+            columns: fromBoard.columns,
+          )) {
+        return incompleteVerificationFeedbackBlocksReworkExitMessage;
+      }
+
       final toBoardLoaded = await _loadBoardForTransfer(targetProjectId);
       if (toBoardLoaded == null) return '无法加载目标项目';
 

@@ -62,7 +62,7 @@ void main() {
     expect(todo.cards.any((card) => card.id == cardId), isFalse);
   });
 
-  test('pick_next_card 待办空时取待返工并移入进行中', () async {
+  test('pick_next_card 待办空时取待返工且留在待返工列', () async {
     final reworkColumn = controller.board!.columns
         .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
     final cardId = await controller.addCard(reworkColumn.id, '返工卡');
@@ -82,11 +82,12 @@ void main() {
     expect(payload['cardId'], cardId);
     expect(payload['sourceColumn'], '待返工');
     expect(payload['workMode'], 'rework');
-    expect(payload['movedToDoing'], isTrue);
-    expect(payload['columnId'], 'doing');
+    expect(payload['movedToDoing'], isFalse);
+    expect(payload['columnId'], KanbanBoard.defaultReworkColumnId);
 
-    final doing = findDoingColumn(controller.board!.columns)!;
-    expect(doing.cards.any((card) => card.id == cardId), isTrue);
+    final rework = controller.board!.columns
+        .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
+    expect(rework.cards.any((card) => card.id == cardId), isTrue);
   });
 
   test('block_card 将卡片移入阻塞中', () async {

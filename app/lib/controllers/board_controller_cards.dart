@@ -411,7 +411,10 @@ extension BoardControllerCards on BoardController {
           }
         }
       }
-      if (hasIncompleteVerificationFeedback(nextVerificationFeedback)) {
+      if (hasAddedVerificationFeedbackItems(
+        original: original.verificationFeedback,
+        next: nextVerificationFeedback,
+      )) {
         await ensureReworkColumn();
         final currentColumnId = findColumnIdForCard(cardId);
         final currentBoard = board;

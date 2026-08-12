@@ -46,11 +46,15 @@ const reworkMoveRequiresFeedbackMessage = '需要添加未完成的反馈才可�
 const incompleteVerificationFeedbackBlocksProgressMessage =
     '请先完成所有验证反馈，才能移入已完成列或标记完成';
 
-/// 跨列移卡门禁：没有未完成反馈不可入待返工；有未完成反馈不可入已完成列。
+/// 待返工列仍有未完成验证反馈时，不可移入其他列。
+const incompleteVerificationFeedbackBlocksReworkExitMessage =
+    '请先完成所有验证反馈，才能离开待返工列';
+
+/// 跨列移卡门禁：没有未完成反馈不可入待返工；待返工有未完成反馈不可离开；
+/// 有未完成反馈不可入已完成列。
 ///
 /// 同列内重排不校验。仅已完成的反馈不能进入待返工。
-/// 返工过程中可移到进行中、阻塞中等非完成列；已完成列按 [doneColumnName] 识别
-///（项目设置可自定义，默认「已完成」）。
+/// 已完成列按 [doneColumnName] 识别（项目设置可自定义，默认「已完成」）。
 /// 不覆盖「新增反馈后自动移入」：该路径会先写入反馈再调用移卡。
 String? reworkMoveRejectionReason({
   required String fromColumnId,
@@ -60,6 +64,11 @@ String? reworkMoveRejectionReason({
   String doneColumnName = ProjectSettings.defaultDoneColumnName,
 }) {
   if (fromColumnId == toColumnId) return null;
+  if (hasIncompleteVerificationFeedback(verificationFeedback) &&
+      isReworkColumnId(columnId: fromColumnId, columns: columns) &&
+      !isReworkColumnId(columnId: toColumnId, columns: columns)) {
+    return incompleteVerificationFeedbackBlocksReworkExitMessage;
+  }
   if (hasIncompleteVerificationFeedback(verificationFeedback) &&
       isDoneColumnId(
         columnId: toColumnId,

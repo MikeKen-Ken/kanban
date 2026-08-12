@@ -192,21 +192,7 @@ void main() {
       );
     });
 
-    test('有未完成反馈时移入已完成列 → 拒绝', () {
-      expect(
-        reworkMoveRejectionReason(
-          fromColumnId: 'rework',
-          toColumnId: 'done',
-          verificationFeedback: [
-            ChecklistItem(id: 'vf', text: '仍需修复'),
-          ],
-          columns: columns,
-        ),
-        incompleteVerificationFeedbackBlocksProgressMessage,
-      );
-    });
-
-    test('有未完成反馈时可移入进行中等非完成列', () {
+    test('有未完成反馈时离开待返工 → 拒绝', () {
       expect(
         reworkMoveRejectionReason(
           fromColumnId: 'rework',
@@ -219,11 +205,39 @@ void main() {
             KanbanColumn(id: 'doing', title: '进行中', order: 3, cards: const []),
           ],
         ),
-        isNull,
+        incompleteVerificationFeedbackBlocksReworkExitMessage,
       );
     });
 
-    test('有未完成反馈时移入自定义名已完成列 → 拒绝', () {
+    test('有未完成反馈时从待返工移入已完成列 → 拒绝', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'done',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '仍需修复'),
+          ],
+          columns: columns,
+        ),
+        incompleteVerificationFeedbackBlocksReworkExitMessage,
+      );
+    });
+
+    test('有未完成反馈时从其他列移入已完成列 → 拒绝', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'verify',
+          toColumnId: 'done',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '仍需修复'),
+          ],
+          columns: columns,
+        ),
+        incompleteVerificationFeedbackBlocksProgressMessage,
+      );
+    });
+
+    test('有未完成反馈时从待返工移入自定义名已完成列 → 拒绝', () {
       final customDone = [
         KanbanColumn(
           id: KanbanBoard.defaultReworkColumnId,
@@ -243,7 +257,7 @@ void main() {
           columns: customDone,
           doneColumnName: '交付区',
         ),
-        incompleteVerificationFeedbackBlocksProgressMessage,
+        incompleteVerificationFeedbackBlocksReworkExitMessage,
       );
     });
 

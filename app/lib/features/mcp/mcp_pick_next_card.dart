@@ -1,6 +1,7 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import 'mcp_arg_parsers.dart';
@@ -35,8 +36,10 @@ Future<CallToolResult> mcpPickNextCard(
 
     var columnId = fromColumnId;
     var columnTitle = picked.column.title;
+    final isReworkSource =
+        picked.sourceColumn == KanbanBoard.defaultReworkColumnTitle;
     final alreadyInDoing = fromColumnId == doingColumn.id;
-    if (!alreadyInDoing) {
+    if (!alreadyInDoing && !isReworkSource) {
       final moveError = await controller.moveCard(
         cardId: card.id,
         fromColumnId: fromColumnId,
@@ -57,7 +60,7 @@ Future<CallToolResult> mcpPickNextCard(
       'fromColumnId': fromColumnId,
       'columnId': columnId,
       'columnTitle': columnTitle,
-      'movedToDoing': !alreadyInDoing,
+      'movedToDoing': !alreadyInDoing && !isReworkSource,
       'workMode': rework ? 'rework' : 'normal',
       'workItems': buildCardWorkItems(card),
       'suggestedCommitMessage': buildCardCommitMessage(card),

@@ -91,8 +91,8 @@ void main() {
     );
   });
 
-  test('未完成反馈存在时可离开待返工到进行中', () async {
-    final cardId = await controller.addCard('verify', '可离开返工');
+  test('未完成反馈存在时拒绝离开待返工到其他列', () async {
+    final cardId = await controller.addCard('verify', '不得离开返工');
     expect(cardId, isNotNull);
 
     await controller.updateCardFull(
@@ -110,8 +110,11 @@ void main() {
       toDisplayIndex: 0,
     );
 
-    expect(err, isNull);
-    expect(controller.findColumnIdForCard(cardId), 'doing');
+    expect(err, incompleteVerificationFeedbackBlocksReworkExitMessage);
+    expect(
+      controller.findColumnIdForCard(cardId),
+      KanbanBoard.defaultReworkColumnId,
+    );
   });
 
   test('未完成反馈存在时拒绝移入已完成列且不落盘', () async {
@@ -133,7 +136,7 @@ void main() {
       toDisplayIndex: 0,
     );
 
-    expect(err, incompleteVerificationFeedbackBlocksProgressMessage);
+    expect(err, incompleteVerificationFeedbackBlocksReworkExitMessage);
     expect(
       controller.findColumnIdForCard(cardId),
       KanbanBoard.defaultReworkColumnId,
