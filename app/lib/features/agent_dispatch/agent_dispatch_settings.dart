@@ -21,6 +21,7 @@ class AgentDispatchSettings {
     this.workerScriptPath,
     this.skillPath,
     this.repoPathByProject = const {},
+    this.repoPaths = const [],
   });
 
   final AgentDispatchEngine engine;
@@ -39,6 +40,7 @@ class AgentDispatchSettings {
   final String? workerScriptPath;
   final String? skillPath;
   final Map<String, String> repoPathByProject;
+  final List<String> repoPaths;
 
   AgentDispatchSettings copyWith({
     AgentDispatchEngine? engine,
@@ -53,6 +55,7 @@ class AgentDispatchSettings {
     Object? workerScriptPath = _sentinel,
     Object? skillPath = _sentinel,
     Map<String, String>? repoPathByProject,
+    List<String>? repoPaths,
   }) {
     return AgentDispatchSettings(
       engine: engine ?? this.engine,
@@ -73,6 +76,7 @@ class AgentDispatchSettings {
           : workerScriptPath as String?,
       skillPath: skillPath == _sentinel ? this.skillPath : skillPath as String?,
       repoPathByProject: repoPathByProject ?? this.repoPathByProject,
+      repoPaths: repoPaths ?? this.repoPaths,
     );
   }
 
@@ -117,17 +121,27 @@ class AgentDispatchSettings {
         if (skillPath != null) 'skillPath': skillPath,
         if (repoPathByProject.isNotEmpty)
           'repoPathByProject': repoPathByProject,
+        if (repoPaths.isNotEmpty) 'repoPaths': repoPaths,
       };
 
   factory AgentDispatchSettings.fromJson(Map<String, dynamic> json) {
     final mapRaw = json['repoPathByProject'] as Map<String, dynamic>?;
+    final pathsRaw = json['repoPaths'] as List<dynamic>?;
+    final repoPath = json['repoPath'] as String?;
+    final migratedPaths = <String>{
+      if (repoPath?.trim().isNotEmpty == true) repoPath!.trim(),
+      ...?mapRaw?.values
+          .whereType<String>()
+          .map((path) => path.trim())
+          .where((path) => path.isNotEmpty),
+    };
     // 兼容旧字段
     final legacyModel = json['model'] as String?;
     return AgentDispatchSettings(
       engine: AgentDispatchEngine.fromName(json['engine'] as String?),
       useProject: json['useProject'] as bool? ?? false,
       projectId: json['projectId'] as String?,
-      repoPath: json['repoPath'] as String?,
+      repoPath: repoPath,
       modelId: json['modelId'] as String? ?? legacyModel,
       effortParamId: json['effortParamId'] as String?,
       effortParamValue:
@@ -144,6 +158,14 @@ class AgentDispatchSettings {
       repoPathByProject: mapRaw == null
           ? const {}
           : mapRaw.map((k, v) => MapEntry(k, v as String)),
+      repoPaths: pathsRaw == null
+          ? migratedPaths.toList()
+          : pathsRaw
+              .whereType<String>()
+              .map((path) => path.trim())
+              .where((path) => path.isNotEmpty)
+              .toSet()
+              .toList(),
     );
   }
 
@@ -170,7 +192,6 @@ class AgentDispatchSettings {
     if (custom != null && custom.isNotEmpty) return custom;
     return defaultSkillPath(engine);
   }
-
 }
 
 const Object _sentinel = Object();

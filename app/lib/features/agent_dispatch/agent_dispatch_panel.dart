@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,8 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/import_export/backup_file_picker.dart';
 import 'agent_dispatch_config.dart';
+import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
+import 'agent_dispatch_directory_opener.dart';
+import 'agent_dispatch_log_store.dart';
 import 'agent_dispatch_platform.dart';
+import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
@@ -30,7 +36,7 @@ class AgentDispatchToolbarButton extends StatelessWidget {
 Future<void> showAgentDispatchPanel(BuildContext context) {
   return showDialog<void>(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     builder: (_) => const AgentDispatchPanel(),
   );
 }
@@ -53,8 +59,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   List<AgentDispatchModelInfo> _models = const [];
   String? _skillPreview;
   String? _workerStatus;
+  String? _repoErrorText;
+  String? _projectErrorText;
+  String? _countErrorText;
   bool _running = false;
   bool _busy = false;
+  Future<void> _logSaveQueue = Future.value();
 
   @override
   void initState() {
@@ -70,6 +80,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       _settings = loaded;
       _repoController.text = loaded.repoPath ?? '';
       _countController.text = '${loaded.cardLimitCount}';
+      _logController.text = prefs.loadAgentDispatchLog();
     });
     await _refreshSkillPreview();
     await _refreshWorkerStatus();
@@ -86,6 +97,21 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         _logController.text.isEmpty ? line : '${_logController.text}\n$line';
     _logController.text = next;
     _logController.selection = TextSelection.collapsed(offset: next.length);
+    _logSaveQueue = _logSaveQueue.then((_) => _saveLog(next));
+    unawaited(_logSaveQueue);
+  }
+
+  Future<void> _saveLog(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.saveAgentDispatchLog(value);
+  }
+
+  Future<void> _clearLog() async {
+    _logController.clear();
+    await _logSaveQueue;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clearAgentDispatchLog();
+    if (mounted) setState(() {});
   }
 
   Future<void> _refreshSkillPreview() async {
@@ -110,13 +136,48 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final board = context.read<BoardController>();
     final projectId =
         _settings.useProject ? _settings.projectId : board.activeProjectId;
-    var next = _settings.copyWith(repoPath: path);
+    var next = _rememberRepo(_settings.copyWith(repoPath: path), path);
     if (projectId != null) {
       final map = Map<String, String>.from(next.repoPathByProject)
         ..[projectId] = path;
       next = next.copyWith(repoPathByProject: map);
     }
     await _persist(next);
+    if (mounted) setState(() => _repoErrorText = null);
+  }
+
+  AgentDispatchSettings _rememberRepo(
+    AgentDispatchSettings settings,
+    String path,
+  ) {
+    final normalized = path.trim();
+    if (normalized.isEmpty) return settings;
+    final paths = [
+      normalized,
+      ...settings.repoPaths.where((item) => item != normalized),
+    ];
+    return settings.copyWith(repoPaths: paths);
+  }
+
+  Future<void> _deleteCurrentRepo() async {
+    final path = _repoController.text.trim();
+    if (path.isEmpty || !_settings.repoPaths.contains(path)) return;
+    final paths = _settings.repoPaths.where((item) => item != path).toList();
+    final byProject = Map<String, String>.from(_settings.repoPathByProject)
+      ..removeWhere((_, value) => value == path);
+    _repoController.clear();
+    await _persist(_settings.copyWith(
+      repoPath: null,
+      repoPaths: paths,
+      repoPathByProject: byProject,
+    ));
+  }
+
+  Future<void> _openSkillDirectory() async {
+    final opened = await openAgentDispatchSkillDirectory(
+      _settings.resolveSkillPath(),
+    );
+    if (!opened) _appendLog('无法打开 Skill 所在目录');
   }
 
   Future<void> _fixWorker() async {
@@ -188,16 +249,25 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Future<void> _run() async {
     if (_running) return;
     final board = context.read<BoardController>();
-    final count = int.tryParse(_countController.text.trim()) ?? 1;
+    final count = int.tryParse(_countController.text.trim());
     final repo = _repoController.text.trim();
-    if (repo.isEmpty) {
-      _appendLog('请填写代码仓库路径');
+    final projectMissing = _settings.useProject && _settings.projectId == null;
+    final countInvalid =
+        !_settings.cardLimitMax && (count == null || count < 1 || count > 999);
+    setState(() {
+      _repoErrorText = repo.isEmpty ? '请填写代码仓库路径' : null;
+      _projectErrorText = projectMissing ? '请选择看板项目' : null;
+      _countErrorText = countInvalid ? '请输入 1–999' : null;
+    });
+    if (repo.isEmpty || projectMissing || countInvalid) {
       return;
     }
-    var next = _settings.copyWith(
-      repoPath: repo,
-      cardLimitCount: count,
-    );
+    var next = _rememberRepo(
+        _settings.copyWith(
+          repoPath: repo,
+          cardLimitCount: count!,
+        ),
+        repo);
     final projectId = next.useProject ? next.projectId : board.activeProjectId;
     if (projectId != null) {
       final map = Map<String, String>.from(next.repoPathByProject)
@@ -216,8 +286,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
     setState(() {
       _running = true;
-      _logController.clear();
     });
+    _appendLog(
+      '\n—— ${DateTime.now().toLocal().toString().substring(0, 19)} 新运行 ——',
+    );
     _appendLog('引擎：${options.engine.label}');
     final result = await _service.runOnce(
       options: options,
@@ -284,12 +356,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                title: const Text('指定看板项目（否则用当前打开的项目，不写入调用正文）'),
+                title: const Text('指定看板项目（默认使用当前项目）'),
                 value: _settings.useProject,
                 onChanged: _running || _busy
                     ? null
-                    : (v) =>
-                        _persist(_settings.copyWith(useProject: v ?? false)),
+                    : (v) {
+                        setState(() => _projectErrorText = null);
+                        _persist(_settings.copyWith(useProject: v ?? false));
+                      },
               ),
               if (_settings.useProject)
                 DropdownButtonFormField<String>(
@@ -297,7 +371,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   initialValue: projects.any((p) => p.id == _settings.projectId)
                       ? _settings.projectId
                       : null,
-                  decoration: const InputDecoration(labelText: '项目'),
+                  decoration: InputDecoration(
+                    labelText: '项目',
+                    errorText: _projectErrorText,
+                  ),
                   items: [
                     for (final p in projects)
                       DropdownMenuItem(value: p.id, child: Text(p.title)),
@@ -315,30 +392,27 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                           if (remembered != null) {
                             _repoController.text = remembered;
                           }
+                          setState(() => _projectErrorText = null);
                         },
                 ),
               const SizedBox(height: 8),
-              Text('代码仓库（必填，会记住）',
-                  style: Theme.of(context).textTheme.labelLarge),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _repoController,
-                      enabled: !_running && !_busy,
-                      decoration: const InputDecoration(
-                        hintText: '本机仓库根目录',
-                      ),
-                      onChanged: (v) =>
-                          _settings = _settings.copyWith(repoPath: v.trim()),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '选择目录',
-                    onPressed: _running || _busy ? null : _pickRepo,
-                    icon: const Icon(Icons.folder_open),
-                  ),
-                ],
+              Text('代码仓库', style: Theme.of(context).textTheme.labelLarge),
+              AgentDispatchRepositoryField(
+                controller: _repoController,
+                paths: _settings.repoPaths,
+                enabled: !_running && !_busy,
+                errorText: _repoErrorText,
+                onChanged: (value) {
+                  setState(() {
+                    _settings = _settings.copyWith(repoPath: value.trim());
+                    _repoErrorText = null;
+                  });
+                },
+                onPickDirectory: _pickRepo,
+                onDeleteCurrent:
+                    _settings.repoPaths.contains(_repoController.text.trim())
+                        ? _deleteCurrentRepo
+                        : null,
               ),
               const SizedBox(height: 12),
               if (_settings.engine == AgentDispatchEngine.cursor) ...[
@@ -422,32 +496,38 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 ),
               ],
               const SizedBox(height: 12),
-              Text('卡片上限', style: Theme.of(context).textTheme.labelLarge),
+              AgentDispatchCardLimitField(
+                controller: _countController,
+                useMax: _settings.cardLimitMax,
+                enabled: !_running && !_busy,
+                errorText: _countErrorText,
+                onMaxChanged: (value) {
+                  setState(() => _countErrorText = null);
+                  _persist(_settings.copyWith(cardLimitMax: value));
+                },
+                onCountChanged: (_) {
+                  if (_countErrorText != null) {
+                    setState(() => _countErrorText = null);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  FilterChip(
-                    label: const Text('Max'),
-                    selected: _settings.cardLimitMax,
-                    onSelected: _running || _busy
-                        ? null
-                        : (v) => _persist(_settings.copyWith(cardLimitMax: v)),
+                  Text('Skill', style: Theme.of(context).textTheme.labelLarge),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: '打开 Skill 目录',
+                    onPressed: _running || _busy ? null : _openSkillDirectory,
+                    icon: const Icon(Icons.folder_open_outlined, size: 20),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _countController,
-                      enabled: !_running && !_busy && !_settings.cardLimitMax,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: '张数',
-                        hintText: '例如 1',
-                      ),
-                    ),
+                  IconButton(
+                    tooltip: '重新读取 Skill',
+                    onPressed: _running || _busy ? null : _refreshSkillPreview,
+                    icon: const Icon(Icons.refresh, size: 20),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text('Skill', style: Theme.of(context).textTheme.labelLarge),
               Text(skillPath, style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 4),
               Container(
@@ -480,7 +560,21 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 ),
               ),
               const SizedBox(height: 8),
-              Text('运行日志', style: Theme.of(context).textTheme.labelLarge),
+              Row(
+                children: [
+                  Text(
+                    '工具对话记录',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _running || _logController.text.isEmpty
+                        ? null
+                        : _clearLog,
+                    child: const Text('清空记录'),
+                  ),
+                ],
+              ),
               SizedBox(
                 height: 140,
                 child: TextField(

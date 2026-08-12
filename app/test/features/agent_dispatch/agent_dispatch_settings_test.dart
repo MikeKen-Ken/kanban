@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_config.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_credentials.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_prompt.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_service.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_settings.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_worker.dart';
 
@@ -55,11 +56,35 @@ void main() {
     const original = AgentDispatchSettings(
       repoPath: '/tmp/x',
       repoPathByProject: {'a': '/tmp/a'},
+      repoPaths: ['/tmp/x', '/tmp/a'],
     );
     final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
     expect(roundTrip.repoPath, '/tmp/x');
     expect(roundTrip.repoPathByProject['a'], '/tmp/a');
+    expect(roundTrip.repoPaths, ['/tmp/x', '/tmp/a']);
     expect(original.toJson(), isNot(contains('cursorApiKey')));
+  });
+
+  test('旧设置会把当前仓库和项目仓库迁移到历史下拉框', () {
+    final settings = AgentDispatchSettings.fromJson({
+      'repoPath': '/tmp/current',
+      'repoPathByProject': {'a': '/tmp/a', 'b': '/tmp/current'},
+    });
+
+    expect(settings.repoPaths, ['/tmp/current', '/tmp/a']);
+  });
+
+  test('Skill 预览读取全文', () async {
+    final temp = await Directory.systemTemp.createTemp('kanban_skill_test_');
+    try {
+      final skill = File('${temp.path}${Platform.pathSeparator}SKILL.md');
+      final content = List.filled(2000, '技').join();
+      await skill.writeAsString(content);
+
+      expect(await peekSkillPreview(skill.path), content);
+    } finally {
+      await temp.delete(recursive: true);
+    }
   });
 
   test('Worker 显式路径可脱离源码仓库解析', () async {

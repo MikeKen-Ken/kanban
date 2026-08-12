@@ -93,12 +93,10 @@ class AgentDispatchService {
 }
 
 /// 解析默认 skill 路径是否可读（供面板展示）。
-Future<String?> peekSkillPreview(String path, {int maxChars = 1200}) async {
+Future<String?> peekSkillPreview(String path) async {
   final file = File(path);
   if (!await file.exists()) return null;
-  final text = await file.readAsString();
-  if (text.length <= maxChars) return text;
-  return '${text.substring(0, maxChars)}\n…';
+  return file.readAsString();
 }
 
 String resolveDispatchSkillPath(AgentDispatchSettings settings) =>
