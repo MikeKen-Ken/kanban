@@ -45,7 +45,7 @@ class KanbanColumnWidget extends StatelessWidget {
     }
 
     final colorMarkerWidth = hasColor ? 12.0 : 0.0;
-    // 数量徽章：左右各 8、上下各 4 的内边距。
+    // 数量徽章：左右各 8；上 4、下 6 的内边距（底边多留 2，避免数字贴底）。
     final countWidth = measure(countLabel, countStyle) + 16;
     const titleCountGap = 8.0;
     const countToolsGap = 4.0;
@@ -336,7 +336,8 @@ class KanbanColumnWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 0, 10),
+            // 底边 12：与右侧工具区视觉留白对齐，避免标题/数量贴分割线
+            padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
             child: Row(
               children: [
                 if (columnColor != null)
@@ -360,8 +361,7 @@ class KanbanColumnWidget extends StatelessWidget {
                       : '未完成 $activeCount / 建议上限 $wipLimit'
                           '${overWip ? '，已超出' : ''}',
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
                     decoration: BoxDecoration(
                       color: overWip
                           ? colorScheme.errorContainer
@@ -370,7 +370,7 @@ class KanbanColumnWidget extends StatelessWidget {
                     ),
                     child: Text(
                       countLabel,
-                      style: countStyle,
+                      style: countStyle.copyWith(height: 1.0),
                     ),
                   ),
                 ),

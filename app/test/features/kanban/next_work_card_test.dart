@@ -144,7 +144,7 @@ void main() {
     expect(buildCardCommitMessage(card), '问题一');
   });
 
-  test('普通模式 workItems 含标题备注与 checklist', () {
+  test('普通模式 workItems 含标题备注与未完成 checklist，跳过已完成项', () {
     final card = _card(
       id: 'n',
       title: '新功能',
@@ -152,6 +152,7 @@ void main() {
       description: '说明',
       checklist: [
         ChecklistItem(id: 'c1', text: '子任务'),
+        ChecklistItem(id: 'c2', text: '已做完', completed: true),
       ],
     );
     expect(isReworkWorkMode(card), isFalse);
@@ -162,9 +163,13 @@ void main() {
         'kind': 'checklist',
         'id': 'c1',
         'text': '子任务',
-        'completed': false,
       },
     ]);
     expect(buildCardCommitMessage(card), '新功能\n\n说明');
+    expect(buildCardWorkSummary(card), {
+      'title': '新功能',
+      'hasDescription': true,
+      'checklist': {'pending': 1, 'total': 2},
+    });
   });
 }

@@ -66,7 +66,36 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
   return null;
 }
 
-/// 本轮应实施的工作项（返工只含未完成验证反馈）。
+/// 取卡摘要：标题与计数，不含正文 / 清单文本 / 附件二进制。
+Map<String, dynamic> buildCardWorkSummary(KanbanCard card) {
+  final rework = isReworkWorkMode(card);
+  final pendingChecklist =
+      card.checklist.where((item) => !item.completed).length;
+  final pendingFeedback =
+      card.verificationFeedback.where((item) => !item.completed).length;
+  final description = card.description?.trim();
+  return {
+    'title': card.title,
+    if (!rework && description != null && description.isNotEmpty)
+      'hasDescription': true,
+    if (!rework && card.checklist.isNotEmpty)
+      'checklist': {
+        'pending': pendingChecklist,
+        'total': card.checklist.length,
+      },
+    if (card.verificationFeedback.isNotEmpty)
+      'verificationFeedback': {
+        'pending': pendingFeedback,
+        'total': card.verificationFeedback.length,
+      },
+    if (card.attachments.isNotEmpty)
+      'attachmentCount': card.attachments.length,
+    if (card.fileAttachments.isNotEmpty)
+      'fileAttachmentCount': card.fileAttachments.length,
+  };
+}
+
+/// 本轮应实施的工作项（返工只含未完成验证反馈；普通模式跳过已完成 checklist）。
 List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
   if (isReworkWorkMode(card)) {
     return [
@@ -88,11 +117,11 @@ List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
     items.add({'kind': 'description', 'text': description});
   }
   for (final item in card.checklist) {
+    if (item.completed) continue;
     items.add({
       'kind': 'checklist',
       'id': item.id,
       'text': item.text,
-      'completed': item.completed,
     });
   }
   return items;

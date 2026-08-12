@@ -5,6 +5,7 @@ import '../../controllers/board_controller.dart';
 import '../views/views.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_card_payloads.dart';
+import 'mcp_get_work_items.dart';
 import 'mcp_pick_next_card.dart';
 import 'mcp_tool_results.dart';
 
@@ -14,9 +15,8 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     'pick_next_card',
     description:
         '取下一条可实施卡并自动移入「进行中」：优先「待办」最新未完成卡，否则「待返工」。'
-        '返回 workMode（normal|rework）、workItems（本轮工作范围）、'
-        'suggestedCommitMessage 与 cardId；不返回完整 card 详情以节省 token。'
-        '完成后用 submit_card_for_verify；实施失败用 block_card。'
+        '默认只返回 cardId、workMode 与 summary（标题/计数，不含正文与附件二进制）以节省 token；'
+        '实施前再调 get_work_items。完成后用 submit_card_for_verify；失败用 block_card。'
         '无需指定列；省略 projectId 时用界面当前项目。',
     inputSchema: JsonSchema.object(
       properties: {
@@ -31,6 +31,32 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     callback: (args, extra) async {
       return mcpPickNextCard(
         controller,
+        projectId: args['projectId'] as String?,
+      );
+    },
+  );
+
+  server.registerTool(
+    'get_work_items',
+    description:
+        '按 cardId 拉取本轮 workItems 与 suggestedCommitMessage。'
+        '普通模式跳过已完成 checklist；返工模式只含未完成验证反馈。'
+        '附件只返回计数，元数据/二进制请用 list_card_attachments、read_card_attachment 按需读取。',
+    inputSchema: JsonSchema.object(
+      properties: {
+        'cardId': JsonSchema.string(description: '卡片 id'),
+        'projectId': JsonSchema.string(description: '可选，缩小查找范围'),
+      },
+      required: ['cardId'],
+    ),
+    annotations:
+        const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
+    callback: (args, extra) async {
+      final cardId = mcpTrimmedString(args['cardId']);
+      if (cardId == null) return mcpErrorResult('cardId 不能为空');
+      return mcpGetWorkItems(
+        controller,
+        cardId: cardId,
         projectId: args['projectId'] as String?,
       );
     },

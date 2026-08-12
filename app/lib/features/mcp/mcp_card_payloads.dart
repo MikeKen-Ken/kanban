@@ -80,6 +80,8 @@ Map<String, dynamic> mcpCardReferencePayload(
     full ? card.toJson() : mcpCardReferenceSummary(card);
 
 /// 单卡详情保留完整清单，但不重复返回对应的纯文本摘要。
+///
+/// 附件只保留计数；二进制/元数据列表请用 list_card_attachments、read_card_attachment。
 Map<String, dynamic> mcpCardDetails(CardReference card) {
   final payload = card.toJson();
   final source = card.source;
@@ -96,6 +98,18 @@ Map<String, dynamic> mcpCardDetails(CardReference card) {
     payload['verificationFeedback'] = [
       for (final item in source.verificationFeedback) item.toJson(),
     ];
+  }
+  if (source.attachments.isNotEmpty) {
+    payload.remove('attachments');
+    payload['attachmentCount'] = source.attachments.length;
+  }
+  if (source.fileAttachments.isNotEmpty) {
+    payload.remove('fileAttachments');
+    payload['fileAttachmentCount'] = source.fileAttachments.length;
+  }
+  if (source.attachments.isNotEmpty || source.fileAttachments.isNotEmpty) {
+    payload['attachmentsNote'] =
+        '附件仅计数；元数据用 list_card_attachments，二进制用 read_card_attachment 按需读取';
   }
   return payload;
 }

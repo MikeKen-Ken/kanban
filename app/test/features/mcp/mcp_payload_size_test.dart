@@ -65,7 +65,7 @@ void main() {
     expect(full['links'], hasLength(1));
   });
 
-  test('单卡详情不重复返回清单与反馈的纯文本副本', () {
+  test('单卡详情不重复返回清单与反馈的纯文本副本，附件仅计数', () {
     final details = mcpCardDetails(_reference(_card()));
 
     expect(details, isNot(contains('checklistTexts')));
@@ -76,6 +76,9 @@ void main() {
     expect(details['verificationFeedback'], [
       {'id': 'feedback-1', 'text': '返工反馈正文', 'completed': false},
     ]);
+    expect(details, isNot(contains('attachments')));
+    expect(details['attachmentCount'], 1);
+    expect(details['attachmentsNote'], contains('list_card_attachments'));
   });
 }
 
@@ -92,6 +95,15 @@ KanbanCard _card() => KanbanCard(
       ],
       verificationFeedback: [
         ChecklistItem(id: 'feedback-1', text: '返工反馈正文'),
+      ],
+      attachments: [
+        CardAttachment(
+          id: 'att-1',
+          fileName: 'shot.png',
+          mimeType: 'image/png',
+          order: 0,
+          createdAt: 1,
+        ),
       ],
       links: [
         CardLink(

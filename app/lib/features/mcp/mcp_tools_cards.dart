@@ -15,7 +15,9 @@ import 'mcp_tool_results.dart';
 void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
   server.registerTool(
     'get_card',
-    description: '按 cardId 获取单张卡片详情（含关联、外链等）',
+    description:
+        '按 cardId 获取单张卡片详情（含关联、外链等）。'
+        '附件只返回计数；元数据/二进制请用 list_card_attachments、read_card_attachment。',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),
