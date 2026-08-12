@@ -182,6 +182,16 @@ async function runCursor(job) {
 function writeResult(outPath, result) {
   writeFileSync2(outPath, JSON.stringify(result, null, 2), "utf8");
 }
+function normalizeModelParameterValues(input) {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => {
+    if (item && typeof item === "object" && "value" in item) {
+      const value = item.value;
+      return value == null ? null : String(value);
+    }
+    return item == null ? null : String(item);
+  }).filter((value) => value !== null && value.length > 0);
+}
 async function listModels() {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
@@ -195,7 +205,9 @@ async function listModels() {
       id: m.id,
       parameters: (m.parameters ?? []).map((p) => ({
         id: p.id,
-        values: Array.isArray(p.values) ? p.values.map(String) : Array.isArray(p.enum) ? p.enum.map(String) : []
+        values: normalizeModelParameterValues(
+          p.values ?? p.enum
+        )
       }))
     }))
   };

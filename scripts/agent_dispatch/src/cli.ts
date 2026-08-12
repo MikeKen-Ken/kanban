@@ -9,6 +9,19 @@ function writeResult(outPath: string, result: DispatchResult): void {
   writeFileSync(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 
+function normalizeModelParameterValues(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item): string | null => {
+      if (item && typeof item === "object" && "value" in item) {
+        const value = (item as { value?: unknown }).value;
+        return value == null ? null : String(value);
+      }
+      return item == null ? null : String(item);
+    })
+    .filter((value): value is string => value !== null && value.length > 0);
+}
+
 async function listModels(): Promise<void> {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
@@ -22,11 +35,10 @@ async function listModels(): Promise<void> {
       id: m.id,
       parameters: (m.parameters ?? []).map((p) => ({
         id: p.id,
-        values: Array.isArray((p as { values?: unknown }).values)
-          ? (p as { values: unknown[] }).values.map(String)
-          : Array.isArray((p as { enum?: unknown }).enum)
-            ? (p as { enum: unknown[] }).enum.map(String)
-            : [],
+        values: normalizeModelParameterValues(
+          (p as { values?: unknown }).values ??
+            (p as { enum?: unknown }).enum,
+        ),
       })),
     })),
   };

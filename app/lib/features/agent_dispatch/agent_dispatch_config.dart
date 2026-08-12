@@ -105,7 +105,15 @@ class AgentDispatchModelParameter {
         const [];
     return AgentDispatchModelParameter(
       id: json['id'] as String? ?? '',
-      values: valuesRaw.map((e) => '$e').toList(),
+      values:
+          valuesRaw.map(_parseModelParameterValue).whereType<String>().toList(),
     );
   }
+}
+
+String? _parseModelParameterValue(dynamic raw) {
+  final value = raw is Map ? raw['value'] : raw;
+  if (value == null) return null;
+  final text = '$value'.trim();
+  return text.isEmpty ? null : text;
 }
