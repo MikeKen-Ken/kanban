@@ -82,6 +82,14 @@ extension BoardControllerWallpapers on BoardController {
           .where(available.contains)
           .toSet()
           .toList(growable: false);
+      if (mode == WallpaperPlaybackMode.random &&
+          selected.length < 2 &&
+          available.length >= 2) {
+        selected = sharedContent.wallpapers
+            .map((item) => item.id)
+            .where(available.contains)
+            .toList(growable: false);
+      }
       if (mode == WallpaperPlaybackMode.fixed && selected.length > 1) {
         selected = [selected.first];
       }

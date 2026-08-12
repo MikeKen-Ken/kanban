@@ -27,13 +27,26 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
   @override
   void initState() {
     super.initState();
-    final settings = context.read<BoardController>().projectSettings;
+    final controller = context.read<BoardController>();
+    final settings = controller.projectSettings;
+    final allIds = controller.wallpapers.map((item) => item.id).toSet();
     _selected = settings.wallpaperIds.toSet();
+    if (_selected.isEmpty && allIds.isNotEmpty) {
+      _selected = allIds;
+    }
     _mode = settings.wallpaperPlaybackMode;
     _intervalSeconds = _intervals.contains(settings.wallpaperIntervalSeconds)
         ? settings.wallpaperIntervalSeconds
         : ProjectSettings.defaultWallpaperIntervalSeconds;
   }
+
+  Set<String> _allWallpaperIds() => context
+      .read<BoardController>()
+      .wallpapers
+      .map((item) => item.id)
+      .toSet();
+
+  void _selectAll() => setState(() => _selected = _allWallpaperIds());
 
   String _intervalLabel(int seconds) {
     if (seconds < 60) return '$seconds 秒';
@@ -160,8 +173,15 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                               ),
                             ],
                             selected: {_mode},
-                            onSelectionChanged: (value) =>
-                                setState(() => _mode = value.first),
+                            onSelectionChanged: (value) {
+                              final next = value.first;
+                              setState(() {
+                                _mode = next;
+                                if (next == WallpaperPlaybackMode.random) {
+                                  _selected = _allWallpaperIds();
+                                }
+                              });
+                            },
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -198,6 +218,10 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                                 : (value) => setState(
                                       () => _intervalSeconds = value!,
                                     ),
+                          ),
+                          TextButton(
+                            onPressed: _busy ? null : _selectAll,
+                            child: const Text('全选'),
                           ),
                           const Spacer(),
                           Text('已选 ${_selected.length} 张'),
