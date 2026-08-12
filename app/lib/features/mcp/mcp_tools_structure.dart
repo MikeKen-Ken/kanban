@@ -67,7 +67,9 @@ void registerKanbanMcpStructureTools(
       properties: {
         'title': JsonSchema.string(),
         'projectId': JsonSchema.string(
-          description: '多项目时必填；单项目可省略（重命名唯一项目）',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '多项目时必填；单项目可省略（重命名唯一项目）',
+          ),
         ),
       },
       required: ['title'],
@@ -101,10 +103,13 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'switch_project',
-    description: '校验目标项目；不会切换界面，后续操作仍需显式传 projectId',
+    description:
+        '校验目标项目（可用 id 或项目名）；不会切换界面，后续操作仍需显式传 projectId',
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(whenOmitted: '必填'),
+        ),
       },
       required: ['projectId'],
     ),
@@ -114,10 +119,12 @@ void registerKanbanMcpStructureTools(
       openWorldHint: false,
     ),
     callback: (args, extra) async {
-      final projectId = mcpTrimmedString(args['projectId']) ?? '';
-      if (projectId.isEmpty) return mcpErrorResult('projectId 不能为空');
-      final switchError = await ensureMcpProject(controller, projectId);
-      if (switchError != null) return switchError;
+      final resolved = resolveMcpProjectRef(
+        controller,
+        mcpTrimmedString(args['projectId']) ?? '',
+      );
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId!;
       return mcpJsonResult({
         'ok': true,
         'projectId': projectId,
@@ -129,10 +136,12 @@ void registerKanbanMcpStructureTools(
 
   server.registerTool(
     'delete_project',
-    description: '删除项目（进入回收站）',
+    description: '删除项目（进入回收站）；projectId 可为 id 或项目名',
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(whenOmitted: '必填'),
+        ),
       },
       required: ['projectId'],
     ),
@@ -142,8 +151,12 @@ void registerKanbanMcpStructureTools(
       openWorldHint: false,
     ),
     callback: (args, extra) async {
-      final projectId = mcpTrimmedString(args['projectId']) ?? '';
-      if (projectId.isEmpty) return mcpErrorResult('projectId 不能为空');
+      final resolved = resolveMcpProjectRef(
+        controller,
+        mcpTrimmedString(args['projectId']) ?? '',
+      );
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId!;
       if (projectId == controller.uiActiveProjectId) {
         return mcpErrorResult('MCP 不能删除界面当前项目，请先由用户在界面切换项目');
       }
@@ -161,16 +174,19 @@ void registerKanbanMcpStructureTools(
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(
-          description: '项目 id；省略则用界面当前项目（非 runOnProject 临时作用域）',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则用界面当前项目（非 runOnProject 临时作用域）',
+          ),
         ),
       },
     ),
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
-      final projectId = mcpTrimmedString(args['projectId']) ??
-          controller.uiActiveProjectId;
-      if (projectId == null) return mcpErrorResult('没有可用项目');
+      final resolved =
+          resolveMcpProjectId(controller, args['projectId'] as String?);
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId!;
       final board = await controller.loadBoardSnapshot(projectId);
       if (board == null) {
         return mcpErrorResult('项目不存在或未加载：$projectId');
@@ -199,7 +215,7 @@ void registerKanbanMcpStructureTools(
       properties: {
         'title': JsonSchema.string(),
         'projectId': JsonSchema.string(
-          description: '项目 id；多项目时必填',
+          description: mcpProjectIdParamDescription(whenOmitted: '多项目时必填'),
         ),
         'beforeColumnId': JsonSchema.string(
           description: '插入到该列之前（优先于 insertIndex）',

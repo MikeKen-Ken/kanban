@@ -10,11 +10,13 @@ import 'mcp_tools_query.dart';
 import 'mcp_tools_relations.dart';
 import 'mcp_tools_run_context.dart';
 import 'mcp_tools_structure.dart';
+import 'mcp_tools_workflow.dart';
 
 /// 向 [McpServer] 注册看板工具；所有写入经 [BoardController]。
 void registerKanbanMcpTools(McpServer server, BoardController controller) {
   registerKanbanMcpStructureTools(server, controller);
   registerKanbanMcpCardTools(server, controller);
+  registerKanbanMcpWorkflowTools(server, controller);
   registerKanbanMcpRelationTools(server, controller);
   registerKanbanMcpRunContextTools(server, controller);
   registerKanbanMcpAttachmentTools(server, controller);

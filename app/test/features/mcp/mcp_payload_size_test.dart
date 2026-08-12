@@ -49,7 +49,7 @@ void main() {
     final full = mcpCardReferencePayload(reference, full: true);
 
     expect(summary['cardId'], 'card-1');
-    expect(summary['labelIds'], ['needs_verify']);
+    expect(summary['labelIds'], ['consultation']);
     expect(summary['checklistCount'], 1);
     expect(summary['verificationFeedbackCount'], 1);
     expect(summary['blockedByIds'], ['before']);
@@ -89,7 +89,7 @@ KanbanCard _card() => KanbanCard(
       order: 0,
       createdAt: 1,
       priority: CardPriority.high,
-      labels: const ['needs_verify'],
+      labels: const ['consultation'],
       checklist: [
         ChecklistItem(id: 'check-1', text: '子任务正文', completed: true),
       ],
@@ -127,7 +127,7 @@ CardReference _reference(KanbanCard card) => CardReference(
       title: card.title,
       description: card.description,
       labelIds: card.labels,
-      labelNames: const ['验收'],
+      labelNames: const ['咨询'],
       checklistTexts: const ['子任务正文'],
       verificationFeedbackTexts: const ['返工反馈正文'],
       priority: card.priority.name,

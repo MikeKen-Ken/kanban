@@ -219,27 +219,75 @@ int mcpLimit(Object? raw, {int fallback = 30, int max = 100}) {
   return ((raw as num?)?.toInt() ?? fallback).clamp(1, max);
 }
 
-/// 若指定了项目 id，仅校验存在；不切换 UI 当前项目。
-/// 项目不存在时返回错误结果；未指定或已是当前项目时返回 null。
+/// MCP `projectId` 参数说明：支持项目 UUID 或项目标题。
+String mcpProjectIdParamDescription({
+  String whenOmitted = '省略则用界面当前项目',
+}) =>
+    '项目 id 或项目名；$whenOmitted';
+
+/// 将 MCP 传入的项目引用解析为项目 id：先精确匹配 id，再按标题（忽略大小写）匹配。
+({String? projectId, CallToolResult? error}) resolveMcpProjectRef(
+  BoardController controller,
+  String projectRef,
+) {
+  final ref = projectRef.trim();
+  if (ref.isEmpty) {
+    return (projectId: null, error: mcpErrorResult('projectId 不能为空'));
+  }
+  for (final project in controller.projects) {
+    if (project.id == ref) {
+      return (projectId: project.id, error: null);
+    }
+  }
+  final lower = ref.toLowerCase();
+  final byTitle = [
+    for (final project in controller.projects)
+      if (project.title.trim().toLowerCase() == lower) project,
+  ];
+  if (byTitle.length == 1) {
+    return (projectId: byTitle.first.id, error: null);
+  }
+  if (byTitle.length > 1) {
+    final detail =
+        byTitle.map((project) => '${project.title}（${project.id}）').join('、');
+    return (
+      projectId: null,
+      error: mcpErrorResult('项目名「$ref」匹配多个项目，请改传项目 id：$detail'),
+    );
+  }
+  return (projectId: null, error: mcpErrorResult('项目不存在：$ref'));
+}
+
+/// 可选 projectId：未传则 `projectId=null`；传入则解析为 id。
+({String? projectId, CallToolResult? error}) resolveOptionalMcpProjectId(
+  BoardController controller,
+  String? projectId,
+) {
+  final explicit = mcpTrimmedString(projectId);
+  if (explicit == null) return (projectId: null, error: null);
+  return resolveMcpProjectRef(controller, explicit);
+}
+
+/// 若指定了项目 id/名，仅校验并可解析；不切换 UI 当前项目。
+/// 项目不存在时返回错误结果；未指定时返回 null。
 Future<CallToolResult?> ensureMcpProject(
   BoardController controller,
   String? projectId,
 ) async {
   final id = mcpTrimmedString(projectId);
   if (id == null) return null;
-  final exists = controller.projects.any((project) => project.id == id);
-  if (!exists) return mcpErrorResult('项目不存在：$id');
-  return null;
+  return resolveMcpProjectRef(controller, id).error;
 }
 
 /// 多项目且省略 projectId 时的统一错误（默认列 id 跨项目相同）。
 CallToolResult mcpMissingProjectIdError() => mcpErrorResult(
-      '存在多个项目时必须显式传入 projectId'
+      '存在多个项目时必须显式传入 projectId（id 或项目名）'
       '（默认列 id 如 todo/doing 跨项目相同，省略会写到错误项目）',
     );
 
 /// 解析 MCP 目标项目（省略则界面当前项目）；不切换 UI。
 ///
+/// [projectId] 可为项目 UUID 或项目标题；先匹配 id，再按标题忽略大小写匹配。
 /// 回退使用 [BoardController.uiActiveProjectId]，避免 [BoardController.runOnProject]
 /// 临时切换 active 时把并发/缺省写操作绑错项目。
 ///
@@ -255,7 +303,10 @@ CallToolResult mcpMissingProjectIdError() => mcpErrorResult(
       controller.projects.length > 1) {
     return (projectId: null, error: mcpMissingProjectIdError());
   }
-  final id = explicit ?? controller.uiActiveProjectId;
+  if (explicit != null) {
+    return resolveMcpProjectRef(controller, explicit);
+  }
+  final id = controller.uiActiveProjectId;
   if (id == null) {
     return (projectId: null, error: mcpErrorResult('没有可用项目'));
   }
@@ -266,7 +317,7 @@ CallToolResult mcpMissingProjectIdError() => mcpErrorResult(
   return (projectId: id, error: null);
 }
 
-/// 按 cardId 定位所属项目；显式 [projectId] 时校验卡片确在该项目。
+/// 按 cardId 定位所属项目；显式 [projectId]（id 或项目名）时校验卡片确在该项目。
 ///
 /// 用于 update/move/complete/delete 等：省略 projectId 时不依赖「当前激活项目」，
 /// 避免列 id 跨项目相同导致写错板。
@@ -277,21 +328,33 @@ Future<({String? projectId, String? columnId, CallToolResult? error})>
   String? projectId,
   String? expectedColumnId,
 }) async {
-  final explicit = mcpTrimmedString(projectId);
+  final explicitRaw = mcpTrimmedString(projectId);
+  String? explicitId;
+  if (explicitRaw != null) {
+    final resolved = resolveMcpProjectRef(controller, explicitRaw);
+    if (resolved.error != null) {
+      return (
+        projectId: null,
+        columnId: null,
+        error: resolved.error,
+      );
+    }
+    explicitId = resolved.projectId;
+  }
   final expectedColumn = mcpTrimmedString(expectedColumnId);
   final refs = await controller.loadAllCardReferences();
   final matches = [
     for (final ref in refs)
       if (ref.cardId == cardId &&
-          (explicit == null || ref.projectId == explicit))
+          (explicitId == null || ref.projectId == explicitId))
         ref,
   ];
   if (matches.isEmpty) {
-    if (explicit != null) {
+    if (explicitId != null) {
       return (
         projectId: null,
         columnId: null,
-        error: mcpErrorResult('项目 $explicit 中未找到卡片：$cardId'),
+        error: mcpErrorResult('项目 $explicitId 中未找到卡片：$cardId'),
       );
     }
     return (

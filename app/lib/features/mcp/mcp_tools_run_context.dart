@@ -147,7 +147,9 @@ void registerKanbanMcpRunContextTools(
 }
 
 Map<String, JsonSchema> get _identityProperties => {
-      'projectId': JsonSchema.string(description: '目标项目 id；必填'),
+      'projectId': JsonSchema.string(
+        description: mcpProjectIdParamDescription(whenOmitted: '必填'),
+      ),
       'cardId': JsonSchema.string(description: '目标卡片 id'),
     };
 

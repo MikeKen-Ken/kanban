@@ -25,7 +25,7 @@ void main() {
     test('标题不符时回退默认 id verify', () {
       final col = KanbanColumn(
         id: 'verify',
-        title: '验收中',
+        title: '检查中',
         order: 0,
         cards: const [],
       );

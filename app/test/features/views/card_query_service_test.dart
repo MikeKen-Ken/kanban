@@ -93,7 +93,7 @@ void main() {
         title: '部署',
         commitRef: 'abc1234',
         verificationFeedback: ['按钮未对齐'],
-        attachmentFileNames: ['验收截图.png'],
+        attachmentFileNames: ['验证截图.png'],
       ),
     ];
 
@@ -111,7 +111,7 @@ void main() {
     );
     expect(
       service
-          .query(extended, const FilterSpec(keyword: '验收截图'), now: now)
+          .query(extended, const FilterSpec(keyword: '验证截图'), now: now)
           .map((card) => card.cardId),
       ['c5'],
     );

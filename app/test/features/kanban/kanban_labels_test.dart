@@ -5,7 +5,7 @@ import 'package:kanban/features/project/project_theme.dart';
 
 void main() {
   group('预设标签', () {
-    test('预设包含四象限、缺资源、咨询和验收，含完整说明', () {
+    test('预设包含四象限、缺资源和咨询，含完整说明', () {
       final presets = presetKanbanLabels();
       expect(presets.map((l) => l.key).toList(), [
         'important_urgent',
@@ -14,7 +14,6 @@ void main() {
         'not_urgent_not_important',
         'need_resource',
         'consultation',
-        'needs_verify',
       ]);
       expect(presets.map((l) => l.name).toList(), [
         '重要紧急',
@@ -23,7 +22,6 @@ void main() {
         '次要不急',
         '缺资源',
         '咨询',
-        '验收',
       ]);
       expect(
         presets
@@ -36,7 +34,6 @@ void main() {
           '紧急不重要',
           '不重要不紧急',
           '答复、解释、建议或非代码说明类交付',
-          '需要代理做本地验收与适用验证后再交人工确认',
         ],
       );
       expect(

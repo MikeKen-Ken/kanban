@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/controllers/board_controller.dart';
 import 'package:kanban/features/mcp/mcp_arg_parsers.dart';
+import 'package:kanban/features/mcp/mcp_pick_next_card.dart';
 import 'package:kanban/features/mcp/mcp_tool_results.dart';
 import 'package:kanban/storage/board_storage.dart';
 import 'package:mcp_dart/mcp_dart.dart';
@@ -39,8 +41,7 @@ void main() {
   });
 
   test('默认列 id 跨项目相同（串项目风险前提）', () async {
-    final aCols =
-        controller.board!.columns.map((c) => c.id).toList()..sort();
+    final aCols = controller.board!.columns.map((c) => c.id).toList()..sort();
     final bBoard = await controller.loadBoardSnapshot(projectB);
     final bCols = bBoard!.columns.map((c) => c.id).toList()..sort();
     expect(aCols, bCols);
@@ -147,5 +148,52 @@ void main() {
     expect(located.error, isNotNull);
     final text = (located.error!.content.first as TextContent).text;
     expect(text, contains('未找到卡片'));
+  });
+
+  test('projectId 支持按项目名解析', () {
+    final byName = resolveMcpProjectId(controller, '项目B');
+    expect(byName.error, isNull);
+    expect(byName.projectId, projectB);
+
+    final byId = resolveMcpProjectId(controller, projectA);
+    expect(byId.error, isNull);
+    expect(byId.projectId, projectA);
+  });
+
+  test('项目名重名时报错并提示改传 id', () async {
+    await controller.createProject('项目B');
+    final resolved = resolveMcpProjectRef(controller, '项目B');
+    expect(resolved.error, isNotNull);
+    final text = (resolved.error!.content.first as TextContent).text;
+    expect(text, contains('匹配多个项目'));
+    expect(text, contains(projectB));
+  });
+
+  test('按项目名定位卡片所属项目', () async {
+    late String cardId;
+    await controller.runOnProject(projectB, () async {
+      cardId = (await controller.addCard('todo', '名解析卡'))!;
+    });
+    final located = await resolveMcpProjectIdForCard(
+      controller,
+      cardId: cardId,
+      projectId: '项目B',
+    );
+    expect(located.error, isNull);
+    expect(located.projectId, projectB);
+  });
+
+  test('pick_next_card 省略 projectId 时使用界面当前项目', () async {
+    final cardA = (await controller.addCard('todo', '界面项目卡'))!;
+    await controller.runOnProject(projectB, () async {
+      await controller.addCard('todo', '其它项目卡');
+    });
+
+    final result = await mcpPickNextCard(controller);
+    expect(result.isError, isNot(true));
+    final text = result.content.whereType<TextContent>().first.text;
+    final payload = jsonDecode(text) as Map<String, dynamic>;
+    expect(payload['projectId'], projectA);
+    expect(payload['cardId'], cardA);
   });
 }

@@ -10,9 +10,6 @@ import '../project/project_theme.dart';
 ///
 /// 工作类型用「咨询」标识非代码交付；无特殊工作类型标签时按一般实施流程处理。
 ///
-/// 「验收」（key=`needs_verify`）表示需要代理做本地验收与适用验证；
-/// 无此标签时 skill 默认不做本地自检，卡片仍进「待验证」交由人工确认。
-///
 /// ## 旧预置兼容
 /// 历史 key：`work` / `personal` / `urgent` / `idea` / `documentation` /
 /// `development` 不再出现在新预设列表，
@@ -61,7 +58,6 @@ const kPresetLabelKeys = <String>{
   'not_urgent_not_important',
   'need_resource',
   'consultation',
-  'needs_verify',
 };
 
 /// 已废弃但仍可解析显示的旧预置 key

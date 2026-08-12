@@ -36,7 +36,9 @@ void _registerRelationTool(
     description: description,
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(description: '目标项目 id；必填'),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(whenOmitted: '必填'),
+        ),
         'firstCardId': JsonSchema.string(description: '第一张卡片 id'),
         'secondCardId': JsonSchema.string(description: '第二张卡片 id'),
       },

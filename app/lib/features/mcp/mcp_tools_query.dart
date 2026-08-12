@@ -19,10 +19,12 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
         '（图片为 ImageContent，文件为 contentBase64），无需再 list/read。'
         '仅 peek 时可传 includeWorkItems=false。'
         '完成后用 submit_card_for_verify；失败用 block_card（传 reason）。'
-        '无需指定列；省略 projectId 时用界面当前项目。',
+        '无需指定列；projectId 可传项目 id 或项目名，省略则用界面当前项目。',
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(description: '省略则用界面当前项目'),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(),
+        ),
         'includeWorkItems': JsonSchema.boolean(
           description: '是否返回 workItems 与附件内容，默认 true',
         ),
@@ -51,7 +53,9 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),
-        'projectId': JsonSchema.string(description: '可选，缩小查找范围'),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(whenOmitted: '可选，缩小查找范围'),
+        ),
       },
       required: ['cardId'],
     ),
@@ -73,7 +77,9 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     description: '列出指定项目整板快照；默认卡片摘要不含备注和关联详情',
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(description: '省略则用界面当前项目'),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(),
+        ),
         'detail': JsonSchema.string(
           description: 'compact | summary，默认 compact；summary 增加备注片段和关联',
         ),
@@ -82,9 +88,10 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
-      final projectId =
-          mcpTrimmedString(args['projectId']) ?? controller.uiActiveProjectId;
-      if (projectId == null) return mcpErrorResult('没有可用项目');
+      final resolved =
+          resolveMcpProjectId(controller, args['projectId'] as String?);
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId!;
       final board = await controller.loadBoardSnapshot(projectId);
       if (board == null) {
         return mcpErrorResult('项目不存在或未加载：$projectId');

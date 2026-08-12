@@ -8,7 +8,7 @@ import 'mcp_arg_parsers.dart';
 import 'mcp_set_card_commit_ref.dart';
 import 'mcp_tool_results.dart';
 
-/// 将卡片移入「待验证」；可选在移列前更新验证反馈。
+/// 将卡片移入「待验证」；可选在移列前完成子任务或更新验证反馈。
 ///
 /// 反馈更新三选一：
 /// - [verificationFeedback] 整表替换
@@ -23,6 +23,7 @@ Future<CallToolResult> mcpSubmitCardForVerify(
   List<ChecklistItem>? verificationFeedback,
   List<String>? completedFeedbackIds,
   bool? completeAllIncompleteFeedback,
+  bool completeAllIncompleteChecklist = false,
   String? commitRef,
 }) async {
   final located = await resolveMcpProjectIdForCard(
@@ -33,7 +34,8 @@ Future<CallToolResult> mcpSubmitCardForVerify(
   if (located.error != null) return located.error!;
   final targetProjectId = located.projectId!;
 
-  return runMcpForProject(controller, targetProjectId, (resolvedProjectId) async {
+  return runMcpForProject(controller, targetProjectId,
+      (resolvedProjectId) async {
     var fromColumnId =
         controller.findColumnIdForCard(cardId) ?? located.columnId;
     if (fromColumnId == null) {
@@ -59,6 +61,20 @@ Future<CallToolResult> mcpSubmitCardForVerify(
 
     // 在勾选反馈前生成提交信息，返工时仅含本轮未完成的反馈原文。
     final commitMessage = buildCardCommitMessage(card);
+
+    List<ChecklistItem>? checklistToApply;
+    var completedChecklistCount = 0;
+    if (completeAllIncompleteChecklist) {
+      final incompleteCount =
+          card.checklist.where((item) => !item.completed).length;
+      if (incompleteCount > 0) {
+        completedChecklistCount = incompleteCount;
+        checklistToApply = [
+          for (final item in card.checklist)
+            item.completed ? item : item.copyWith(completed: true),
+        ];
+      }
+    }
 
     List<ChecklistItem>? feedbackToApply = verificationFeedback;
     if (completedFeedbackIds != null) {
@@ -92,10 +108,11 @@ Future<CallToolResult> mcpSubmitCardForVerify(
       }
     }
 
-    if (feedbackToApply != null) {
+    if (checklistToApply != null || feedbackToApply != null) {
       final updateError = await controller.updateCardFull(
         fromColumnId,
         cardId,
+        checklist: checklistToApply,
         verificationFeedback: feedbackToApply,
       );
       if (updateError != null) return mcpErrorResult(updateError);
@@ -145,6 +162,8 @@ Future<CallToolResult> mcpSubmitCardForVerify(
       'toColumnId': verifyColumn.id,
       'alreadyInVerifyColumn': wasAlreadyInVerifyColumn,
       'suggestedCommitMessage': commitMessage,
+      if (completeAllIncompleteChecklist)
+        'completedChecklistCount': completedChecklistCount,
       if (writtenCommitRef != null) 'commitRef': writtenCommitRef,
       if (writtenCommitRef == null &&
           (refreshed?.commitRef == null || refreshed!.commitRef!.isEmpty))

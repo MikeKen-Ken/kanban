@@ -94,7 +94,58 @@ void main() {
     expect(card.verificationFeedback.every((item) => item.completed), isTrue);
   });
 
-  test('completedFeedbackIds 仍可只勾选部分反馈', () async {
+  test('completeAllIncompleteChecklist 一次勾选全部未完成子任务', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '多子任务卡');
+    expect(cardId, isNotNull);
+    await controller.updateCardFull(
+      todoColumn.id,
+      cardId!,
+      checklist: [
+        ChecklistItem(id: 'done', text: '已完成', completed: true),
+        ChecklistItem(id: 'todo-1', text: '待完成一'),
+        ChecklistItem(id: 'todo-2', text: '待完成二'),
+      ],
+    );
+
+    final result = await mcpSubmitCardForVerify(
+      controller,
+      cardId: cardId,
+      completeAllIncompleteChecklist: true,
+    );
+
+    expect(result.isError, isNot(true));
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['completedChecklistCount'], 2);
+    final verifyColumn = findVerifyColumn(controller.board!.columns)!;
+    final card = verifyColumn.cards.firstWhere((item) => item.id == cardId);
+    expect(card.checklist.every((item) => item.completed), isTrue);
+  });
+
+  test('省略 completeAllIncompleteChecklist 时不修改子任务', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '保留子任务卡');
+    expect(cardId, isNotNull);
+    await controller.updateCardFull(
+      todoColumn.id,
+      cardId!,
+      checklist: [ChecklistItem(id: 'todo', text: '仍未完成')],
+    );
+
+    final result = await mcpSubmitCardForVerify(
+      controller,
+      cardId: cardId,
+    );
+
+    expect(result.isError, isNot(true));
+    final verifyColumn = findVerifyColumn(controller.board!.columns)!;
+    final card = verifyColumn.cards.firstWhere((item) => item.id == cardId);
+    expect(card.checklist.single.completed, isFalse);
+  });
+
+  test('completedFeedbackIds 留下未完成反馈时拒绝送验', () async {
     final reworkColumn = controller.board!.columns
         .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
     final cardId = await controller.addCard(reworkColumn.id, '返工卡');
@@ -113,11 +164,13 @@ void main() {
       cardId: cardId,
       completedFeedbackIds: ['fb1'],
     );
-    expect(result.isError, isNot(true));
+    expect(result.isError, isTrue);
+    expect(_textOf(result), contains('请先完成所有验证反馈'));
 
     final board = controller.board!;
-    final verifyColumn = findVerifyColumn(board.columns)!;
-    final card = verifyColumn.cards.firstWhere((c) => c.id == cardId);
+    final refreshedReworkColumn = board.columns
+        .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
+    final card = refreshedReworkColumn.cards.firstWhere((c) => c.id == cardId);
     expect(card.verificationFeedback[0].completed, isTrue);
     expect(card.verificationFeedback[1].completed, isFalse);
   });
@@ -158,7 +211,8 @@ void main() {
     expect(payload['alreadyInVerifyColumn'], isTrue);
     expect(payload['commitRef'], 'deadbeef');
 
-    final card = verifyColumn.cards.firstWhere((c) => c.id == cardId);
+    final refreshedVerifyColumn = findVerifyColumn(controller.board!.columns)!;
+    final card = refreshedVerifyColumn.cards.firstWhere((c) => c.id == cardId);
     expect(card.commitRef, 'deadbeef');
   });
 }

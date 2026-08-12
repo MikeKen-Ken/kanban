@@ -66,7 +66,7 @@ void main() {
         ChecklistItem(id: 'cl1', text: '子任务', completed: true),
       ],
       verificationFeedback: [
-        ChecklistItem(id: 'vf1', text: '验收未过', completed: false),
+        ChecklistItem(id: 'vf1', text: '验证未通过', completed: false),
       ],
     );
     final restored = KanbanCard.fromJson(card.toJson());
@@ -77,7 +77,7 @@ void main() {
     expect(restored.checklist.length, 1);
     expect(restored.checklist.first.completed, isTrue);
     expect(restored.verificationFeedback.length, 1);
-    expect(restored.verificationFeedback.first.text, '验收未过');
+    expect(restored.verificationFeedback.first.text, '验证未通过');
   });
 
   test('card matches search query', () {
@@ -224,8 +224,7 @@ void main() {
       ],
     );
     final ensured = board.ensureReworkColumn();
-    final reworks =
-        ensured.columns.where((c) => c.title == '待返工').toList();
+    final reworks = ensured.columns.where((c) => c.title == '待返工').toList();
     expect(reworks, hasLength(1));
     expect(reworks.single.id, KanbanBoard.defaultReworkColumnId);
     expect(reworks.single.cards.map((c) => c.id).toList(), ['c2', 'c1']);

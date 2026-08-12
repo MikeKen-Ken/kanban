@@ -12,14 +12,18 @@ void registerKanbanMcpLabelTools(McpServer server, BoardController controller) {
     description: '列出预置与自定义标签（可按项目主题）',
     inputSchema: JsonSchema.object(
       properties: {
-        'projectId': JsonSchema.string(description: '用于选择预置主题，默认当前项目'),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(whenOmitted: '用于选择预置主题，默认当前项目'),
+        ),
       },
     ),
     annotations:
         const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
     callback: (args, extra) async {
-      final projectId = mcpTrimmedString(args['projectId']) ??
-          controller.uiActiveProjectId;
+      final resolved =
+          resolveMcpProjectId(controller, args['projectId'] as String?);
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId;
       final themeId =
           projectId == null ? '' : controller.themeIdForProject(projectId);
       final labels = allKanbanLabels(

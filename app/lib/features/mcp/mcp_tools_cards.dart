@@ -15,13 +15,14 @@ import 'mcp_tool_results.dart';
 void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
   server.registerTool(
     'get_card',
-    description:
-        '按 cardId 获取单张卡片详情（含关联、外链等）。'
+    description: '按 cardId 获取单张卡片详情（含关联、外链等）。'
         '附件只返回计数；元数据/二进制请用 list_card_attachments、read_card_attachment。',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),
-        'projectId': JsonSchema.string(description: '可选，缩小查找范围'),
+        'projectId': JsonSchema.string(
+          description: mcpProjectIdParamDescription(whenOmitted: '可选，缩小查找范围'),
+        ),
       },
       required: ['cardId'],
     ),
@@ -30,7 +31,12 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
     callback: (args, extra) async {
       final cardId = mcpTrimmedString(args['cardId']) ?? '';
       if (cardId.isEmpty) return mcpErrorResult('cardId 不能为空');
-      final projectId = mcpTrimmedString(args['projectId']);
+      final resolved = resolveOptionalMcpProjectId(
+        controller,
+        args['projectId'] as String?,
+      );
+      if (resolved.error != null) return resolved.error!;
+      final projectId = resolved.projectId;
       final refs = await controller.loadAllCardReferences();
       CardReference? match;
       for (final card in refs) {
@@ -46,15 +52,16 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'create_card',
-    description:
-        '在指定列创建卡片；支持到期日、提醒、重复、标签、清单、验证反馈、关联与外链。'
+    description: '在指定列创建卡片；支持到期日、提醒、重复、标签、清单、验证反馈、关联与外链。'
         '多项目时必须传 projectId（默认列 id 跨项目相同）',
     inputSchema: JsonSchema.object(
       properties: {
         'title': JsonSchema.string(description: '标题'),
         'columnId': JsonSchema.string(description: '列 id'),
         'projectId': JsonSchema.string(
-          description: '项目 id；多项目时必填，单项目可省略',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '多项目时必填，单项目可省略',
+          ),
         ),
         'description': JsonSchema.string(description: '备注'),
         'priority': JsonSchema.string(
@@ -115,72 +122,72 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         controller,
         args['projectId'] as String?,
         (projectId) async {
-        final due = parseMcpEpoch(args['dueDate'], fieldName: 'dueDate');
-        if (due.hasError) return mcpErrorResult(due.error!);
-        final reminder =
-            parseMcpEpoch(args['reminderAt'], fieldName: 'reminderAt');
-        if (reminder.hasError) return mcpErrorResult(reminder.error!);
+          final due = parseMcpEpoch(args['dueDate'], fieldName: 'dueDate');
+          if (due.hasError) return mcpErrorResult(due.error!);
+          final reminder =
+              parseMcpEpoch(args['reminderAt'], fieldName: 'reminderAt');
+          if (reminder.hasError) return mcpErrorResult(reminder.error!);
 
-        final labels = (args['labels'] as List?)
-                ?.whereType<String>()
-                .map((item) => item.trim())
-                .where((item) => item.isNotEmpty)
-                .toList() ??
-            const <String>[];
-        final checklist = parseMcpChecklist(args['checklist']);
-        final verificationFeedback =
-            parseMcpChecklist(args['verificationFeedback']);
-        final blockedByIds = parseMcpIdList(args['blockedByIds']);
-        final relatedIds = parseMcpIdList(args['relatedIds']);
-        final links = parseMcpLinks(args['links']);
-        final description = mcpTrimmedString(args['description']);
-        final recurrence = args['recurrence'] == null
-            ? CardRecurrence.none
-            : parseMcpRecurrence(args['recurrence'] as String?);
-        final colorValue = (args['colorValue'] as num?)?.toInt();
+          final labels = (args['labels'] as List?)
+                  ?.whereType<String>()
+                  .map((item) => item.trim())
+                  .where((item) => item.isNotEmpty)
+                  .toList() ??
+              const <String>[];
+          final checklist = parseMcpChecklist(args['checklist']);
+          final verificationFeedback =
+              parseMcpChecklist(args['verificationFeedback']);
+          final blockedByIds = parseMcpIdList(args['blockedByIds']);
+          final relatedIds = parseMcpIdList(args['relatedIds']);
+          final links = parseMcpLinks(args['links']);
+          final description = mcpTrimmedString(args['description']);
+          final recurrence = args['recurrence'] == null
+              ? CardRecurrence.none
+              : parseMcpRecurrence(args['recurrence'] as String?);
+          final colorValue = (args['colorValue'] as num?)?.toInt();
 
-        final cardId = await controller.addCard(
-          columnId,
-          title,
-          description: description,
-          dueDate: due.value,
-          reminderAt: reminder.value,
-          recurrence: recurrence,
-          priority: parseMcpPriority(args['priority'] as String?),
-          labels: labels,
-        );
-        if (cardId == null) {
-          return mcpErrorResult('创建失败：请确认项目与列 id 有效');
-        }
-
-        if (checklist != null ||
-            verificationFeedback != null ||
-            colorValue != null ||
-            blockedByIds != null ||
-            relatedIds != null ||
-            links != null) {
-          final updateError = await controller.updateCardFull(
+          final cardId = await controller.addCard(
             columnId,
-            cardId,
-            checklist: checklist,
-            verificationFeedback: verificationFeedback,
-            blockedByIds: blockedByIds,
-            relatedIds: relatedIds,
-            links: links,
-            colorValue: colorValue,
+            title,
+            description: description,
+            dueDate: due.value,
+            reminderAt: reminder.value,
+            recurrence: recurrence,
+            priority: parseMcpPriority(args['priority'] as String?),
+            labels: labels,
           );
-          if (updateError != null) return mcpErrorResult(updateError);
-        }
+          if (cardId == null) {
+            return mcpErrorResult('创建失败：请确认项目与列 id 有效');
+          }
 
-        final actualColumnId =
-            controller.findColumnIdForCard(cardId) ?? columnId;
-        return mcpJsonResult({
-          'cardId': cardId,
-          'projectId': projectId,
-          'columnId': actualColumnId,
-          'title': title,
-        });
-      },
+          if (checklist != null ||
+              verificationFeedback != null ||
+              colorValue != null ||
+              blockedByIds != null ||
+              relatedIds != null ||
+              links != null) {
+            final updateError = await controller.updateCardFull(
+              columnId,
+              cardId,
+              checklist: checklist,
+              verificationFeedback: verificationFeedback,
+              blockedByIds: blockedByIds,
+              relatedIds: relatedIds,
+              links: links,
+              colorValue: colorValue,
+            );
+            if (updateError != null) return mcpErrorResult(updateError);
+          }
+
+          final actualColumnId =
+              controller.findColumnIdForCard(cardId) ?? columnId;
+          return mcpJsonResult({
+            'cardId': cardId,
+            'projectId': projectId,
+            'columnId': actualColumnId,
+            'title': title,
+          });
+        },
         requireExplicitWhenMultiple: true,
       );
     },
@@ -188,15 +195,16 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'update_card',
-    description:
-        '更新卡片字段（需提供所在列）；支持到期日、提醒、重复、标签、清单、验证反馈、关联、外链与颜色。'
+    description: '更新卡片字段（需提供所在列）；支持到期日、提醒、重复、标签、清单、验证反馈、关联、外链与颜色。'
         '省略 projectId 时按 cardId 定位所属项目，不依赖当前激活项目',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(),
         'columnId': JsonSchema.string(),
         'projectId': JsonSchema.string(
-          description: '目标项目；省略则按 cardId 跨项目定位',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则按 cardId 跨项目定位',
+          ),
         ),
         'title': JsonSchema.string(),
         'description': JsonSchema.string(),
@@ -262,8 +270,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         expectedColumnId: columnId,
       );
       if (located.error != null) return located.error!;
-      return runMcpForProject(controller, located.projectId,
-          (projectId) async {
+      return runMcpForProject(controller, located.projectId, (projectId) async {
         final due = parseMcpEpoch(args['dueDate'], fieldName: 'dueDate');
         if (due.hasError) return mcpErrorResult(due.error!);
         final reminder =
@@ -338,8 +345,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'move_card',
-    description:
-        '将卡片移动到另一列（可改显示位置）。'
+    description: '将卡片移动到另一列（可改显示位置）。'
         '待返工列仍有未完成验证反馈时不可离开；'
         '其他列有未完成验证反馈时不可移入已完成列（列名可自定义，默认「已完成」）。'
         '省略 projectId 时按 cardId 定位所属项目，不依赖当前激活项目',
@@ -349,7 +355,9 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         'fromColumnId': JsonSchema.string(),
         'toColumnId': JsonSchema.string(),
         'projectId': JsonSchema.string(
-          description: '目标项目；省略则按 cardId 跨项目定位',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则按 cardId 跨项目定位',
+          ),
         ),
         'toIndex': JsonSchema.number(description: '目标列显示下标，默认末尾'),
       },
@@ -374,8 +382,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         expectedColumnId: fromColumnId,
       );
       if (located.error != null) return located.error!;
-      return runMcpForProject(controller, located.projectId,
-          (projectId) async {
+      return runMcpForProject(controller, located.projectId, (projectId) async {
         final board = controller.board;
         if (board == null) return mcpErrorResult('看板未就绪');
         final toColumn = board.columns.cast<KanbanColumn?>().firstWhere(
@@ -405,8 +412,8 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'submit_card_for_verify',
-    description:
-        '将卡片移入「待验证」（实施成功收尾）。只需 cardId 即可：有未完成验证反馈时默认全部勾完成再移列。'
+    description: '将卡片移入「待验证」（实施成功收尾）。只需 cardId 即可：有未完成验证反馈时默认全部勾完成再移列。'
+        '实施卡完成全部子任务后可传 completeAllIncompleteChecklist=true，一次勾完未完成子任务。'
         '可选 completeAllIncompleteFeedback / completedFeedbackIds / verificationFeedback（三选一）。'
         '成功时返回 suggestedCommitMessage（直接用作 git commit 信息）。'
         'git commit 后请调用 set_card_commit_ref 写入提交号，'
@@ -417,11 +424,15 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),
         'projectId': JsonSchema.string(
-          description: '目标项目；省略则按 cardId 跨项目定位',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则按 cardId 跨项目定位',
+          ),
         ),
         'completeAllIncompleteFeedback': JsonSchema.boolean(
-          description:
-              '可选；true=勾选全部未完成反馈。省略且仅传 cardId 时：有未完成反馈则默认勾全选',
+          description: '可选；true=勾选全部未完成反馈。省略且仅传 cardId 时：有未完成反馈则默认勾全选',
+        ),
+        'completeAllIncompleteChecklist': JsonSchema.boolean(
+          description: '可选；true=勾选全部未完成子任务。无未完成子任务时幂等成功',
         ),
         'verificationFeedback': JsonSchema.array(
           items: JsonSchema.object(properties: {
@@ -436,8 +447,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           description: '可选；只勾选指定验证反馈 id（与另两种反馈参数互斥）',
         ),
         'commitRef': JsonSchema.string(
-          description:
-              '可选；git commit 后写入卡片提交号（完整或短 hash）。'
+          description: '可选；git commit 后写入卡片提交号（完整或短 hash）。'
               '卡片已在待验证列时也可单独传此项补写。',
         ),
       },
@@ -467,6 +477,9 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
       }
       final completeAllRaw = args['completeAllIncompleteFeedback'];
       final bool? completeAll = completeAllRaw is bool ? completeAllRaw : null;
+      final completeChecklistRaw = args['completeAllIncompleteChecklist'];
+      final completeChecklist =
+          completeChecklistRaw is bool ? completeChecklistRaw : false;
       return mcpSubmitCardForVerify(
         controller,
         cardId: cardId,
@@ -474,6 +487,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         verificationFeedback: verificationFeedback,
         completedFeedbackIds: completedFeedbackIds,
         completeAllIncompleteFeedback: completeAll,
+        completeAllIncompleteChecklist: completeChecklist,
         commitRef: mcpTrimmedString(args['commitRef']),
       );
     },
@@ -481,15 +495,16 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'block_card',
-    description:
-        '将卡片移入「阻塞中」。实施失败或无法继续时使用；需 cardId。'
+    description: '将卡片移入「阻塞中」。实施失败或无法继续时使用；需 cardId。'
         '传入 reason 时追加到备注末尾（格式：阻塞原因：…）。'
         '省略 projectId 时按 cardId 定位所属项目',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),
         'projectId': JsonSchema.string(
-          description: '目标项目；省略则按 cardId 跨项目定位',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则按 cardId 跨项目定位',
+          ),
         ),
         'reason': JsonSchema.string(
           description: '阻塞原因；追加到备注末尾',
@@ -516,8 +531,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'complete_card',
-    description:
-        '将卡片标记为完成（会按项目设置移入已完成列）。'
+    description: '将卡片标记为完成（会按项目设置移入已完成列）。'
         '仍有未完成验证反馈时拒绝。'
         '省略 projectId 时按 cardId 定位所属项目',
     inputSchema: JsonSchema.object(
@@ -525,7 +539,9 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         'cardId': JsonSchema.string(),
         'columnId': JsonSchema.string(),
         'projectId': JsonSchema.string(
-          description: '目标项目；省略则按 cardId 跨项目定位',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则按 cardId 跨项目定位',
+          ),
         ),
       },
       required: ['cardId', 'columnId'],
@@ -548,8 +564,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         expectedColumnId: columnId,
       );
       if (located.error != null) return located.error!;
-      return runMcpForProject(controller, located.projectId,
-          (projectId) async {
+      return runMcpForProject(controller, located.projectId, (projectId) async {
         final board = controller.board;
         if (board == null) return mcpErrorResult('看板未就绪');
         KanbanCard? target;
@@ -587,8 +602,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'set_card_commit_ref',
-    description:
-        '写入卡片「提交号」（Git commit hash，完整或短均可）。'
+    description: '写入卡片「提交号」（Git commit hash，完整或短均可）。'
         '只需 cardId 与 commitRef；省略 projectId 时按 cardId 跨项目定位。'
         '传 clearCommitRef=true 可清除。',
     inputSchema: JsonSchema.object(
@@ -601,7 +615,9 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           description: 'true 时清除已有提交号',
         ),
         'projectId': JsonSchema.string(
-          description: '目标项目；省略则按 cardId 跨项目定位',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则按 cardId 跨项目定位',
+          ),
         ),
       },
       required: ['cardId'],
@@ -626,14 +642,15 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'delete_card',
-    description:
-        '删除卡片（进入回收站）。省略 projectId 时按 cardId 定位所属项目',
+    description: '删除卡片（进入回收站）。省略 projectId 时按 cardId 定位所属项目',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(),
         'columnId': JsonSchema.string(),
         'projectId': JsonSchema.string(
-          description: '目标项目；省略则按 cardId 跨项目定位',
+          description: mcpProjectIdParamDescription(
+            whenOmitted: '省略则按 cardId 跨项目定位',
+          ),
         ),
       },
       required: ['cardId', 'columnId'],
@@ -656,8 +673,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         expectedColumnId: columnId,
       );
       if (located.error != null) return located.error!;
-      return runMcpForProject(controller, located.projectId,
-          (projectId) async {
+      return runMcpForProject(controller, located.projectId, (projectId) async {
         await controller.deleteCard(columnId, cardId);
         return mcpJsonResult({
           'ok': true,

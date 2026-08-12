@@ -14,7 +14,6 @@ const _semanticResource = Color(0xFFB7791F);
 const _semanticDevelopment = Color(0xFF6B4FD3);
 const _semanticConsultation = Color(0xFF16878A);
 const _semanticDocumentation = Color(0xFFA84A2A);
-const _semanticAcceptance = Color(0xFF2E8B57);
 
 /// 单个项目的颜色主题预设
 class ProjectThemePreset {
@@ -31,7 +30,6 @@ class ProjectThemePreset {
     required this.labelDevelopment,
     required this.labelConsultation,
     required this.labelDocumentation,
-    required this.labelAcceptance,
     required this.priorityLow,
     required this.priorityMedium,
     required this.priorityHigh,
@@ -66,8 +64,6 @@ class ProjectThemePreset {
   /// 可在卡片 Markdown 中交付的内容
   final Color labelDocumentation;
 
-  /// 已完成并通过验收的需求
-  final Color labelAcceptance;
   final Color priorityLow;
   final Color priorityMedium;
   final Color priorityHigh;
@@ -82,7 +78,7 @@ class ProjectThemePreset {
         CardPriority.high => priorityHigh,
       };
 
-  /// 当前预置：艾森豪威尔四象限、缺资源、咨询与验收。
+  /// 当前预置：艾森豪威尔四象限、缺资源与咨询。
   List<KanbanLabel> get presetLabels => [
         KanbanLabel(
           key: 'important_urgent',
@@ -121,12 +117,6 @@ class ProjectThemePreset {
           description: '答复、解释、建议或非代码说明类交付',
           color: _distinctLabelColor(labelConsultation, _semanticConsultation),
         ),
-        KanbanLabel(
-          key: 'needs_verify',
-          name: '验收',
-          description: '需要代理做本地验收与适用验证后再交人工确认',
-          color: _distinctLabelColor(labelAcceptance, _semanticAcceptance),
-        ),
       ];
 
   /// 旧预置（工作/个人/紧急/想法）：仅解析显示，不进入新选标签列表。
@@ -160,7 +150,8 @@ class ProjectThemePreset {
           key: 'documentation',
           name: '文档（旧）',
           description: '旧预置标签，新项目请改用「咨询」',
-          color: _distinctLabelColor(labelDocumentation, _semanticDocumentation),
+          color:
+              _distinctLabelColor(labelDocumentation, _semanticDocumentation),
         ),
         KanbanLabel(
           key: 'development',
@@ -187,7 +178,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF5B5BD6),
     labelConsultation: Color(0xFF16878A),
     labelDocumentation: Color(0xFF8B5E3C),
-    labelAcceptance: Color(0xFF3C8D62),
     priorityLow: Color(0xFF2E9E6A),
     priorityMedium: Color(0xFFE09A2E),
     priorityHigh: Color(0xFFE05252),
@@ -205,7 +195,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF5272B8),
     labelConsultation: Color(0xFF368C79),
     labelDocumentation: Color(0xFF8A6848),
-    labelAcceptance: Color(0xFF4E9A70),
     priorityLow: Color(0xFF4A9B6E),
     priorityMedium: Color(0xFFD4A03C),
     priorityHigh: Color(0xFFC45C4A),
@@ -223,7 +212,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF7766B8),
     labelConsultation: Color(0xFF4B9382),
     labelDocumentation: Color(0xFF8F5F42),
-    labelAcceptance: Color(0xFF4B9368),
     priorityLow: Color(0xFFD4A03C),
     priorityMedium: Color(0xFFE07A3A),
     priorityHigh: Color(0xFFD64550),
@@ -241,7 +229,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF536FB2),
     labelConsultation: Color(0xFF238B8C),
     labelDocumentation: Color(0xFF786247),
-    labelAcceptance: Color(0xFF3D9474),
     priorityLow: Color(0xFF2E9E9E),
     priorityMedium: Color(0xFFE09A2E),
     priorityHigh: Color(0xFFE05252),
@@ -259,7 +246,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF6672A8),
     labelConsultation: Color(0xFF527F78),
     labelDocumentation: Color(0xFF7B6653),
-    labelAcceptance: Color(0xFF568B6A),
     priorityLow: Color(0xFF6E8B74),
     priorityMedium: Color(0xFFB8956A),
     priorityHigh: Color(0xFFB85C5C),
@@ -277,7 +263,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF735FA8),
     labelConsultation: Color(0xFF4A8B83),
     labelDocumentation: Color(0xFF90654F),
-    labelAcceptance: Color(0xFF4B966D),
     priorityLow: Color(0xFF6E9B7A),
     priorityMedium: Color(0xFFD4896A),
     priorityHigh: Color(0xFFD64550),
@@ -295,7 +280,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF6956A5),
     labelConsultation: Color(0xFF4E8886),
     labelDocumentation: Color(0xFF80604D),
-    labelAcceptance: Color(0xFF4B9272),
     priorityLow: Color(0xFF5B8FA8),
     priorityMedium: Color(0xFFC9A04A),
     priorityHigh: Color(0xFFC45C6A),
@@ -313,7 +297,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF6D63AE),
     labelConsultation: Color(0xFF4C8F7A),
     labelDocumentation: Color(0xFF8D6746),
-    labelAcceptance: Color(0xFF5A9465),
     priorityLow: Color(0xFF7A9B4F),
     priorityMedium: Color(0xFFC9922E),
     priorityHigh: Color(0xFFD45C3A),
@@ -331,7 +314,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF6E67A8),
     labelConsultation: Color(0xFF4C867A),
     labelDocumentation: Color(0xFF805B43),
-    labelAcceptance: Color(0xFF568C62),
     priorityLow: Color(0xFF7A8B5A),
     priorityMedium: Color(0xFFC9922E),
     priorityHigh: Color(0xFFC24A3A),
@@ -349,7 +331,6 @@ const kProjectThemePresets = <ProjectThemePreset>[
     labelDevelopment: Color(0xFF5C69AF),
     labelConsultation: Color(0xFF338D7A),
     labelDocumentation: Color(0xFF806A4D),
-    labelAcceptance: Color(0xFF4F9A75),
     priorityLow: Color(0xFF5BA88E),
     priorityMedium: Color(0xFFD4A03C),
     priorityHigh: Color(0xFFD45C5C),
