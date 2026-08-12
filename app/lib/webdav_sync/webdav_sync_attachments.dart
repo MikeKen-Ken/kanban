@@ -63,27 +63,21 @@ mixin _WebDavSyncAttachments
   ) async {
     if (!_attachmentSync.isAvailable) return 0;
     var failed = 0;
+    final remoteDir = KanbanPaths.remoteWallpapersDir(base);
     for (final asset in sharedContent.wallpapers) {
       _ensureNotCancelled();
       for (final thumb in const [false, true]) {
         if (await _attachmentSync.wallpaperExists(asset.id, thumb: thumb)) {
           continue;
         }
-        try {
-          final bytes = await _readBytes(
-            client,
-            KanbanPaths.remoteWallpaperPath(base, asset.id, thumb: thumb),
-          );
-          if (bytes != null && bytes.isNotEmpty) {
-            await _attachmentSync.writeWallpaper(
-              asset.id,
-              bytes,
-              thumb: thumb,
-            );
-          }
-        } catch (_) {
-          // note: 缩略图缺失不阻断原图下载
-        }
+        final downloaded = await _downloadRemoteWallpaper(
+          client,
+          remoteDir,
+          base,
+          asset.id,
+          thumb: thumb,
+        );
+        if (!downloaded && !thumb) failed++;
       }
       if (!await _attachmentSync.wallpaperExists(asset.id)) failed++;
     }
@@ -91,6 +85,59 @@ mixin _WebDavSyncAttachments
       sharedContent.wallpapers.map((item) => item.id).toSet(),
     );
     return failed;
+  }
+
+  Future<bool> _downloadRemoteWallpaper(
+    Client client,
+    String wallpapersDir,
+    String base,
+    String wallpaperId, {
+    bool thumb = false,
+  }) async {
+    if (await _attachmentSync.wallpaperExists(wallpaperId, thumb: thumb)) {
+      return true;
+    }
+
+    try {
+      var bytes = await _readBytes(
+        client,
+        KanbanPaths.remoteWallpaperPath(base, wallpaperId, thumb: thumb),
+      );
+      if (bytes != null && bytes.isNotEmpty) {
+        await _attachmentSync.writeWallpaper(
+          wallpaperId,
+          bytes,
+          thumb: thumb,
+        );
+        return await _attachmentSync.wallpaperExists(wallpaperId, thumb: thumb);
+      }
+
+      final expectedName = KanbanPaths.remoteProjectAttachmentFileName(
+        wallpaperId,
+        thumb: thumb,
+      );
+      final files = await _readDirWithFallback(client, wallpapersDir);
+      for (final file in files) {
+        if (file.isDir == true) continue;
+        final name = file.name ?? file.path?.split('/').last ?? '';
+        if (name != expectedName) continue;
+        final remotePath = _remoteFilePath(wallpapersDir, file);
+        bytes = await _readBytes(client, remotePath);
+        if (bytes == null || bytes.isEmpty) continue;
+        await _attachmentSync.writeWallpaper(
+          wallpaperId,
+          bytes,
+          thumb: thumb,
+        );
+        if (await _attachmentSync.wallpaperExists(wallpaperId, thumb: thumb)) {
+          return true;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return await _attachmentSync.wallpaperExists(wallpaperId, thumb: thumb);
   }
 
   Future<Set<String>> _listRemoteAttachmentNames(

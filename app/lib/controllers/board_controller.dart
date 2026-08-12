@@ -161,6 +161,8 @@ abstract class _BoardControllerBase extends ChangeNotifier {
   Map<String, TrashBin> projectTrashes = {};
   List<TrashItem> labelTrash = const [];
   Set<String> missingAttachmentIds = {};
+  /// 当前项目已缓存到本地、可实际渲染的壁纸 id。
+  List<String> displayableWallpaperIds = const [];
   bool isLoading = true;
   String? errorMessage;
 

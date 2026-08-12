@@ -23,7 +23,6 @@ extension BoardControllerSync on BoardController {
 
   Future<void> syncNow() async {
     await _syncService.pullAndMerge(userInitiated: true);
-    await _reloadUiAfterSync();
   }
 
   /// 取消进行中的 WebDAV 同步，恢复可继续操作

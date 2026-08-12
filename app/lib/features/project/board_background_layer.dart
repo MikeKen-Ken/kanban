@@ -88,21 +88,21 @@ class _BoardBackgroundLayerState extends State<BoardBackgroundLayer> {
     if (widget.wallpaperIds.isEmpty) return const SizedBox.expand();
     if (_index >= widget.wallpaperIds.length) _index = 0;
     final opacity = ProjectSettings.clampOverlayOpacity(widget.overlayOpacity);
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _BoardBackgroundImage(attachmentId: widget.wallpaperIds[_index]),
-        if (opacity > 0)
-          ColoredBox(color: Colors.black.withValues(alpha: opacity)),
-      ],
+    return _BoardBackgroundImage(
+      attachmentId: widget.wallpaperIds[_index],
+      overlayOpacity: opacity,
     );
   }
 }
 
 class _BoardBackgroundImage extends StatefulWidget {
-  const _BoardBackgroundImage({required this.attachmentId});
+  const _BoardBackgroundImage({
+    required this.attachmentId,
+    required this.overlayOpacity,
+  });
 
   final String attachmentId;
+  final double overlayOpacity;
 
   @override
   State<_BoardBackgroundImage> createState() => _BoardBackgroundImageState();
@@ -139,12 +139,21 @@ class _BoardBackgroundImageState extends State<_BoardBackgroundImage> {
       builder: (context, snapshot) {
         final bytes = snapshot.data;
         if (bytes == null) return const SizedBox.expand();
-        return Image.memory(
-          bytes,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          gaplessPlayback: true,
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.memory(
+              bytes,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              gaplessPlayback: true,
+            ),
+            if (widget.overlayOpacity > 0)
+              ColoredBox(
+                color: Colors.black.withValues(alpha: widget.overlayOpacity),
+              ),
+          ],
         );
       },
     );

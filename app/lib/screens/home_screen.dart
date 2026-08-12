@@ -352,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ): () => _requestSync(),
       },
       child: Scaffold(
-        backgroundColor: controller.projectSettings.hasBackgroundImage
+        backgroundColor: controller.hasDisplayableBackground
             ? Colors.transparent
             : null,
         appBar: AppBar(
@@ -533,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         body: _buildBoardBody(
           compact: compact,
-          wallpaperIds: controller.projectSettings.effectiveWallpaperIds,
+          wallpaperIds: controller.displayableWallpaperIds,
           wallpaperPlaybackMode:
               controller.projectSettings.wallpaperPlaybackMode,
           wallpaperIntervalSeconds:

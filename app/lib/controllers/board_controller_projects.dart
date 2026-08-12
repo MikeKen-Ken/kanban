@@ -13,6 +13,7 @@ extension BoardControllerProjects on BoardController {
       await _ensureReworkColumnPersisted();
       projectThemeIds[projectId] = projectSettings.themeId;
       activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
+      await refreshDisplayableWallpapers();
       await _recordProjectUsed(projectId);
       notifyListeners();
     });

@@ -3,6 +3,34 @@ part of 'board_controller.dart';
 extension BoardControllerWallpapers on BoardController {
   List<WallpaperAsset> get wallpapers => sharedContent.wallpapers;
 
+  bool get hasDisplayableBackground => displayableWallpaperIds.isNotEmpty;
+
+  /// 根据项目设置与本地缓存，刷新可渲染的壁纸 id 列表。
+  Future<void> refreshDisplayableWallpapers() async {
+    final candidates = projectSettings.effectiveWallpaperIds;
+    if (candidates.isEmpty) {
+      displayableWallpaperIds = const [];
+      return;
+    }
+    final store = attachmentStore;
+    if (store == null) {
+      displayableWallpaperIds = const [];
+      return;
+    }
+    final libraryIds = sharedContent.wallpapers.map((item) => item.id).toSet();
+    final projectId = activeProjectId;
+    final available = <String>[];
+    for (final id in candidates) {
+      if (libraryIds.contains(id)) {
+        if (await store.wallpaperExists(id)) available.add(id);
+      } else if (projectId != null &&
+          await store.existsImage(projectId: projectId, attachmentId: id)) {
+        available.add(id);
+      }
+    }
+    displayableWallpaperIds = available;
+  }
+
   Future<Uint8List?> readWallpaperBytes(
     String wallpaperId, {
     bool thumb = true,
@@ -38,6 +66,7 @@ extension BoardControllerWallpapers on BoardController {
         sharedContent
             .copyWith(wallpapers: [...sharedContent.wallpapers, ...added]),
       );
+      await refreshDisplayableWallpapers();
       return null;
     });
   }
@@ -68,6 +97,7 @@ extension BoardControllerWallpapers on BoardController {
             )
             .bump(),
       );
+      await refreshDisplayableWallpapers();
     });
   }
 
@@ -121,6 +151,7 @@ extension BoardControllerWallpapers on BoardController {
           await store.deleteWallpaper(asset.id);
         }
       }
+      await refreshDisplayableWallpapers();
       notifyListeners();
       _markWorkspaceChanged();
     });

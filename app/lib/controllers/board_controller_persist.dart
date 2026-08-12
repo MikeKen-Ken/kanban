@@ -84,6 +84,7 @@ extension BoardControllerPersist on BoardController {
       }
       _backupCoordinator.markChanged();
       await refreshMissingAttachments();
+      await refreshDisplayableWallpapers();
     });
   }
 
@@ -152,9 +153,12 @@ extension BoardControllerPersist on BoardController {
 
       board = await _repository.loadBoard(activeProjectId!);
       projectSettings = await _repository.loadProjectSettings(activeProjectId!);
+      sharedContent = await _repository.loadSharedContent();
+      await _initializeSharedLabels();
       await _ensureReworkColumnPersisted();
       await _refreshProjectThemeIds();
       await _loadTrashState();
+      await refreshDisplayableWallpapers();
     } catch (e) {
       errorMessage = e.toString();
     } finally {
@@ -167,7 +171,9 @@ extension BoardControllerPersist on BoardController {
     unawaited(purgeExpiredCompletedCards());
 
     _syncService.statusStream.listen((status) {
-      if (status == SyncStatus.success || status == SyncStatus.error) {
+      if (status == SyncStatus.success) {
+        unawaited(_reloadUiAfterSync());
+      } else if (status == SyncStatus.error) {
         unawaited(refreshMissingAttachments());
       }
       notifyListeners();
@@ -218,17 +224,18 @@ extension BoardControllerPersist on BoardController {
   Future<void> _reloadUiAfterSync() {
     return _withBoardMutation(() async {
       manifest = await _repository.loadManifest();
+      sharedContent = await _repository.loadSharedContent();
+      await _initializeSharedLabels();
       if (activeProjectId != null) {
         board = await _repository.loadBoard(activeProjectId!);
         projectSettings =
             await _repository.loadProjectSettings(activeProjectId!);
         await _ensureReworkColumnPersisted();
-        sharedContent = await _repository.loadSharedContent();
-        await _initializeSharedLabels();
-        await _refreshProjectThemeIds();
         await _loadTrashState();
       }
+      await _refreshProjectThemeIds();
       await refreshMissingAttachments();
+      await refreshDisplayableWallpapers();
       notifyListeners();
     });
   }
