@@ -87,6 +87,16 @@ void main() {
       order: 0,
       createdAt: 0,
       labels: ['work'],
+      commitRef: 'deadbeef',
+      attachments: [
+        CardAttachment(
+          id: 'a1',
+          fileName: '封面图.jpg',
+          mimeType: 'image/jpeg',
+          order: 0,
+          createdAt: 0,
+        ),
+      ],
       verificationFeedback: [
         ChecklistItem(id: 'vf1', text: '缺少截图'),
       ],
@@ -94,6 +104,8 @@ void main() {
     expect(card.matchesSearch('报告'), isTrue);
     expect(card.matchesSearch('工作'), isTrue); // 旧 key work →「工作（旧）」
     expect(card.matchesSearch('截图'), isTrue);
+    expect(card.matchesSearch('deadbeef'), isTrue);
+    expect(card.matchesSearch('封面图'), isTrue);
     expect(card.matchesSearch('不存在'), isFalse);
   });
 

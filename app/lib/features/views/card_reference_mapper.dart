@@ -37,6 +37,10 @@ List<CardReference> buildCardReferences({
             verificationFeedbackTexts: [
               for (final item in card.verificationFeedback) item.text,
             ],
+            attachmentFileNames: [
+              for (final item in card.sortedAttachments) item.fileName,
+              for (final item in card.fileAttachments) item.fileName,
+            ],
             priority: card.priority.name,
             completed: card.completed,
             dueDate: card.dueDate,

@@ -49,10 +49,16 @@ class CardQueryService {
       card.description ?? '',
       card.projectName,
       card.columnName,
+      card.commitRef ?? '',
       ...card.labelIds,
       ...card.labelNames,
       ...card.checklistTexts,
       ...card.verificationFeedbackTexts,
+      ...card.attachmentFileNames,
+      for (final link in card.links) ...[
+        if (link['title'] is String) link['title'] as String,
+        if (link['url'] is String) link['url'] as String,
+      ],
     ].map((value) => value.toLowerCase()).toList();
     return terms.every(
       (term) => fields.any((field) => field.contains(term)),

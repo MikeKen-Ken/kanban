@@ -14,6 +14,7 @@ class CardReference {
     this.labelNames = const [],
     this.checklistTexts = const [],
     this.verificationFeedbackTexts = const [],
+    this.attachmentFileNames = const [],
     this.priority = 'none',
     this.completed = false,
     this.dueDate,
@@ -38,6 +39,7 @@ class CardReference {
   final List<String> labelNames;
   final List<String> checklistTexts;
   final List<String> verificationFeedbackTexts;
+  final List<String> attachmentFileNames;
   final String priority;
   final bool completed;
   final int? dueDate;
@@ -65,6 +67,8 @@ class CardReference {
         if (checklistTexts.isNotEmpty) 'checklistTexts': checklistTexts,
         if (verificationFeedbackTexts.isNotEmpty)
           'verificationFeedbackTexts': verificationFeedbackTexts,
+        if (attachmentFileNames.isNotEmpty)
+          'attachmentFileNames': attachmentFileNames,
         if (priority != 'none') 'priority': priority,
         if (completed) 'completed': true,
         if (dueDate != null) 'dueDate': dueDate,
@@ -93,6 +97,7 @@ class CardReference {
       verificationFeedbackTexts: _strings(
         json['verificationFeedbackTexts'] ?? json['verificationFeedback'],
       ),
+      attachmentFileNames: _strings(json['attachmentFileNames']),
       priority: _string(json['priority'], fallback: 'none'),
       completed: json['completed'] is bool ? json['completed'] as bool : false,
       dueDate: _nullableInt(json['dueDate']),

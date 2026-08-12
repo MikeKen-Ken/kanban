@@ -85,6 +85,38 @@ void main() {
     );
   });
 
+  test('关键词覆盖提交号、验证反馈与附件名', () {
+    final extended = [
+      ...cards,
+      _card(
+        id: 'c5',
+        title: '部署',
+        commitRef: 'abc1234',
+        verificationFeedback: ['按钮未对齐'],
+        attachmentFileNames: ['验收截图.png'],
+      ),
+    ];
+
+    expect(
+      service
+          .query(extended, const FilterSpec(keyword: 'abc1234'), now: now)
+          .map((card) => card.cardId),
+      ['c5'],
+    );
+    expect(
+      service
+          .query(extended, const FilterSpec(keyword: '按钮未对齐'), now: now)
+          .map((card) => card.cardId),
+      ['c5'],
+    );
+    expect(
+      service
+          .query(extended, const FilterSpec(keyword: '验收截图'), now: now)
+          .map((card) => card.cardId),
+      ['c5'],
+    );
+  });
+
   test('标签支持任一和全部匹配', () {
     final any = service.query(
       cards,
@@ -228,6 +260,9 @@ CardReference _card({
   List<String> labels = const [],
   List<String> labelNames = const [],
   List<String> checklist = const [],
+  List<String> verificationFeedback = const [],
+  List<String> attachmentFileNames = const [],
+  String? commitRef,
   String priority = 'none',
   bool completed = false,
   DateTime? dueDate,
@@ -246,6 +281,9 @@ CardReference _card({
     labelIds: labels,
     labelNames: labelNames,
     checklistTexts: checklist,
+    verificationFeedbackTexts: verificationFeedback,
+    attachmentFileNames: attachmentFileNames,
+    commitRef: commitRef,
     priority: priority,
     completed: completed,
     dueDate: dueDate?.millisecondsSinceEpoch,

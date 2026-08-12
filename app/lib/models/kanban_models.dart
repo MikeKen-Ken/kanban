@@ -899,6 +899,9 @@ class KanbanCard {
       if (link.title.toLowerCase().contains(q)) return true;
       if (link.url.toLowerCase().contains(q)) return true;
     }
+    for (final attachment in attachments) {
+      if (attachment.fileName.toLowerCase().contains(q)) return true;
+    }
     for (final file in fileAttachments) {
       if (file.fileName.toLowerCase().contains(q)) return true;
     }

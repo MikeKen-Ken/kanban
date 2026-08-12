@@ -88,7 +88,10 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     description: '组合筛选卡片；默认返回摘要，实施前再用 get_card 读取详情',
     inputSchema: JsonSchema.object(
       properties: {
-        'keyword': JsonSchema.string(description: '标题/备注/标签关键词'),
+        'keyword': JsonSchema.string(
+          description:
+              '标题/备注/提交号/标签/子任务/验证反馈/附件名/外链关键词',
+        ),
         'projectId': JsonSchema.string(description: '限定单个项目 id'),
         'projectIds': JsonSchema.array(items: JsonSchema.string()),
         'columnIds': JsonSchema.array(items: JsonSchema.string()),
