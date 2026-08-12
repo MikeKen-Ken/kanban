@@ -6,11 +6,12 @@ import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_tool_results.dart';
+import 'mcp_work_scope_result.dart';
 
 /// 取下一条可实施卡，并自动移入「进行中」。
 ///
 /// 选取规则与 [pickNextWorkCard] 一致：优先「待办」最新未完成卡，否则「待返工」。
-/// 默认 [includeWorkItems]=true，一次返回实施范围；仅 peek 时可传 false。
+/// 默认 [includeWorkItems]=true，一次返回实施范围与附件内容；仅 peek 时可传 false。
 Future<CallToolResult> mcpPickNextCard(
   BoardController controller, {
   String? projectId,
@@ -65,9 +66,14 @@ Future<CallToolResult> mcpPickNextCard(
       'movedToDoing': !alreadyInDoing && !isReworkSource,
       'workMode': rework ? 'rework' : 'normal',
     };
-    if (includeWorkItems) {
-      payload.addAll(buildCardWorkScope(card));
+    if (!includeWorkItems) {
+      return mcpJsonResult(payload);
     }
-    return mcpJsonResult(payload);
+    return mcpWorkScopeResult(
+      controller: controller,
+      projectId: resolvedProjectId,
+      card: card,
+      basePayload: payload,
+    );
   });
 }

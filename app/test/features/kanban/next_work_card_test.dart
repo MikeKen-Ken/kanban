@@ -122,12 +122,16 @@ void main() {
     expect(newer?.id, 'new');
   });
 
-  test('返工 workItems 只含未完成验证反馈', () {
+  test('返工 workItems 含背景与未完成验证反馈', () {
     final card = _card(
       id: 'r',
       title: '旧标题',
       updatedAt: 1,
       description: '旧备注',
+      checklist: [
+        ChecklistItem(id: 'c1', text: '未做子任务'),
+        ChecklistItem(id: 'c2', text: '已做', completed: true),
+      ],
       verificationFeedback: [
         ChecklistItem(id: 'fb1', text: '问题一'),
         ChecklistItem(id: 'fb2', text: '问题二', completed: true),
@@ -135,6 +139,9 @@ void main() {
     );
     expect(isReworkWorkMode(card), isTrue);
     expect(buildCardWorkItems(card), [
+      {'kind': 'title', 'text': '旧标题'},
+      {'kind': 'description', 'text': '旧备注'},
+      {'kind': 'checklist', 'id': 'c1', 'text': '未做子任务'},
       {
         'kind': 'verificationFeedback',
         'id': 'fb1',
@@ -142,6 +149,7 @@ void main() {
       },
     ]);
     expect(buildCardCommitMessage(card), '问题一');
+    expect(buildCardWorkScope(card)['workMode'], 'rework');
   });
 
   test('普通模式 workItems 含标题备注与未完成 checklist，跳过已完成项', () {
@@ -166,10 +174,6 @@ void main() {
       },
     ]);
     expect(buildCardCommitMessage(card), '新功能\n\n说明');
-    expect(buildCardWorkSummary(card), {
-      'title': '新功能',
-      'hasDescription': true,
-      'checklist': {'pending': 1, 'total': 2},
-    });
+    expect(buildCardWorkScope(card)['workMode'], 'normal');
   });
 }

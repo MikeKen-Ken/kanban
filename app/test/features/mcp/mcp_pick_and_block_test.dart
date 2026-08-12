@@ -13,8 +13,8 @@ import 'package:mcp_dart/mcp_dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 String _textOf(CallToolResult result) {
-  final content = result.content.single as TextContent;
-  return content.text;
+  final text = result.content.whereType<TextContent>().single;
+  return text.text;
 }
 
 void main() {
@@ -40,11 +40,16 @@ void main() {
     }
   });
 
-  test('pick_next_card 取待办卡后移入进行中且只返回摘要', () async {
+  test('pick_next_card 默认含 workItems 并移入进行中', () async {
     final todoColumn =
         controller.board!.columns.firstWhere((c) => c.id == 'todo');
     final cardId = await controller.addCard(todoColumn.id, '实施卡');
     expect(cardId, isNotNull);
+    await controller.updateCardFull(
+      todoColumn.id,
+      cardId!,
+      description: '备注',
+    );
 
     final result = await mcpPickNextCard(controller);
     expect(result.isError, isNot(true));
@@ -57,11 +62,13 @@ void main() {
     expect(payload['columnTitle'], '进行中');
     expect(payload['movedToDoing'], isTrue);
     expect(payload['workMode'], 'normal');
-    expect(payload['summary'], isA<Map>());
-    expect(payload['summary']['title'], '实施卡');
-    expect(payload, isNot(contains('workItems')));
+    expect(payload['workItems'], [
+      {'kind': 'title', 'text': '实施卡'},
+      {'kind': 'description', 'text': '备注'},
+    ]);
+    expect(payload, isNot(contains('summary')));
     expect(payload, isNot(contains('suggestedCommitMessage')));
-    expect(payload['next'], 'get_work_items');
+    expect(payload, isNot(contains('next')));
 
     final doing = findDoingColumn(controller.board!.columns)!;
     expect(doing.cards.any((card) => card.id == cardId), isTrue);
@@ -69,7 +76,21 @@ void main() {
     expect(todo.cards.any((card) => card.id == cardId), isFalse);
   });
 
-  test('get_work_items 返回未完成 checklist 且不含已完成项', () async {
+  test('pick_next_card includeWorkItems=false 时不含 workItems', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '只取卡');
+    expect(cardId, isNotNull);
+
+    final result =
+        await mcpPickNextCard(controller, includeWorkItems: false);
+    expect(result.isError, isNot(true));
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['cardId'], cardId);
+    expect(payload, isNot(contains('workItems')));
+  });
+
+  test('get_work_items 返回未完成 checklist 且不含已完成项与 commit message', () async {
     final todoColumn =
         controller.board!.columns.firstWhere((c) => c.id == 'todo');
     final cardId = await controller.addCard(todoColumn.id, '带清单');
@@ -97,11 +118,38 @@ void main() {
       {'kind': 'description', 'text': '备注正文'},
       {'kind': 'checklist', 'id': 'c1', 'text': '待做'},
     ]);
-    expect(payload['suggestedCommitMessage'], '带清单\n\n备注正文');
-    expect(payload, isNot(contains('attachments')));
+    expect(payload, isNot(contains('suggestedCommitMessage')));
+    expect(payload, isNot(contains('summary')));
   });
 
-  test('pick_next_card 待办空时取待返工且留在待返工列', () async {
+  test('有图片附件元数据时 pick 返回 attachments 字段', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '带图');
+    expect(cardId, isNotNull);
+    await controller.updateCardFull(
+      todoColumn.id,
+      cardId!,
+      attachments: [
+        CardAttachment(
+          id: 'att-1',
+          fileName: 'a.png',
+          mimeType: 'image/png',
+          order: 0,
+          createdAt: 1,
+        ),
+      ],
+    );
+
+    final result = await mcpPickNextCard(controller);
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['attachments'], isA<List>());
+    expect(payload['attachments'], hasLength(1));
+    expect(payload['attachments'].single['id'], 'att-1');
+    expect(payload['attachmentsNote'], contains('已内联'));
+  });
+
+  test('pick_next_card 待办空时取待返工且 workItems 含背景', () async {
     final reworkColumn = controller.board!.columns
         .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
     final cardId = await controller.addCard(reworkColumn.id, '返工卡');
@@ -109,6 +157,7 @@ void main() {
     await controller.updateCardFull(
       reworkColumn.id,
       cardId!,
+      description: '背景说明',
       verificationFeedback: [
         ChecklistItem(id: 'fb1', text: '修好我'),
       ],
@@ -123,11 +172,9 @@ void main() {
     expect(payload['workMode'], 'rework');
     expect(payload['movedToDoing'], isFalse);
     expect(payload['columnId'], KanbanBoard.defaultReworkColumnId);
-    expect(payload, isNot(contains('workItems')));
-
-    final work = await mcpGetWorkItems(controller, cardId: cardId);
-    final workPayload = jsonDecode(_textOf(work)) as Map<String, dynamic>;
-    expect(workPayload['workItems'], [
+    expect(payload['workItems'], [
+      {'kind': 'title', 'text': '返工卡'},
+      {'kind': 'description', 'text': '背景说明'},
       {
         'kind': 'verificationFeedback',
         'id': 'fb1',
@@ -155,6 +202,33 @@ void main() {
 
     final blocked = findBlockedColumn(controller.board!.columns)!;
     expect(blocked.cards.any((card) => card.id == cardId), isTrue);
+  });
+
+  test('block_card 传入 reason 时追加到备注末尾', () async {
+    final doingColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'doing');
+    final cardId = await controller.addCard(doingColumn.id, '卡住了');
+    expect(cardId, isNotNull);
+    await controller.updateCardFull(
+      doingColumn.id,
+      cardId!,
+      description: '原有备注',
+    );
+
+    final result = await mcpBlockCard(
+      controller,
+      cardId: cardId,
+      reason: '依赖接口尚未就绪',
+    );
+    expect(result.isError, isNot(true));
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['ok'], isTrue);
+    expect(payload['description'], '原有备注\n\n阻塞原因：依赖接口尚未就绪');
+
+    final card = controller.findCardById(cardId)!;
+    expect(card.description, '原有备注\n\n阻塞原因：依赖接口尚未就绪');
+    final blocked = findBlockedColumn(controller.board!.columns)!;
+    expect(blocked.cards.any((c) => c.id == cardId), isTrue);
   });
 
   test('block_card 已在阻塞中时幂等', () async {

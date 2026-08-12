@@ -708,7 +708,7 @@ class KanbanCard {
   KanbanCard copyWith({
     String? id,
     String? title,
-    String? description,
+    Object? description = _sentinel,
     int? order,
     int? createdAt,
     int? updatedAt,
@@ -738,7 +738,9 @@ class KanbanCard {
     return KanbanCard(
       id: id ?? this.id,
       title: title ?? this.title,
-      description: description ?? this.description,
+      description: description == _sentinel
+          ? this.description
+          : description as String?,
       order: order ?? this.order,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

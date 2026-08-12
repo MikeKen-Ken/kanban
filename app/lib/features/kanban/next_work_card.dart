@@ -66,32 +66,13 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
   return null;
 }
 
-/// 本轮实施范围：workMode、workItems，有附件则带元数据（不含二进制）。
+/// 本轮实施范围（仅文本；附件由 MCP 层内联二进制）。
 Map<String, dynamic> buildCardWorkScope(KanbanCard card) {
   final rework = isReworkWorkMode(card);
-  final scope = <String, dynamic>{
+  return {
     'workMode': rework ? 'rework' : 'normal',
     'workItems': buildCardWorkItems(card),
   };
-  if (card.attachments.isNotEmpty) {
-    scope['attachments'] = [
-      for (final attachment in card.sortedAttachments)
-        {
-          ...attachment.toJson(),
-          'cover': attachment.order == 0,
-        },
-    ];
-  }
-  if (card.fileAttachments.isNotEmpty) {
-    scope['fileAttachments'] = [
-      for (final attachment in card.sortedFileAttachments) attachment.toJson(),
-    ];
-  }
-  if (card.attachments.isNotEmpty || card.fileAttachments.isNotEmpty) {
-    scope['attachmentsNote'] =
-        '有附件即应使用；图片二进制用 read_card_attachment 按 id 读取（无需再 list）';
-  }
-  return scope;
 }
 
 /// 本轮应实施的工作项。

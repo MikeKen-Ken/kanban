@@ -15,12 +15,17 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     'pick_next_card',
     description:
         '取下一条可实施卡并自动移入「进行中」：优先「待办」最新未完成卡，否则「待返工」。'
-        '默认只返回 cardId、workMode 与 summary（标题/计数，不含正文与附件二进制）以节省 token；'
-        '实施前再调 get_work_items。完成后用 submit_card_for_verify；失败用 block_card。'
+        '默认 includeWorkItems=true，一次返回 workItems；有图片/文件时直接内联内容'
+        '（图片为 ImageContent，文件为 contentBase64），无需再 list/read。'
+        '仅 peek 时可传 includeWorkItems=false。'
+        '完成后用 submit_card_for_verify；失败用 block_card（传 reason）。'
         '无需指定列；省略 projectId 时用界面当前项目。',
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(description: '省略则用界面当前项目'),
+        'includeWorkItems': JsonSchema.boolean(
+          description: '是否返回 workItems 与附件内容，默认 true',
+        ),
       },
     ),
     annotations: const ToolAnnotations(
@@ -32,6 +37,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
       return mcpPickNextCard(
         controller,
         projectId: args['projectId'] as String?,
+        includeWorkItems: args['includeWorkItems'] != false,
       );
     },
   );
@@ -39,9 +45,9 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'get_work_items',
     description:
-        '按 cardId 拉取本轮 workItems 与 suggestedCommitMessage。'
-        '普通模式跳过已完成 checklist；返工模式只含未完成验证反馈。'
-        '附件只返回计数，元数据/二进制请用 list_card_attachments、read_card_attachment 按需读取。',
+        '按 cardId 再次拉取本轮 workItems（不含 commit message）。'
+        '含标题/备注/未完成 checklist；有未完成验证反馈时一并返回。'
+        '有附件时直接内联内容（同 pick_next_card），无需再 list/read。',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),

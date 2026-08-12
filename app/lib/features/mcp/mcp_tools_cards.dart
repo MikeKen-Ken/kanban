@@ -474,13 +474,17 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
   server.registerTool(
     'block_card',
     description:
-        '将卡片移入「阻塞中」。实施失败或无法继续时使用；只需 cardId。'
+        '将卡片移入「阻塞中」。实施失败或无法继续时使用；需 cardId。'
+        '传入 reason 时追加到备注末尾（格式：阻塞原因：…）。'
         '省略 projectId 时按 cardId 定位所属项目',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),
         'projectId': JsonSchema.string(
           description: '目标项目；省略则按 cardId 跨项目定位',
+        ),
+        'reason': JsonSchema.string(
+          description: '阻塞原因；追加到备注末尾',
         ),
       },
       required: ['cardId'],
@@ -497,6 +501,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         controller,
         cardId: cardId,
         projectId: args['projectId'] as String?,
+        reason: mcpTrimmedString(args['reason']),
       );
     },
   );

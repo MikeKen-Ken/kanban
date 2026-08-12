@@ -123,6 +123,24 @@ void main() {
     expect(restored.width, 800);
   });
 
+  test('KanbanCard copyWith 可清空备注', () {
+    final card = KanbanCard(
+      id: 'card-1',
+      title: '带备注',
+      description: '旧备注',
+      order: 0,
+      createdAt: 1,
+    );
+    final cleared = card.copyWith(description: null);
+    expect(cleared.description, isNull);
+
+    final updated = card.copyWith(description: '新备注');
+    expect(updated.description, '新备注');
+
+    final unchanged = card.copyWith(title: '新标题');
+    expect(unchanged.description, '旧备注');
+  });
+
   test('KanbanCard keeps attachments in json', () {
     final card = KanbanCard(
       id: 'card-1',
