@@ -1,13 +1,18 @@
 import 'dart:io';
 
 import 'agent_dispatch_config.dart';
+import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_prompt.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
 /// 启动一次新的 Agent 会话：注入 skill + 本次调用，不在此层取卡/送验。
 class AgentDispatchService {
-  AgentDispatchService();
+  AgentDispatchService({
+    AgentDispatchCredentials credentials = const AgentDispatchCredentials(),
+  }) : _credentials = credentials;
+
+  final AgentDispatchCredentials _credentials;
 
   bool _cancelRequested = false;
 
@@ -49,12 +54,31 @@ class AgentDispatchService {
     onLog?.call('上限：${options.cardLimit.label}');
     onLog?.call('启动新会话（${options.engine.label}）…');
 
+    String? cursorApiKey;
+    if (options.engine == AgentDispatchEngine.cursor) {
+      try {
+        cursorApiKey = await _credentials.resolveCursorApiKey();
+      } catch (error) {
+        return AgentWorkerResult(
+          ok: false,
+          error: '读取 Cursor API Key 的系统安全存储失败：$error',
+        );
+      }
+    }
+    if (options.engine == AgentDispatchEngine.cursor && cursorApiKey == null) {
+      return const AgentWorkerResult(
+        ok: false,
+        error: '尚未配置 Cursor API Key，请先在 Agent 调度面板中安全保存',
+      );
+    }
+
     final result = await runAgentWorkerJob(
       engine: options.engine,
       cwd: repo,
       prompt: prompt,
       model: options.modelId,
       modelParams: options.modelParams,
+      cursorApiKey: cursorApiKey,
       workerScriptPath: workerScriptPath,
       onLog: (line) {
         if (_cancelRequested) return;

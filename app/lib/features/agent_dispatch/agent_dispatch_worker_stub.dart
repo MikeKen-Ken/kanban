@@ -20,6 +20,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   required String prompt,
   String? model,
   List<({String id, String value})> modelParams = const [],
+  String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
 }) async {
@@ -32,6 +33,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
 Future<String?> resolveAgentDispatchCliPath(String? overridePath) async => null;
 
 Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
+  String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
 }) async =>

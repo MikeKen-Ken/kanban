@@ -1,15 +1,46 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   effortToCodexConfigArgs,
   type DispatchJob,
   type DispatchResult,
 } from "./types.js";
 
-function resolveCodexBin(): string {
-  return process.platform === "win32" ? "codex.cmd" : "codex";
+function resolveCodexCommand(): {
+  command: string;
+  prefixArgs: string[];
+  shell: boolean;
+} {
+  const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const bundledCli = join(
+    packageRoot,
+    "node_modules",
+    "@openai",
+    "codex",
+    "bin",
+    "codex.js",
+  );
+  if (existsSync(bundledCli)) {
+    return {
+      command: process.execPath,
+      prefixArgs: [bundledCli],
+      shell: false,
+    };
+  }
+  return {
+    command: "codex",
+    prefixArgs: [],
+    shell: process.platform === "win32",
+  };
 }
 
 export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
@@ -37,11 +68,12 @@ export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
 
   try {
     const code = await new Promise<number>((resolvePromise, reject) => {
-      const child = spawn(resolveCodexBin(), args, {
+      const codex = resolveCodexCommand();
+      const child = spawn(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
         env: process.env,
         stdio: ["pipe", "pipe", "pipe"],
-        shell: process.platform === "win32",
+        shell: codex.shell,
       });
       child.stdout.on("data", (buf: Buffer) => {
         process.stdout.write(buf);

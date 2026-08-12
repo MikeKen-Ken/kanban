@@ -144,6 +144,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Install Node.js for Agent Worker
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.1"
+
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -174,6 +179,11 @@ jobs:
           Copy-Item ../scripts/windows/x64/msvcp140.dll build/windows/x64/runner/Release/
           Copy-Item ../scripts/windows/x64/vcruntime140.dll build/windows/x64/runner/Release/
           Copy-Item ../scripts/windows/x64/vcruntime140_1.dll build/windows/x64/runner/Release/
+
+      - name: Package self-contained Agent Worker
+        run: >
+          .\scripts\package_agent_worker_windows.ps1
+          -Destination .\app\build\windows\x64\runner\Release\agent_worker
 
       # Upload the Release folder directly (not a zip). GitHub Actions already
       # wraps artifacts in an archive when downloading from the Artifacts UI.

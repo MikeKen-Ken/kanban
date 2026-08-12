@@ -37,6 +37,9 @@ Iterable<String> _packageRootCandidates() sync* {
   if (kanbanRoot != null && kanbanRoot.isNotEmpty) {
     yield p.join(kanbanRoot, 'scripts', 'agent_dispatch');
   }
+  final executableDir = p.dirname(Platform.resolvedExecutable);
+  yield p.join(executableDir, 'agent_worker');
+  yield p.join(executableDir, 'scripts', 'agent_dispatch');
   yield p.join(Directory.current.path, 'scripts', 'agent_dispatch');
   yield p.join(Directory.current.path, '..', 'scripts', 'agent_dispatch');
 }
@@ -45,8 +48,7 @@ Future<String?> resolveAgentDispatchCliPath(String? overridePath) async {
   final candidates = <String>[
     if (overridePath != null && overridePath.trim().isNotEmpty)
       overridePath.trim(),
-    for (final root in _packageRootCandidates())
-      p.join(root, 'dist', 'cli.js'),
+    for (final root in _packageRootCandidates()) p.join(root, 'dist', 'cli.js'),
   ];
   for (final path in candidates) {
     final normalized = p.normalize(path);
@@ -61,6 +63,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   required String prompt,
   String? model,
   List<({String id, String value})> modelParams = const [],
+  String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
 }) async {
@@ -89,22 +92,26 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   await jobFile.writeAsString(jsonEncode(job));
 
   try {
-    final node = await _resolveNodeExecutable();
+    final packageRoot = p.basename(p.dirname(cli)) == 'dist'
+        ? p.dirname(p.dirname(cli))
+        : p.dirname(cli);
+    final node = await _resolveNodeExecutable(packageRoot: packageRoot);
     if (node == null) {
       return const AgentWorkerResult(
         ok: false,
         error: '未找到 node。请安装 Node.js 并确保在 PATH 中。',
       );
     }
-    final packageRoot = p.basename(p.dirname(cli)) == 'dist'
-        ? p.dirname(p.dirname(cli))
-        : p.dirname(cli);
     onLog?.call('启动 worker：$cli');
+    final environment = Map<String, String>.from(Platform.environment);
+    if (cursorApiKey != null && cursorApiKey.trim().isNotEmpty) {
+      environment['CURSOR_API_KEY'] = cursorApiKey.trim();
+    }
     final process = await Process.start(
       node,
       [cli, '--job', jobFile.path],
       workingDirectory: packageRoot,
-      environment: Platform.environment,
+      environment: environment,
       runInShell: Platform.isWindows,
     );
     process.stdout
@@ -147,6 +154,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
 }
 
 Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
+  String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
 }) async {
@@ -154,17 +162,22 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   if (cli == null) {
     throw StateError('未找到 Worker，请先一键修复');
   }
-  final node = await _resolveNodeExecutable();
-  if (node == null) throw StateError('未找到 node');
   final packageRoot = p.basename(p.dirname(cli)) == 'dist'
       ? p.dirname(p.dirname(cli))
       : p.dirname(cli);
+  final node = await _resolveNodeExecutable(packageRoot: packageRoot);
+  if (node == null) throw StateError('未找到 node');
+  if (cursorApiKey == null || cursorApiKey.trim().isEmpty) {
+    throw StateError('尚未配置 Cursor API Key');
+  }
+  final environment = Map<String, String>.from(Platform.environment)
+    ..['CURSOR_API_KEY'] = cursorApiKey.trim();
   onLog?.call('拉取模型列表…');
   final result = await Process.run(
     node,
     [cli, '--list-models'],
     workingDirectory: packageRoot,
-    environment: Platform.environment,
+    environment: environment,
     runInShell: Platform.isWindows,
   );
   if (result.exitCode != 0) {
@@ -187,15 +200,27 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
 }) async {
   final existing = await resolveAgentDispatchCliPath(workerScriptPath);
   if (existing != null && await File(existing).exists()) {
+    final existingRoot = p.basename(p.dirname(existing)) == 'dist'
+        ? p.dirname(p.dirname(existing))
+        : p.dirname(existing);
     final nodeModules = p.join(
-      p.basename(p.dirname(existing)) == 'dist'
-          ? p.dirname(p.dirname(existing))
-          : p.dirname(existing),
+      existingRoot,
       'node_modules',
       '@cursor',
       'sdk',
     );
-    if (await Directory(nodeModules).exists()) {
+    final codexCli = p.join(
+      existingRoot,
+      'node_modules',
+      '@openai',
+      'codex',
+      'bin',
+      'codex.js',
+    );
+    final node = await _resolveNodeExecutable(packageRoot: existingRoot);
+    if (await Directory(nodeModules).exists() &&
+        await File(codexCli).exists() &&
+        node != null) {
       return (ok: true, message: 'Worker 已就绪：$existing');
     }
   }
@@ -204,8 +229,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
   if (packageRoot == null) {
     return (
       ok: false,
-      message:
-          '未找到 scripts/agent_dispatch。请把看板仓库放在可访问路径，或设置 KANBAN_ROOT。',
+      message: '未找到内置 Worker。开发环境请设置 KANBAN_ROOT；发布包请重新下载完整 ZIP。',
     );
   }
 
@@ -253,11 +277,22 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
   return (ok: true, message: 'Worker 已修复：$cli');
 }
 
-Future<String?> _resolveNodeExecutable() => _resolveOnPath(
-      Platform.isWindows ? const ['node.exe', 'node'] : const ['node']);
+Future<String?> _resolveNodeExecutable({String? packageRoot}) async {
+  if (packageRoot != null) {
+    final bundled = p.join(
+      packageRoot,
+      'runtime',
+      Platform.isWindows ? 'node.exe' : 'node',
+    );
+    if (await File(bundled).exists()) return bundled;
+  }
+  return _resolveOnPath(
+    Platform.isWindows ? const ['node.exe', 'node'] : const ['node'],
+  );
+}
 
 Future<String?> _resolveNpmExecutable() => _resolveOnPath(
-      Platform.isWindows ? const ['npm.cmd', 'npm'] : const ['npm']);
+    Platform.isWindows ? const ['npm.cmd', 'npm'] : const ['npm']);
 
 Future<String?> _resolveOnPath(List<String> names) async {
   for (final name in names) {

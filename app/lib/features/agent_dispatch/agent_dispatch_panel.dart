@@ -5,10 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/import_export/backup_file_picker.dart';
 import 'agent_dispatch_config.dart';
+import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_platform.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
+import 'cursor_api_key_section.dart';
 
 /// 左上角「新建项目」右侧入口（仅桌面）。
 class AgentDispatchToolbarButton extends StatelessWidget {
@@ -41,6 +43,7 @@ class AgentDispatchPanel extends StatefulWidget {
 }
 
 class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
+  static const _credentials = AgentDispatchCredentials();
   AgentDispatchSettings _settings = const AgentDispatchSettings();
   final _repoController = TextEditingController();
   final _countController = TextEditingController(text: '1');
@@ -137,6 +140,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     setState(() => _busy = true);
     try {
       final models = await listAgentDispatchModels(
+        cursorApiKey: await _credentials.resolveCursorApiKey(),
         workerScriptPath: _settings.workerScriptPath,
         onLog: (l) {
           if (mounted) setState(() => _appendLog(l));
@@ -194,8 +198,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       repoPath: repo,
       cardLimitCount: count,
     );
-    final projectId =
-        next.useProject ? next.projectId : board.activeProjectId;
+    final projectId = next.useProject ? next.projectId : board.activeProjectId;
     if (projectId != null) {
       final map = Map<String, String>.from(next.repoPathByProject)
         ..[projectId] = repo;
@@ -267,7 +270,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 selected: {_settings.engine},
                 onSelectionChanged: _running || _busy
                     ? null
-                    : (s) => _persist(_settings.copyWith(engine: s.first)),
+                    : (s) {
+                        setState(() => _models = const []);
+                        _persist(_settings.copyWith(
+                          engine: s.first,
+                          modelId: null,
+                          effortParamId: null,
+                          effortParamValue: null,
+                        ));
+                      },
               ),
               const SizedBox(height: 12),
               CheckboxListTile(
@@ -318,8 +329,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                       decoration: const InputDecoration(
                         hintText: '本机仓库根目录',
                       ),
-                      onChanged: (v) => _settings =
-                          _settings.copyWith(repoPath: v.trim()),
+                      onChanged: (v) =>
+                          _settings = _settings.copyWith(repoPath: v.trim()),
                     ),
                   ),
                   IconButton(
@@ -330,17 +341,30 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 ],
               ),
               const SizedBox(height: 12),
+              if (_settings.engine == AgentDispatchEngine.cursor) ...[
+                CursorApiKeySection(
+                  enabled: !_running && !_busy,
+                  credentials: _credentials,
+                ),
+                const SizedBox(height: 12),
+              ],
               Row(
                 children: [
                   Text('模型', style: Theme.of(context).textTheme.labelLarge),
                   const Spacer(),
-                  TextButton(
-                    onPressed: _running || _busy ? null : _loadModels,
-                    child: const Text('从 API 刷新'),
-                  ),
+                  if (_settings.engine == AgentDispatchEngine.cursor)
+                    TextButton(
+                      onPressed: _running || _busy ? null : _loadModels,
+                      child: const Text('从 API 刷新'),
+                    ),
                 ],
               ),
-              if (_models.isEmpty)
+              if (_settings.engine == AgentDispatchEngine.codex)
+                Text(
+                  '使用本机 Codex CLI 的默认模型与登录状态',
+                  style: Theme.of(context).textTheme.bodySmall,
+                )
+              else if (_models.isEmpty)
                 Text(
                   _settings.modelId ?? '尚未加载；可点刷新，或稍后手动依赖默认模型',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -412,8 +436,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   Expanded(
                     child: TextField(
                       controller: _countController,
-                      enabled:
-                          !_running && !_busy && !_settings.cardLimitMax,
+                      enabled: !_running && !_busy && !_settings.cardLimitMax,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: '张数',
@@ -437,7 +460,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 child: SingleChildScrollView(
                   child: Text(
                     _skillPreview ?? '（未找到或无法读取 Skill）',
-                    style: const TextStyle(fontFamily: 'Consolas', fontSize: 11),
+                    style:
+                        const TextStyle(fontFamily: 'Consolas', fontSize: 11),
                   ),
                 ),
               ),

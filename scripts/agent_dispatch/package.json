@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "kanban-agent-dispatch",
   "version": "1.0.0",
   "private": true,
@@ -12,7 +12,8 @@
     "node": ">=22.13"
   },
   "dependencies": {
-    "@cursor/sdk": "^1.0.0"
+    "@cursor/sdk": "^1.0.0",
+    "@openai/codex": "^0.147.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

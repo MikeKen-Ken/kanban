@@ -89,7 +89,7 @@
 - `undo/`：可撤销命令与本机撤销栈
 - `templates/`：卡片模板与复制
 - `reminders/`：提醒、重复规则和平台调度
-- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec（仅本机偏好）
+- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）
 - `mcp/`：Windows 内嵌 MCP 与 Cursor/Codex 一键配置（仅本机）
 - `statistics/`：只读统计
 - `wip/`：列上限策略

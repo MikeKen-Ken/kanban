@@ -5,9 +5,16 @@ import { Cursor } from "@cursor/sdk";
 
 // src/run_codex.ts
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // src/types.ts
 function resolveModelParams(job) {
@@ -42,8 +49,28 @@ function effortToCodexConfigArgs(job) {
 }
 
 // src/run_codex.ts
-function resolveCodexBin() {
-  return process.platform === "win32" ? "codex.cmd" : "codex";
+function resolveCodexCommand() {
+  const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const bundledCli = join(
+    packageRoot,
+    "node_modules",
+    "@openai",
+    "codex",
+    "bin",
+    "codex.js"
+  );
+  if (existsSync(bundledCli)) {
+    return {
+      command: process.execPath,
+      prefixArgs: [bundledCli],
+      shell: false
+    };
+  }
+  return {
+    command: "codex",
+    prefixArgs: [],
+    shell: process.platform === "win32"
+  };
 }
 async function runCodex(job) {
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
@@ -67,11 +94,12 @@ async function runCodex(job) {
   console.log(`Codex args=${args.join(" ")}`);
   try {
     const code = await new Promise((resolvePromise, reject) => {
-      const child = spawn(resolveCodexBin(), args, {
+      const codex = resolveCodexCommand();
+      const child = spawn(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
         env: process.env,
         stdio: ["pipe", "pipe", "pipe"],
-        shell: process.platform === "win32"
+        shell: codex.shell
       });
       child.stdout.on("data", (buf) => {
         process.stdout.write(buf);
