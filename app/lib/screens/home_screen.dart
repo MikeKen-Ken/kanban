@@ -339,6 +339,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _openSearch,
         const SingleActivator(LogicalKeyboardKey.keyN, control: true):
             _quickCapture,
+        const SingleActivator(LogicalKeyboardKey.keyI, control: true):
+            _openSettings,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
             _undoWithFeedback,
         const SingleActivator(
