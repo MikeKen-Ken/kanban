@@ -14,8 +14,7 @@ class AgentDispatchSettings {
     this.projectId,
     this.repoPath,
     this.modelId,
-    this.effortParamId,
-    this.effortParamValue,
+    this.modelParamValues = const {},
     this.cardLimitMax = false,
     this.cardLimitCount = 1,
     this.workerScriptPath,
@@ -30,9 +29,8 @@ class AgentDispatchSettings {
   final String? repoPath;
   final String? modelId;
 
-  /// 思考/速度类参数（来自模型 catalog）。
-  final String? effortParamId;
-  final String? effortParamValue;
+  /// 当前模型的参数值，参数定义来自 Cursor 模型 catalog。
+  final Map<String, String> modelParamValues;
 
   final bool cardLimitMax;
   final int cardLimitCount;
@@ -48,8 +46,7 @@ class AgentDispatchSettings {
     Object? projectId = _sentinel,
     Object? repoPath = _sentinel,
     Object? modelId = _sentinel,
-    Object? effortParamId = _sentinel,
-    Object? effortParamValue = _sentinel,
+    Map<String, String>? modelParamValues,
     bool? cardLimitMax,
     int? cardLimitCount,
     Object? workerScriptPath = _sentinel,
@@ -63,12 +60,7 @@ class AgentDispatchSettings {
       projectId: projectId == _sentinel ? this.projectId : projectId as String?,
       repoPath: repoPath == _sentinel ? this.repoPath : repoPath as String?,
       modelId: modelId == _sentinel ? this.modelId : modelId as String?,
-      effortParamId: effortParamId == _sentinel
-          ? this.effortParamId
-          : effortParamId as String?,
-      effortParamValue: effortParamValue == _sentinel
-          ? this.effortParamValue
-          : effortParamValue as String?,
+      modelParamValues: modelParamValues ?? this.modelParamValues,
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       workerScriptPath: workerScriptPath == _sentinel
@@ -85,16 +77,13 @@ class AgentDispatchSettings {
   }) {
     final title =
         useProject && projectId != null ? projectTitleOf(projectId!) : null;
-    final params = <({String id, String value})>[];
-    final pid = effortParamId?.trim();
-    final pval = effortParamValue?.trim();
-    if (pid != null &&
-        pid.isNotEmpty &&
-        pval != null &&
-        pval.isNotEmpty &&
-        pval != 'default') {
-      params.add((id: pid, value: pval));
-    }
+    final params = modelParamValues.entries
+        .where((entry) =>
+            entry.key.trim().isNotEmpty &&
+            entry.value.trim().isNotEmpty &&
+            entry.value != 'default')
+        .map((entry) => (id: entry.key, value: entry.value))
+        .toList();
     return AgentDispatchRunOptions(
       engine: engine,
       projectTitle: useProject ? title : null,
@@ -113,8 +102,7 @@ class AgentDispatchSettings {
         if (projectId != null) 'projectId': projectId,
         if (repoPath != null) 'repoPath': repoPath,
         if (modelId != null) 'modelId': modelId,
-        if (effortParamId != null) 'effortParamId': effortParamId,
-        if (effortParamValue != null) 'effortParamValue': effortParamValue,
+        if (modelParamValues.isNotEmpty) 'modelParamValues': modelParamValues,
         'cardLimitMax': cardLimitMax,
         'cardLimitCount': cardLimitCount,
         if (workerScriptPath != null) 'workerScriptPath': workerScriptPath,
@@ -127,6 +115,7 @@ class AgentDispatchSettings {
   factory AgentDispatchSettings.fromJson(Map<String, dynamic> json) {
     final mapRaw = json['repoPathByProject'] as Map<String, dynamic>?;
     final pathsRaw = json['repoPaths'] as List<dynamic>?;
+    final modelParamsRaw = json['modelParamValues'] as Map<String, dynamic>?;
     final repoPath = json['repoPath'] as String?;
     final migratedPaths = <String>{
       if (repoPath?.trim().isNotEmpty == true) repoPath!.trim(),
@@ -137,15 +126,22 @@ class AgentDispatchSettings {
     };
     // 兼容旧字段
     final legacyModel = json['model'] as String?;
+    final legacyParamId = json['effortParamId'] as String?;
+    final legacyParamValue =
+        json['effortParamValue'] as String? ?? json['effort'] as String?;
+    final modelParamValues = modelParamsRaw == null
+        ? <String, String>{
+            if (legacyParamId != null && legacyParamValue != null)
+              legacyParamId: legacyParamValue,
+          }
+        : modelParamsRaw.map((key, value) => MapEntry(key, '$value'));
     return AgentDispatchSettings(
       engine: AgentDispatchEngine.fromName(json['engine'] as String?),
       useProject: json['useProject'] as bool? ?? false,
       projectId: json['projectId'] as String?,
       repoPath: repoPath,
       modelId: json['modelId'] as String? ?? legacyModel,
-      effortParamId: json['effortParamId'] as String?,
-      effortParamValue:
-          json['effortParamValue'] as String? ?? (json['effort'] as String?),
+      modelParamValues: modelParamValues,
       cardLimitMax: json['cardLimitMax'] as bool? ??
           (json['useMultiCard'] != true && json['maxCards'] == null
               ? false

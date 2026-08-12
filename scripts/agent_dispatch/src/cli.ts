@@ -9,17 +9,30 @@ function writeResult(outPath: string, result: DispatchResult): void {
   writeFileSync(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 
-function normalizeModelParameterValues(input: unknown): string[] {
+function normalizeModelParameterValues(
+  input: unknown,
+): Array<{ value: string; displayName?: string }> {
   if (!Array.isArray(input)) return [];
   return input
-    .map((item): string | null => {
+    .map((item): { value: string; displayName?: string } | null => {
       if (item && typeof item === "object" && "value" in item) {
         const value = (item as { value?: unknown }).value;
-        return value == null ? null : String(value);
+        const displayName = (item as { displayName?: unknown }).displayName;
+        return value == null
+          ? null
+          : {
+              value: String(value),
+              ...(displayName == null
+                ? {}
+                : { displayName: String(displayName) }),
+            };
       }
-      return item == null ? null : String(item);
+      return item == null ? null : { value: String(item) };
     })
-    .filter((value): value is string => value !== null && value.length > 0);
+    .filter(
+      (item): item is { value: string; displayName?: string } =>
+        item !== null && item.value.length > 0,
+    );
 }
 
 async function listModels(): Promise<void> {
@@ -33,12 +46,21 @@ async function listModels(): Promise<void> {
   const payload = {
     models: models.map((m) => ({
       id: m.id,
+      displayName: m.displayName,
+      description: m.description,
       parameters: (m.parameters ?? []).map((p) => ({
         id: p.id,
+        displayName: p.displayName,
         values: normalizeModelParameterValues(
           (p as { values?: unknown }).values ??
             (p as { enum?: unknown }).enum,
         ),
+      })),
+      variants: (m.variants ?? []).map((variant) => ({
+        displayName: variant.displayName,
+        description: variant.description,
+        isDefault: variant.isDefault,
+        params: variant.params,
       })),
     })),
   };

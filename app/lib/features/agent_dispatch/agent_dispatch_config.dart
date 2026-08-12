@@ -71,20 +71,40 @@ class AgentDispatchRunOptions {
 class AgentDispatchModelInfo {
   const AgentDispatchModelInfo({
     required this.id,
+    this.displayName,
+    this.description,
     this.parameters = const [],
+    this.variants = const [],
   });
 
   final String id;
+  final String? displayName;
+  final String? description;
   final List<AgentDispatchModelParameter> parameters;
+  final List<AgentDispatchModelVariant> variants;
+
+  AgentDispatchModelVariant? get defaultVariant {
+    for (final variant in variants) {
+      if (variant.isDefault) return variant;
+    }
+    return null;
+  }
 
   factory AgentDispatchModelInfo.fromJson(Map<String, dynamic> json) {
     final raw = json['parameters'] as List<dynamic>? ?? const [];
     return AgentDispatchModelInfo(
       id: json['id'] as String? ?? '',
+      displayName: json['displayName'] as String?,
+      description: json['description'] as String?,
       parameters: raw
           .whereType<Map<String, dynamic>>()
           .map(AgentDispatchModelParameter.fromJson)
           .where((p) => p.id.isNotEmpty)
+          .toList(),
+      variants: (json['variants'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AgentDispatchModelVariant.fromJson)
+          .where((variant) => variant.displayName.isNotEmpty)
           .toList(),
     );
   }
@@ -93,11 +113,15 @@ class AgentDispatchModelInfo {
 class AgentDispatchModelParameter {
   const AgentDispatchModelParameter({
     required this.id,
-    this.values = const [],
+    this.displayName,
+    this.options = const [],
   });
 
   final String id;
-  final List<String> values;
+  final String? displayName;
+  final List<AgentDispatchModelParameterOption> options;
+
+  List<String> get values => options.map((option) => option.value).toList();
 
   factory AgentDispatchModelParameter.fromJson(Map<String, dynamic> json) {
     final valuesRaw = json['values'] as List<dynamic>? ??
@@ -105,15 +129,62 @@ class AgentDispatchModelParameter {
         const [];
     return AgentDispatchModelParameter(
       id: json['id'] as String? ?? '',
-      values:
-          valuesRaw.map(_parseModelParameterValue).whereType<String>().toList(),
+      displayName: json['displayName'] as String?,
+      options: valuesRaw
+          .map(AgentDispatchModelParameterOption.fromJson)
+          .whereType<AgentDispatchModelParameterOption>()
+          .toList(),
     );
   }
 }
 
-String? _parseModelParameterValue(dynamic raw) {
-  final value = raw is Map ? raw['value'] : raw;
-  if (value == null) return null;
-  final text = '$value'.trim();
-  return text.isEmpty ? null : text;
+class AgentDispatchModelParameterOption {
+  const AgentDispatchModelParameterOption({
+    required this.value,
+    this.displayName,
+  });
+
+  final String value;
+  final String? displayName;
+
+  static AgentDispatchModelParameterOption? fromJson(dynamic raw) {
+    final value = raw is Map ? raw['value'] : raw;
+    if (value == null) return null;
+    final text = '$value'.trim();
+    if (text.isEmpty) return null;
+    return AgentDispatchModelParameterOption(
+      value: text,
+      displayName: raw is Map ? raw['displayName'] as String? : null,
+    );
+  }
+}
+
+class AgentDispatchModelVariant {
+  const AgentDispatchModelVariant({
+    required this.displayName,
+    this.description,
+    this.isDefault = false,
+    this.params = const {},
+  });
+
+  final String displayName;
+  final String? description;
+  final bool isDefault;
+  final Map<String, String> params;
+
+  factory AgentDispatchModelVariant.fromJson(Map<String, dynamic> json) {
+    final params = <String, String>{};
+    for (final raw in json['params'] as List<dynamic>? ?? const []) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      final value = raw['value'];
+      if (id != null && value != null) params['$id'] = '$value';
+    }
+    return AgentDispatchModelVariant(
+      displayName: json['displayName'] as String? ?? '',
+      description: json['description'] as String?,
+      isDefault: json['isDefault'] as bool? ?? false,
+      params: params,
+    );
+  }
 }

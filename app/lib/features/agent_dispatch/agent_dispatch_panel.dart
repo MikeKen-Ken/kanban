@@ -11,6 +11,7 @@ import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
 import 'agent_dispatch_log_store.dart';
+import 'agent_dispatch_model_parameters.dart';
 import 'agent_dispatch_platform.dart';
 import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_service.dart';
@@ -232,20 +233,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     return null;
   }
 
-  AgentDispatchModelParameter? get _effortParam {
-    final model = _selectedModel;
-    if (model == null) return null;
-    for (final p in model.parameters) {
-      if (p.id == 'reasoning_effort' ||
-          p.id == 'model_reasoning_effort' ||
-          p.id == 'fast' ||
-          p.id == 'optimize_for') {
-        return p;
-      }
-    }
-    return model.parameters.isEmpty ? null : model.parameters.first;
-  }
-
   Future<void> _run() async {
     if (_running) return;
     final board = context.read<BoardController>();
@@ -321,7 +308,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Widget build(BuildContext context) {
     final board = context.watch<BoardController>();
     final projects = board.manifest?.projects ?? const [];
-    final effortParam = _effortParam;
+    final modelParameters = _selectedModel?.parameters ?? const [];
     final skillPath = _settings.resolveSkillPath();
 
     return AlertDialog(
@@ -347,8 +334,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                         _persist(_settings.copyWith(
                           engine: s.first,
                           modelId: null,
-                          effortParamId: null,
-                          effortParamValue: null,
+                          modelParamValues: const {},
                         ));
                       },
               ),
@@ -452,49 +438,39 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   decoration: const InputDecoration(labelText: '模型 id'),
                   items: [
                     for (final m in _models)
-                      DropdownMenuItem(value: m.id, child: Text(m.id)),
+                      DropdownMenuItem(
+                        value: m.id,
+                        child: Text(
+                          m.displayName == null || m.displayName == m.id
+                              ? m.id
+                              : '${m.displayName}（${m.id}）',
+                        ),
+                      ),
                   ],
                   onChanged: _running || _busy
                       ? null
                       : (id) => _persist(_settings.copyWith(
                             modelId: id,
-                            effortParamId: null,
-                            effortParamValue: null,
+                            modelParamValues: const {},
                           )),
                 ),
-              if (effortParam != null) ...[
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  key: ValueKey(
-                    'effort-${effortParam.id}-${_settings.effortParamValue}',
-                  ),
-                  initialValue: () {
-                    final values = [
-                      'default',
-                      ...effortParam.values,
-                    ];
-                    final cur = _settings.effortParamValue ?? 'default';
-                    return values.contains(cur) ? cur : 'default';
-                  }(),
-                  decoration: InputDecoration(
-                    labelText: '思考程度（${effortParam.id}）',
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: 'default',
-                      child: Text('默认（不传参）'),
-                    ),
-                    for (final v in effortParam.values)
-                      DropdownMenuItem(value: v, child: Text(v)),
-                  ],
-                  onChanged: _running || _busy
-                      ? null
-                      : (v) => _persist(_settings.copyWith(
-                            effortParamId: effortParam.id,
-                            effortParamValue: v,
-                          )),
-                ),
-              ],
+              AgentDispatchModelParameters(
+                parameters: modelParameters,
+                defaultVariant: _selectedModel?.defaultVariant,
+                values: _settings.modelParamValues,
+                enabled: !_running && !_busy,
+                onChanged: (id, value) {
+                  final values = Map<String, String>.from(
+                    _settings.modelParamValues,
+                  );
+                  if (value == 'default') {
+                    values.remove(id);
+                  } else {
+                    values[id] = value;
+                  }
+                  _persist(_settings.copyWith(modelParamValues: values));
+                },
+              ),
               const SizedBox(height: 12),
               AgentDispatchCardLimitField(
                 controller: _countController,

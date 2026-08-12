@@ -187,10 +187,16 @@ function normalizeModelParameterValues(input) {
   return input.map((item) => {
     if (item && typeof item === "object" && "value" in item) {
       const value = item.value;
-      return value == null ? null : String(value);
+      const displayName = item.displayName;
+      return value == null ? null : {
+        value: String(value),
+        ...displayName == null ? {} : { displayName: String(displayName) }
+      };
     }
-    return item == null ? null : String(item);
-  }).filter((value) => value !== null && value.length > 0);
+    return item == null ? null : { value: String(item) };
+  }).filter(
+    (item) => item !== null && item.value.length > 0
+  );
 }
 async function listModels() {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
@@ -203,11 +209,20 @@ async function listModels() {
   const payload = {
     models: models.map((m) => ({
       id: m.id,
+      displayName: m.displayName,
+      description: m.description,
       parameters: (m.parameters ?? []).map((p) => ({
         id: p.id,
+        displayName: p.displayName,
         values: normalizeModelParameterValues(
           p.values ?? p.enum
         )
+      })),
+      variants: (m.variants ?? []).map((variant) => ({
+        displayName: variant.displayName,
+        description: variant.description,
+        isDefault: variant.isDefault,
+        params: variant.params
       }))
     }))
   };

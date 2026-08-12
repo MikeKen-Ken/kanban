@@ -40,15 +40,20 @@ void main() {
       repoPath: r'D:\repo',
       modelId: 'composer-2.5',
       cardLimitMax: true,
-      effortParamId: 'reasoning_effort',
-      effortParamValue: 'high',
+      modelParamValues: {
+        'fast': 'true',
+        'reasoning_effort': 'high',
+      },
     );
     final opts = settings.toRunOptions(
       projectTitleOf: (id) => id == 'p1' ? '项目甲' : null,
     );
     expect(opts.projectTitle, '项目甲');
     expect(opts.repoPath, r'D:\repo');
-    expect(opts.modelParams.single.id, 'reasoning_effort');
+    expect(opts.modelParams, [
+      (id: 'fast', value: 'true'),
+      (id: 'reasoning_effort', value: 'high'),
+    ]);
     expect(opts.cardLimit, isA<AgentDispatchCardLimitMax>());
   });
 
@@ -57,11 +62,13 @@ void main() {
       repoPath: '/tmp/x',
       repoPathByProject: {'a': '/tmp/a'},
       repoPaths: ['/tmp/x', '/tmp/a'],
+      modelParamValues: {'fast': 'false', 'effort': 'high'},
     );
     final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
     expect(roundTrip.repoPath, '/tmp/x');
     expect(roundTrip.repoPathByProject['a'], '/tmp/a');
     expect(roundTrip.repoPaths, ['/tmp/x', '/tmp/a']);
+    expect(roundTrip.modelParamValues, {'fast': 'false', 'effort': 'high'});
     expect(original.toJson(), isNot(contains('cursorApiKey')));
   });
 
@@ -72,6 +79,15 @@ void main() {
     });
 
     expect(settings.repoPaths, ['/tmp/current', '/tmp/a']);
+  });
+
+  test('旧版单一模型参数迁移到参数映射', () {
+    final settings = AgentDispatchSettings.fromJson({
+      'effortParamId': 'reasoning_effort',
+      'effortParamValue': 'high',
+    });
+
+    expect(settings.modelParamValues, {'reasoning_effort': 'high'});
   });
 
   test('Skill 预览读取全文', () async {
