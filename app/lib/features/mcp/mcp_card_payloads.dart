@@ -26,6 +26,8 @@ Map<String, dynamic> mcpBoardCardSummary(
       },
     if (card.attachments.isNotEmpty) 'attachmentCount': card.attachments.length,
     if (card.blockedByIds.isNotEmpty) 'blockedByIds': card.blockedByIds,
+    if (card.commitRef != null && card.commitRef!.isNotEmpty)
+      'commitRef': card.commitRef,
   };
   if (!includeDetails) return payload;
 
@@ -36,6 +38,9 @@ Map<String, dynamic> mcpBoardCardSummary(
         : '${description.substring(0, descriptionMax)}…';
   }
   if (card.colorValue != null) payload['colorValue'] = card.colorValue;
+  if (card.commitRef != null && card.commitRef!.isNotEmpty) {
+    payload['commitRef'] = card.commitRef;
+  }
   if (card.relatedIds.isNotEmpty) payload['relatedIds'] = card.relatedIds;
   if (card.links.isNotEmpty) {
     payload['links'] = [
@@ -63,6 +68,8 @@ Map<String, dynamic> mcpCardReferenceSummary(CardReference card) => {
       if (card.verificationFeedbackTexts.isNotEmpty)
         'verificationFeedbackCount': card.verificationFeedbackTexts.length,
       if (card.blockedByIds.isNotEmpty) 'blockedByIds': card.blockedByIds,
+      if (card.commitRef != null && card.commitRef!.isNotEmpty)
+        'commitRef': card.commitRef,
     };
 
 /// 列表默认返回摘要；显式 detail=full 时才返回完整引用。

@@ -8,6 +8,7 @@ class KanbanPaths {
   static const attachmentsDirName = 'attachments';
   static const wallpapersDirName = 'wallpapers';
   static const attachmentFileExt = 'jpg';
+  static const fileAttachmentExt = 'bin';
   static const projectsFileName = 'projects.json';
   static const projectsDirName = 'projects';
   static const settingsFileName = 'settings.json';
@@ -102,6 +103,18 @@ class KanbanPaths {
       '${remoteWallpapersDir(baseDir)}/'
       '${remoteProjectAttachmentFileName(wallpaperId, thumb: thumb)}';
 
+  static String remoteProjectFileAttachmentFileName(String attachmentId) =>
+      '$attachmentId.$fileAttachmentExt';
+
+  static String remoteProjectFileAttachmentPath(
+    String baseDir,
+    String projectId,
+    String attachmentId,
+  ) {
+    return '${remoteProjectAttachmentsDir(baseDir, projectId)}/'
+        '${remoteProjectFileAttachmentFileName(attachmentId)}';
+  }
+
   static String? attachmentIdFromRemoteFileName(String fileName) {
     if (!fileName.endsWith('.$attachmentFileExt')) return null;
     final base =
@@ -111,6 +124,15 @@ class KanbanPaths {
     }
     return base;
   }
+
+  static String? fileAttachmentIdFromRemoteFileName(String fileName) {
+    if (!fileName.endsWith('.$fileAttachmentExt')) return null;
+    return fileName.substring(0, fileName.length - fileAttachmentExt.length - 1);
+  }
+
+  static String? attachmentIdFromAnyRemoteFileName(String fileName) =>
+      attachmentIdFromRemoteFileName(fileName) ??
+      fileAttachmentIdFromRemoteFileName(fileName);
 
   static String? attachmentIdFromRemoteFile(String filePath) {
     final name = filePath.split('/').last;

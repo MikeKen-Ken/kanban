@@ -99,6 +99,12 @@ extension BoardControllerMoves on BoardController {
         attachments: moving.attachments,
       );
       if (copyError != null) return copyError;
+      final fileCopyError = await copyCardFileAttachmentsBetweenProjects(
+        fromProjectId: fromProjectId,
+        toProjectId: targetProjectId,
+        attachments: moving.fileAttachments,
+      );
+      if (fileCopyError != null) return fileCopyError;
 
       final fromPrefs = fromProjectId == activeProjectId
           ? columnPreferencesFor(fromColumnId)
@@ -138,6 +144,12 @@ extension BoardControllerMoves on BoardController {
         await store.deleteAttachments(
           projectId: fromProjectId,
           attachments: moving.attachments,
+        );
+      }
+      if (store != null && moving.fileAttachments.isNotEmpty) {
+        await store.deleteFileAttachments(
+          projectId: fromProjectId,
+          attachments: moving.fileAttachments,
         );
       }
 

@@ -525,6 +525,63 @@ class CardLink {
   }
 }
 
+/// 卡片通用文件附件元数据（脚本、文档、TXT 等；二进制存于 attachments/ 目录）
+class CardFileAttachment {
+  CardFileAttachment({
+    required this.id,
+    required this.fileName,
+    required this.mimeType,
+    required this.order,
+    required this.createdAt,
+    this.size = 0,
+  });
+
+  final String id;
+  final String fileName;
+  final String mimeType;
+  final int order;
+  final int createdAt;
+  final int size;
+
+  CardFileAttachment copyWith({
+    String? id,
+    String? fileName,
+    String? mimeType,
+    int? order,
+    int? createdAt,
+    int? size,
+  }) {
+    return CardFileAttachment(
+      id: id ?? this.id,
+      fileName: fileName ?? this.fileName,
+      mimeType: mimeType ?? this.mimeType,
+      order: order ?? this.order,
+      createdAt: createdAt ?? this.createdAt,
+      size: size ?? this.size,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'order': order,
+        'createdAt': createdAt,
+        if (size > 0) 'size': size,
+      };
+
+  factory CardFileAttachment.fromJson(Map<String, dynamic> json) {
+    return CardFileAttachment(
+      id: json['id'] as String,
+      fileName: json['fileName'] as String? ?? 'file.bin',
+      mimeType: json['mimeType'] as String? ?? 'application/octet-stream',
+      order: json['order'] as int? ?? 0,
+      createdAt: json['createdAt'] as int? ?? 0,
+      size: json['size'] as int? ?? 0,
+    );
+  }
+}
+
 class KanbanCard {
   KanbanCard({
     required this.id,
@@ -545,9 +602,11 @@ class KanbanCard {
     this.checklist = const [],
     this.verificationFeedback = const [],
     this.attachments = const [],
+    this.fileAttachments = const [],
     this.links = const [],
     this.blockedByIds = const [],
     this.relatedIds = const [],
+    this.commitRef,
     this.colorValue,
     this.conflictSide,
     this.conflictColumnId,
@@ -578,6 +637,9 @@ class KanbanCard {
   final List<ChecklistItem> verificationFeedback;
   final List<CardAttachment> attachments;
 
+  /// 通用文件附件（脚本、文档、TXT 等）
+  final List<CardFileAttachment> fileAttachments;
+
   /// 外链书签
   final List<CardLink> links;
 
@@ -586,6 +648,9 @@ class KanbanCard {
 
   /// 关联卡片 id（无先后关系，仅追溯/导航；写入本侧，不会自动回链）
   final List<String> relatedIds;
+
+  /// 完成该任务时对应的 Git 提交号（完整或短 hash）
+  final String? commitRef;
 
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
@@ -600,6 +665,7 @@ class KanbanCard {
   final bool conflictDeleted;
 
   static const maxAttachments = 9;
+  static const maxFileAttachments = 20;
 
   bool get hasConflict => conflictSide != null || conflictDeleted;
 
@@ -614,12 +680,20 @@ class KanbanCard {
 
   bool get hasAttachments => attachments.isNotEmpty;
 
+  bool get hasFileAttachments => fileAttachments.isNotEmpty;
+
   bool get hasLinks => links.isNotEmpty;
 
   bool get hasRelations => blockedByIds.isNotEmpty || relatedIds.isNotEmpty;
 
   List<CardAttachment> get sortedAttachments {
     final list = [...attachments]..sort((a, b) => a.order.compareTo(b.order));
+    return list;
+  }
+
+  List<CardFileAttachment> get sortedFileAttachments {
+    final list = [...fileAttachments]
+      ..sort((a, b) => a.order.compareTo(b.order));
     return list;
   }
 
@@ -650,9 +724,11 @@ class KanbanCard {
     List<ChecklistItem>? checklist,
     List<ChecklistItem>? verificationFeedback,
     List<CardAttachment>? attachments,
+    List<CardFileAttachment>? fileAttachments,
     List<CardLink>? links,
     List<String>? blockedByIds,
     List<String>? relatedIds,
+    Object? commitRef = _sentinel,
     Object? colorValue = _sentinel,
     Object? conflictSide = _sentinel,
     Object? conflictColumnId = _sentinel,
@@ -682,9 +758,12 @@ class KanbanCard {
       checklist: checklist ?? this.checklist,
       verificationFeedback: verificationFeedback ?? this.verificationFeedback,
       attachments: attachments ?? this.attachments,
+      fileAttachments: fileAttachments ?? this.fileAttachments,
       links: links ?? this.links,
       blockedByIds: blockedByIds ?? this.blockedByIds,
       relatedIds: relatedIds ?? this.relatedIds,
+      commitRef:
+          commitRef == _sentinel ? this.commitRef : commitRef as String?,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
       conflictSide: clearConflict
@@ -730,9 +809,13 @@ class KanbanCard {
             verificationFeedback.map((c) => c.toJson()).toList(),
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
+      if (fileAttachments.isNotEmpty)
+        'fileAttachments':
+            fileAttachments.map((a) => a.toJson()).toList(),
       if (links.isNotEmpty) 'links': links.map((link) => link.toJson()).toList(),
       if (blockedByIds.isNotEmpty) 'blockedByIds': blockedByIds,
       if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
+      if (commitRef != null && commitRef!.isNotEmpty) 'commitRef': commitRef,
       if (colorValue != null) 'color': colorValue,
     };
     if (includeConflict) {
@@ -779,6 +862,9 @@ class KanbanCard {
       attachments: (json['attachments'] as List<dynamic>? ?? [])
           .map((e) => CardAttachment.fromJson(e as Map<String, dynamic>))
           .toList(),
+      fileAttachments: (json['fileAttachments'] as List<dynamic>? ?? [])
+          .map((e) => CardFileAttachment.fromJson(e as Map<String, dynamic>))
+          .toList(),
       links: (json['links'] as List<dynamic>? ?? [])
           .map((e) => CardLink.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -788,6 +874,7 @@ class KanbanCard {
       relatedIds: (json['relatedIds'] as List<dynamic>? ?? [])
           .map((e) => e as String)
           .toList(),
+      commitRef: json['commitRef'] as String?,
       colorValue: json['color'] as int?,
       conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
       conflictColumnId: json['conflictColumnId'] as String?,
@@ -801,6 +888,7 @@ class KanbanCard {
     final q = query.toLowerCase();
     if (title.toLowerCase().contains(q)) return true;
     if (description?.toLowerCase().contains(q) ?? false) return true;
+    if (commitRef?.toLowerCase().contains(q) ?? false) return true;
     for (final item in checklist) {
       if (item.text.toLowerCase().contains(q)) return true;
     }
@@ -810,6 +898,9 @@ class KanbanCard {
     for (final link in links) {
       if (link.title.toLowerCase().contains(q)) return true;
       if (link.url.toLowerCase().contains(q)) return true;
+    }
+    for (final file in fileAttachments) {
+      if (file.fileName.toLowerCase().contains(q)) return true;
     }
     for (final key in labels) {
       final label = findKanbanLabel(key, customLabels);

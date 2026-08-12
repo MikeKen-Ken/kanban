@@ -14,8 +14,10 @@ import '../completed_auto_clear/completed_auto_clear.dart';
 import '../labels/label_editor_dialog.dart';
 import 'card_detail_actions_bar.dart';
 import 'card_detail_attachments_section.dart';
+import 'card_detail_file_attachments_section.dart';
 import 'card_detail_checklist_section.dart';
 import 'card_detail_conflict_banner.dart';
+import 'card_detail_commit_ref_section.dart';
 import 'card_detail_due_reminder_section.dart';
 import 'card_detail_pin_button.dart';
 import 'card_detail_relations_section.dart';
@@ -81,6 +83,7 @@ class _CardDetailSheet extends StatefulWidget {
 class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
+  late final TextEditingController _commitRefController;
   late final FocusNode _titleFocusNode;
   final FocusNode _descFocusNode = FocusNode();
   late BoardController _boardController;
@@ -94,6 +97,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late List<ChecklistItem> _checklist;
   late List<ChecklistItem> _verificationFeedback;
   late List<CardAttachment> _attachments;
+  late List<CardFileAttachment> _fileAttachments;
   late List<CardLink> _links;
   late List<String> _blockedByIds;
   late List<String> _relatedIds;
@@ -114,6 +118,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   Iterable<TextEditingController> get _textControllers => [
         _titleController,
         _descController,
+        _commitRefController,
         _checklistInput,
         _verificationFeedbackInput,
       ];
@@ -125,6 +130,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _titleController = TextEditingController(text: widget.card.title);
     _descController =
         TextEditingController(text: widget.card.description ?? '');
+    _commitRefController =
+        TextEditingController(text: widget.card.commitRef ?? '');
     _completed = widget.card.completed;
     _dueDate = widget.card.dueDate != null
         ? DateTime.fromMillisecondsSinceEpoch(widget.card.dueDate!)
@@ -139,6 +146,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _checklist = [...widget.card.checklist];
     _verificationFeedback = [...widget.card.verificationFeedback];
     _attachments = [...widget.card.sortedAttachments];
+    _fileAttachments = [...widget.card.sortedFileAttachments];
     _links = [...widget.card.sortedLinks];
     _blockedByIds = [...widget.card.blockedByIds];
     _relatedIds = [...widget.card.relatedIds];
@@ -178,6 +186,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _titleController.dispose();
     _titleFocusNode.dispose();
     _descController.dispose();
+    _commitRefController.dispose();
     _descFocusNode.dispose();
     _checklistInput.dispose();
     _verificationFeedbackInput.dispose();
@@ -240,6 +249,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         (originalDesc == null || originalDesc.isEmpty ? null : originalDesc)) {
       return true;
     }
+    final originalCommitRef = widget.card.commitRef?.trim();
+    final nextCommitRef = _commitRefController.text.trim();
+    if (nextCommitRef !=
+        (originalCommitRef == null || originalCommitRef.isEmpty
+            ? ''
+            : originalCommitRef)) {
+      return true;
+    }
     if (_completed != widget.card.completed) return true;
     if (nextDue != originalDue) return true;
     if (nextReminder != originalReminder) return true;
@@ -254,6 +271,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     }
     if (_colorValue != widget.card.colorValue) return true;
     if (!_attachmentIdsEqual(_attachments, widget.card.sortedAttachments)) {
+      return true;
+    }
+    if (!_fileAttachmentIdsEqual(
+        _fileAttachments, widget.card.sortedFileAttachments)) {
       return true;
     }
     if (!_linksEqual(_links, widget.card.sortedLinks)) return true;
@@ -306,6 +327,17 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     return true;
   }
 
+  static bool _fileAttachmentIdsEqual(
+    List<CardFileAttachment> a,
+    List<CardFileAttachment> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id || a[i].order != b[i].order) return false;
+    }
+    return true;
+  }
+
   /// 间隔可选上限：天 30、周/月 12。
   static int _maxRecurrenceInterval(CardRecurrence recurrence) {
     return switch (recurrence) {
@@ -326,9 +358,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_checklist.isNotEmpty) return true;
     if (_verificationFeedback.isNotEmpty) return true;
     if (_attachments.isNotEmpty) return true;
+    if (_fileAttachments.isNotEmpty) return true;
     if (_links.isNotEmpty) return true;
     if (_blockedByIds.isNotEmpty || _relatedIds.isNotEmpty) return true;
     if (_colorValue != null) return true;
+    if (_commitRefController.text.trim().isNotEmpty) return true;
     return false;
   }
 
@@ -367,6 +401,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     // 在可能 dispose 之前同步快照，再异步写入。
     final title = _effectiveTitle;
     final description = _effectiveDescription;
+    final commitRefText = _commitRefController.text.trim();
+    final commitRef = commitRefText.isEmpty ? null : commitRefText;
+    final clearCommitRef = commitRefText.isEmpty;
     final completed = _completed;
     final dueDate = _dueDate?.millisecondsSinceEpoch;
     final clearDueDate = _dueDate == null;
@@ -381,6 +418,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final verificationFeedback =
         List<ChecklistItem>.from(_verificationFeedback);
     final attachments = List<CardAttachment>.from(_attachments);
+    final fileAttachments = List<CardFileAttachment>.from(_fileAttachments);
     final links = List<CardLink>.from(_links);
     final blockedByIds = List<String>.from(_blockedByIds);
     final relatedIds = List<String>.from(_relatedIds);
@@ -396,6 +434,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         title: title,
         description: description,
         clearDescription: description == null,
+        commitRef: commitRef,
+        clearCommitRef: clearCommitRef,
         completed: hasIncompleteVerificationFeedback(verificationFeedback)
             ? false
             : completed,
@@ -410,6 +450,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         checklist: checklist,
         verificationFeedback: verificationFeedback,
         attachments: attachments,
+        fileAttachments: fileAttachments,
         links: links,
         blockedByIds: blockedByIds,
         relatedIds: relatedIds,
@@ -1090,6 +1131,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _safeSetState(() => _attachments = next),
                         ),
                         const SizedBox(height: 20),
+                        CardDetailFileAttachmentsSection(
+                          columnId: widget.columnId,
+                          cardId: widget.card.id,
+                          attachments: _fileAttachments,
+                          missingAttachmentIds:
+                              _boardController.missingAttachmentIds,
+                          onAttachmentsChanged: (next) =>
+                              _safeSetState(() => _fileAttachments = next),
+                        ),
+                        const SizedBox(height: 20),
                         CardDetailDueReminderSection(
                           dueDate: _dueDate,
                           reminderAt: _reminderAt,
@@ -1097,6 +1148,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _safeSetState(() => _dueDate = value),
                           onReminderChanged: (value) =>
                               _safeSetState(() => _reminderAt = value),
+                        ),
+                        const SizedBox(height: 20),
+                        CardDetailCommitRefSection(
+                          controller: _commitRefController,
+                          onChanged: () => _safeSetState(() {}),
                         ),
                         const SizedBox(height: 20),
                         Text('重复', style: theme.textTheme.titleSmall),

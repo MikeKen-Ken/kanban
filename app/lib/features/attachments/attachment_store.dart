@@ -13,11 +13,25 @@ abstract class AttachmentStore {
     int? createdAt,
   });
 
+  Future<CardFileAttachment> saveFile({
+    required String projectId,
+    required Uint8List sourceBytes,
+    required String fileName,
+    required int order,
+    int? createdAt,
+  });
+
   Future<void> writeBytes({
     required String projectId,
     required String attachmentId,
     required Uint8List bytes,
     bool thumb = false,
+  });
+
+  Future<void> writeFileBytes({
+    required String projectId,
+    required String attachmentId,
+    required Uint8List bytes,
   });
 
   Future<Uint8List?> readBytes({
@@ -26,10 +40,31 @@ abstract class AttachmentStore {
     bool thumb = false,
   });
 
+  Future<Uint8List?> readFileBytes({
+    required String projectId,
+    required String attachmentId,
+  });
+
   Future<bool> exists({
     required String projectId,
     required String attachmentId,
     bool thumb = false,
+  });
+
+  Future<bool> existsImage({
+    required String projectId,
+    required String attachmentId,
+    bool thumb = false,
+  });
+
+  Future<bool> existsFile({
+    required String projectId,
+    required String attachmentId,
+  });
+
+  Future<String?> localFilePath({
+    required String projectId,
+    required String attachmentId,
   });
 
   Future<void> deleteAttachment({
@@ -37,9 +72,19 @@ abstract class AttachmentStore {
     required String attachmentId,
   });
 
+  Future<void> deleteFileAttachment({
+    required String projectId,
+    required String attachmentId,
+  });
+
   Future<void> deleteAttachments({
     required String projectId,
     required Iterable<CardAttachment> attachments,
+  });
+
+  Future<void> deleteFileAttachments({
+    required String projectId,
+    required Iterable<CardFileAttachment> attachments,
   });
 
   Future<Set<String>> listLocalAttachmentIds(String projectId);

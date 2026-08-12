@@ -87,6 +87,8 @@ extension BoardControllerCards on BoardController {
       final now = DateTime.now().millisecondsSinceEpoch;
       final duplicatedId = const Uuid().v4();
       final copiedAttachments = await _copyCardAttachments(source.attachments);
+      final copiedFileAttachments =
+          await _copyCardFileAttachments(source.fileAttachments);
       final duplicated = source.copyWith(
         id: duplicatedId,
         order: sourceColumn.cards.length,
@@ -103,6 +105,7 @@ extension BoardControllerCards on BoardController {
             item.copyWith(id: const Uuid().v4()),
         ],
         attachments: copiedAttachments,
+        fileAttachments: copiedFileAttachments,
         links: [
           for (final link in source.links)
             link.copyWith(id: const Uuid().v4(), createdAt: now),
@@ -214,9 +217,12 @@ extension BoardControllerCards on BoardController {
     List<ChecklistItem>? checklist,
     List<ChecklistItem>? verificationFeedback,
     List<CardAttachment>? attachments,
+    List<CardFileAttachment>? fileAttachments,
     List<CardLink>? links,
     List<String>? blockedByIds,
     List<String>? relatedIds,
+    String? commitRef,
+    bool clearCommitRef = false,
     int? colorValue,
     bool clearColor = false,
   }) async {
@@ -260,9 +266,13 @@ extension BoardControllerCards on BoardController {
             checklist: checklist ?? card.checklist,
             verificationFeedback: nextVerificationFeedback,
             attachments: attachments ?? card.attachments,
+            fileAttachments: fileAttachments ?? card.fileAttachments,
             links: links ?? card.links,
             blockedByIds: blockedByIds ?? card.blockedByIds,
             relatedIds: relatedIds ?? card.relatedIds,
+            commitRef: clearCommitRef
+                ? null
+                : (commitRef ?? card.commitRef),
             colorValue: clearColor ? null : (colorValue ?? card.colorValue),
             updatedAt: now,
           );
@@ -290,9 +300,14 @@ extension BoardControllerCards on BoardController {
         final restoredVerification =
             verificationFeedback ?? original.verificationFeedback;
         final restoredAttachments = attachments ?? original.attachments;
+        final restoredFileAttachments =
+            fileAttachments ?? original.fileAttachments;
         final restoredLinks = links ?? original.links;
         final restoredBlockedBy = blockedByIds ?? original.blockedByIds;
         final restoredRelated = relatedIds ?? original.relatedIds;
+        final restoredCommitRef = clearCommitRef
+            ? null
+            : (commitRef ?? original.commitRef);
         final restoredColor =
             clearColor ? null : (colorValue ?? original.colorValue);
         _pushUndo(
@@ -316,9 +331,12 @@ extension BoardControllerCards on BoardController {
               checklist: original.checklist,
               verificationFeedback: original.verificationFeedback,
               attachments: original.attachments,
+              fileAttachments: original.fileAttachments,
               links: original.links,
               blockedByIds: original.blockedByIds,
               relatedIds: original.relatedIds,
+              commitRef: original.commitRef,
+              clearCommitRef: original.commitRef == null,
               colorValue: original.colorValue,
               clearColor: original.colorValue == null,
             );
@@ -343,9 +361,12 @@ extension BoardControllerCards on BoardController {
               checklist: restoredChecklist,
               verificationFeedback: restoredVerification,
               attachments: restoredAttachments,
+              fileAttachments: restoredFileAttachments,
               links: restoredLinks,
               blockedByIds: restoredBlockedBy,
               relatedIds: restoredRelated,
+              commitRef: restoredCommitRef,
+              clearCommitRef: restoredCommitRef == null,
               colorValue: restoredColor,
               clearColor: restoredColor == null,
             );

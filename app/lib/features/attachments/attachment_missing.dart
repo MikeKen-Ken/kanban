@@ -14,10 +14,23 @@ Future<Set<String>> findMissingAttachmentIds({
 }) async {
   if (store == null) return {};
 
-  final ids = collectReferencedAttachmentIds(board, trash, settings: settings);
+  final refs = collectReferencedAttachmentsByKind(
+    board,
+    trash,
+    settings: settings,
+  );
   final missing = <String>{};
-  for (final id in ids) {
-    final exists = await store.exists(
+  for (final id in refs.imageIds) {
+    final exists = await store.existsImage(
+      projectId: projectId,
+      attachmentId: id,
+    );
+    if (!exists) {
+      missing.add(id);
+    }
+  }
+  for (final id in refs.fileIds) {
+    final exists = await store.existsFile(
       projectId: projectId,
       attachmentId: id,
     );
@@ -34,6 +47,11 @@ int countMissingAttachmentsForCard(
 ) {
   var count = 0;
   for (final attachment in card.attachments) {
+    if (missingIds.contains(attachment.id)) {
+      count++;
+    }
+  }
+  for (final attachment in card.fileAttachments) {
     if (missingIds.contains(attachment.id)) {
       count++;
     }
