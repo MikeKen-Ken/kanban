@@ -173,7 +173,7 @@ void main() {
         'text': '子任务',
       },
     ]);
-    expect(buildCardCommitMessage(card), '新功能\n\n说明');
+    expect(buildCardCommitMessage(card), '新功能\n\n说明\n\n- 子任务');
     expect(buildCardWorkScope(card)['workMode'], 'normal');
   });
 }

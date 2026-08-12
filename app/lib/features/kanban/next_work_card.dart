@@ -107,7 +107,7 @@ List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
   return items;
 }
 
-/// 提交信息：返工仅用未完成验证反馈原文；普通用标题 + 备注。
+/// 提交信息：返工仅用未完成验证反馈原文；普通用标题、备注与未完成子任务。
 String buildCardCommitMessage(KanbanCard card) {
   if (isReworkWorkMode(card)) {
     return [
@@ -118,8 +118,16 @@ String buildCardCommitMessage(KanbanCard card) {
 
   final title = card.title.trim();
   final description = card.description?.trim();
-  if (description == null || description.isEmpty) return title;
-  return '$title\n\n$description';
+  final incompleteChecklist = [
+    for (final item in card.checklist)
+      if (!item.completed && item.text.trim().isNotEmpty)
+        '- ${item.text.trim()}',
+  ];
+  return [
+    title,
+    if (description != null && description.isNotEmpty) description,
+    if (incompleteChecklist.isNotEmpty) incompleteChecklist.join('\n'),
+  ].join('\n\n');
 }
 
 /// 把所有未完成验证反馈勾为完成；无未完成项时返回 null。

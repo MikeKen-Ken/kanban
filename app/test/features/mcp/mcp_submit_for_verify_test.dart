@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/controllers/board_controller.dart';
 import 'package:kanban/features/kanban/verify_column.dart';
+import 'package:kanban/features/mcp/mcp_pick_next_card.dart';
 import 'package:kanban/features/mcp/mcp_submit_for_verify.dart';
 import 'package:kanban/models/kanban_models.dart';
 import 'package:kanban/storage/board_storage.dart';
@@ -109,6 +110,19 @@ void main() {
       ],
     );
 
+    final pick = await mcpPickNextCard(controller);
+    expect(pick.isError, isNot(true));
+    final doingColumnId = controller.findColumnIdForCard(cardId)!;
+    await controller.updateCardFull(
+      doingColumnId,
+      cardId,
+      checklist: [
+        ChecklistItem(id: 'done', text: '已完成', completed: true),
+        ChecklistItem(id: 'todo-1', text: '待完成一', completed: true),
+        ChecklistItem(id: 'todo-2', text: '待完成二'),
+      ],
+    );
+
     final result = await mcpSubmitCardForVerify(
       controller,
       cardId: cardId,
@@ -117,7 +131,11 @@ void main() {
 
     expect(result.isError, isNot(true));
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
-    expect(payload['completedChecklistCount'], 2);
+    expect(
+      payload['suggestedCommitMessage'],
+      '多子任务卡\n\n- 待完成一\n- 待完成二',
+    );
+    expect(payload['completedChecklistCount'], 1);
     final verifyColumn = findVerifyColumn(controller.board!.columns)!;
     final card = verifyColumn.cards.firstWhere((item) => item.id == cardId);
     expect(card.checklist.every((item) => item.completed), isTrue);

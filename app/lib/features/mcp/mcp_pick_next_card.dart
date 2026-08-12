@@ -5,6 +5,7 @@ import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import 'mcp_arg_parsers.dart';
+import 'mcp_submission_snapshot_store.dart';
 import 'mcp_tool_results.dart';
 import 'mcp_work_scope_result.dart';
 
@@ -16,6 +17,7 @@ Future<CallToolResult> mcpPickNextCard(
   BoardController controller, {
   String? projectId,
   bool includeWorkItems = true,
+  McpSubmissionSnapshotStore? submissionSnapshotStore,
 }) {
   return runMcpForProject(controller, projectId, (resolvedProjectId) async {
     final board = controller.board;
@@ -55,6 +57,20 @@ Future<CallToolResult> mcpPickNextCard(
     }
 
     final rework = isReworkWorkMode(card);
+    await (submissionSnapshotStore ?? McpSubmissionSnapshotStore()).write(
+      McpSubmissionSnapshot(
+        projectId: resolvedProjectId,
+        cardId: card.id,
+        workMode: rework ? 'rework' : 'normal',
+        suggestedCommitMessage: buildCardCommitMessage(card),
+        incompleteFeedbackIds: [
+          if (rework)
+            for (final item in card.verificationFeedback)
+              if (!item.completed) item.id,
+        ],
+        capturedAt: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
     final payload = <String, dynamic>{
       'found': true,
       'projectId': resolvedProjectId,

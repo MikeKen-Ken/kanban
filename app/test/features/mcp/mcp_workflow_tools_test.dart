@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/controllers/board_controller.dart';
 import 'package:kanban/features/kanban/verify_column.dart';
+import 'package:kanban/features/mcp/mcp_pick_next_card.dart';
 import 'package:kanban/features/mcp/mcp_prepare_card_submission.dart';
 import 'package:kanban/features/mcp/mcp_submit_consultation.dart';
+import 'package:kanban/models/kanban_models.dart';
 import 'package:kanban/storage/board_storage.dart';
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,13 +38,34 @@ void main() {
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
 
-  test('prepare_card_submission 只读返回提交信息', () async {
+  test('prepare_card_submission 使用取卡时冻结的普通任务范围', () async {
     final todo = controller.board!.columns.firstWhere((c) => c.id == 'todo');
     final cardId = (await controller.addCard(todo.id, '只读准备'))!;
     await controller.updateCardFull(
       todo.id,
       cardId,
       description: '提交正文',
+      checklist: [
+        ChecklistItem(id: 'todo', text: '待完成子任务'),
+        ChecklistItem(id: 'done', text: '历史子任务', completed: true),
+      ],
+    );
+
+    final pick = await mcpPickNextCard(controller);
+    expect(pick.isError, isNot(true));
+    final doingColumnId = controller.findColumnIdForCard(cardId)!;
+    await controller.updateCardFull(
+      doingColumnId,
+      cardId,
+      checklist: [
+        ChecklistItem(
+          id: 'todo',
+          text: '待完成子任务',
+          completed: true,
+        ),
+        ChecklistItem(id: 'done', text: '历史子任务', completed: true),
+        ChecklistItem(id: 'late', text: '实施中新增子任务'),
+      ],
     );
 
     final result = await mcpPrepareCardSubmission(
@@ -51,8 +74,48 @@ void main() {
     );
 
     expect(result.isError, isNot(true));
-    expect(_jsonOf(result)['suggestedCommitMessage'], '只读准备\n\n提交正文');
-    expect(controller.findColumnIdForCard(cardId), todo.id);
+    expect(
+      _jsonOf(result)['suggestedCommitMessage'],
+      '只读准备\n\n提交正文\n\n- 待完成子任务',
+    );
+    expect(controller.findColumnIdForCard(cardId), doingColumnId);
+  });
+
+  test('prepare_card_submission 返工时使用取卡时冻结的验证反馈', () async {
+    final rework = controller.board!.columns.firstWhere(
+      (column) => column.id == KanbanBoard.defaultReworkColumnId,
+    );
+    final cardId = (await controller.addCard(rework.id, '返工卡'))!;
+    await controller.updateCardFull(
+      rework.id,
+      cardId,
+      verificationFeedback: [
+        ChecklistItem(id: 'fb1', text: '修复问题一'),
+        ChecklistItem(id: 'done', text: '历史反馈', completed: true),
+      ],
+    );
+
+    final pick = await mcpPickNextCard(controller);
+    expect(pick.isError, isNot(true));
+    await controller.updateCardFull(
+      rework.id,
+      cardId,
+      verificationFeedback: [
+        ChecklistItem(id: 'fb1', text: '修复问题一', completed: true),
+        ChecklistItem(id: 'late', text: '实施中新增反馈'),
+      ],
+    );
+
+    final result = await mcpPrepareCardSubmission(
+      controller,
+      cardId: cardId,
+    );
+
+    expect(result.isError, isNot(true));
+    final payload = _jsonOf(result);
+    expect(payload['workMode'], 'rework');
+    expect(payload['suggestedCommitMessage'], '修复问题一');
+    expect(payload['incompleteFeedbackIds'], ['fb1']);
   });
 
   test('submit_consultation 追加答复并移入待验证', () async {

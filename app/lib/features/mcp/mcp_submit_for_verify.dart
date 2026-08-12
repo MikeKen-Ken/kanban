@@ -6,6 +6,7 @@ import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_set_card_commit_ref.dart';
+import 'mcp_submission_snapshot_store.dart';
 import 'mcp_tool_results.dart';
 
 /// 将卡片移入「待验证」；可选在移列前完成子任务或更新验证反馈。
@@ -25,6 +26,7 @@ Future<CallToolResult> mcpSubmitCardForVerify(
   bool? completeAllIncompleteFeedback,
   bool completeAllIncompleteChecklist = false,
   String? commitRef,
+  McpSubmissionSnapshotStore? submissionSnapshotStore,
 }) async {
   final located = await resolveMcpProjectIdForCard(
     controller,
@@ -59,8 +61,12 @@ Future<CallToolResult> mcpSubmitCardForVerify(
       return mcpErrorResult('未找到卡片：$cardId');
     }
 
-    // 在勾选反馈前生成提交信息，返工时仅含本轮未完成的反馈原文。
-    final commitMessage = buildCardCommitMessage(card);
+    // 优先使用取卡时冻结的范围，避免提前勾选后遗漏本轮已实施子任务。
+    final submissionSnapshot =
+        await (submissionSnapshotStore ?? McpSubmissionSnapshotStore())
+            .read(projectId: resolvedProjectId, cardId: cardId);
+    final commitMessage = submissionSnapshot?.suggestedCommitMessage ??
+        buildCardCommitMessage(card);
 
     List<ChecklistItem>? checklistToApply;
     var completedChecklistCount = 0;
