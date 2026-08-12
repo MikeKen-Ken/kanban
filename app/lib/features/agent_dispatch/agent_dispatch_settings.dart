@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'agent_dispatch_config.dart';
@@ -8,139 +10,162 @@ import 'agent_dispatch_config.dart';
 class AgentDispatchSettings {
   const AgentDispatchSettings({
     this.engine = AgentDispatchEngine.cursor,
+    this.useProject = false,
     this.projectId,
     this.repoPath,
-    this.model,
-    this.effort = AgentDispatchEffort.default_,
-    this.maxCards = 1,
-    this.autoSubmitVerify = true,
-    this.autoBlockOnFail = true,
-    this.useProject = false,
-    this.useRepo = true,
-    this.useModel = false,
-    this.useEffort = false,
-    this.useMultiCard = false,
+    this.modelId,
+    this.effortParamId,
+    this.effortParamValue,
+    this.cardLimitMax = false,
+    this.cardLimitCount = 1,
     this.workerScriptPath,
+    this.skillPath,
     this.repoPathByProject = const {},
   });
 
   final AgentDispatchEngine engine;
+  final bool useProject;
   final String? projectId;
   final String? repoPath;
-  final String? model;
-  final AgentDispatchEffort effort;
-  final int maxCards;
-  final bool autoSubmitVerify;
-  final bool autoBlockOnFail;
+  final String? modelId;
 
-  /// 复选框：是否指定项目 / 仓库 / 模型 / 思考程度 / 多卡。
-  final bool useProject;
-  final bool useRepo;
-  final bool useModel;
-  final bool useEffort;
-  final bool useMultiCard;
+  /// 思考/速度类参数（来自模型 catalog）。
+  final String? effortParamId;
+  final String? effortParamValue;
 
-  /// 可选：覆盖 worker 脚本路径（`cli.js`）。
+  final bool cardLimitMax;
+  final int cardLimitCount;
+
   final String? workerScriptPath;
-
-  /// 各看板项目最近使用的仓库路径。
+  final String? skillPath;
   final Map<String, String> repoPathByProject;
 
   AgentDispatchSettings copyWith({
     AgentDispatchEngine? engine,
+    bool? useProject,
     Object? projectId = _sentinel,
     Object? repoPath = _sentinel,
-    Object? model = _sentinel,
-    AgentDispatchEffort? effort,
-    int? maxCards,
-    bool? autoSubmitVerify,
-    bool? autoBlockOnFail,
-    bool? useProject,
-    bool? useRepo,
-    bool? useModel,
-    bool? useEffort,
-    bool? useMultiCard,
+    Object? modelId = _sentinel,
+    Object? effortParamId = _sentinel,
+    Object? effortParamValue = _sentinel,
+    bool? cardLimitMax,
+    int? cardLimitCount,
     Object? workerScriptPath = _sentinel,
+    Object? skillPath = _sentinel,
     Map<String, String>? repoPathByProject,
   }) {
     return AgentDispatchSettings(
       engine: engine ?? this.engine,
+      useProject: useProject ?? this.useProject,
       projectId: projectId == _sentinel ? this.projectId : projectId as String?,
       repoPath: repoPath == _sentinel ? this.repoPath : repoPath as String?,
-      model: model == _sentinel ? this.model : model as String?,
-      effort: effort ?? this.effort,
-      maxCards: maxCards ?? this.maxCards,
-      autoSubmitVerify: autoSubmitVerify ?? this.autoSubmitVerify,
-      autoBlockOnFail: autoBlockOnFail ?? this.autoBlockOnFail,
-      useProject: useProject ?? this.useProject,
-      useRepo: useRepo ?? this.useRepo,
-      useModel: useModel ?? this.useModel,
-      useEffort: useEffort ?? this.useEffort,
-      useMultiCard: useMultiCard ?? this.useMultiCard,
+      modelId: modelId == _sentinel ? this.modelId : modelId as String?,
+      effortParamId: effortParamId == _sentinel
+          ? this.effortParamId
+          : effortParamId as String?,
+      effortParamValue: effortParamValue == _sentinel
+          ? this.effortParamValue
+          : effortParamValue as String?,
+      cardLimitMax: cardLimitMax ?? this.cardLimitMax,
+      cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       workerScriptPath: workerScriptPath == _sentinel
           ? this.workerScriptPath
           : workerScriptPath as String?,
+      skillPath: skillPath == _sentinel ? this.skillPath : skillPath as String?,
       repoPathByProject: repoPathByProject ?? this.repoPathByProject,
     );
   }
 
-  AgentDispatchRunOptions toRunOptions({String? activeProjectId}) {
-    final projectId = useProject ? this.projectId : activeProjectId;
-    final repoFromMap = projectId == null
-        ? null
-        : repoPathByProject[projectId];
+  AgentDispatchRunOptions toRunOptions({
+    required String? Function(String projectId) projectTitleOf,
+  }) {
+    final title = useProject && projectId != null
+        ? projectTitleOf(projectId!)
+        : null;
+    final params = <({String id, String value})>[];
+    final pid = effortParamId?.trim();
+    final pval = effortParamValue?.trim();
+    if (pid != null &&
+        pid.isNotEmpty &&
+        pval != null &&
+        pval.isNotEmpty &&
+        pval != 'default') {
+      params.add((id: pid, value: pval));
+    }
     return AgentDispatchRunOptions(
       engine: engine,
-      projectId: projectId,
-      repoPath: useRepo ? (repoPath ?? repoFromMap) : repoFromMap,
-      model: useModel ? model : null,
-      effort: useEffort ? effort : AgentDispatchEffort.default_,
-      maxCards: useMultiCard ? maxCards.clamp(1, 50) : 1,
-      autoSubmitVerify: autoSubmitVerify,
-      autoBlockOnFail: autoBlockOnFail,
+      projectTitle: useProject ? title : null,
+      repoPath: repoPath?.trim() ?? '',
+      modelId: modelId,
+      modelParams: params,
+      cardLimit: cardLimitMax
+          ? AgentDispatchCardLimit.max
+          : AgentDispatchCardLimit.count(cardLimitCount),
     );
   }
 
   Map<String, dynamic> toJson() => {
         'engine': engine.name,
+        'useProject': useProject,
         if (projectId != null) 'projectId': projectId,
         if (repoPath != null) 'repoPath': repoPath,
-        if (model != null) 'model': model,
-        'effort': effort.wireName,
-        'maxCards': maxCards,
-        'autoSubmitVerify': autoSubmitVerify,
-        'autoBlockOnFail': autoBlockOnFail,
-        'useProject': useProject,
-        'useRepo': useRepo,
-        'useModel': useModel,
-        'useEffort': useEffort,
-        'useMultiCard': useMultiCard,
+        if (modelId != null) 'modelId': modelId,
+        if (effortParamId != null) 'effortParamId': effortParamId,
+        if (effortParamValue != null) 'effortParamValue': effortParamValue,
+        'cardLimitMax': cardLimitMax,
+        'cardLimitCount': cardLimitCount,
         if (workerScriptPath != null) 'workerScriptPath': workerScriptPath,
+        if (skillPath != null) 'skillPath': skillPath,
         if (repoPathByProject.isNotEmpty)
           'repoPathByProject': repoPathByProject,
       };
 
   factory AgentDispatchSettings.fromJson(Map<String, dynamic> json) {
     final mapRaw = json['repoPathByProject'] as Map<String, dynamic>?;
+    // 兼容旧字段
+    final legacyModel = json['model'] as String?;
     return AgentDispatchSettings(
       engine: AgentDispatchEngine.fromName(json['engine'] as String?),
+      useProject: json['useProject'] as bool? ?? false,
       projectId: json['projectId'] as String?,
       repoPath: json['repoPath'] as String?,
-      model: json['model'] as String?,
-      effort: AgentDispatchEffort.fromName(json['effort'] as String?),
-      maxCards: (json['maxCards'] as num?)?.toInt() ?? 1,
-      autoSubmitVerify: json['autoSubmitVerify'] as bool? ?? true,
-      autoBlockOnFail: json['autoBlockOnFail'] as bool? ?? true,
-      useProject: json['useProject'] as bool? ?? false,
-      useRepo: json['useRepo'] as bool? ?? true,
-      useModel: json['useModel'] as bool? ?? false,
-      useEffort: json['useEffort'] as bool? ?? false,
-      useMultiCard: json['useMultiCard'] as bool? ?? false,
+      modelId: json['modelId'] as String? ?? legacyModel,
+      effortParamId: json['effortParamId'] as String?,
+      effortParamValue: json['effortParamValue'] as String? ??
+          (json['effort'] as String?),
+      cardLimitMax: json['cardLimitMax'] as bool? ??
+          (json['useMultiCard'] != true && json['maxCards'] == null
+              ? false
+              : false),
+      cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
+          (json['maxCards'] as num?)?.toInt() ??
+          1,
       workerScriptPath: json['workerScriptPath'] as String?,
+      skillPath: json['skillPath'] as String?,
       repoPathByProject: mapRaw == null
           ? const {}
           : mapRaw.map((k, v) => MapEntry(k, v as String)),
     );
+  }
+
+  /// 默认 skill 路径：`%USERPROFILE%\.cursor\skills\kanban-complete-tasks\SKILL.md`
+  static String defaultSkillPath() {
+    final home = Platform.environment['USERPROFILE'] ??
+        Platform.environment['HOME'] ??
+        Directory.current.path;
+    return p.join(
+      home,
+      '.cursor',
+      'skills',
+      'kanban-complete-tasks',
+      'SKILL.md',
+    );
+  }
+
+  String resolveSkillPath() {
+    final custom = skillPath?.trim();
+    if (custom != null && custom.isNotEmpty) return custom;
+    return defaultSkillPath();
   }
 }
 

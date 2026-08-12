@@ -1,24 +1,27 @@
-export type EffortWire = "default" | "fast" | "low" | "medium" | "high";
-
-export interface DispatchJob {
+export type DispatchJob = {
   engine: "cursor" | "codex";
   cwd: string;
   prompt: string;
   model?: string;
-  effort?: EffortWire;
+  modelParams?: Array<{ id: string; value: string }>;
+  /** @deprecated 旧字段，兼容 */
+  effort?: string;
   outPath: string;
-}
+};
 
-export interface DispatchResult {
+export type DispatchResult = {
   ok: boolean;
   summary?: string;
   error?: string;
-}
+};
 
-export function effortToCursorParams(
-  effort: EffortWire | undefined,
+export function resolveModelParams(
+  job: DispatchJob,
 ): Array<{ id: string; value: string }> | undefined {
-  switch (effort) {
+  if (job.modelParams && job.modelParams.length > 0) {
+    return job.modelParams;
+  }
+  switch (job.effort) {
     case "fast":
       return [{ id: "fast", value: "true" }];
     case "low":
@@ -32,19 +35,16 @@ export function effortToCursorParams(
   }
 }
 
-export function effortToCodexConfigArgs(
-  effort: EffortWire | undefined,
-): string[] {
-  switch (effort) {
-    case "low":
-      return ["-c", "model_reasoning_effort=low"];
-    case "medium":
-      return ["-c", "model_reasoning_effort=medium"];
-    case "high":
-      return ["-c", "model_reasoning_effort=high"];
-    case "fast":
-      return ["-c", "model_reasoning_effort=low"];
-    default:
-      return [];
+export function effortToCodexConfigArgs(job: DispatchJob): string[] {
+  const params = resolveModelParams(job) ?? [];
+  const effort = params.find(
+    (p) => p.id === "reasoning_effort" || p.id === "model_reasoning_effort",
+  );
+  if (effort) {
+    return ["-c", `model_reasoning_effort=${effort.value}`];
   }
+  if (params.some((p) => p.id === "fast" && p.value === "true")) {
+    return ["-c", "model_reasoning_effort=low"];
+  }
+  return [];
 }

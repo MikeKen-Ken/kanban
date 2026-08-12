@@ -26,12 +26,11 @@ export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
     job.cwd,
     "-o",
     lastMessageFile,
-    ...effortToCodexConfigArgs(job.effort),
+    ...effortToCodexConfigArgs(job),
   ];
   if (job.model?.trim()) {
     args.push("-m", job.model.trim());
   }
-  // 从文件读 prompt：用 stdin
   args.push("-");
 
   console.log(`Codex args=${args.join(" ")}`);
@@ -64,16 +63,9 @@ export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
     }
 
     if (code === 0) {
-      return {
-        ok: true,
-        summary: summary || "Codex 实施完成",
-      };
+      return { ok: true, summary: summary || "Codex 会话完成" };
     }
-    return {
-      ok: false,
-      error: `Codex 退出码 ${code}`,
-      summary,
-    };
+    return { ok: false, error: `Codex 退出码 ${code}`, summary };
   } finally {
     try {
       rmSync(temp, { recursive: true, force: true });

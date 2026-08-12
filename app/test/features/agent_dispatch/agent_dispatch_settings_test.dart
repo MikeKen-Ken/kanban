@@ -4,58 +4,54 @@ import 'package:kanban/features/agent_dispatch/agent_dispatch_prompt.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_settings.dart';
 
 void main() {
-  test('buildAgentDispatchPrompt 含卡片与仓库信息', () {
-    final text = buildAgentDispatchPrompt(
-      projectId: 'p1',
-      cardId: 'c1',
-      cardTitle: '修登录',
-      cardDescription: '备注内容',
-      workScope: {
-        'workMode': 'normal',
-        'workItems': [
-          {'type': 'checklist', 'text': '改 auth'},
-        ],
-      },
-      repoPath: r'C:\work\demo',
+  test('buildSkillDispatchPrompt 注入 skill 与 name', () {
+    final text = buildSkillDispatchPrompt(
+      skillMarkdown: '# 看板：做最新一条\n\n## 流程\n',
+      projectTitle: '我的项目',
+      cardLimit: AgentDispatchCardLimit.count(3),
     );
-    expect(text, contains('修登录'));
-    expect(text, contains('c1'));
-    expect(text, contains(r'C:\work\demo'));
-    expect(text, contains('改 auth'));
+    expect(text, contains('Skill 正文'));
+    expect(text, contains('name:我的项目'));
+    expect(text, contains('最多 3 张'));
   });
 
-  test('toRunOptions 尊重复选框', () {
+  test('不指定项目时调用正文为空说明', () {
+    final text = buildSkillDispatchPrompt(
+      skillMarkdown: 'skill',
+      projectTitle: null,
+      cardLimit: AgentDispatchCardLimit.max,
+    );
+    expect(text, contains('（空：使用看板当前打开的项目）'));
+    expect(text, contains('不限'));
+    expect(text, isNot(contains('name:')));
+  });
+
+  test('toRunOptions：仓库必填字段与 Max', () {
     const settings = AgentDispatchSettings(
-      engine: AgentDispatchEngine.codex,
-      projectId: 'proj',
-      repoPath: r'D:\repo',
-      model: 'composer-2.5',
-      effort: AgentDispatchEffort.high,
-      maxCards: 5,
+      engine: AgentDispatchEngine.cursor,
       useProject: true,
-      useRepo: true,
-      useModel: false,
-      useEffort: true,
-      useMultiCard: true,
+      projectId: 'p1',
+      repoPath: r'D:\repo',
+      modelId: 'composer-2.5',
+      cardLimitMax: true,
+      effortParamId: 'reasoning_effort',
+      effortParamValue: 'high',
     );
-    final opts = settings.toRunOptions(activeProjectId: 'other');
-    expect(opts.engine, AgentDispatchEngine.codex);
-    expect(opts.projectId, 'proj');
+    final opts = settings.toRunOptions(
+      projectTitleOf: (id) => id == 'p1' ? '项目甲' : null,
+    );
+    expect(opts.projectTitle, '项目甲');
     expect(opts.repoPath, r'D:\repo');
-    expect(opts.model, isNull);
-    expect(opts.effort, AgentDispatchEffort.high);
-    expect(opts.maxCards, 5);
+    expect(opts.modelParams.single.id, 'reasoning_effort');
+    expect(opts.cardLimit, isA<AgentDispatchCardLimitMax>());
   });
 
-  test('settings JSON 往返', () {
+  test('settings JSON 往返保留仓库', () {
     const original = AgentDispatchSettings(
-      engine: AgentDispatchEngine.cursor,
-      useRepo: true,
       repoPath: '/tmp/x',
       repoPathByProject: {'a': '/tmp/a'},
     );
     final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
-    expect(roundTrip.engine, AgentDispatchEngine.cursor);
     expect(roundTrip.repoPath, '/tmp/x');
     expect(roundTrip.repoPathByProject['a'], '/tmp/a');
   });

@@ -8,6 +8,7 @@ import 'project_quick_switch.dart';
 import 'project_settings_screen.dart';
 import 'project_theme.dart';
 import '../../common/app_snack_bar.dart';
+import '../agent_dispatch/agent_dispatch.dart';
 
 /// 左上角项目切换器
 class ProjectSwitcher extends StatelessWidget {
@@ -430,6 +431,7 @@ class ProjectSwitcher extends StatelessWidget {
               icon: const Icon(Icons.add),
               onPressed: () => _createProject(context),
             ),
+            const AgentDispatchToolbarButton(),
           ],
         );
       },

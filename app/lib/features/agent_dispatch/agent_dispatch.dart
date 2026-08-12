@@ -1,4 +1,4 @@
-/// 桌面端本机 Agent 调度（Cursor SDK / Codex exec）。
+/// 桌面端本机 Agent 调度（Cursor SDK / Codex exec + Skill）。
 library;
 
 export 'agent_dispatch_config.dart';

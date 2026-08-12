@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../common/app_snack_bar.dart';
 import '../controllers/board_controller.dart';
-import '../features/agent_dispatch/agent_dispatch.dart';
 import '../features/app_update/app_update_screen.dart';
 import '../features/kanban/card_detail_sheet.dart';
 import '../features/project/board_background_layer.dart';
@@ -386,7 +385,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.add),
                 onPressed: () => _addColumn(context),
               ),
-            if (!compact) const AgentDispatchToolbarButton(),
             if (!compact)
               IconButton(
                 tooltip: '日历',

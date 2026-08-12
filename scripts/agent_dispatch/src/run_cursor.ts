@@ -1,5 +1,5 @@
 import { Agent, CursorAgentError } from "@cursor/sdk";
-import { effortToCursorParams, type DispatchJob, type DispatchResult } from "./types.js";
+import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
 
 export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
@@ -11,8 +11,10 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
   }
 
   const modelId = job.model?.trim() || "composer-2.5";
-  const params = effortToCursorParams(job.effort);
-  console.log(`Cursor 模型=${modelId} effort=${job.effort ?? "default"}`);
+  const params = resolveModelParams(job);
+  console.log(
+    `Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`,
+  );
 
   try {
     const result = await Agent.prompt(job.prompt, {
@@ -23,7 +25,8 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
       },
       local: {
         cwd: job.cwd,
-        settingSources: ["project"],
+        // 需要用户级 MCP（kanbanMCP）与项目规则
+        settingSources: ["user", "project"],
       },
     });
 
@@ -39,7 +42,7 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
       typeof result.result === "string"
         ? result.result
         : result.status === "finished"
-          ? "Cursor 实施完成"
+          ? "Cursor 会话完成"
           : `Cursor 状态：${result.status}`;
 
     return { ok: result.status === "finished", summary };

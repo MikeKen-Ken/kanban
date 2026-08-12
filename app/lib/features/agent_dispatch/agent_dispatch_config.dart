@@ -16,64 +16,96 @@ enum AgentDispatchEngine {
   }
 }
 
-/// 思考 / 速度档位（写入各引擎可识别的参数）。
-enum AgentDispatchEffort {
-  /// 不传额外参数，用引擎默认。
-  default_,
-  fast,
-  low,
-  medium,
-  high;
+/// 卡片数量：固定张数或全部（Max）。
+sealed class AgentDispatchCardLimit {
+  const AgentDispatchCardLimit();
+
+  static const AgentDispatchCardLimit max = AgentDispatchCardLimitMax();
+
+  factory AgentDispatchCardLimit.count(int n) =>
+      AgentDispatchCardLimitCount(n.clamp(1, 999));
 
   String get label => switch (this) {
-        AgentDispatchEffort.default_ => '默认',
-        AgentDispatchEffort.fast => '快速',
-        AgentDispatchEffort.low => '低',
-        AgentDispatchEffort.medium => '中',
-        AgentDispatchEffort.high => '高',
+        AgentDispatchCardLimitMax() => 'Max（全部）',
+        AgentDispatchCardLimitCount(:final count) => '$count',
       };
-
-  static AgentDispatchEffort fromName(String? name) {
-    if (name == 'default') return AgentDispatchEffort.default_;
-    return AgentDispatchEffort.values.firstWhere(
-      (e) => e.name == name,
-      orElse: () => AgentDispatchEffort.default_,
-    );
-  }
-
-  String get wireName =>
-      this == AgentDispatchEffort.default_ ? 'default' : name;
 }
 
-/// 一次调度运行的选项（由面板复选框组装）。
+final class AgentDispatchCardLimitMax extends AgentDispatchCardLimit {
+  const AgentDispatchCardLimitMax();
+}
+
+final class AgentDispatchCardLimitCount extends AgentDispatchCardLimit {
+  const AgentDispatchCardLimitCount(this.count);
+  final int count;
+}
+
+/// 一次运行选项。
 class AgentDispatchRunOptions {
   const AgentDispatchRunOptions({
     required this.engine,
-    this.projectId,
-    this.repoPath,
-    this.model,
-    this.effort = AgentDispatchEffort.default_,
-    this.maxCards = 1,
-    this.autoSubmitVerify = true,
-    this.autoBlockOnFail = true,
+    required this.repoPath,
+    required this.cardLimit,
+    this.projectTitle,
+    this.modelId,
+    this.modelParams = const [],
   });
 
   final AgentDispatchEngine engine;
 
-  /// 为空则用当前活动项目。
-  final String? projectId;
+  /// 非空时作为 skill「本次调用」中的 `name:<标题>`。
+  final String? projectTitle;
 
-  /// 本机代码仓库路径（local cwd）。
-  final String? repoPath;
+  /// Agent 工作目录（必填）。
+  final String repoPath;
 
-  /// 为空则用引擎默认模型。
-  final String? model;
+  final String? modelId;
 
-  final AgentDispatchEffort effort;
+  /// 来自 Cursor.models.list 的 params，如 fast / reasoning_effort。
+  final List<({String id, String value})> modelParams;
 
-  /// 连续取卡并执行的最大张数。
-  final int maxCards;
+  final AgentDispatchCardLimit cardLimit;
+}
 
-  final bool autoSubmitVerify;
-  final bool autoBlockOnFail;
+/// 模型目录项（worker --list-models）。
+class AgentDispatchModelInfo {
+  const AgentDispatchModelInfo({
+    required this.id,
+    this.parameters = const [],
+  });
+
+  final String id;
+  final List<AgentDispatchModelParameter> parameters;
+
+  factory AgentDispatchModelInfo.fromJson(Map<String, dynamic> json) {
+    final raw = json['parameters'] as List<dynamic>? ?? const [];
+    return AgentDispatchModelInfo(
+      id: json['id'] as String? ?? '',
+      parameters: raw
+          .whereType<Map<String, dynamic>>()
+          .map(AgentDispatchModelParameter.fromJson)
+          .where((p) => p.id.isNotEmpty)
+          .toList(),
+    );
+  }
+}
+
+class AgentDispatchModelParameter {
+  const AgentDispatchModelParameter({
+    required this.id,
+    this.values = const [],
+  });
+
+  final String id;
+  final List<String> values;
+
+  factory AgentDispatchModelParameter.fromJson(Map<String, dynamic> json) {
+    final valuesRaw = json['values'] as List<dynamic>? ??
+        json['enum'] as List<dynamic>? ??
+        const [];
+    return AgentDispatchModelParameter(
+      id: json['id'] as String? ?? '',
+      values: valuesRaw.map((e) => '$e').toList(),
+    );
+  }
 }

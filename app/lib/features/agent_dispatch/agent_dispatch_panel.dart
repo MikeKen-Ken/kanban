@@ -8,8 +8,9 @@ import 'agent_dispatch_config.dart';
 import 'agent_dispatch_platform.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
+import 'agent_dispatch_worker.dart';
 
-/// AppBar「新建列」后的 Agent 调度入口（仅桌面）。
+/// 左上角「新建项目」右侧入口（仅桌面）。
 class AgentDispatchToolbarButton extends StatelessWidget {
   const AgentDispatchToolbarButton({super.key});
 
@@ -42,30 +43,33 @@ class AgentDispatchPanel extends StatefulWidget {
 class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   AgentDispatchSettings _settings = const AgentDispatchSettings();
   final _repoController = TextEditingController();
-  final _modelController = TextEditingController();
-  final _maxCardsController = TextEditingController(text: '1');
-  final _workerPathController = TextEditingController();
+  final _countController = TextEditingController(text: '1');
   final _logController = TextEditingController();
+  final _service = AgentDispatchService();
+
+  List<AgentDispatchModelInfo> _models = const [];
+  String? _skillPreview;
+  String? _workerStatus;
   bool _running = false;
-  AgentDispatchService? _service;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _bootstrap();
   }
 
-  Future<void> _load() async {
+  Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     final loaded = prefs.loadAgentDispatchSettings();
     if (!mounted) return;
     setState(() {
       _settings = loaded;
       _repoController.text = loaded.repoPath ?? '';
-      _modelController.text = loaded.model ?? '';
-      _maxCardsController.text = '${loaded.maxCards}';
-      _workerPathController.text = loaded.workerScriptPath ?? '';
+      _countController.text = '${loaded.cardLimitCount}';
     });
+    await _refreshSkillPreview();
+    await _refreshWorkerStatus();
   }
 
   Future<void> _persist(AgentDispatchSettings next) async {
@@ -75,11 +79,25 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   void _appendLog(String line) {
-    final next = _logController.text.isEmpty
-        ? line
-        : '${_logController.text}\n$line';
+    final next =
+        _logController.text.isEmpty ? line : '${_logController.text}\n$line';
     _logController.text = next;
     _logController.selection = TextSelection.collapsed(offset: next.length);
+  }
+
+  Future<void> _refreshSkillPreview() async {
+    final path = _settings.resolveSkillPath();
+    final preview = await peekSkillPreview(path);
+    if (!mounted) return;
+    setState(() => _skillPreview = preview);
+  }
+
+  Future<void> _refreshWorkerStatus() async {
+    final cli = await resolveAgentDispatchCliPath(_settings.workerScriptPath);
+    if (!mounted) return;
+    setState(() {
+      _workerStatus = cli == null ? '未找到 Worker（需一键修复）' : '已就绪：$cli';
+    });
   }
 
   Future<void> _pickRepo() async {
@@ -87,9 +105,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (path == null || !mounted) return;
     _repoController.text = path;
     final board = context.read<BoardController>();
-    final projectId = _settings.useProject
-        ? _settings.projectId
-        : board.activeProjectId;
+    final projectId =
+        _settings.useProject ? _settings.projectId : board.activeProjectId;
     var next = _settings.copyWith(repoPath: path);
     if (projectId != null) {
       final map = Map<String, String>.from(next.repoPathByProject)
@@ -99,44 +116,109 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     await _persist(next);
   }
 
+  Future<void> _fixWorker() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    _appendLog('开始修复 Worker…');
+    final result = await ensureAgentDispatchWorker(
+      workerScriptPath: _settings.workerScriptPath,
+      onLog: (l) {
+        if (mounted) setState(() => _appendLog(l));
+      },
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _appendLog(result.message);
+    await _refreshWorkerStatus();
+  }
+
+  Future<void> _loadModels() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final models = await listAgentDispatchModels(
+        workerScriptPath: _settings.workerScriptPath,
+        onLog: (l) {
+          if (mounted) setState(() => _appendLog(l));
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _models = models;
+        _busy = false;
+      });
+      _appendLog('已加载 ${models.length} 个模型');
+      if (_settings.modelId == null && models.isNotEmpty) {
+        await _persist(_settings.copyWith(modelId: models.first.id));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _appendLog('拉取模型失败：$e');
+    }
+  }
+
+  AgentDispatchModelInfo? get _selectedModel {
+    final id = _settings.modelId;
+    if (id == null) return null;
+    for (final m in _models) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
+
+  AgentDispatchModelParameter? get _effortParam {
+    final model = _selectedModel;
+    if (model == null) return null;
+    for (final p in model.parameters) {
+      if (p.id == 'reasoning_effort' ||
+          p.id == 'model_reasoning_effort' ||
+          p.id == 'fast' ||
+          p.id == 'optimize_for') {
+        return p;
+      }
+    }
+    return model.parameters.isEmpty ? null : model.parameters.first;
+  }
+
   Future<void> _run() async {
     if (_running) return;
     final board = context.read<BoardController>();
-    final maxCards = int.tryParse(_maxCardsController.text.trim()) ?? 1;
+    final count = int.tryParse(_countController.text.trim()) ?? 1;
+    final repo = _repoController.text.trim();
+    if (repo.isEmpty) {
+      _appendLog('请填写代码仓库路径');
+      return;
+    }
     var next = _settings.copyWith(
-      repoPath: _repoController.text.trim().isEmpty
-          ? null
-          : _repoController.text.trim(),
-      model: _modelController.text.trim().isEmpty
-          ? null
-          : _modelController.text.trim(),
-      maxCards: maxCards,
-      workerScriptPath: _workerPathController.text.trim().isEmpty
-          ? null
-          : _workerPathController.text.trim(),
+      repoPath: repo,
+      cardLimitCount: count,
     );
+    final projectId =
+        next.useProject ? next.projectId : board.activeProjectId;
+    if (projectId != null) {
+      final map = Map<String, String>.from(next.repoPathByProject)
+        ..[projectId] = repo;
+      next = next.copyWith(repoPathByProject: map);
+    }
     await _persist(next);
 
-    final options = next.toRunOptions(activeProjectId: board.activeProjectId);
+    final options = next.toRunOptions(
+      projectTitleOf: (id) => board.manifest?.findById(id)?.title,
+    );
+    if (options.repoPath.isEmpty) {
+      _appendLog('请填写代码仓库路径');
+      return;
+    }
+
     setState(() {
       _running = true;
       _logController.clear();
     });
-    _service = AgentDispatchService(board);
     _appendLog('引擎：${options.engine.label}');
-    if (options.projectId != null) {
-      _appendLog('项目：${options.projectId}');
-    }
-    if (options.repoPath != null) {
-      _appendLog('仓库：${options.repoPath}');
-    }
-    if (options.model != null) {
-      _appendLog('模型：${options.model}');
-    }
-    _appendLog('思考：${options.effort.label}；最多 ${options.maxCards} 张');
-
-    final result = await _service!.runBatch(
+    final result = await _service.runOnce(
       options: options,
+      skillPath: next.resolveSkillPath(),
       workerScriptPath: next.workerScriptPath,
       onLog: (line) {
         if (!mounted) return;
@@ -145,23 +227,17 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     );
     if (!mounted) return;
     setState(() => _running = false);
-    _appendLog(
-      '结束：处理 ${result.processed}，成功 ${result.succeeded}，失败 ${result.failed}'
-      '${result.stoppedReason == null ? '' : '（${result.stoppedReason}）'}',
-    );
-  }
-
-  void _cancel() {
-    _service?.requestCancel();
-    _appendLog('正在请求取消…');
+    if (result.ok) {
+      _appendLog(result.summary ?? '完成');
+    } else {
+      _appendLog(result.error ?? '失败');
+    }
   }
 
   @override
   void dispose() {
     _repoController.dispose();
-    _modelController.dispose();
-    _maxCardsController.dispose();
-    _workerPathController.dispose();
+    _countController.dispose();
     _logController.dispose();
     super.dispose();
   }
@@ -170,14 +246,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Widget build(BuildContext context) {
     final board = context.watch<BoardController>();
     final projects = board.manifest?.projects ?? const [];
+    final effortParam = _effortParam;
+    final skillPath = _settings.resolveSkillPath();
 
     return AlertDialog(
       title: const Text('Agent 调度'),
       content: SizedBox(
-        width: 520,
+        width: 560,
         child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('引擎', style: Theme.of(context).textTheme.labelLarge),
@@ -188,7 +265,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     ButtonSegment(value: e, label: Text(e.label)),
                 ],
                 selected: {_settings.engine},
-                onSelectionChanged: _running
+                onSelectionChanged: _running || _busy
                     ? null
                     : (s) => _persist(_settings.copyWith(engine: s.first)),
               ),
@@ -196,11 +273,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                title: const Text('指定看板项目'),
+                title: const Text('指定看板项目（否则用当前打开的项目，不写入调用正文）'),
                 value: _settings.useProject,
-                onChanged: _running
+                onChanged: _running || _busy
                     ? null
-                    : (v) => _persist(_settings.copyWith(useProject: v ?? false)),
+                    : (v) =>
+                        _persist(_settings.copyWith(useProject: v ?? false)),
               ),
               if (_settings.useProject)
                 DropdownButtonFormField<String>(
@@ -213,139 +291,174 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     for (final p in projects)
                       DropdownMenuItem(value: p.id, child: Text(p.title)),
                   ],
-                  onChanged: _running
+                  onChanged: _running || _busy
                       ? null
-                      : (id) => _persist(_settings.copyWith(projectId: id)),
-                ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('指定代码仓库'),
-                value: _settings.useRepo,
-                onChanged: _running
-                    ? null
-                    : (v) => _persist(_settings.copyWith(useRepo: v ?? false)),
-              ),
-              if (_settings.useRepo)
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _repoController,
-                        enabled: !_running,
-                        decoration: const InputDecoration(
-                          labelText: '本机仓库路径',
-                          hintText: r'例如 %USERPROFILE%\Projects\foo',
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '选择目录',
-                      onPressed: _running ? null : _pickRepo,
-                      icon: const Icon(Icons.folder_open),
-                    ),
-                  ],
-                ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('指定模型'),
-                value: _settings.useModel,
-                onChanged: _running
-                    ? null
-                    : (v) => _persist(_settings.copyWith(useModel: v ?? false)),
-              ),
-              if (_settings.useModel)
-                TextField(
-                  controller: _modelController,
-                  enabled: !_running,
-                  decoration: const InputDecoration(
-                    labelText: '模型 id',
-                    hintText: 'composer-2.5 / gpt-5.4-codex 等',
-                  ),
-                ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('指定思考程度'),
-                value: _settings.useEffort,
-                onChanged: _running
-                    ? null
-                    : (v) => _persist(_settings.copyWith(useEffort: v ?? false)),
-              ),
-              if (_settings.useEffort)
-                DropdownButtonFormField<AgentDispatchEffort>(
-                  key: ValueKey('effort-${_settings.effort.name}'),
-                  initialValue: _settings.effort,
-                  decoration: const InputDecoration(labelText: '思考程度'),
-                  items: [
-                    for (final e in AgentDispatchEffort.values)
-                      DropdownMenuItem(value: e, child: Text(e.label)),
-                  ],
-                  onChanged: _running
-                      ? null
-                      : (e) {
-                          if (e != null) {
-                            _persist(_settings.copyWith(effort: e));
+                      : (id) {
+                          final remembered = id == null
+                              ? null
+                              : _settings.repoPathByProject[id];
+                          _persist(_settings.copyWith(
+                            projectId: id,
+                            repoPath: remembered ?? _settings.repoPath,
+                          ));
+                          if (remembered != null) {
+                            _repoController.text = remembered;
                           }
                         },
                 ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('连续处理多张'),
-                value: _settings.useMultiCard,
-                onChanged: _running
-                    ? null
-                    : (v) =>
-                        _persist(_settings.copyWith(useMultiCard: v ?? false)),
-              ),
-              if (_settings.useMultiCard)
-                TextField(
-                  controller: _maxCardsController,
-                  enabled: !_running,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '最多张数',
-                    hintText: '1–50',
-                  ),
-                ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('成功后提交待验证'),
-                value: _settings.autoSubmitVerify,
-                onChanged: _running
-                    ? null
-                    : (v) => _persist(
-                          _settings.copyWith(autoSubmitVerify: v ?? true),
-                        ),
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('失败后移入阻塞中'),
-                value: _settings.autoBlockOnFail,
-                onChanged: _running
-                    ? null
-                    : (v) => _persist(
-                          _settings.copyWith(autoBlockOnFail: v ?? true),
-                        ),
-              ),
               const SizedBox(height: 8),
-              TextField(
-                controller: _workerPathController,
-                enabled: !_running,
-                decoration: const InputDecoration(
-                  labelText: 'Worker 脚本（可选）',
-                  hintText: r'scripts\agent_dispatch\dist\cli.js',
+              Text('代码仓库（必填，会记住）',
+                  style: Theme.of(context).textTheme.labelLarge),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _repoController,
+                      enabled: !_running && !_busy,
+                      decoration: const InputDecoration(
+                        hintText: '本机仓库根目录',
+                      ),
+                      onChanged: (v) => _settings =
+                          _settings.copyWith(repoPath: v.trim()),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '选择目录',
+                    onPressed: _running || _busy ? null : _pickRepo,
+                    icon: const Icon(Icons.folder_open),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text('模型', style: Theme.of(context).textTheme.labelLarge),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _running || _busy ? null : _loadModels,
+                    child: const Text('从 API 刷新'),
+                  ),
+                ],
+              ),
+              if (_models.isEmpty)
+                Text(
+                  _settings.modelId ?? '尚未加载；可点刷新，或稍后手动依赖默认模型',
+                  style: Theme.of(context).textTheme.bodySmall,
+                )
+              else
+                DropdownButtonFormField<String>(
+                  key: ValueKey('model-${_settings.modelId}'),
+                  initialValue: _models.any((m) => m.id == _settings.modelId)
+                      ? _settings.modelId
+                      : _models.first.id,
+                  decoration: const InputDecoration(labelText: '模型 id'),
+                  items: [
+                    for (final m in _models)
+                      DropdownMenuItem(value: m.id, child: Text(m.id)),
+                  ],
+                  onChanged: _running || _busy
+                      ? null
+                      : (id) => _persist(_settings.copyWith(
+                            modelId: id,
+                            effortParamId: null,
+                            effortParamValue: null,
+                          )),
+                ),
+              if (effortParam != null) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(
+                    'effort-${effortParam.id}-${_settings.effortParamValue}',
+                  ),
+                  initialValue: () {
+                    final values = [
+                      'default',
+                      ...effortParam.values,
+                    ];
+                    final cur = _settings.effortParamValue ?? 'default';
+                    return values.contains(cur) ? cur : 'default';
+                  }(),
+                  decoration: InputDecoration(
+                    labelText: '思考程度（${effortParam.id}）',
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: 'default',
+                      child: Text('默认（不传参）'),
+                    ),
+                    for (final v in effortParam.values)
+                      DropdownMenuItem(value: v, child: Text(v)),
+                  ],
+                  onChanged: _running || _busy
+                      ? null
+                      : (v) => _persist(_settings.copyWith(
+                            effortParamId: effortParam.id,
+                            effortParamValue: v,
+                          )),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text('卡片上限', style: Theme.of(context).textTheme.labelLarge),
+              Row(
+                children: [
+                  FilterChip(
+                    label: const Text('Max'),
+                    selected: _settings.cardLimitMax,
+                    onSelected: _running || _busy
+                        ? null
+                        : (v) => _persist(_settings.copyWith(cardLimitMax: v)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _countController,
+                      enabled:
+                          !_running && !_busy && !_settings.cardLimitMax,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '张数',
+                        hintText: '例如 1',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('Skill', style: Theme.of(context).textTheme.labelLarge),
+              Text(skillPath, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 4),
+              Container(
+                height: 120,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    _skillPreview ?? '（未找到或无法读取 Skill）',
+                    style: const TextStyle(fontFamily: 'Consolas', fontSize: 11),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
+              Text('Worker', style: Theme.of(context).textTheme.labelLarge),
+              Text(
+                _workerStatus ?? '检查中…',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _running || _busy ? null : _fixWorker,
+                  icon: const Icon(Icons.build_outlined, size: 18),
+                  label: const Text('一键修复 Worker'),
+                ),
+              ),
+              const SizedBox(height: 8),
               Text('运行日志', style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 4),
               SizedBox(
-                height: 160,
+                height: 140,
                 child: TextField(
                   controller: _logController,
                   readOnly: true,
@@ -369,11 +482,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         ),
         if (_running)
           TextButton(
-            onPressed: _cancel,
-            child: const Text('取消运行'),
+            onPressed: () {
+              _service.requestCancel();
+              _appendLog('已请求取消（进行中的会话可能仍会跑完）');
+            },
+            child: const Text('取消'),
           ),
         FilledButton.icon(
-          onPressed: _running ? null : _run,
+          onPressed: _running || _busy ? null : _run,
           icon: _running
               ? const SizedBox(
                   width: 16,

@@ -1,23 +1,39 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { Cursor } from "@cursor/sdk";
 import { runCodex } from "./run_codex.js";
 import { runCursor } from "./run_cursor.js";
 import type { DispatchJob, DispatchResult } from "./types.js";
-
-function parseArgs(argv: string[]): { jobPath: string } {
-  const idx = argv.indexOf("--job");
-  if (idx < 0 || !argv[idx + 1]) {
-    throw new Error("用法: node cli.js --job <job.json>");
-  }
-  return { jobPath: resolve(argv[idx + 1]!) };
-}
 
 function writeResult(outPath: string, result: DispatchResult): void {
   writeFileSync(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 
-async function main(): Promise<void> {
-  const { jobPath } = parseArgs(process.argv.slice(2));
+async function listModels(): Promise<void> {
+  const apiKey = process.env.CURSOR_API_KEY?.trim();
+  if (!apiKey) {
+    console.error("缺少 CURSOR_API_KEY");
+    process.exitCode = 2;
+    return;
+  }
+  const models = await Cursor.models.list({ apiKey });
+  const payload = {
+    models: models.map((m) => ({
+      id: m.id,
+      parameters: (m.parameters ?? []).map((p) => ({
+        id: p.id,
+        values: Array.isArray((p as { values?: unknown }).values)
+          ? (p as { values: unknown[] }).values.map(String)
+          : Array.isArray((p as { enum?: unknown }).enum)
+            ? (p as { enum: unknown[] }).enum.map(String)
+            : [],
+      })),
+    })),
+  };
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
+async function runJob(jobPath: string): Promise<void> {
   const job = JSON.parse(readFileSync(jobPath, "utf8")) as DispatchJob;
   if (!job.outPath) {
     throw new Error("job.outPath 必填");
@@ -36,11 +52,7 @@ async function main(): Promise<void> {
   console.log(`engine=${job.engine} cwd=${job.cwd}`);
   let result: DispatchResult;
   try {
-    if (job.engine === "codex") {
-      result = await runCodex(job);
-    } else {
-      result = await runCursor(job);
-    }
+    result = job.engine === "codex" ? await runCodex(job) : await runCursor(job);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     result = { ok: false, error: message };
@@ -48,6 +60,19 @@ async function main(): Promise<void> {
 
   writeResult(job.outPath, result);
   process.exitCode = result.ok ? 0 : 2;
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+  if (argv.includes("--list-models")) {
+    await listModels();
+    return;
+  }
+  const idx = argv.indexOf("--job");
+  if (idx < 0 || !argv[idx + 1]) {
+    throw new Error("用法: node cli.js --job <job.json> | --list-models");
+  }
+  await runJob(resolve(argv[idx + 1]!));
 }
 
 main().catch((err) => {

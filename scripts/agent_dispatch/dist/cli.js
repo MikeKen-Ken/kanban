@@ -1,6 +1,7 @@
 // src/cli.ts
 import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { resolve } from "node:path";
+import { Cursor } from "@cursor/sdk";
 
 // src/run_codex.ts
 import { spawn } from "node:child_process";
@@ -9,8 +10,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // src/types.ts
-function effortToCursorParams(effort) {
-  switch (effort) {
+function resolveModelParams(job) {
+  if (job.modelParams && job.modelParams.length > 0) {
+    return job.modelParams;
+  }
+  switch (job.effort) {
     case "fast":
       return [{ id: "fast", value: "true" }];
     case "low":
@@ -23,19 +27,18 @@ function effortToCursorParams(effort) {
       return void 0;
   }
 }
-function effortToCodexConfigArgs(effort) {
-  switch (effort) {
-    case "low":
-      return ["-c", "model_reasoning_effort=low"];
-    case "medium":
-      return ["-c", "model_reasoning_effort=medium"];
-    case "high":
-      return ["-c", "model_reasoning_effort=high"];
-    case "fast":
-      return ["-c", "model_reasoning_effort=low"];
-    default:
-      return [];
+function effortToCodexConfigArgs(job) {
+  const params = resolveModelParams(job) ?? [];
+  const effort = params.find(
+    (p) => p.id === "reasoning_effort" || p.id === "model_reasoning_effort"
+  );
+  if (effort) {
+    return ["-c", `model_reasoning_effort=${effort.value}`];
   }
+  if (params.some((p) => p.id === "fast" && p.value === "true")) {
+    return ["-c", "model_reasoning_effort=low"];
+  }
+  return [];
 }
 
 // src/run_codex.ts
@@ -55,7 +58,7 @@ async function runCodex(job) {
     job.cwd,
     "-o",
     lastMessageFile,
-    ...effortToCodexConfigArgs(job.effort)
+    ...effortToCodexConfigArgs(job)
   ];
   if (job.model?.trim()) {
     args.push("-m", job.model.trim());
@@ -88,16 +91,9 @@ async function runCodex(job) {
       summary = void 0;
     }
     if (code === 0) {
-      return {
-        ok: true,
-        summary: summary || "Codex \u5B9E\u65BD\u5B8C\u6210"
-      };
+      return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
     }
-    return {
-      ok: false,
-      error: `Codex \u9000\u51FA\u7801 ${code}`,
-      summary
-    };
+    return { ok: false, error: `Codex \u9000\u51FA\u7801 ${code}`, summary };
   } finally {
     try {
       rmSync(temp, { recursive: true, force: true });
@@ -117,8 +113,10 @@ async function runCursor(job) {
     };
   }
   const modelId = job.model?.trim() || "composer-2.5";
-  const params = effortToCursorParams(job.effort);
-  console.log(`Cursor \u6A21\u578B=${modelId} effort=${job.effort ?? "default"}`);
+  const params = resolveModelParams(job);
+  console.log(
+    `Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`
+  );
   try {
     const result = await Agent.prompt(job.prompt, {
       apiKey,
@@ -128,7 +126,8 @@ async function runCursor(job) {
       },
       local: {
         cwd: job.cwd,
-        settingSources: ["project"]
+        // 需要用户级 MCP（kanbanMCP）与项目规则
+        settingSources: ["user", "project"]
       }
     });
     if (result.status === "error") {
@@ -138,7 +137,7 @@ async function runCursor(job) {
         summary: typeof result.result === "string" ? result.result : void 0
       };
     }
-    const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor \u5B9E\u65BD\u5B8C\u6210" : `Cursor \u72B6\u6001\uFF1A${result.status}`;
+    const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor \u4F1A\u8BDD\u5B8C\u6210" : `Cursor \u72B6\u6001\uFF1A${result.status}`;
     return { ok: result.status === "finished", summary };
   } catch (err) {
     if (err instanceof CursorAgentError) {
@@ -152,18 +151,30 @@ async function runCursor(job) {
 }
 
 // src/cli.ts
-function parseArgs(argv) {
-  const idx = argv.indexOf("--job");
-  if (idx < 0 || !argv[idx + 1]) {
-    throw new Error("\u7528\u6CD5: node cli.js --job <job.json>");
-  }
-  return { jobPath: resolve(argv[idx + 1]) };
-}
 function writeResult(outPath, result) {
   writeFileSync2(outPath, JSON.stringify(result, null, 2), "utf8");
 }
-async function main() {
-  const { jobPath } = parseArgs(process.argv.slice(2));
+async function listModels() {
+  const apiKey = process.env.CURSOR_API_KEY?.trim();
+  if (!apiKey) {
+    console.error("\u7F3A\u5C11 CURSOR_API_KEY");
+    process.exitCode = 2;
+    return;
+  }
+  const models = await Cursor.models.list({ apiKey });
+  const payload = {
+    models: models.map((m) => ({
+      id: m.id,
+      parameters: (m.parameters ?? []).map((p) => ({
+        id: p.id,
+        values: Array.isArray(p.values) ? p.values.map(String) : Array.isArray(p.enum) ? p.enum.map(String) : []
+      }))
+    }))
+  };
+  process.stdout.write(`${JSON.stringify(payload)}
+`);
+}
+async function runJob(jobPath) {
   const job = JSON.parse(readFileSync2(jobPath, "utf8"));
   if (!job.outPath) {
     throw new Error("job.outPath \u5FC5\u586B");
@@ -181,17 +192,25 @@ async function main() {
   console.log(`engine=${job.engine} cwd=${job.cwd}`);
   let result;
   try {
-    if (job.engine === "codex") {
-      result = await runCodex(job);
-    } else {
-      result = await runCursor(job);
-    }
+    result = job.engine === "codex" ? await runCodex(job) : await runCursor(job);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     result = { ok: false, error: message };
   }
   writeResult(job.outPath, result);
   process.exitCode = result.ok ? 0 : 2;
+}
+async function main() {
+  const argv = process.argv.slice(2);
+  if (argv.includes("--list-models")) {
+    await listModels();
+    return;
+  }
+  const idx = argv.indexOf("--job");
+  if (idx < 0 || !argv[idx + 1]) {
+    throw new Error("\u7528\u6CD5: node cli.js --job <job.json> | --list-models");
+  }
+  await runJob(resolve(argv[idx + 1]));
 }
 main().catch((err) => {
   console.error(err);

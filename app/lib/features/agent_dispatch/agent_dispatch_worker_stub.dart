@@ -1,6 +1,5 @@
 import 'agent_dispatch_config.dart';
 
-/// Web/无 IO 平台占位。
 class AgentWorkerResult {
   const AgentWorkerResult({
     required this.ok,
@@ -20,7 +19,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   required String cwd,
   required String prompt,
   String? model,
-  AgentDispatchEffort effort = AgentDispatchEffort.default_,
+  List<({String id, String value})> modelParams = const [],
   String? workerScriptPath,
   void Function(String line)? onLog,
 }) async {
@@ -31,3 +30,15 @@ Future<AgentWorkerResult> runAgentWorkerJob({
 }
 
 Future<String?> resolveAgentDispatchCliPath(String? overridePath) async => null;
+
+Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
+  String? workerScriptPath,
+  void Function(String line)? onLog,
+}) async =>
+    const [];
+
+Future<({bool ok, String message})> ensureAgentDispatchWorker({
+  String? workerScriptPath,
+  void Function(String line)? onLog,
+}) async =>
+    (ok: false, message: '当前平台不支持');

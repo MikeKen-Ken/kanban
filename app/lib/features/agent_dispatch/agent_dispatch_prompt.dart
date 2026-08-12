@@ -1,37 +1,40 @@
-import 'dart:convert';
+import 'agent_dispatch_config.dart';
 
-/// 把看板 workItems 打成给 Cursor/Codex 的实施提示词。
-String buildAgentDispatchPrompt({
-  required String projectId,
-  required String cardId,
-  required String cardTitle,
-  String? cardDescription,
-  required Map<String, dynamic> workScope,
-  required String repoPath,
+/// 把 skill 全文作为指令；「本次调用」符合 skill 第 3 步对调用正文的约定。
+String buildSkillDispatchPrompt({
+  required String skillMarkdown,
+  String? projectTitle,
+  required AgentDispatchCardLimit cardLimit,
 }) {
-  final buffer = StringBuffer()
-    ..writeln('你是本机代码仓库中的实施 Agent。请直接改代码完成下列看板任务。')
-    ..writeln()
-    ..writeln('仓库路径：$repoPath')
-    ..writeln('看板项目 id：$projectId')
-    ..writeln('卡片 id：$cardId')
-    ..writeln('标题：$cardTitle');
-  final description = cardDescription?.trim();
-  if (description != null && description.isNotEmpty) {
-    buffer
-      ..writeln()
-      ..writeln('备注：')
-      ..writeln(description);
+  final skill = skillMarkdown.trim();
+  final callBody = StringBuffer();
+  final title = projectTitle?.trim();
+  if (title != null && title.isNotEmpty) {
+    callBody.writeln('name:$title');
   }
-  buffer
-    ..writeln()
-    ..writeln('实施范围（JSON）：')
-    ..writeln(const JsonEncoder.withIndent('  ').convert(workScope))
-    ..writeln()
-    ..writeln('要求：')
-    ..writeln('1. 只做范围内未完成项；不要扩大需求。')
-    ..writeln('2. 遵守仓库现有架构与编码约定。')
-    ..writeln('3. 能跑的低成本检查尽量做；不要启动 GUI/模拟器。')
-    ..writeln('4. 完成后用简短中文说明改了什么；若无法完成，明确写出阻塞原因。');
-  return buffer.toString();
+
+  final limitLine = switch (cardLimit) {
+    AgentDispatchCardLimitMax() =>
+      '卡片上限：不限（按 skill 连续处理，直到 pick_next_card 返回 found=false）。',
+    AgentDispatchCardLimitCount(:final count) =>
+      '卡片上限：最多 $count 张（每张完整走完 skill 后再取下一张；达上限或无卡则停止）。',
+  };
+
+  return '''
+你必须严格按下列 Skill 执行。
+「Skill 正文」是完整流程；「本次调用」才是 Skill 第 3 步所说的调用正文（可为空，表示使用看板当前打开的项目）。
+
+# Skill 正文
+
+$skill
+
+# 本次调用
+
+${callBody.toString().trim().isEmpty ? '（空：使用看板当前打开的项目）' : callBody.toString().trim()}
+
+# 调度约束（不属于调用正文）
+
+- $limitLine
+- 不要修改 Skill 文件本身。
+''';
 }
