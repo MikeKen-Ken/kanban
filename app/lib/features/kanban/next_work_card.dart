@@ -66,49 +66,39 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
   return null;
 }
 
-/// 取卡摘要：标题与计数，不含正文 / 清单文本 / 附件二进制。
-Map<String, dynamic> buildCardWorkSummary(KanbanCard card) {
+/// 本轮实施范围：workMode、workItems，有附件则带元数据（不含二进制）。
+Map<String, dynamic> buildCardWorkScope(KanbanCard card) {
   final rework = isReworkWorkMode(card);
-  final pendingChecklist =
-      card.checklist.where((item) => !item.completed).length;
-  final pendingFeedback =
-      card.verificationFeedback.where((item) => !item.completed).length;
-  final description = card.description?.trim();
-  return {
-    'title': card.title,
-    if (!rework && description != null && description.isNotEmpty)
-      'hasDescription': true,
-    if (!rework && card.checklist.isNotEmpty)
-      'checklist': {
-        'pending': pendingChecklist,
-        'total': card.checklist.length,
-      },
-    if (card.verificationFeedback.isNotEmpty)
-      'verificationFeedback': {
-        'pending': pendingFeedback,
-        'total': card.verificationFeedback.length,
-      },
-    if (card.attachments.isNotEmpty)
-      'attachmentCount': card.attachments.length,
-    if (card.fileAttachments.isNotEmpty)
-      'fileAttachmentCount': card.fileAttachments.length,
+  final scope = <String, dynamic>{
+    'workMode': rework ? 'rework' : 'normal',
+    'workItems': buildCardWorkItems(card),
   };
-}
-
-/// 本轮应实施的工作项（返工只含未完成验证反馈；普通模式跳过已完成 checklist）。
-List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
-  if (isReworkWorkMode(card)) {
-    return [
-      for (final item in card.verificationFeedback)
-        if (!item.completed)
-          {
-            'kind': 'verificationFeedback',
-            'id': item.id,
-            'text': item.text,
-          },
+  if (card.attachments.isNotEmpty) {
+    scope['attachments'] = [
+      for (final attachment in card.sortedAttachments)
+        {
+          ...attachment.toJson(),
+          'cover': attachment.order == 0,
+        },
     ];
   }
+  if (card.fileAttachments.isNotEmpty) {
+    scope['fileAttachments'] = [
+      for (final attachment in card.sortedFileAttachments) attachment.toJson(),
+    ];
+  }
+  if (card.attachments.isNotEmpty || card.fileAttachments.isNotEmpty) {
+    scope['attachmentsNote'] =
+        '有附件即应使用；图片二进制用 read_card_attachment 按 id 读取（无需再 list）';
+  }
+  return scope;
+}
 
+/// 本轮应实施的工作项。
+///
+/// 普通与返工均含标题、备注、未完成 checklist；返工另附未完成验证反馈。
+/// 已完成 checklist / 反馈不返回。
+List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
   final items = <Map<String, dynamic>>[
     {'kind': 'title', 'text': card.title},
   ];
@@ -120,6 +110,14 @@ List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
     if (item.completed) continue;
     items.add({
       'kind': 'checklist',
+      'id': item.id,
+      'text': item.text,
+    });
+  }
+  for (final item in card.verificationFeedback) {
+    if (item.completed) continue;
+    items.add({
+      'kind': 'verificationFeedback',
       'id': item.id,
       'text': item.text,
     });

@@ -10,10 +10,11 @@ import 'mcp_tool_results.dart';
 /// 取下一条可实施卡，并自动移入「进行中」。
 ///
 /// 选取规则与 [pickNextWorkCard] 一致：优先「待办」最新未完成卡，否则「待返工」。
-/// 默认只返回摘要；正文工作项请再调 [mcpGetWorkItems]。
+/// 默认 [includeWorkItems]=true，一次返回实施范围；仅 peek 时可传 false。
 Future<CallToolResult> mcpPickNextCard(
   BoardController controller, {
   String? projectId,
+  bool includeWorkItems = true,
 }) {
   return runMcpForProject(controller, projectId, (resolvedProjectId) async {
     final board = controller.board;
@@ -53,7 +54,7 @@ Future<CallToolResult> mcpPickNextCard(
     }
 
     final rework = isReworkWorkMode(card);
-    return mcpJsonResult({
+    final payload = <String, dynamic>{
       'found': true,
       'projectId': resolvedProjectId,
       'cardId': card.id,
@@ -63,8 +64,10 @@ Future<CallToolResult> mcpPickNextCard(
       'columnTitle': columnTitle,
       'movedToDoing': !alreadyInDoing && !isReworkSource,
       'workMode': rework ? 'rework' : 'normal',
-      'summary': buildCardWorkSummary(card),
-      'next': 'get_work_items',
-    });
+    };
+    if (includeWorkItems) {
+      payload.addAll(buildCardWorkScope(card));
+    }
+    return mcpJsonResult(payload);
   });
 }

@@ -290,6 +290,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'settings':
         _openSettings();
         break;
+      case 'search':
+        _openSearch();
+        break;
     }
   }
 
@@ -396,11 +399,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 onPressed: _cycleSwimlaneMode,
               ),
-            IconButton(
-              tooltip: '搜索',
-              icon: const Icon(Icons.search),
-              onPressed: _openSearch,
-            ),
+            if (!compact)
+              IconButton(
+                tooltip: '搜索',
+                icon: const Icon(Icons.search),
+                onPressed: _openSearch,
+              ),
             if (!compact)
               Selector<BoardController, int>(
                 selector: (_, c) => c.trashItemCount,
@@ -457,6 +461,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 tooltip: '更多操作',
                 onSelected: _handleCompactAction,
                 itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'search',
+                    child: ListTile(
+                      leading: Icon(Icons.search),
+                      title: Text('搜索'),
+                    ),
+                  ),
                   const PopupMenuItem(
                     value: 'calendar',
                     child: ListTile(
