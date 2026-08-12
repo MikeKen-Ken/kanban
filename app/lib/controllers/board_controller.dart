@@ -20,6 +20,7 @@ import '../features/completed_auto_clear/completed_auto_clear.dart';
 import '../features/import_export/backup_archive_service.dart';
 import '../features/import_export/backup_coordinator.dart';
 import '../features/import_export/backup_history_store.dart';
+import '../features/import_export/backup_restore_service.dart';
 import '../features/mcp/kanban_mcp_host.dart';
 import '../features/project/project_list_preferences.dart';
 import '../features/project/project_settings.dart';
@@ -163,6 +164,7 @@ abstract class _BoardControllerBase extends ChangeNotifier {
   Map<String, TrashBin> projectTrashes = {};
   List<TrashItem> labelTrash = const [];
   Set<String> missingAttachmentIds = {};
+
   /// 当前项目已缓存到本地、可实际渲染的壁纸 id。
   List<String> displayableWallpaperIds = const [];
   bool isLoading = true;

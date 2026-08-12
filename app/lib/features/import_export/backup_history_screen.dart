@@ -6,6 +6,7 @@ import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import 'backup_file_picker.dart';
 import 'backup_history_store.dart';
+import 'backup_restore_service.dart';
 
 class BackupHistoryScreen extends StatefulWidget {
   const BackupHistoryScreen({
@@ -20,7 +21,7 @@ class BackupHistoryScreen extends StatefulWidget {
   final Future<List<BackupSnapshotInfo>> Function()? listLocalBackups;
   final String? Function()? autoBackupDirectory;
   final Future<void> Function()? createBackup;
-  final Future<void> Function(String id)? restoreBackup;
+  final Future<void> Function(String id, BackupRestoreMode mode)? restoreBackup;
 
   @override
   State<BackupHistoryScreen> createState() => _BackupHistoryScreenState();
@@ -115,39 +116,47 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
   }
 
   Future<void> _restore(BackupSnapshotInfo snapshot) async {
-    final confirmed = await showDialog<bool>(
+    final mode = await showDialog<BackupRestoreMode>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('恢复到这个时间点？'),
         content: Text(
+          '完全恢复会替换当前工作区；恢复并合并会保留两边新增数据，并将同一字段的冲突标记为“冲突”。\n'
           '将恢复 ${_formatTime(snapshot.createdAt)} 的完整工作区。'
           '恢复前会自动保存当前状态。',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context),
             child: const Text('取消'),
           ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, BackupRestoreMode.merge),
+            child: const Text('恢复并合并'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('恢复'),
+            onPressed: () => Navigator.pop(context, BackupRestoreMode.replace),
+            child: const Text('完全恢复'),
           ),
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (mode == null || !mounted) return;
     setState(() => _working = true);
     try {
       final override = widget.restoreBackup;
       if (override != null) {
-        await override(snapshot.id);
+        await override(snapshot.id, mode);
       } else {
         await context
             .read<BoardController>()
-            .restoreTimePointBackup(snapshot.id);
+            .restoreTimePointBackup(snapshot.id, mode: mode);
       }
       if (!mounted) return;
-      showAppSnackBar(context, message: '工作区已恢复');
+      showAppSnackBar(
+        context,
+        message: mode == BackupRestoreMode.merge ? '工作区已合并恢复' : '工作区已恢复',
+      );
       await _reload();
     } catch (error) {
       if (!mounted) return;

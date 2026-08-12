@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/import_export/backup_archive_service.dart';
+import 'package:kanban/features/import_export/backup_restore_service.dart';
 import 'package:kanban/features/project/projects_manifest.dart';
 import 'package:kanban/features/sync_conflict/workspace_snapshot.dart';
 import 'package:kanban/features/trash/trash_models.dart';
@@ -79,5 +80,44 @@ void main() {
       () => service.decode(ZipEncoder().encodeBytes(archive)),
       throwsFormatException,
     );
+  });
+
+  test('合并恢复保留两边新增内容，且当前附件优先', () {
+    ProjectWorkspaceSnapshot workspace(String id) {
+      return ProjectWorkspaceSnapshot(
+        manifest: ProjectsManifest(
+          projects: [
+            ProjectEntry(id: id, title: id, updatedAt: 1, revision: 1),
+          ],
+          updatedAt: 1,
+          revision: 1,
+        ),
+        boards: const {},
+        settings: const {},
+      );
+    }
+
+    final merged = const BackupRestoreService().merge(
+      current: BackupPackage(
+        workspace: workspace('current'),
+        attachments: {
+          'attachments/p1/same': Uint8List.fromList([2])
+        },
+      ),
+      backup: BackupPackage(
+        workspace: workspace('backup'),
+        attachments: {
+          'attachments/p1/same': Uint8List.fromList([1]),
+          'attachments/p1/old': Uint8List.fromList([3]),
+        },
+      ),
+    );
+
+    expect(
+      merged.workspace.manifest.projects.map((item) => item.id),
+      containsAll(['current', 'backup']),
+    );
+    expect(merged.attachments['attachments/p1/same'], [2]);
+    expect(merged.attachments['attachments/p1/old'], [3]);
   });
 }

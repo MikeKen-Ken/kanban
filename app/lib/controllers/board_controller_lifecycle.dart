@@ -150,12 +150,21 @@ extension BoardControllerLifecycle on BoardController {
     );
   }
 
-  Future<void> restoreBackupArchive(Uint8List bytes) async {
+  Future<void> restoreBackupArchive(
+    Uint8List bytes, {
+    BackupRestoreMode mode = BackupRestoreMode.replace,
+  }) async {
     return _backupCoordinator.runExclusive(() async {
       final service = const BackupArchiveService();
       final package = service.decode(bytes);
       // 安全备份在看板锁外生成，避免读附件时卡住其它突变。
       final safetyBytes = await createBackupArchive();
+      final restorePackage = mode == BackupRestoreMode.merge
+          ? const BackupRestoreService().merge(
+              current: service.decode(safetyBytes),
+              backup: package,
+            )
+          : package;
       if (_backupHistorySupported) {
         final safetySnapshot =
             await _backupCoordinator.storeArchiveNow(safetyBytes);
@@ -163,7 +172,7 @@ extension BoardControllerLifecycle on BoardController {
       }
       try {
         await _withBoardMutation(() async {
-          await _applyBackupPackage(package);
+          await _applyBackupPackage(restorePackage);
           if (_backupHistorySupported) {
             await _repository.clearPendingRestoreBackupId();
           }
@@ -204,10 +213,10 @@ extension BoardControllerLifecycle on BoardController {
       final segments = entry.key.split('/');
       if (segments.length < 3) continue;
       final isFile = segments.length >= 4 && segments[2] == 'files';
-      final isThumb = !isFile && segments.length >= 4 && segments[2] == 'thumbs';
-      final attachmentId = isFile
-          ? segments[3]
-          : (isThumb ? segments[3] : segments[2]);
+      final isThumb =
+          !isFile && segments.length >= 4 && segments[2] == 'thumbs';
+      final attachmentId =
+          isFile ? segments[3] : (isThumb ? segments[3] : segments[2]);
       if (isFile) {
         await store.writeFileBytes(
           projectId: segments[1],
@@ -253,12 +262,13 @@ extension BoardControllerLifecycle on BoardController {
   Future<void> restoreTimePointBackup(
     String id, {
     bool remote = false,
+    BackupRestoreMode mode = BackupRestoreMode.replace,
   }) async {
     final bytes = remote
         ? await _syncService.readRemoteBackupSnapshot(id)
         : await _backupCoordinator.readLocalBackup(id);
     if (bytes == null) throw StateError('备份不存在或无法读取');
-    await restoreBackupArchive(bytes);
+    await restoreBackupArchive(bytes, mode: mode);
   }
 
   Future<void> deleteLocalTimePointBackup(String id) =>
@@ -614,4 +624,3 @@ extension BoardControllerLifecycle on BoardController {
     return n;
   }
 }
-
