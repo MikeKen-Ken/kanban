@@ -73,6 +73,7 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
     }
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.controller.purgeExpiredCompletedCards());
+      unawaited(widget.controller.purgeExpiredTrashItems());
     }
   }
 

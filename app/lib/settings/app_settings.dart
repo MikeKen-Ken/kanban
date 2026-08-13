@@ -22,6 +22,7 @@ class AppSettings {
     this.mcpEnabled = false,
     this.mcpPort = McpConstants.defaultPort,
     this.completedAutoClearDays = 0,
+    this.trashRetentionDays = 0,
     this.confirmBeforeDeleteCard = false,
     this.autoBackupDirectory,
   });
@@ -59,6 +60,9 @@ class AppSettings {
   /// 已完成列卡片自动清空保留天数；`0` 表示从不自动清空（仅本机）
   final int completedAutoClearDays;
 
+  /// 回收站保留天数；超过后自动永久删除。`0` 表示从不自动清理（仅本机）
+  final int trashRetentionDays;
+
   /// 删除卡片前是否弹出确认对话框（默认关闭：直接进回收站）
   final bool confirmBeforeDeleteCard;
 
@@ -82,6 +86,7 @@ class AppSettings {
     bool? mcpEnabled,
     int? mcpPort,
     int? completedAutoClearDays,
+    int? trashRetentionDays,
     bool? confirmBeforeDeleteCard,
     Object? autoBackupDirectory = _sentinel,
   }) {
@@ -100,6 +105,7 @@ class AppSettings {
       mcpPort: mcpPort ?? this.mcpPort,
       completedAutoClearDays:
           completedAutoClearDays ?? this.completedAutoClearDays,
+      trashRetentionDays: trashRetentionDays ?? this.trashRetentionDays,
       confirmBeforeDeleteCard:
           confirmBeforeDeleteCard ?? this.confirmBeforeDeleteCard,
       autoBackupDirectory: autoBackupDirectory == _sentinel
@@ -122,6 +128,7 @@ class AppSettings {
         'mcpEnabled': mcpEnabled,
         'mcpPort': mcpPort,
         'completedAutoClearDays': completedAutoClearDays,
+        'trashRetentionDays': trashRetentionDays,
         'confirmBeforeDeleteCard': confirmBeforeDeleteCard,
         if (autoBackupDirectory != null)
           'autoBackupDirectory': autoBackupDirectory,
@@ -135,6 +142,10 @@ class AppSettings {
     final clearDays = clearDaysRaw is int
         ? clearDaysRaw
         : (clearDaysRaw is num ? clearDaysRaw.toInt() : 0);
+    final trashDaysRaw = json['trashRetentionDays'];
+    final trashDays = trashDaysRaw is int
+        ? trashDaysRaw
+        : (trashDaysRaw is num ? trashDaysRaw.toInt() : 0);
     return AppSettings(
       dragLongPressMs:
           json['dragLongPressMs'] as int? ?? defaults.dragLongPressMs,
@@ -162,6 +173,7 @@ class AppSettings {
       mcpEnabled: json['mcpEnabled'] as bool? ?? defaults.mcpEnabled,
       mcpPort: port < 1 || port > 65535 ? defaults.mcpPort : port,
       completedAutoClearDays: clearDays < 0 ? 0 : clearDays,
+      trashRetentionDays: trashDays < 0 ? 0 : trashDays,
       confirmBeforeDeleteCard:
           json['confirmBeforeDeleteCard'] as bool? ?? false,
       autoBackupDirectory: json['autoBackupDirectory'] as String?,

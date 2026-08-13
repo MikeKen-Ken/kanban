@@ -103,6 +103,48 @@ extension BoardControllerTrash on BoardController {
     });
   }
 
+  /// 永久删除超过保留天数的回收项。
+  ///
+  /// [force] 为 true 时忽略节流（例如用户刚改了保留天数）。
+  /// 返回实际永久删除的条目数量。
+  Future<int> purgeExpiredTrashItems({bool force = false}) async {
+    final days = appSettings.trashRetentionDays;
+    if (days <= 0) return 0;
+    if (isLoading || errorMessage != null) return 0;
+    if (_trashAutoClearRunning) return 0;
+
+    final now = DateTime.now();
+    if (!force) {
+      final last = _lastTrashAutoClearAt;
+      if (last != null && now.difference(last) < trashAutoClearMinInterval) {
+        return 0;
+      }
+    }
+
+    _trashAutoClearRunning = true;
+    _lastTrashAutoClearAt = now;
+    try {
+      final expired = selectExpiredTrashItems(
+        items: allTrashItems,
+        retainDays: days,
+        now: now,
+      );
+      if (expired.isEmpty) return 0;
+
+      var count = 0;
+      for (final item in expired) {
+        await permanentlyDeleteTrashItem(item.id);
+        count++;
+      }
+      if (count > 0) {
+        debugPrint('回收站自动清理：$count 项已永久删除');
+      }
+      return count;
+    } finally {
+      _trashAutoClearRunning = false;
+    }
+  }
+
   Future<String?> _restoreLabel(TrashItem item) async {
     final label = item.labelPayload;
     if (label == null) return '数据损坏，无法还原';

@@ -45,6 +45,7 @@ import '../features/kanban/need_resource_column_gate.dart';
 import '../features/kanban/transfer_card.dart';
 import '../features/kanban/verify_column.dart';
 import '../features/trash/trash_models.dart';
+import '../features/trash/trash_auto_clear.dart';
 import '../settings/app_settings.dart';
 import '../storage/board_storage.dart';
 import '../webdav_sync/webdav_config.dart';
@@ -104,6 +105,10 @@ abstract class _BoardControllerBase extends ChangeNotifier {
   /// 已完成自动清空：上次扫描时间（进程内节流）
   DateTime? _lastCompletedAutoClearAt;
   bool _completedAutoClearRunning = false;
+
+  /// 回收站自动清理：上次扫描时间（进程内节流）
+  DateTime? _lastTrashAutoClearAt;
+  bool _trashAutoClearRunning = false;
 
   KanbanBoard? _uiBoard;
   KanbanBoard? get board => _projectMutationScope?.board ?? _uiBoard;

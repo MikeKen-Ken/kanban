@@ -169,6 +169,7 @@ extension BoardControllerPersist on BoardController {
     unawaited(runOverdueAutomations());
     unawaited(_rescheduleReminders());
     unawaited(purgeExpiredCompletedCards());
+    unawaited(purgeExpiredTrashItems());
 
     _syncService.statusStream.listen((status) {
       if (status == SyncStatus.success) {

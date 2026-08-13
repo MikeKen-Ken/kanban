@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
 import 'trash_models.dart';
+import 'trash_auto_clear.dart';
 import '../../common/app_snack_bar.dart';
 
 class TrashScreen extends StatelessWidget {
@@ -138,6 +139,38 @@ class TrashScreen extends StatelessWidget {
           appBar: AppBar(
             title: const Text('回收站'),
             actions: [
+              Selector<BoardController, int>(
+                selector: (_, c) => c.appSettings.trashRetentionDays,
+                builder: (context, days, _) {
+                  final options = [
+                    ...trashRetentionDayOptions,
+                    if (!trashRetentionDayOptions.contains(days)) days,
+                  ]..sort();
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: days,
+                        items: [
+                          for (final option in options)
+                            DropdownMenuItem(
+                              value: option,
+                              child: Text(trashRetentionDaysLabel(option)),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          controller.saveAppSettings(
+                            controller.appSettings.copyWith(
+                              trashRetentionDays: value,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
               if (items.isNotEmpty)
                 TextButton(
                   onPressed: () => _confirmEmptyTrash(context, controller),

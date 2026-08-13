@@ -345,6 +345,8 @@ extension BoardControllerProjects on BoardController {
         settings.mcpPort != appSettings.mcpPort;
     final autoClearChanged =
         settings.completedAutoClearDays != appSettings.completedAutoClearDays;
+    final trashRetentionChanged =
+        settings.trashRetentionDays != appSettings.trashRetentionDays;
     appSettings = settings;
     await _repository.saveAppSettings(settings);
     notifyListeners();
@@ -353,6 +355,9 @@ extension BoardControllerProjects on BoardController {
     }
     if (autoClearChanged && settings.completedAutoClearDays > 0) {
       unawaited(purgeExpiredCompletedCards(force: true));
+    }
+    if (trashRetentionChanged && settings.trashRetentionDays > 0) {
+      unawaited(purgeExpiredTrashItems(force: true));
     }
   }
 
