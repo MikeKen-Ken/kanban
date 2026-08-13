@@ -1,19 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../mcp/mcp_dispatch_card_gate.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_log.dart';
+import 'agent_dispatch_log_store.dart';
 import 'agent_dispatch_prompt.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
 /// 启动一次 Worker 批次；Worker 只调度，每轮 Agent 按 Skill 自己取一张卡。
 ///
-/// 单例：关闭工作台面板不会终止批次，重新打开可恢复「运行中」状态。
+/// 单例：关闭工作台只隐藏窗口，不会终止批次；日志与运行状态由本服务持有。
 class AgentDispatchService {
   factory AgentDispatchService() => _shared;
 
@@ -35,8 +37,13 @@ class AgentDispatchService {
   AgentWorkerProcess? _activeWorker;
   final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
   final _runningListeners = <void Function()>{};
+  String _logText = '';
+  bool _logHydrated = false;
+  Future<void> _logSaveQueue = Future.value();
 
   bool get isRunning => _isRunning;
+
+  String get logText => _logText;
 
   void addLogListener(void Function(AgentDispatchLogEntry entry) listener) {
     _logListeners.add(listener);
@@ -62,14 +69,60 @@ class AgentDispatchService {
     }
   }
 
+  /// 从本机存储补齐日志；已有内存日志时不覆盖。
+  Future<void> hydrateLog() async {
+    if (_logHydrated) return;
+    _logHydrated = true;
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.loadAgentDispatchLog();
+    if (_logText.isEmpty && stored.isNotEmpty) {
+      _logText = stored;
+      _notifyLog(const AgentDispatchLogEntry(''));
+    }
+  }
+
+  Future<void> clearLog() async {
+    _logText = '';
+    _logHydrated = true;
+    _notifyLog(const AgentDispatchLogEntry(''));
+    _logSaveQueue = _logSaveQueue.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clearAgentDispatchLog();
+    });
+    await _logSaveQueue;
+  }
+
+  void appendLog(
+    String message, {
+    AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
+  }) {
+    final now = DateTime.now();
+    final formatted = message
+        .split(RegExp(r'\r?\n'))
+        .map((part) => AgentDispatchLogEntry(part, level: level).format(now))
+        .join('\n');
+    _logText = _logText.isEmpty ? formatted : '$_logText\n$formatted';
+    _logHydrated = true;
+    _notifyLog(AgentDispatchLogEntry(message, level: level));
+    _logSaveQueue = _logSaveQueue.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.saveAgentDispatchLog(_logText);
+    });
+  }
+
+  Future<void> get pendingLogPersist => _logSaveQueue;
+
+  void _notifyLog(AgentDispatchLogEntry entry) {
+    for (final listener in _logListeners.toList()) {
+      listener(entry);
+    }
+  }
+
   void _emitLog(
     String message, {
     AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
   }) {
-    final entry = AgentDispatchLogEntry(message, level: level);
-    for (final listener in _logListeners.toList()) {
-      listener(entry);
-    }
+    appendLog(message, level: level);
   }
 
   /// 立即停止当前 Worker 及其 SDK/CLI 子进程，并阻止后续会话启动。
@@ -244,6 +297,17 @@ class AgentDispatchService {
       log(result.error ?? 'Worker 批次失败', level: AgentDispatchLogLevel.error);
     }
     return result;
+  }
+
+  void debugReset() {
+    _cancelRequested = false;
+    _isRunning = false;
+    _activeWorker = null;
+    _logText = '';
+    _logHydrated = false;
+    _logSaveQueue = Future.value();
+    _logListeners.clear();
+    _runningListeners.clear();
   }
 }
 

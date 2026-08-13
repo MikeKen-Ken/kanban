@@ -14,41 +14,17 @@ import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
 import 'agent_dispatch_log_exporter.dart';
 import 'agent_dispatch_log.dart';
-import 'agent_dispatch_log_store.dart';
 import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
-import 'agent_dispatch_platform.dart';
 import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_usage_pane.dart';
+import 'agent_dispatch_window.dart';
 import 'agent_dispatch_worker.dart';
 import 'agent_dispatch_workspace.dart';
 import 'cursor_api_key_section.dart';
-
-/// 左上角「新建项目」右侧入口（仅桌面）。
-class AgentDispatchToolbarButton extends StatelessWidget {
-  const AgentDispatchToolbarButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    if (!isAgentDispatchDesktop) return const SizedBox.shrink();
-    return IconButton(
-      tooltip: 'Agent 调度',
-      icon: const Icon(Icons.smart_toy_outlined),
-      onPressed: () => showAgentDispatchPanel(context),
-    );
-  }
-}
-
-Future<void> showAgentDispatchPanel(BuildContext context) {
-  return showDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    builder: (_) => const AgentDispatchPanel(),
-  );
-}
 
 class AgentDispatchPanel extends StatefulWidget {
   const AgentDispatchPanel({super.key});
@@ -78,19 +54,29 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   bool _usageBusy = false;
   DateTime _lastLogAt = DateTime.now();
   Timer? _heartbeat;
-  Future<void> _logSaveQueue = Future.value();
 
   @override
   void initState() {
     super.initState();
+    _running = _service.isRunning;
+    _syncLogFromService();
     _service.addLogListener(_onServiceLog);
     _service.addRunningListener(_onServiceRunningChanged);
+    if (_running) _startHeartbeat();
     _bootstrap();
+  }
+
+  void _syncLogFromService() {
+    final text = _service.logText;
+    _logController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 
   void _onServiceLog(AgentDispatchLogEntry entry) {
     if (!mounted) return;
-    setState(() => _appendLog(entry.message, level: entry.level));
+    setState(_syncLogFromService);
   }
 
   void _onServiceRunningChanged() {
@@ -140,8 +126,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       _models = cachedModels;
       _repoController.text = normalized.repoPath ?? '';
       _countController.text = '${normalized.cardLimitCount}';
-      _logController.text = prefs.loadAgentDispatchLog();
     });
+    await _service.hydrateLog();
+    if (!mounted) return;
+    setState(_syncLogFromService);
     await _refreshSkillPreview();
     await _refreshWorkerStatus();
     if (!mounted) return;
@@ -169,18 +157,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
   }) {
     _lastLogAt = DateTime.now();
-    final formatted = line
-        .split(RegExp(r'\r?\n'))
-        .map((part) =>
-            AgentDispatchLogEntry(part, level: level).format(_lastLogAt))
-        .join('\n');
-    final next = _logController.text.isEmpty
-        ? formatted
-        : '${_logController.text}\n$formatted';
-    _logController.text = next;
-    _logController.selection = TextSelection.collapsed(offset: next.length);
-    _logSaveQueue = _logSaveQueue.then((_) => _saveLog(next));
-    unawaited(_logSaveQueue);
+    _service.appendLog(line, level: level);
   }
 
   void _startHeartbeat() {
@@ -203,17 +180,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     _heartbeat = null;
   }
 
-  Future<void> _saveLog(String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.saveAgentDispatchLog(value);
-  }
-
   Future<void> _clearLog() async {
-    _logController.clear();
-    await _logSaveQueue;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clearAgentDispatchLog();
-    if (mounted) setState(() {});
+    await _service.clearLog();
+    if (mounted) setState(_syncLogFromService);
   }
 
   Future<void> _exportLog() async {
@@ -297,7 +266,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final result = await ensureAgentDispatchWorker(
       workerScriptPath: _settings.workerScriptPath,
       onLog: (l) {
-        if (mounted) setState(() => _appendLog(l));
+        if (mounted) _appendLog(l);
       },
     );
     if (!mounted) return;
@@ -319,7 +288,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         cursorApiKey: await _credentials.resolveCursorApiKey(),
         workerScriptPath: _settings.workerScriptPath,
         onLog: (l) {
-          if (mounted) setState(() => _appendLog(l));
+          if (mounted) _appendLog(l);
         },
       );
       if (!mounted) return;
@@ -750,7 +719,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       ),
       actions: [
         TextButton(
-          onPressed: _running ? null : () => Navigator.of(context).pop(),
+          onPressed: () => AgentDispatchWindow.hide(),
           child: const Text('关闭'),
         ),
         if (_running)

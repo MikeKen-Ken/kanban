@@ -7,3 +7,4 @@ export 'agent_dispatch_panel.dart';
 export 'agent_dispatch_platform.dart';
 export 'agent_dispatch_service.dart';
 export 'agent_dispatch_settings.dart';
+export 'agent_dispatch_window.dart';

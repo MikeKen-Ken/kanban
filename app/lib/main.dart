@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'controllers/board_controller.dart';
 import 'features/agent_dispatch/agent_dispatch_service.dart';
+import 'features/agent_dispatch/agent_dispatch_window.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/project/project_theme.dart';
 import 'screens/home_screen.dart';
@@ -37,6 +38,7 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
   final _navigatorKey = GlobalKey<NavigatorState>();
 
   void _dismissWithEscape() {
+    if (AgentDispatchWindow.hideIfVisible()) return;
     final focusedContext = FocusManager.instance.primaryFocus?.context;
     final isEditingText = focusedContext?.widget is EditableText ||
         focusedContext?.findAncestorWidgetOfExactType<EditableText>() != null;
@@ -99,7 +101,9 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
                 const SingleActivator(LogicalKeyboardKey.escape):
                     _dismissWithEscape,
               },
-              child: child ?? const SizedBox.shrink(),
+              child: AgentDispatchWindowHost(
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
             theme: buildKanbanTheme(preset, Brightness.light),
             darkTheme: buildKanbanTheme(preset, Brightness.dark),
