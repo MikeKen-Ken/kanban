@@ -28,12 +28,20 @@ export async function runBatch(
     processedCards,
   });
 
+  const drainedResult = (): DispatchResult => ({
+    ok: true,
+    summary: `已在当前会话结束后停止；已处理 ${processedCards} 张`,
+    processedCards,
+  });
+
   try {
     await mcp.connect(job.mcpEndpoint);
     workerLog("Worker 已连接看板 MCP；Worker 只读检查队列，Skill 自己领取卡片");
 
     for (let index = 1; index <= limit; index += 1) {
-      cancellation?.throwIfCancelled();
+      if (cancellation?.shouldStopAfterCurrentSession) {
+        return cancellation.isCancelled ? cancelledResult() : drainedResult();
+      }
       workerLog(`──────── Worker 单卡轮次 ${index}/${limit} ────────`);
       const peek = await mcp.callJson("peek_next_card", {
         ...(job.projectId ? { projectId: job.projectId } : {}),
@@ -115,6 +123,9 @@ export async function runBatch(
 
       processedCards += 1;
       workerLog(`[success] Worker 确认第 ${index} 次 Skill 只处理一张且已送验；会话已释放`);
+      if (cancellation?.shouldStopAfterCurrentSession) {
+        return cancellation.isCancelled ? cancelledResult() : drainedResult();
+      }
     }
 
     workerLog(`[success] Worker 批次完成：已达到上限并处理 ${processedCards} 张`);

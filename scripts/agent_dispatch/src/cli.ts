@@ -177,6 +177,9 @@ async function runJob(jobPath: string): Promise<void> {
   if (job.cancelFile?.trim()) {
     cancellation.watchCancelFile(job.cancelFile.trim());
   }
+  if (job.drainFile?.trim()) {
+    cancellation.watchDrainFile(job.drainFile.trim());
+  }
   let result: DispatchResult;
   try {
     result = await runBatch(job, cancellation);

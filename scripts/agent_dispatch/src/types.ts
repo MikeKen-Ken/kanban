@@ -10,8 +10,10 @@ export type DispatchJob = {
   workerToken: string;
   /** @deprecated 旧字段，兼容 */
   effort?: string;
-  /** Dart 侧 touch 此文件以请求协作式停止 */
+  /** Dart 侧 touch 此文件以请求立即停止 */
   cancelFile?: string;
+  /** Dart 侧 touch 此文件以在当前 Skill 会话结束后停止批次 */
+  drainFile?: string;
   outPath: string;
 };
 

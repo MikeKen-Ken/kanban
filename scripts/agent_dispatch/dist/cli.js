@@ -13,9 +13,11 @@ var WorkerCancelledError = class extends Error {
 };
 var WorkerCancellation = class {
   cancelled = false;
+  drainAfterCurrent = false;
   reason = "\u5DF2\u53D6\u6D88";
   callbacks = /* @__PURE__ */ new Set();
   cancelFileTimer;
+  drainFileTimer;
   signalInstalled = false;
   watchCancelFile(path) {
     const check = () => {
@@ -29,6 +31,18 @@ var WorkerCancellation = class {
     this.cancelFileTimer = setInterval(check, 200);
     this.cancelFileTimer.unref?.();
   }
+  watchDrainFile(path) {
+    const check = () => {
+      if (this.drainAfterCurrent || this.cancelled) return;
+      try {
+        if (existsSync(path)) this.requestDrainAfterCurrent();
+      } catch {
+      }
+    };
+    check();
+    this.drainFileTimer = setInterval(check, 200);
+    this.drainFileTimer.unref?.();
+  }
   installSignalHandlers() {
     if (this.signalInstalled) return;
     this.signalInstalled = true;
@@ -40,6 +54,13 @@ var WorkerCancellation = class {
   }
   get isCancelled() {
     return this.cancelled;
+  }
+  get shouldStopAfterCurrentSession() {
+    return this.cancelled || this.drainAfterCurrent;
+  }
+  requestDrainAfterCurrent() {
+    if (this.cancelled || this.drainAfterCurrent) return;
+    this.drainAfterCurrent = true;
   }
   onCancel(callback) {
     this.callbacks.add(callback);
@@ -60,6 +81,10 @@ var WorkerCancellation = class {
     if (this.cancelFileTimer) {
       clearInterval(this.cancelFileTimer);
       this.cancelFileTimer = void 0;
+    }
+    if (this.drainFileTimer) {
+      clearInterval(this.drainFileTimer);
+      this.drainFileTimer = void 0;
     }
   }
   async invoke(callback) {
@@ -545,11 +570,18 @@ async function runBatch(job, cancellation) {
     error: "\u5DF2\u53D6\u6D88",
     processedCards
   });
+  const drainedResult = () => ({
+    ok: true,
+    summary: `\u5DF2\u5728\u5F53\u524D\u4F1A\u8BDD\u7ED3\u675F\u540E\u505C\u6B62\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`,
+    processedCards
+  });
   try {
     await mcp.connect(job.mcpEndpoint);
     workerLog("Worker \u5DF2\u8FDE\u63A5\u770B\u677F MCP\uFF1BWorker \u53EA\u8BFB\u68C0\u67E5\u961F\u5217\uFF0CSkill \u81EA\u5DF1\u9886\u53D6\u5361\u7247");
     for (let index = 1; index <= limit; index += 1) {
-      cancellation?.throwIfCancelled();
+      if (cancellation?.shouldStopAfterCurrentSession) {
+        return cancellation.isCancelled ? cancelledResult() : drainedResult();
+      }
       workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${index}/${limit} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const peek = await mcp.callJson("peek_next_card", {
         ...job.projectId ? { projectId: job.projectId } : {}
@@ -623,6 +655,9 @@ async function runBatch(job, cancellation) {
       }
       processedCards += 1;
       workerLog(`[success] Worker \u786E\u8BA4\u7B2C ${index} \u6B21 Skill \u53EA\u5904\u7406\u4E00\u5F20\u4E14\u5DF2\u9001\u9A8C\uFF1B\u4F1A\u8BDD\u5DF2\u91CA\u653E`);
+      if (cancellation?.shouldStopAfterCurrentSession) {
+        return cancellation.isCancelled ? cancelledResult() : drainedResult();
+      }
     }
     workerLog(`[success] Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u8FBE\u5230\u4E0A\u9650\u5E76\u5904\u7406 ${processedCards} \u5F20`);
     return {
@@ -782,6 +817,9 @@ async function runJob(jobPath) {
   cancellation.installSignalHandlers();
   if (job.cancelFile?.trim()) {
     cancellation.watchCancelFile(job.cancelFile.trim());
+  }
+  if (job.drainFile?.trim()) {
+    cancellation.watchDrainFile(job.drainFile.trim());
   }
   let result;
   try {

@@ -33,6 +33,7 @@ class AgentDispatchService {
   final AgentDispatchCredentials _credentials;
 
   bool _cancelRequested = false;
+  bool _drainAfterCurrentRequested = false;
   bool _isRunning = false;
   AgentWorkerProcess? _activeWorker;
   final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
@@ -137,6 +138,13 @@ class AgentDispatchService {
     if (worker != null) await worker.stop();
   }
 
+  /// 在当前 Skill 会话结束后停止批次，不中断进行中的会话。
+  Future<void> requestDrainAfterCurrent() async {
+    _drainAfterCurrentRequested = true;
+    final worker = _activeWorker;
+    if (worker != null) await worker.requestDrainAfterCurrent();
+  }
+
   /// 应用退出时停止所有由 Agent 工作台创建的 Worker。
   ///
   /// 逐个 Worker 使用 `taskkill /T`，以确保 SDK/CLI 子进程不会遗留。
@@ -156,6 +164,7 @@ class AgentDispatchService {
       return const AgentWorkerResult(ok: false, error: '已有批次在运行');
     }
     _cancelRequested = false;
+    _drainAfterCurrentRequested = false;
     _setRunning(true);
     try {
       return await _runOnceImpl(
@@ -293,6 +302,7 @@ class AgentDispatchService {
 
   void debugReset() {
     _cancelRequested = false;
+    _drainAfterCurrentRequested = false;
     _isRunning = false;
     _activeWorker = null;
     _logText = '';

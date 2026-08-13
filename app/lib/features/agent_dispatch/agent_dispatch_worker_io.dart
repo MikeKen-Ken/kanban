@@ -30,13 +30,25 @@ class AgentWorkerProcess {
     this._process, {
     AgentDispatchWindowsJob? windowsJob,
     String? cancelFile,
+    String? drainFile,
   })  : _windowsJob = windowsJob,
-        _cancelFile = cancelFile;
+        _cancelFile = cancelFile,
+        _drainFile = drainFile;
 
   final Process _process;
   AgentDispatchWindowsJob? _windowsJob;
   final String? _cancelFile;
+  final String? _drainFile;
   bool _stopRequested = false;
+
+  /// 在当前 Skill 会话结束后停止批次，不中断进行中的会话。
+  Future<void> requestDrainAfterCurrent() async {
+    final drainFile = _drainFile;
+    if (drainFile == null) return;
+    try {
+      await File(drainFile).writeAsString('');
+    } catch (_) {}
+  }
 
   /// 终止 Worker 及其启动的 SDK/CLI 子进程。
   Future<void> stop() async {
@@ -142,6 +154,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   final jobFile = File(p.join(tempDir.path, 'job.json'));
   final outFile = File(p.join(tempDir.path, 'out.json'));
   final cancelFile = File(p.join(tempDir.path, 'cancel'));
+  final drainFile = File(p.join(tempDir.path, 'drain'));
   final job = <String, dynamic>{
     'engine': engine.name,
     'cwd': cwd,
@@ -157,6 +170,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
         for (final item in modelParams) {'id': item.id, 'value': item.value},
       ],
     'cancelFile': cancelFile.path,
+    'drainFile': drainFile.path,
     'outPath': outFile.path,
   };
   await jobFile.writeAsString(jsonEncode(job));
@@ -191,6 +205,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
         onWarning: (message) => onLog?.call('[warning] $message'),
       ),
       cancelFile: cancelFile.path,
+      drainFile: drainFile.path,
     );
     onProcessStarted?.call(workerProcess);
     process.stdout

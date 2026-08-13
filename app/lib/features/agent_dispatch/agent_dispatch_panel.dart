@@ -51,6 +51,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   AgentDispatchUsageSnapshot? _usage;
   bool _running = false;
   bool _stopping = false;
+  bool _drainPending = false;
   bool _busy = false;
   bool _usageBusy = false;
   int _cursorKeySectionRevision = 0;
@@ -97,7 +98,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final running = _service.isRunning;
     setState(() {
       _running = running;
-      if (!running) _stopping = false;
+      if (!running) {
+        _stopping = false;
+        _drainPending = false;
+      }
     });
     if (running) {
       _startHeartbeat();
@@ -784,23 +788,38 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           onPressed: () => AgentDispatchWindow.hide(),
           child: const Text('关闭'),
         ),
-        if (_running)
+        if (_running) ...[
+          TextButton(
+            onPressed: _drainPending || _stopping
+                ? null
+                : () async {
+                    setState(() => _drainPending = true);
+                    _appendLog(
+                      '将在当前 Skill 会话结束后停止…',
+                      level: AgentDispatchLogLevel.warning,
+                    );
+                    await _service.requestDrainAfterCurrent();
+                    if (mounted) setState(() {});
+                  },
+            child: Text(_drainPending ? '会后停止中…' : '会后停止'),
+          ),
           TextButton(
             onPressed: _stopping
                 ? null
                 : () async {
                     setState(() => _stopping = true);
                     _appendLog(
-                      '正在停止当前 SDK/CLI 会话…',
+                      '正在立即停止当前 SDK/CLI 会话…',
                       level: AgentDispatchLogLevel.warning,
                     );
                     await _service.requestCancel();
                     if (mounted) setState(() {});
                   },
-            child: Text(_stopping ? '正在停止…' : '停止运行'),
+            child: Text(_stopping ? '正在停止…' : '立即停止'),
           ),
+        ],
         FilledButton.icon(
-          onPressed: _running || _busy || _stopping ? null : _run,
+          onPressed: _running || _busy || _stopping || _drainPending ? null : _run,
           icon: _running
               ? const SizedBox(
                   width: 16,

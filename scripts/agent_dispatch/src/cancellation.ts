@@ -12,9 +12,11 @@ type CancelCallback = () => void | Promise<void>;
 /** Worker 批次取消：SIGTERM/SIGINT、cancelFile 轮询与活动会话回调。 */
 export class WorkerCancellation {
   private cancelled = false;
+  private drainAfterCurrent = false;
   private reason = "已取消";
   private readonly callbacks = new Set<CancelCallback>();
   private cancelFileTimer: NodeJS.Timeout | undefined;
+  private drainFileTimer: NodeJS.Timeout | undefined;
   private signalInstalled = false;
 
   watchCancelFile(path: string): void {
@@ -31,6 +33,20 @@ export class WorkerCancellation {
     this.cancelFileTimer.unref?.();
   }
 
+  watchDrainFile(path: string): void {
+    const check = (): void => {
+      if (this.drainAfterCurrent || this.cancelled) return;
+      try {
+        if (existsSync(path)) this.requestDrainAfterCurrent();
+      } catch {
+        // ignore
+      }
+    };
+    check();
+    this.drainFileTimer = setInterval(check, 200);
+    this.drainFileTimer.unref?.();
+  }
+
   installSignalHandlers(): void {
     if (this.signalInstalled) return;
     this.signalInstalled = true;
@@ -43,6 +59,15 @@ export class WorkerCancellation {
 
   get isCancelled(): boolean {
     return this.cancelled;
+  }
+
+  get shouldStopAfterCurrentSession(): boolean {
+    return this.cancelled || this.drainAfterCurrent;
+  }
+
+  requestDrainAfterCurrent(): void {
+    if (this.cancelled || this.drainAfterCurrent) return;
+    this.drainAfterCurrent = true;
   }
 
   onCancel(callback: CancelCallback): void {
@@ -67,6 +92,10 @@ export class WorkerCancellation {
     if (this.cancelFileTimer) {
       clearInterval(this.cancelFileTimer);
       this.cancelFileTimer = undefined;
+    }
+    if (this.drainFileTimer) {
+      clearInterval(this.drainFileTimer);
+      this.drainFileTimer = undefined;
     }
   }
 
