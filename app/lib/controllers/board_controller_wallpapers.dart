@@ -21,11 +21,9 @@ extension BoardControllerWallpapers on BoardController {
     if (!displayableWallpaperIds.contains(wallpaperId)) return;
     if (projectSettings.wallpaperActiveId == wallpaperId) return;
     return _withBoardMutation(() async {
-      await _persistProjectSettings(
-        projectSettings
-            .copyWith(wallpaperActiveId: wallpaperId, clearConflictSide: true)
-            .bump(),
-      );
+      // 轮播位置只影响当前设备的显示，不写入项目设置，也不触发备份/WebDAV。
+      projectSettings = projectSettings.copyWith(wallpaperActiveId: wallpaperId);
+      notifyListeners();
     });
   }
 

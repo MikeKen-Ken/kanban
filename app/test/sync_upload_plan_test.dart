@@ -142,6 +142,34 @@ void main() {
     expect(countPendingSyncUploads(workspace: local, baseline: base), 0);
   });
 
+  test('壁纸轮播位置变化不产生同步上传', () {
+    final base = _workspace(
+      projects: [_entry('p1')],
+      boards: {'p1': _board('p1')},
+      settings: {
+        'p1': const ProjectSettings(
+          wallpaperIds: ['wall-a', 'wall-b'],
+          wallpaperActiveId: 'wall-a',
+        ),
+      },
+    );
+    final local = _workspace(
+      projects: [_entry('p1')],
+      boards: {'p1': _board('p1')},
+      settings: {
+        'p1': const ProjectSettings(
+          wallpaperIds: ['wall-a', 'wall-b'],
+          wallpaperActiveId: 'wall-b',
+        ),
+      },
+    );
+
+    final plan = buildSyncUploadPlan(workspace: local, baseline: base);
+
+    expect(plan.items, isEmpty);
+    expect(countPendingSyncUploads(workspace: local, baseline: base), 0);
+  });
+
   test('只改一张卡时只上传该列与变更的看板元数据', () {
     final baseBoard = _board(
       'p1',

@@ -174,7 +174,7 @@ class ProjectSettings {
       if (backgroundAttachmentId.isNotEmpty)
         'backgroundAttachmentId': backgroundAttachmentId,
       if (wallpaperIds.isNotEmpty) 'wallpaperIds': wallpaperIds,
-      if (wallpaperActiveId.isNotEmpty) 'wallpaperActiveId': wallpaperActiveId,
+      // 当前轮播位置只是本机展示状态，不属于跨设备同步的数据。
       if (wallpaperPlaybackMode != WallpaperPlaybackMode.fixed)
         'wallpaperPlaybackMode': wallpaperPlaybackMode.name,
       if (wallpaperIntervalSeconds != defaultWallpaperIntervalSeconds)
