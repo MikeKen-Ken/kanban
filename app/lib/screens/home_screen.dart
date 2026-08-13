@@ -352,11 +352,13 @@ class _HomeScreenState extends State<HomeScreen> {
           shift: true,
         ): () => _requestSync(),
       },
-      child: Scaffold(
-        backgroundColor: controller.hasDisplayableBackground
-            ? Colors.transparent
-            : null,
-        appBar: AppBar(
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: controller.hasDisplayableBackground
+              ? Colors.transparent
+              : null,
+          appBar: AppBar(
           title: const ProjectSwitcher(),
           actions: [
             if (!compact)
@@ -549,6 +551,7 @@ class _HomeScreenState extends State<HomeScreen> {
           wallpaperIntervalSeconds:
               controller.projectSettings.wallpaperIntervalSeconds,
           overlayOpacity: controller.projectSettings.backgroundOverlayOpacity,
+        ),
         ),
       ),
     );
