@@ -795,13 +795,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 : () async {
                     setState(() => _drainPending = true);
                     _appendLog(
-                      '将在当前 Skill 会话结束后停止…',
+                      '将在当前会话结束后停止批次…',
                       level: AgentDispatchLogLevel.warning,
                     );
                     await _service.requestDrainAfterCurrent();
                     if (mounted) setState(() {});
                   },
-            child: Text(_drainPending ? '会后停止中…' : '会后停止'),
+            child: Text(_drainPending ? '当前会话后停止中…' : '当前会话后停止'),
           ),
           TextButton(
             onPressed: _stopping
