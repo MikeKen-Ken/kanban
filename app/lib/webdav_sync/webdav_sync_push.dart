@@ -171,17 +171,9 @@ mixin _WebDavSyncPush
     }
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return;
-    if (!force && !config.autoSync) return;
-
-    // 非强制推送在冷却期内延后，避免限流风暴
     if (!force) {
-      final wait = _remainingCooldown();
-      if (wait != null) {
-        _scheduleAfterCooldown(() {
-          unawaited(_pushNow(force: force));
-        });
-        return;
-      }
+      print('已忽略自动推送：仅手动上传或合并回写会写入云端');
+      return;
     }
 
     final client = _client(config);
@@ -196,7 +188,6 @@ mixin _WebDavSyncPush
 
     final runId = _syncRunId;
     _pushInFlight = true;
-    _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
     _resetEnsuredRemoteDirs();

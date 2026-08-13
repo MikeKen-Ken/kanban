@@ -159,8 +159,9 @@ class CardDetailAttachmentsSection extends StatelessWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => context.read<BoardController>().syncNow(),
-                  child: const Text('立即同步'),
+                  onPressed: () =>
+                      context.read<BoardController>().mergeNow(),
+                  child: const Text('合并同步'),
                 ),
               ],
             ),

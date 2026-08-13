@@ -2,16 +2,11 @@ part of 'board_controller.dart';
 
 extension BoardControllerSync on BoardController {
   Future<void> saveWebDavConfig(WebDavConfig config) async {
-    final connected = config.enabled && config.isConfigured;
     await _withBoardMutation(() async {
       webDavConfig = config;
       await _repository.saveWebDavConfig(config);
-      // 仅自动拉取开启时挂后台轮询；保存配置本身不触发同步
-      if (connected && config.autoPull) {
-        _syncService.startPolling();
-      } else {
-        _syncService.stopPolling();
-      }
+      // 不再后台轮询或自动同步；保存配置本身不触发上传/下载
+      _syncService.stopPolling();
       notifyListeners();
     });
     unawaited(_syncService.refreshPendingUploadCount());
@@ -21,9 +16,22 @@ extension BoardControllerSync on BoardController {
     return _syncService.testConnection(config);
   }
 
-  Future<void> syncNow() async {
+  /// 全量上传本机工作区，覆盖云端（相对 SyncBase 不做增量跳过）。
+  Future<void> uploadNow() async {
+    await _syncService.pushNow(force: true, baseline: null);
+  }
+
+  /// 全量下载云端工作区，覆盖本机，不合并。
+  Future<void> downloadNow() async {
+    await _syncService.pullAndReplace();
+  }
+
+  /// 三路合并（现有逻辑）：拉取后合并，有差异再回推。
+  Future<void> mergeNow() async {
     await _syncService.pullAndMerge(userInitiated: true);
   }
+
+  Future<void> syncNow() => mergeNow();
 
   /// 取消进行中的 WebDAV 同步，恢复可继续操作
   bool cancelSync() {

@@ -45,6 +45,13 @@ Copy-Item (Join-Path $workerRoot 'node_modules') $resolvedDestination -Recurse
 
 Copy-Item $nodeExecutable (Join-Path $runtimeDestination 'node.exe')
 
+$cursorSdkPackage = Get-Content -LiteralPath (Join-Path $workerRoot 'node_modules\@cursor\sdk\package.json') -Raw | ConvertFrom-Json
+$workerManifest = @{
+    nodeVersion = $expectedNodeVersion
+    cursorSdkVersion = $cursorSdkPackage.version
+} | ConvertTo-Json
+Set-Content -LiteralPath (Join-Path $resolvedDestination 'worker_manifest.json') -Value $workerManifest -Encoding utf8
+
 $cliPath = Join-Path $resolvedDestination 'dist\cli.js'
 $sdkPath = Join-Path $resolvedDestination 'node_modules\@cursor\sdk'
 $mcpClientPath = Join-Path $resolvedDestination 'node_modules\@modelcontextprotocol\client'

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_windows_job.dart';
+import 'agent_worker_health.dart';
 
 class AgentWorkerResult {
   const AgentWorkerResult({
@@ -115,6 +116,13 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       ok: false,
       error: '未找到 Worker（dist/cli.js）。请点「一键修复 Worker」。',
     );
+  }
+
+  final health = await inspectAgentDispatchWorker(workerScriptPath);
+  onLog?.call('Worker 环境：${health.summary}');
+  onLog?.call('Worker 路径：${health.workerRoot}');
+  if (!health.ok) {
+    return AgentWorkerResult(ok: false, error: health.error);
   }
 
   final tempDir = await Directory.systemTemp.createTemp('kanban_agent_');
@@ -327,39 +335,22 @@ Future<String?> resolveCursorApiKeyLabel({
 Future<({bool ok, String message})> ensureAgentDispatchWorker({
   String? workerScriptPath,
   void Function(String line)? onLog,
+  AgentWorkerCommandRunner? commandRunner,
 }) async {
-  final existing = await resolveAgentDispatchCliPath(workerScriptPath);
-  if (existing != null && await File(existing).exists()) {
-    final existingRoot = p.basename(p.dirname(existing)) == 'dist'
-        ? p.dirname(p.dirname(existing))
-        : p.dirname(existing);
-    final cursorSdk = p.join(
-      existingRoot,
-      'node_modules',
-      '@cursor',
-      'sdk',
+  final existingHealth = await inspectAgentDispatchWorker(
+    workerScriptPath,
+    commandRunner: commandRunner,
+  );
+  onLog?.call('Worker 检查：${existingHealth.summary}');
+  if (existingHealth.ok) {
+    return (ok: true, message: 'Worker 健康检查通过：${existingHealth.summary}');
+  }
+  if (_isPublishedWorkerRoot(existingHealth.workerRoot)) {
+    return (
+      ok: false,
+      message:
+          '${existingHealth.error}\n发布版 Worker 必须随应用整体更新，请前往「设置 → 检查更新」下载并安装完整更新。',
     );
-    final mcpClient = p.join(
-      existingRoot,
-      'node_modules',
-      '@modelcontextprotocol',
-      'client',
-    );
-    final codexCli = p.join(
-      existingRoot,
-      'node_modules',
-      '@openai',
-      'codex',
-      'bin',
-      'codex.js',
-    );
-    final node = await _resolveNodeExecutable(packageRoot: existingRoot);
-    if (await Directory(cursorSdk).exists() &&
-        await Directory(mcpClient).exists() &&
-        await File(codexCli).exists() &&
-        node != null) {
-      return (ok: true, message: 'Worker 已就绪：$existing');
-    }
   }
 
   final packageRoot = await resolveAgentDispatchPackageRoot(workerScriptPath);
@@ -369,16 +360,23 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
       message: '未找到内置 Worker。开发环境请设置 KANBAN_ROOT；发布包请重新下载完整 ZIP。',
     );
   }
+  if (!await _isDevelopmentWorkerRoot(packageRoot)) {
+    return (
+      ok: false,
+      message:
+          '${existingHealth.error}\n该 Worker 不包含源码，无法原地重建；请更新应用或重新下载完整 ZIP。',
+    );
+  }
 
   final npm = await _resolveNpmExecutable();
   if (npm == null) {
     return (ok: false, message: '未找到 npm。请先安装 Node.js。');
   }
 
-  onLog?.call('npm install @ $packageRoot');
+  onLog?.call('开发环境执行 npm ci @ $packageRoot');
   final install = await Process.run(
     npm,
-    ['install'],
+    ['ci'],
     workingDirectory: packageRoot,
     environment: Platform.environment,
     runInShell: true,
@@ -388,7 +386,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     onLog?.call((install.stderr as String).trim());
   }
   if (install.exitCode != 0) {
-    return (ok: false, message: 'npm install 失败（${install.exitCode}）');
+    return (ok: false, message: 'npm ci 失败（${install.exitCode}）');
   }
 
   onLog?.call('npm run build');
@@ -407,12 +405,54 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     return (ok: false, message: 'npm run build 失败（${build.exitCode}）');
   }
 
-  final cli = p.join(packageRoot, 'dist', 'cli.js');
-  if (!await File(cli).exists()) {
-    return (ok: false, message: '构建完成但仍未找到 dist/cli.js');
-  }
-  return (ok: true, message: 'Worker 已修复：$cli');
+  final repaired = await inspectAgentDispatchWorker(
+    p.join(packageRoot, 'dist', 'cli.js'),
+    commandRunner: commandRunner,
+  );
+  onLog?.call('修复后检查：${repaired.summary}');
+  return repaired.ok
+      ? (ok: true, message: 'Worker 已修复并通过健康检查：${repaired.summary}')
+      : (ok: false, message: repaired.error ?? 'Worker 修复后健康检查仍未通过');
 }
+
+Future<AgentWorkerHealth> inspectAgentDispatchWorker(String? workerScriptPath,
+    {AgentWorkerCommandRunner? commandRunner}) async {
+  final cli = await resolveAgentDispatchCliPath(workerScriptPath);
+  final root = cli == null
+      ? await resolveAgentDispatchPackageRoot(workerScriptPath)
+      : _workerRootFromCli(cli);
+  if (root == null) {
+    return const AgentWorkerHealth(
+      ok: false,
+      source: '未找到',
+      workerRoot: '未知',
+      error: '未找到 Worker（dist/cli.js）',
+    );
+  }
+  final published = _isPublishedWorkerRoot(root);
+  final node = await _resolveNodeExecutable(
+    packageRoot: root,
+    allowSystemFallback: !published,
+  );
+  return inspectAgentWorkerRoot(
+    root: root,
+    published: published,
+    nodePath: node,
+    commandRunner: commandRunner,
+  );
+}
+
+String _workerRootFromCli(String cli) {
+  final dir = p.dirname(cli);
+  return p.basename(dir) == 'dist' ? p.dirname(dir) : dir;
+}
+
+bool _isPublishedWorkerRoot(String root) => p.equals(p.normalize(root),
+    p.join(p.dirname(Platform.resolvedExecutable), 'agent_worker'));
+
+Future<bool> _isDevelopmentWorkerRoot(String root) async =>
+    await File(p.join(root, 'package.json')).exists() &&
+    await Directory(p.join(root, 'src')).exists();
 
 /// Worker 在写出 out.json 前被系统杀掉时的说明。
 String describeWorkerExitWithoutOutput(int code) {
@@ -443,7 +483,10 @@ Map<String, String> _workerEnvironment({
   return environment;
 }
 
-Future<String?> _resolveNodeExecutable({String? packageRoot}) async {
+Future<String?> _resolveNodeExecutable({
+  String? packageRoot,
+  bool allowSystemFallback = true,
+}) async {
   if (packageRoot != null) {
     final bundled = p.join(
       packageRoot,
@@ -452,6 +495,7 @@ Future<String?> _resolveNodeExecutable({String? packageRoot}) async {
     );
     if (await File(bundled).exists()) return bundled;
   }
+  if (!allowSystemFallback) return null;
   return _resolveOnPath(
     Platform.isWindows ? const ['node.exe', 'node'] : const ['node'],
   );

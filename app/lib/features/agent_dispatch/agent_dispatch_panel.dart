@@ -205,10 +205,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   Future<void> _refreshWorkerStatus() async {
-    final cli = await resolveAgentDispatchCliPath(_settings.workerScriptPath);
+    final health = await inspectAgentDispatchWorker(_settings.workerScriptPath);
     if (!mounted) return;
     setState(() {
-      _workerStatus = cli == null ? '未找到 Worker（需一键修复）' : '已就绪：$cli';
+      _workerStatus = health.ok
+          ? '健康：${health.summary}\n${health.workerRoot}'
+          : '${health.error ?? 'Worker 健康检查失败'}\n${health.summary}';
     });
   }
 

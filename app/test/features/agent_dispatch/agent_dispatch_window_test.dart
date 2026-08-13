@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_window.dart';
@@ -59,6 +60,48 @@ void main() {
       tester.state<_KeepAliveMarkerState>(find.byType(_KeepAliveMarker)).mark,
       'kept',
     );
+  });
+
+  testWidgets('builder 插槽中悬停带 tooltip 的按钮能显示文案，不出现巨大灰板',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => AgentDispatchWindowHost(
+          panel: IconButton(
+            tooltip: '选择目录',
+            onPressed: () {},
+            icon: const Icon(Icons.folder_open),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        ),
+        home: const SizedBox.shrink(),
+      ),
+    );
+
+    AgentDispatchWindow.show();
+    await tester.pump();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byIcon(Icons.folder_open)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(ErrorWidget), findsNothing);
+    expect(find.text('选择目录'), findsOneWidget);
+
+    final tooltipBox = tester.getSize(
+      find
+          .ancestor(
+            of: find.text('选择目录'),
+            matching: find.byType(ConstrainedBox),
+          )
+          .first,
+    );
+    expect(tooltipBox.width, lessThan(240));
+    expect(tooltipBox.height, lessThan(80));
   });
 }
 

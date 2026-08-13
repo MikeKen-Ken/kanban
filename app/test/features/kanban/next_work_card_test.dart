@@ -11,6 +11,7 @@ KanbanCard _card({
   String? description,
   List<ChecklistItem> checklist = const [],
   List<ChecklistItem> verificationFeedback = const [],
+  String? commitRef,
 }) {
   final created = createdAt ?? updatedAt;
   return KanbanCard(
@@ -23,6 +24,7 @@ KanbanCard _card({
     description: description,
     checklist: checklist,
     verificationFeedback: verificationFeedback,
+    commitRef: commitRef,
   );
 }
 
@@ -164,6 +166,7 @@ void main() {
         ChecklistItem(id: 'fb1', text: '问题一'),
         ChecklistItem(id: 'fb2', text: '问题二', completed: true),
       ],
+      commitRef: 'abc1234',
     );
     expect(isReworkWorkMode(card), isTrue);
     expect(buildCardWorkItems(card), [
@@ -178,6 +181,7 @@ void main() {
     ]);
     expect(buildCardCommitMessage(card), '问题一');
     expect(buildCardWorkScope(card)['workMode'], 'rework');
+    expect(buildCardWorkScope(card)['commitRef'], 'abc1234');
   });
 
   test('普通模式 workItems 含标题备注与未完成 checklist，跳过已完成项', () {

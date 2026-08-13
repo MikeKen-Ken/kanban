@@ -35,17 +35,18 @@ void main() {
     });
     expect(config.pollIntervalSeconds, 60);
     expect(config.pushDebounceSeconds, 60);
+    expect(config.autoSync, isFalse);
     expect(config.autoPull, isFalse);
   });
 
-  test('fromJson 可读 autoPull；缺失时默认关闭', () {
+  test('fromJson 忽略已保存的自动上传/拉取开关', () {
     final withPull = WebDavConfig.fromJson({
       'enabled': true,
       'serverUrl': 'https://example.com/dav',
       'username': 'u',
       'password': 'p',
-      'autoSync': false,
-      'autoPull': false,
+      'autoSync': true,
+      'autoPull': true,
     });
     expect(withPull.autoSync, isFalse);
     expect(withPull.autoPull, isFalse);

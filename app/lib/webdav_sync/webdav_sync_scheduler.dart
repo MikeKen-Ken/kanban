@@ -1,7 +1,7 @@
 part of 'webdav_sync_service.dart';
 
 mixin _WebDavSyncScheduler on _WebDavSyncHost {
-  /// 取消进行中的同步（含排队中的 pull/push）；本地防抖推送定时器不受影响
+  /// 取消进行中的同步（含排队中的 pull/push）
   ///
   /// 返回是否确实发出了取消请求。底层传输为协作式中止，当前 HTTP 可能仍跑完，
   /// 但不会再提交成功/失败状态，并可立即再次触发同步。
@@ -14,6 +14,7 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
 
     _pullPending = false;
     _pullPendingUserInitiated = false;
+    _pullPendingReplace = false;
     _pushPending = false;
     _pushPendingForce = false;
 
@@ -52,27 +53,12 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
         message.contains('ratelimit');
   }
 
-  int _pollIntervalSeconds(WebDavConfig config) =>
-      WebDavConfig.clampPollIntervalSeconds(config.pollIntervalSeconds);
-
   Duration? _remainingCooldown([DateTime? now]) {
     final until = _cooldownUntil;
     if (until == null) return null;
     final remaining = until.difference(now ?? DateTime.now());
     if (remaining <= Duration.zero) return null;
     return remaining;
-  }
-
-  bool _canStartAutoSync(WebDavConfig config) {
-    final now = DateTime.now();
-    if (_remainingCooldown(now) != null) return false;
-    final last = _lastAttemptAt;
-    if (last == null) return true;
-    return now.difference(last).inSeconds >= _pollIntervalSeconds(config);
-  }
-
-  void _noteAttempt() {
-    _lastAttemptAt = DateTime.now();
   }
 
   void _noteSuccess() {
@@ -98,9 +84,7 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
   }
 
   void schedulePush() {
-    final gen = ++_pushScheduleGen;
-    _debounceTimer?.cancel();
-    unawaited(_armPushDebounce(gen));
+    // 不再自动上传；仅刷新相对 SyncBase 的待上传计数。
     schedulePendingUploadCountRefresh();
   }
 
@@ -143,34 +127,15 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
     }
   }
 
-  Future<void> _armPushDebounce(int gen) async {
-    final config = await _loadConfig();
-    if (gen != _pushScheduleGen) return;
-
-    final seconds = WebDavConfig.clampPushDebounceSeconds(
-      config.pushDebounceSeconds,
-    );
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(Duration(seconds: seconds), () {
-      if (gen != _pushScheduleGen) return;
-      final wait = _remainingCooldown();
-      if (wait != null) {
-        _scheduleAfterCooldown(() {
-          unawaited(_pushNow());
-        });
-        return;
-      }
-      unawaited(_pushNow());
-    });
-  }
-
   void _drainPendingWork({bool forceFallback = false}) {
     final pull = _pullPending;
     final pullUser = _pullPendingUserInitiated;
+    final pullReplace = _pullPendingReplace;
     final push = _pushPending;
     final pushForce = _pushPendingForce || forceFallback;
     _pullPending = false;
     _pullPendingUserInitiated = false;
+    _pullPendingReplace = false;
     _pushPending = false;
     _pushPendingForce = false;
 
@@ -179,7 +144,10 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
     final wait = _remainingCooldown();
     void run() {
       if (pull) {
-        unawaited(_pullAndMerge(userInitiated: pullUser));
+        unawaited(_pullAndMerge(
+          userInitiated: pullUser,
+          replaceLocal: pullReplace,
+        ));
       } else if (push) {
         unawaited(_pushNow(force: pushForce));
       }
@@ -194,50 +162,9 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
   }
 
   void startPolling() {
+    // 自动拉取已停用，不挂后台轮询。
     stopPolling();
-    _pollingEnabled = true;
-    _armNextPoll();
   }
 
-  void _armNextPoll() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
-    if (!_pollingEnabled) return;
-    unawaited(_scheduleNextPoll());
-  }
-
-  Future<void> _scheduleNextPoll() async {
-    if (!_pollingEnabled) return;
-    final config = await _loadConfig();
-    if (!_pollingEnabled || !config.enabled || !config.autoPull) return;
-
-    final interval = Duration(seconds: _pollIntervalSeconds(config));
-    var delay = interval;
-    final cooldown = _remainingCooldown();
-    if (cooldown != null && cooldown > delay) {
-      delay = cooldown;
-    }
-
-    if (!_pollingEnabled) return;
-    _pollTimer = Timer(delay, () async {
-      try {
-        if (!_pollingEnabled) return;
-        final latest = await _loadConfig();
-        if (!_pollingEnabled || !latest.enabled || !latest.autoPull) return;
-        if (_canStartAutoSync(latest)) {
-          await _pullAndMerge();
-        }
-      } finally {
-        if (_pollingEnabled) {
-          _armNextPoll();
-        }
-      }
-    });
-  }
-
-  void stopPolling() {
-    _pollingEnabled = false;
-    _pollTimer?.cancel();
-    _pollTimer = null;
-  }
+  void stopPolling() {}
 }

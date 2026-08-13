@@ -40,9 +40,9 @@ class WebDavConfig {
   final String username;
   final String password;
   final String remotePath;
-  /// 本地变更后防抖自动上传
+  /// 兼容旧配置 JSON；运行时始终视为关闭，不会自动上传
   final bool autoSync;
-  /// 启动与后台定时自动拉取
+  /// 兼容旧配置 JSON；运行时始终视为关闭，不会自动拉取
   final bool autoPull;
   final int pollIntervalSeconds;
   final int pushDebounceSeconds;
@@ -111,9 +111,9 @@ class WebDavConfig {
       username: json['username'] as String? ?? '',
       password: json['password'] as String? ?? '',
       remotePath: json['remotePath'] as String? ?? '/KanbanApp',
-      // 同步默认为手动：旧配置无此字段时也按手动处理
-      autoSync: json['autoSync'] as bool? ?? false,
-      autoPull: json['autoPull'] as bool? ?? false,
+      // 同步改为手动：启动与后台不再自动拉取或上传
+      autoSync: false,
+      autoPull: false,
       pollIntervalSeconds: clampPollIntervalSeconds(
         json['pollIntervalSeconds'] as int? ?? defaultPollIntervalSeconds,
       ),

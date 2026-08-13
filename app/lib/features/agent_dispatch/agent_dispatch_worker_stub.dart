@@ -1,5 +1,6 @@
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_usage.dart';
+import 'agent_worker_health.dart';
 
 class AgentWorkerResult {
   const AgentWorkerResult({
@@ -46,6 +47,17 @@ Future<AgentWorkerResult> runAgentWorkerJob({
 
 Future<String?> resolveAgentDispatchCliPath(String? overridePath) async => null;
 
+Future<AgentWorkerHealth> inspectAgentDispatchWorker(
+  String? workerScriptPath, {
+  AgentWorkerCommandRunner? commandRunner,
+}) async =>
+    const AgentWorkerHealth(
+      ok: false,
+      source: '不支持',
+      workerRoot: '未知',
+      error: '当前平台不支持本机 Agent 调度',
+    );
+
 Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   String? cursorApiKey,
   String? workerScriptPath,
@@ -71,6 +83,7 @@ Future<String?> resolveCursorApiKeyLabel({
 Future<({bool ok, String message})> ensureAgentDispatchWorker({
   String? workerScriptPath,
   void Function(String line)? onLog,
+  AgentWorkerCommandRunner? commandRunner,
 }) async =>
     (ok: false, message: '当前平台不支持');
 

@@ -97,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!enabled) return '未启用 · 连接配置仅保存在本机';
     final host = serverUrl.trim();
     if (host.isEmpty) return '已启用 · 尚未填写服务器地址 · 连接配置仅保存在本机';
-    return '已启用 · $host · 连接配置仅保存在本机';
+    return '已启用 · $host · 手动上传/下载/合并';
   }
 
   @override

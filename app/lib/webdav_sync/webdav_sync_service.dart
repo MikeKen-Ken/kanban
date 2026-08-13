@@ -91,19 +91,16 @@ abstract class _WebDavSyncHost {
   /// 最近一次附件上传失败的原始错误（用于提示细节）
   String? _lastAttachmentError;
 
-  Timer? _debounceTimer;
-  Timer? _pollTimer;
   Timer? _cooldownRetryTimer;
   Timer? _pendingCountTimer;
-  int _pushScheduleGen = 0;
   int _pendingCountGen = 0;
-  bool _pollingEnabled = false;
   bool _pushInFlight = false;
   bool _pushPending = false;
   bool _pushPendingForce = false;
   bool _syncInFlight = false;
   bool _pullPending = false;
   bool _pullPendingUserInitiated = false;
+  bool _pullPendingReplace = false;
 
   /// 当前同步世代：每次开跑或取消时递增，用于丢弃已取消回合的结果
   int _syncRunId = 0;
@@ -111,10 +108,6 @@ abstract class _WebDavSyncHost {
   /// 用户已请求取消；I/O 检查点协作中止，不强制掐断底层 HTTP
   bool _cancelRequested = false;
 
-  /// 上次开始同步尝试的时间（成功/失败都更新，用于节流）
-  DateTime? _lastAttemptAt;
-
-  /// 限流/失败后的冷却截止时间
   DateTime? _cooldownUntil;
   int _consecutiveFailures = 0;
 
@@ -166,10 +159,13 @@ abstract class _WebDavSyncHost {
   });
 
   /// 由 pull mixin 实现；调度器等跨职责调用走此抽象入口。
-  Future<void> _pullAndMerge({bool userInitiated = false});
+  Future<void> _pullAndMerge({
+    bool userInitiated = false,
+    bool replaceLocal = false,
+  });
 }
 
-/// 自动 WebDAV 同步：本地变更后防抖上传，启动/轮询时拉取合并
+/// 手动 WebDAV 同步：上传覆盖云端、下载覆盖本机、三路合并
 class WebDavSyncService extends _WebDavSyncHost
     with
         _WebDavSyncScheduler,
@@ -211,8 +207,12 @@ class WebDavSyncService extends _WebDavSyncHost
     return _pullAndMerge(userInitiated: userInitiated);
   }
 
+  /// 全量拉取云端并覆盖本机，不合并、不回推。
+  Future<void> pullAndReplace() {
+    return _pullAndMerge(userInitiated: true, replaceLocal: true);
+  }
+
   void dispose() {
-    _debounceTimer?.cancel();
     _cooldownRetryTimer?.cancel();
     _pendingCountTimer?.cancel();
     stopPolling();

@@ -19,6 +19,7 @@ import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
 import '../features/kanban/swimlane_board.dart';
 import '../main.dart';
+import '../webdav_sync/sync_actions_sheet.dart';
 import '../webdav_sync/webdav_sync_service.dart';
 import 'settings_screen.dart';
 import '../widgets/kanban_column_widget.dart';
@@ -100,12 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _requestSync() {
-    final controller = context.read<BoardController>();
-    if (controller.syncStatus == SyncStatus.syncing) {
-      showAppSnackBar(context, message: '正在同步…可点取消按钮');
-      return;
-    }
-    controller.syncNow();
+    unawaited(showSyncActionsAndRun(context, context.read<BoardController>()));
   }
 
   void _cancelSync() {
@@ -806,7 +802,7 @@ class _SyncIndicator extends StatelessWidget {
                 ? [
                     lastSuccess,
                     if (pendingDetail != null) pendingDetail,
-                    '点击立即同步',
+                    '点击选择上传、下载或合并',
                   ].join('\n')
                 : [
                     error!,

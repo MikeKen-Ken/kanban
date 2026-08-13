@@ -2,22 +2,22 @@
 
 ## 触发
 
-- 本地改动后按 `pushDebounceSeconds` 防抖推送（默认 60s，范围 5–60s）；需开启 `autoSync`；本地立刻落盘，仅延迟云端请求；若处于失败/限流冷却，再延后到冷却结束
-- 启动时拉取：仅当 `autoPull` 开启时执行一次 `pullAndMerge`
-- 手动同步：先 `pullAndMerge`，有变更时再写回远端；**不受**拉取间隔与失败冷却限制，也不受 `autoSync` / `autoPull` 限制
-- 后台轮询：按 `pollIntervalSeconds` 单次定时续期（默认 600s，范围 60–600s）；需开启 `autoPull`
-- 保存 WebDAV 配置：只落盘并按需启停轮询，**不**自动触发同步
-- 配置项：`WebDavConfig.enabled`、`autoSync`（自动上传）、`autoPull`（自动拉取）、`pollIntervalSeconds`、`pushDebounceSeconds`
-- 仅手动：关闭 `autoSync` 与 `autoPull` 后，只有点「立即同步」才会 `pullAndMerge` / 上传
+- **没有默认自动同步**：启动、后台轮询、本地改动后都不会自动上传或拉取。`autoSync` / `autoPull` 仍保留在配置 JSON 中以兼容旧数据，读取时一律视为关闭，设置页也已隐藏。
+- **上传**：全量推送当前本机工作区覆盖云端（`baseline` 为空，含远端多余项目/列清理）；覆盖前需二次确认
+- **下载**：全量拉取云端工作区并覆盖本机，不合并、不回推；云端无数据时失败并保留本机
+- **合并**：现有 `pullAndMerge`：三路合并后，有变更再增量写回远端；**不受**冷却限制
+- 保存 WebDAV 配置：只落盘，**不**自动触发同步，也**不**启动轮询
+- 配置项：`WebDavConfig.enabled`；`autoSync` / `autoPull` / 间隔字段仅兼容存储，不驱动行为
 
 ## 节流与退避
 
 - 用「上次尝试时间」节流，失败也会拉开间隔（不再只认成功时间）
 - 失败指数退避；识别 `429` / `toomanyrequests` 时从 60s 起跳，上限 10 分钟
-- 自动轮询与进行中的同步重叠时直接丢弃，不立刻连环重试
+- 手动同步进行中再点上传/下载/合并会排队，结束后再执行
 - 合并结果与远端 JSON 一致时跳过 JSON 回推，减少无意义写入
-- **增量推送**：相对 SyncBase（本地防抖推送）或相对刚拉取的远端（合并回推），只上传内容变化的 JSON 文件；未改项目/列/设置整文件跳过。附件仍按「本地有、远端无」补传。
-- **增量拉取**：读远端 `sync_index.json`，与本地 SyncBase 内容指纹比对；一致则复用 SyncBase、不下载该 JSON。无索引或无 SyncBase 时全量拉取。
+- **上传**全量覆盖云端 JSON（含清理远端多余项目/列）；**合并回推**仍按相对远端的增量
+- **下载**全量拉取云端 JSON（不复用 SyncBase 跳过），覆盖本机后不回推
+- **合并拉取**：读远端 `sync_index.json`，与本地 SyncBase 内容指纹比对；一致则复用 SyncBase、不下载该 JSON。无索引或无 SyncBase 时全量拉取。
 
 ## 远端结构
 

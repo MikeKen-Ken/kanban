@@ -160,7 +160,7 @@ void main() {
     }
   });
 
-  test('自包含 Worker 同时验证运行时与 Cursor SDK', () async {
+  test('自包含 Worker 同时验证运行时、依赖与 Cursor 原生模块', () async {
     final temp = await Directory.systemTemp.createTemp('kanban_worker_bundle_');
     try {
       final dist = Directory('${temp.path}${Platform.pathSeparator}dist');
@@ -168,6 +168,11 @@ void main() {
       final sdk = Directory(
         '${temp.path}${Platform.pathSeparator}node_modules'
         '${Platform.pathSeparator}@cursor${Platform.pathSeparator}sdk',
+      );
+      final sdkNative = Directory(
+        '${temp.path}${Platform.pathSeparator}node_modules'
+        '${Platform.pathSeparator}@cursor${Platform.pathSeparator}'
+        'sdk-win32-x64${Platform.pathSeparator}vendor',
       );
       final mcpClient = Directory(
         '${temp.path}${Platform.pathSeparator}node_modules'
@@ -182,6 +187,11 @@ void main() {
       await dist.create(recursive: true);
       await runtime.create(recursive: true);
       await sdk.create(recursive: true);
+      await Directory('${sdkNative.path}${Platform.pathSeparator}tree-sitter')
+          .create(recursive: true);
+      await Directory(
+        '${sdkNative.path}${Platform.pathSeparator}tree-sitter-bash',
+      ).create(recursive: true);
       await mcpClient.create(recursive: true);
       await codexBin.create(recursive: true);
       final cli = File('${dist.path}${Platform.pathSeparator}cli.js');
@@ -189,14 +199,101 @@ void main() {
       await cli.writeAsString('');
       await File('${runtime.path}${Platform.pathSeparator}$nodeName')
           .writeAsString('');
+      await File('${sdk.path}${Platform.pathSeparator}package.json')
+          .writeAsString('{"version":"1.0.28"}');
+      await File(
+        '${mcpClient.path}${Platform.pathSeparator}package.json',
+      ).writeAsString('{}');
+      await File(
+        '${sdkNative.path}${Platform.pathSeparator}tree-sitter'
+        '${Platform.pathSeparator}binding.node',
+      ).writeAsString('');
+      await File(
+        '${sdkNative.path}${Platform.pathSeparator}tree-sitter-bash'
+        '${Platform.pathSeparator}binding.node',
+      ).writeAsString('');
       await File('${codexBin.path}${Platform.pathSeparator}codex.js')
           .writeAsString('');
 
       final result = await ensureAgentDispatchWorker(
         workerScriptPath: cli.path,
+        commandRunner: (executable, arguments) async {
+          if (arguments.contains('--version')) {
+            return ProcessResult(1, 0, 'v24.18.0\n', '');
+          }
+          return ProcessResult(1, 0, '', '');
+        },
       );
       expect(result.ok, isTrue);
-      expect(result.message, contains('Worker 已就绪'));
+      expect(result.message, contains('健康检查通过'));
+      expect(result.message, contains('Cursor SDK=1.0.28'));
+    } finally {
+      await temp.delete(recursive: true);
+    }
+  });
+
+  test('Worker 原生模块访问冲突会返回可读诊断', () async {
+    final temp = await Directory.systemTemp.createTemp('kanban_worker_crash_');
+    try {
+      final dist = Directory('${temp.path}${Platform.pathSeparator}dist');
+      final runtime = Directory('${temp.path}${Platform.pathSeparator}runtime');
+      final modules =
+          Directory('${temp.path}${Platform.pathSeparator}node_modules');
+      await dist.create(recursive: true);
+      await runtime.create(recursive: true);
+      await Directory('${modules.path}${Platform.pathSeparator}@cursor'
+              '${Platform.pathSeparator}sdk')
+          .create(recursive: true);
+      await Directory('${modules.path}${Platform.pathSeparator}@cursor'
+              '${Platform.pathSeparator}sdk-win32-x64'
+              '${Platform.pathSeparator}vendor${Platform.pathSeparator}tree-sitter')
+          .create(recursive: true);
+      await Directory('${modules.path}${Platform.pathSeparator}@cursor'
+              '${Platform.pathSeparator}sdk-win32-x64'
+              '${Platform.pathSeparator}vendor${Platform.pathSeparator}tree-sitter-bash')
+          .create(recursive: true);
+      await Directory(
+              '${modules.path}${Platform.pathSeparator}@modelcontextprotocol'
+              '${Platform.pathSeparator}client')
+          .create(recursive: true);
+      await Directory('${modules.path}${Platform.pathSeparator}@openai'
+              '${Platform.pathSeparator}codex${Platform.pathSeparator}bin')
+          .create(recursive: true);
+      final cli = File('${dist.path}${Platform.pathSeparator}cli.js');
+      await cli.writeAsString('');
+      await File('${runtime.path}${Platform.pathSeparator}node.exe')
+          .writeAsString('');
+      await File('${modules.path}${Platform.pathSeparator}@cursor'
+              '${Platform.pathSeparator}sdk${Platform.pathSeparator}package.json')
+          .writeAsString('{"version":"1.0.28"}');
+      await File('${modules.path}${Platform.pathSeparator}@modelcontextprotocol'
+              '${Platform.pathSeparator}client${Platform.pathSeparator}package.json')
+          .writeAsString('{}');
+      await File('${modules.path}${Platform.pathSeparator}@openai'
+              '${Platform.pathSeparator}codex${Platform.pathSeparator}bin'
+              '${Platform.pathSeparator}codex.js')
+          .writeAsString('');
+      for (final grammar in ['tree-sitter', 'tree-sitter-bash']) {
+        await File('${modules.path}${Platform.pathSeparator}@cursor'
+                '${Platform.pathSeparator}sdk-win32-x64'
+                '${Platform.pathSeparator}vendor${Platform.pathSeparator}$grammar'
+                '${Platform.pathSeparator}binding.node')
+            .writeAsString('');
+      }
+
+      final health = await inspectAgentDispatchWorker(
+        cli.path,
+        commandRunner: (executable, arguments) async {
+          if (arguments.contains('--version')) {
+            return ProcessResult(1, 0, 'v24.18.0\n', '');
+          }
+          return ProcessResult(1, -1073741819, '', '');
+        },
+      );
+
+      expect(health.ok, isFalse);
+      expect(health.error, contains('原生模块健康检查失败'));
+      expect(health.error, contains('-1073741819'));
     } finally {
       await temp.delete(recursive: true);
     }

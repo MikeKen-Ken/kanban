@@ -93,18 +93,24 @@ class _AgentDispatchScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ModalBarrier(
-          dismissible: true,
-          color: Colors.black54,
-          onDismiss: onDismiss,
-        ),
-        SafeArea(
-          child: Center(child: child),
-        ),
-      ],
+    // 工作台插在 MaterialApp.builder 中，是 Navigator Overlay 的兄弟而不是后代。
+    // Tooltip / 下拉菜单 / PopupMenu 都需要 Overlay 祖先，否则悬停会插入失败，
+    // 在 Release 里表现为一块巨大的空灰色 ErrorWidget。
+    return Overlay.wrap(
+      clipBehavior: Clip.none,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ModalBarrier(
+            dismissible: true,
+            color: Colors.black54,
+            onDismiss: onDismiss,
+          ),
+          SafeArea(
+            child: Center(child: child),
+          ),
+        ],
+      ),
     );
   }
 }

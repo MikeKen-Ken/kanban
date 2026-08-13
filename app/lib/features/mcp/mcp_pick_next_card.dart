@@ -116,6 +116,8 @@ Future<CallToolResult> mcpPickNextCard(
       'columnTitle': columnTitle,
       'movedToDoing': !alreadyInDoing && !isReworkSource,
       'workMode': rework ? 'rework' : 'normal',
+      if (card.commitRef != null && card.commitRef!.isNotEmpty)
+        'commitRef': card.commitRef,
     };
     if (!includeWorkItems) {
       return mcpJsonResult(payload);

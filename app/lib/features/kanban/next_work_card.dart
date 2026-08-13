@@ -73,6 +73,8 @@ Map<String, dynamic> buildCardWorkScope(KanbanCard card) {
     'workMode': rework ? 'rework' : 'normal',
     'workItems': buildCardWorkItems(card),
     if (card.labels.isNotEmpty) 'labels': card.labels,
+    if (card.commitRef != null && card.commitRef!.isNotEmpty)
+      'commitRef': card.commitRef,
   };
 }
 

@@ -193,6 +193,7 @@ void main() {
       reworkColumn.id,
       cardId!,
       description: '背景说明',
+      commitRef: 'abc1234',
       verificationFeedback: [
         ChecklistItem(id: 'fb1', text: '修好我'),
       ],
@@ -205,6 +206,7 @@ void main() {
     expect(payload['cardId'], cardId);
     expect(payload['sourceColumn'], '待返工');
     expect(payload['workMode'], 'rework');
+    expect(payload['commitRef'], 'abc1234');
     expect(payload['movedToDoing'], isFalse);
     expect(payload['columnId'], KanbanBoard.defaultReworkColumnId);
     expect(payload['workItems'], [

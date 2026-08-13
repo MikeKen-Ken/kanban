@@ -297,22 +297,24 @@ mixin _WebDavSyncPull
   }
 
   @override
-  Future<void> _pullAndMerge({bool userInitiated = false}) async {
+  Future<void> _pullAndMerge({
+    bool userInitiated = false,
+    bool replaceLocal = false,
+  }) async {
+    if (!userInitiated) {
+      print('已忽略自动拉取：仅手动下载或合并会读取云端');
+      return;
+    }
+
     if (_syncInFlight || _pushInFlight) {
-      // 仅用户手动同步才排队；自动轮询重叠直接丢弃，避免失败后立即连环重试
-      if (userInitiated) {
-        _pullPending = true;
-        _pullPendingUserInitiated = true;
-      }
+      _pullPending = true;
+      _pullPendingUserInitiated = true;
+      _pullPendingReplace = replaceLocal;
       return;
     }
 
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return;
-
-    if (!userInitiated && !_canStartAutoSync(config)) {
-      return;
-    }
 
     // note: 手动同步不受自动节流/冷却限制，由用户主动触发
 
@@ -324,7 +326,6 @@ mixin _WebDavSyncPull
 
     final runId = _syncRunId;
     _syncInFlight = true;
-    _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
     _resetEnsuredRemoteDirs();
@@ -335,28 +336,43 @@ mixin _WebDavSyncPull
       var local = await _captureWorkspace();
       final syncBase = await _syncBaseStore.load();
       _setProgress(const SyncProgress(phase: SyncPhase.downloading));
-      final remote = await pullRemote(reuseFrom: syncBase);
+      final remote = await pullRemote(
+        reuseFrom: replaceLocal ? null : syncBase,
+      );
       _ensureNotCancelled(runId);
       if (remote == null) {
-        // note: 远端为空时上传本地；先结束本回合再 push
+        if (replaceLocal) {
+          _setStatus(SyncStatus.error, error: '云端没有可下载的数据');
+          return;
+        }
+        // note: 合并时远端为空则上传本地；先结束本回合再 push
         _syncInFlight = false;
         await _pushNow(force: true, workspace: local, baseline: null);
         return;
       }
 
       _setProgress(const SyncProgress(phase: SyncPhase.merging));
-      var merged = _mergeWorkspaces(local, remote, syncBase);
-      _ensureNotCancelled(runId);
+      late ProjectWorkspaceSnapshot merged;
+      if (replaceLocal) {
+        merged = await _withLocalTransaction(() async {
+          await _saveWorkspace(remote);
+          return remote;
+        });
+        _ensureNotCancelled(runId);
+      } else {
+        merged = _mergeWorkspaces(local, remote, syncBase);
+        _ensureNotCancelled(runId);
 
-      // 合并落盘前重新捕获，避免网络期间的本地写入被旧快照覆盖。
-      merged = await _withLocalTransaction(() async {
-        final latest = await _loadWorkspace();
-        final next = _workspaceJsonEquals(latest, local)
-            ? merged
-            : _mergeWorkspaces(latest, remote, syncBase);
-        await _saveWorkspace(next);
-        return next;
-      });
+        // 合并落盘前重新捕获，避免网络期间的本地写入被旧快照覆盖。
+        merged = await _withLocalTransaction(() async {
+          final latest = await _loadWorkspace();
+          final next = _workspaceJsonEquals(latest, local)
+              ? merged
+              : _mergeWorkspaces(latest, remote, syncBase);
+          await _saveWorkspace(next);
+          return next;
+        });
+      }
 
       final client = _client(config);
       var attachmentFailures = 0;
@@ -396,6 +412,17 @@ mixin _WebDavSyncPull
       }
 
       _applyAttachmentSyncWarning(attachmentFailures);
+
+      if (replaceLocal) {
+        if (!_shouldCommit(runId)) {
+          throw const SyncCancelledException();
+        }
+        await _syncBaseStore.save(merged);
+        _noteSuccess();
+        _setStatus(SyncStatus.success);
+        unawaited(refreshPendingUploadCount());
+        return;
+      }
 
       // note: 按文件级差异判断；整表 JSON 编码顺序不同不应当触发整表回推
       if (countPendingSyncUploads(workspace: merged, baseline: remote) == 0) {
