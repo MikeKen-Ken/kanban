@@ -40,14 +40,6 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
         : ProjectSettings.defaultWallpaperIntervalSeconds;
   }
 
-  Set<String> _allWallpaperIds() => context
-      .read<BoardController>()
-      .wallpapers
-      .map((item) => item.id)
-      .toSet();
-
-  void _selectAll() => setState(() => _selected = _allWallpaperIds());
-
   String _intervalLabel(int seconds) {
     if (seconds < 60) return '$seconds 秒';
     if (seconds < 3600) return '${seconds ~/ 60} 分钟';
@@ -106,11 +98,15 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
 
   Future<void> _save() async {
     setState(() => _busy = true);
-    await context.read<BoardController>().setProjectWallpapers(
-          wallpaperIds: _selected.toList(growable: false),
-          mode: _mode,
-          intervalSeconds: _intervalSeconds,
-        );
+    final controller = context.read<BoardController>();
+    final wallpaperIds = _mode == WallpaperPlaybackMode.random
+        ? controller.wallpapers.map((item) => item.id).toList(growable: false)
+        : _selected.toList(growable: false);
+    await controller.setProjectWallpapers(
+      wallpaperIds: wallpaperIds,
+      mode: _mode,
+      intervalSeconds: _intervalSeconds,
+    );
     if (mounted) Navigator.pop(context);
   }
 
@@ -181,13 +177,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                             ],
                             selected: {_mode},
                             onSelectionChanged: (value) {
-                              final next = value.first;
-                              setState(() {
-                                _mode = next;
-                                if (next == WallpaperPlaybackMode.random) {
-                                  _selected = _allWallpaperIds();
-                                }
-                              });
+                              setState(() => _mode = value.first);
                             },
                           ),
                         ),
@@ -226,12 +216,8 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                                       () => _intervalSeconds = value!,
                                     ),
                           ),
-                          TextButton(
-                            onPressed: _busy ? null : _selectAll,
-                            child: const Text('全选'),
-                          ),
                           const Spacer(),
-                          Text('已选 ${_selected.length} 张'),
+                          const Text('轮播全部壁纸'),
                         ],
                       ),
                     ],
@@ -253,23 +239,21 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                       itemCount: wallpapers.length,
                       itemBuilder: (context, index) {
                         final asset = wallpapers[index];
+                        final showSelection = _deleteMode ||
+                            _mode == WallpaperPlaybackMode.fixed;
                         final checked = _deleteMode
                             ? _deleteSelection.contains(asset.id)
                             : _selected.contains(asset.id);
                         return InkWell(
-                          onTap: _busy
+                          onTap: _busy || !showSelection
                               ? null
                               : () => setState(() {
-                                    final set = _deleteMode
-                                        ? _deleteSelection
-                                        : _selected;
-                                    if (_deleteMode ||
-                                        _mode == WallpaperPlaybackMode.random) {
-                                      checked
-                                          ? set.remove(asset.id)
-                                          : set.add(asset.id);
+                                    if (_deleteMode) {
+                                      _deleteSelection.contains(asset.id)
+                                          ? _deleteSelection.remove(asset.id)
+                                          : _deleteSelection.add(asset.id);
                                     } else {
-                                      set
+                                      _selected
                                         ..clear()
                                         ..add(asset.id);
                                     }
@@ -281,23 +265,24 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                                 borderRadius: BorderRadius.circular(12),
                                 child: WallpaperImage(wallpaperId: asset.id),
                               ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: CircleAvatar(
-                                  radius: 14,
-                                  backgroundColor: checked
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.black54,
-                                  child: Icon(
-                                    checked
-                                        ? Icons.check
-                                        : Icons.circle_outlined,
-                                    size: 18,
-                                    color: Colors.white,
+                              if (showSelection)
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: checked
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.black54,
+                                    child: Icon(
+                                      checked
+                                          ? Icons.check
+                                          : Icons.circle_outlined,
+                                      size: 18,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
-                              ),
                               Positioned(
                                 left: 8,
                                 right: 8,

@@ -97,7 +97,9 @@ extension BoardControllerWallpapers on BoardController {
         final selected =
             current.wallpaperPlaybackMode == WallpaperPlaybackMode.fixed
                 ? [addedIds.last]
-                : {...current.wallpaperIds, ...addedIds}.toList(growable: false);
+                : sharedContent.wallpapers
+                    .map((item) => item.id)
+                    .toList(growable: false);
         final activeId = current.wallpaperPlaybackMode == WallpaperPlaybackMode.fixed
             ? addedIds.last
             : _nextWallpaperActiveId(
@@ -133,18 +135,15 @@ extension BoardControllerWallpapers on BoardController {
   }) async {
     return _withBoardMutation(() async {
       final available = sharedContent.wallpapers.map((item) => item.id).toSet();
-      var selected = wallpaperIds
-          .where(available.contains)
-          .toSet()
-          .toList(growable: false);
-      if (mode == WallpaperPlaybackMode.random &&
-          selected.length < 2 &&
-          available.length >= 2) {
-        selected = sharedContent.wallpapers
-            .map((item) => item.id)
-            .where(available.contains)
-            .toList(growable: false);
-      }
+      var selected = mode == WallpaperPlaybackMode.random
+          ? sharedContent.wallpapers
+              .map((item) => item.id)
+              .where(available.contains)
+              .toList(growable: false)
+          : wallpaperIds
+              .where(available.contains)
+              .toSet()
+              .toList(growable: false);
       if (mode == WallpaperPlaybackMode.fixed && selected.length > 1) {
         selected = [selected.first];
       }

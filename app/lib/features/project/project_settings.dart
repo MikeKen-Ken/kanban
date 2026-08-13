@@ -93,7 +93,7 @@ class ProjectSettings {
   static const defaultCardSurfaceOpacity = 1.0;
   static const minCardSurfaceOpacity = 0.35;
 
-  /// 新项目默认每 10 秒从所选壁纸中随机轮播。
+  /// 新项目默认每 10 秒从全部壁纸中随机轮播。
   static const defaultWallpaperIntervalSeconds = 10;
   static const legacyWallpaperIntervalSeconds = 60;
   static const minWallpaperIntervalSeconds = 10;
