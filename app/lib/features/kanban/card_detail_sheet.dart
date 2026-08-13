@@ -37,7 +37,7 @@ import 'verify_column.dart';
 @visibleForTesting
 const bool kCardDetailSheetEnableDrag = false;
 
-/// 卡片详情底部弹层：标题、备注、子任务、验证反馈、提交号、优先级、标签、卡片背景色、截止日期等
+/// 卡片详情底部弹层：标题、备注、子任务、验证反馈、优先级、标签、卡片背景色、截止日期、关联、提交号等
 Future<void> showCardDetailSheet({
   required BuildContext context,
   required String columnId,
@@ -1043,7 +1043,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                           ),
                         const SizedBox(height: 20),
-                        // 子任务与验证反馈；其后依次为提交号、优先级、标签、卡片背景色。
+                        // 子任务与验证反馈；其后依次为优先级、标签、卡片背景色等，提交号在最底部。
                         CardDetailChecklistSection(
                           checklist: _checklist,
                           verificationFeedback: _verificationFeedback,
@@ -1061,11 +1061,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _removeVerificationFeedbackItem,
                           onEditVerificationFeedbackItem:
                               _editVerificationFeedbackItem,
-                        ),
-                        const SizedBox(height: 20),
-                        CardDetailCommitRefSection(
-                          controller: _commitRefController,
-                          onChanged: () => _safeSetState(() {}),
                         ),
                         const SizedBox(height: 20),
                         Text('优先级', style: theme.textTheme.titleSmall),
@@ -1292,6 +1287,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               card: card,
                             );
                           },
+                        ),
+                        const SizedBox(height: 20),
+                        CardDetailCommitRefSection(
+                          controller: _commitRefController,
+                          onChanged: () => _safeSetState(() {}),
                         ),
                       ],
                     ),
