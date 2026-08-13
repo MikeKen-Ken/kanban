@@ -5,6 +5,30 @@ extension BoardControllerWallpapers on BoardController {
 
   bool get hasDisplayableBackground => displayableWallpaperIds.isNotEmpty;
 
+  String _nextWallpaperActiveId({
+    required String currentActiveId,
+    required List<String> selected,
+  }) {
+    if (selected.isEmpty) return '';
+    if (currentActiveId.isNotEmpty && selected.contains(currentActiveId)) {
+      return currentActiveId;
+    }
+    return selected.first;
+  }
+
+  /// 随机轮播切换当前展示壁纸，并同步到项目设置。
+  Future<void> setActiveWallpaper(String wallpaperId) async {
+    if (!displayableWallpaperIds.contains(wallpaperId)) return;
+    if (projectSettings.wallpaperActiveId == wallpaperId) return;
+    return _withBoardMutation(() async {
+      await _persistProjectSettings(
+        projectSettings
+            .copyWith(wallpaperActiveId: wallpaperId, clearConflictSide: true)
+            .bump(),
+      );
+    });
+  }
+
   /// 根据项目设置与本地缓存，刷新可渲染的壁纸 id 列表。
   Future<void> refreshDisplayableWallpapers() async {
     final candidates = projectSettings.effectiveWallpaperIds;
@@ -76,9 +100,16 @@ extension BoardControllerWallpapers on BoardController {
             current.wallpaperPlaybackMode == WallpaperPlaybackMode.fixed
                 ? [addedIds.last]
                 : {...current.wallpaperIds, ...addedIds}.toList(growable: false);
+        final activeId = current.wallpaperPlaybackMode == WallpaperPlaybackMode.fixed
+            ? addedIds.last
+            : _nextWallpaperActiveId(
+                currentActiveId: current.wallpaperActiveId,
+                selected: selected,
+              );
         final next = current
             .copyWith(
               wallpaperIds: selected,
+              wallpaperActiveId: activeId,
               backgroundAttachmentId: selected.isEmpty ? '' : selected.first,
               wallpaperPlaybackMode: selected.length > 1
                   ? current.wallpaperPlaybackMode
@@ -119,11 +150,16 @@ extension BoardControllerWallpapers on BoardController {
       if (mode == WallpaperPlaybackMode.fixed && selected.length > 1) {
         selected = [selected.first];
       }
+      final activeId = _nextWallpaperActiveId(
+        currentActiveId: projectSettings.wallpaperActiveId,
+        selected: selected,
+      );
       await _persistProjectSettings(
         projectSettings
             .copyWith(
               backgroundAttachmentId: selected.isEmpty ? '' : selected.first,
               wallpaperIds: selected,
+              wallpaperActiveId: activeId,
               wallpaperPlaybackMode:
                   selected.length > 1 ? mode : WallpaperPlaybackMode.fixed,
               wallpaperIntervalSeconds: intervalSeconds,
@@ -163,9 +199,14 @@ extension BoardControllerWallpapers on BoardController {
         if (selected.length == current.wallpaperIds.length && !legacyRemoved) {
           continue;
         }
+        final activeRemoved = wallpaperIds.contains(current.wallpaperActiveId);
+        final activeId = activeRemoved
+            ? (selected.isEmpty ? '' : selected.first)
+            : current.wallpaperActiveId;
         final next = current
             .copyWith(
               wallpaperIds: selected,
+              wallpaperActiveId: activeId,
               backgroundAttachmentId: legacyRemoved
                   ? (selected.isEmpty ? '' : selected.first)
                   : current.backgroundAttachmentId,

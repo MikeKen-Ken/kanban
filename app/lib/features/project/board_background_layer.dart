@@ -17,12 +17,14 @@ class BoardBackgroundLayer extends StatefulWidget {
   const BoardBackgroundLayer({
     super.key,
     required this.wallpaperIds,
+    required this.activeWallpaperId,
     required this.playbackMode,
     required this.intervalSeconds,
     required this.overlayOpacity,
   });
 
   final List<String> wallpaperIds;
+  final String activeWallpaperId;
   final WallpaperPlaybackMode playbackMode;
   final int intervalSeconds;
   final double overlayOpacity;
@@ -34,7 +36,14 @@ class BoardBackgroundLayer extends StatefulWidget {
 class _BoardBackgroundLayerState extends State<BoardBackgroundLayer> {
   final Random _random = Random();
   Timer? _timer;
-  int _index = 0;
+
+  String _resolveActiveId() {
+    final ids = widget.wallpaperIds;
+    if (ids.isEmpty) return '';
+    final active = widget.activeWallpaperId;
+    if (active.isNotEmpty && ids.contains(active)) return active;
+    return ids.first;
+  }
 
   @override
   void initState() {
@@ -45,10 +54,10 @@ class _BoardBackgroundLayerState extends State<BoardBackgroundLayer> {
   @override
   void didUpdateWidget(covariant BoardBackgroundLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_sameIds(oldWidget.wallpaperIds, widget.wallpaperIds)) _index = 0;
     if (oldWidget.playbackMode != widget.playbackMode ||
         oldWidget.intervalSeconds != widget.intervalSeconds ||
-        !_sameIds(oldWidget.wallpaperIds, widget.wallpaperIds)) {
+        !_sameIds(oldWidget.wallpaperIds, widget.wallpaperIds) ||
+        oldWidget.activeWallpaperId != widget.activeWallpaperId) {
       _restartTimer();
     }
   }
@@ -72,11 +81,12 @@ class _BoardBackgroundLayerState extends State<BoardBackgroundLayer> {
     );
     _timer = Timer.periodic(Duration(seconds: seconds), (_) {
       if (!mounted || widget.wallpaperIds.length < 2) return;
-      var next = _index;
-      while (next == _index) {
-        next = _random.nextInt(widget.wallpaperIds.length);
+      final current = _resolveActiveId();
+      var next = current;
+      while (next == current) {
+        next = widget.wallpaperIds[_random.nextInt(widget.wallpaperIds.length)];
       }
-      setState(() => _index = next);
+      context.read<BoardController>().setActiveWallpaper(next);
     });
   }
 
@@ -89,9 +99,8 @@ class _BoardBackgroundLayerState extends State<BoardBackgroundLayer> {
   @override
   Widget build(BuildContext context) {
     if (widget.wallpaperIds.isEmpty) return const SizedBox.expand();
-    if (_index >= widget.wallpaperIds.length) _index = 0;
     final opacity = ProjectSettings.clampOverlayOpacity(widget.overlayOpacity);
-    final wallpaperId = widget.wallpaperIds[_index];
+    final wallpaperId = _resolveActiveId();
     return Stack(
       fit: StackFit.expand,
       children: [

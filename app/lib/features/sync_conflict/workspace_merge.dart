@@ -51,6 +51,7 @@ bool _stringListEq(List<String> a, List<String> b) {
 
 bool _wallpaperConfigEq(ProjectSettings a, ProjectSettings b) =>
     _stringListEq(a.wallpaperIds, b.wallpaperIds) &&
+    a.wallpaperActiveId == b.wallpaperActiveId &&
     a.wallpaperPlaybackMode == b.wallpaperPlaybackMode &&
     a.wallpaperIntervalSeconds == b.wallpaperIntervalSeconds;
 
@@ -259,6 +260,11 @@ ProjectSettings mergeSettings({
         : wallpaperRemoteChanged
             ? effectiveRemote.wallpaperIds
             : base.wallpaperIds,
+    wallpaperActiveId: wallpaperLocalChanged
+        ? effectiveLocal.wallpaperActiveId
+        : wallpaperRemoteChanged
+            ? effectiveRemote.wallpaperActiveId
+            : base.wallpaperActiveId,
     wallpaperPlaybackMode: wallpaperLocalChanged
         ? effectiveLocal.wallpaperPlaybackMode
         : wallpaperRemoteChanged

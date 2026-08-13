@@ -12,6 +12,7 @@ class ProjectSettings {
     this.themeId = '',
     this.backgroundAttachmentId = '',
     this.wallpaperIds = const [],
+    this.wallpaperActiveId = '',
     this.wallpaperPlaybackMode = WallpaperPlaybackMode.random,
     this.wallpaperIntervalSeconds = defaultWallpaperIntervalSeconds,
     this.backgroundOverlayOpacity = defaultBackgroundOverlayOpacity,
@@ -36,6 +37,9 @@ class ProjectSettings {
 
   /// 当前项目选择的工作区壁纸 id；固定模式通常只有一项。
   final List<String> wallpaperIds;
+
+  /// 随机轮播时当前展示的壁纸 id；空表示使用 [wallpaperIds] 首项。
+  final String wallpaperActiveId;
 
   final WallpaperPlaybackMode wallpaperPlaybackMode;
   final int wallpaperIntervalSeconds;
@@ -74,6 +78,15 @@ class ProjectSettings {
           ? const <String>[]
           : <String>[backgroundAttachmentId]);
 
+  String activeWallpaperIdFor(List<String> displayableIds) {
+    if (displayableIds.isEmpty) return '';
+    if (wallpaperActiveId.isNotEmpty &&
+        displayableIds.contains(wallpaperActiveId)) {
+      return wallpaperActiveId;
+    }
+    return displayableIds.first;
+  }
+
   static const defaultDoneColumnName = '已完成';
   static const defaultBackgroundOverlayOpacity = 0.4;
   static const maxBackgroundOverlayOpacity = 0.7;
@@ -91,6 +104,7 @@ class ProjectSettings {
     String? themeId,
     String? backgroundAttachmentId,
     List<String>? wallpaperIds,
+    String? wallpaperActiveId,
     WallpaperPlaybackMode? wallpaperPlaybackMode,
     int? wallpaperIntervalSeconds,
     double? backgroundOverlayOpacity,
@@ -110,6 +124,7 @@ class ProjectSettings {
       backgroundAttachmentId:
           backgroundAttachmentId ?? this.backgroundAttachmentId,
       wallpaperIds: wallpaperIds ?? this.wallpaperIds,
+      wallpaperActiveId: wallpaperActiveId ?? this.wallpaperActiveId,
       wallpaperPlaybackMode:
           wallpaperPlaybackMode ?? this.wallpaperPlaybackMode,
       wallpaperIntervalSeconds: wallpaperIntervalSeconds == null
@@ -159,6 +174,7 @@ class ProjectSettings {
       if (backgroundAttachmentId.isNotEmpty)
         'backgroundAttachmentId': backgroundAttachmentId,
       if (wallpaperIds.isNotEmpty) 'wallpaperIds': wallpaperIds,
+      if (wallpaperActiveId.isNotEmpty) 'wallpaperActiveId': wallpaperActiveId,
       if (wallpaperPlaybackMode != WallpaperPlaybackMode.fixed)
         'wallpaperPlaybackMode': wallpaperPlaybackMode.name,
       if (wallpaperIntervalSeconds != defaultWallpaperIntervalSeconds)
@@ -211,6 +227,7 @@ class ProjectSettings {
           .where((id) => id.isNotEmpty)
           .toSet()
           .toList(growable: false),
+      wallpaperActiveId: json['wallpaperActiveId'] as String? ?? '',
       wallpaperPlaybackMode: wallpaperMode,
       wallpaperIntervalSeconds: clampWallpaperIntervalSeconds(
         intervalRaw ??

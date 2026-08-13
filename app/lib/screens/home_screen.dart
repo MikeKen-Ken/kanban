@@ -547,6 +547,7 @@ class _HomeScreenState extends State<HomeScreen> {
         body: _buildBoardBody(
           compact: compact,
           wallpaperIds: controller.displayableWallpaperIds,
+          activeWallpaperId: controller.projectSettings.wallpaperActiveId,
           wallpaperPlaybackMode:
               controller.projectSettings.wallpaperPlaybackMode,
           wallpaperIntervalSeconds:
@@ -560,6 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBoardBody({
     required bool compact,
     required List<String> wallpaperIds,
+    required String activeWallpaperId,
     required WallpaperPlaybackMode wallpaperPlaybackMode,
     required int wallpaperIntervalSeconds,
     required double overlayOpacity,
@@ -675,6 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         BoardBackgroundLayer(
           wallpaperIds: wallpaperIds,
+          activeWallpaperId: activeWallpaperId,
           playbackMode: wallpaperPlaybackMode,
           intervalSeconds: wallpaperIntervalSeconds,
           overlayOpacity: overlayOpacity,
