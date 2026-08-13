@@ -3,6 +3,7 @@ import {
   StreamableHTTPClientTransport,
   type CallToolResult,
 } from "@modelcontextprotocol/client";
+import { settleWithin } from "./async_limit.js";
 
 export class KanbanMcpClient {
   private readonly client = new Client({
@@ -33,7 +34,8 @@ export class KanbanMcpClient {
   }
 
   async close(): Promise<void> {
-    await this.client.close();
+    // Streamable HTTP / SSE 的 close 可能一直等不到服务端结束流。
+    await settleWithin(2000, this.client.close());
   }
 
   private resultText(result: CallToolResult): string {

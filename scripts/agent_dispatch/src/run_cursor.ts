@@ -1,5 +1,6 @@
 import { writeSync } from "node:fs";
 import { Agent, CursorAgentError } from "@cursor/sdk";
+import { settleWithin } from "./async_limit.js";
 import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
 
 function logLine(line: string): void {
@@ -101,7 +102,7 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
 
       return { ok: result.status === "finished", summary };
     } finally {
-      await agent[Symbol.asyncDispose]();
+      await settleWithin(8000, agent[Symbol.asyncDispose]());
     }
   } catch (err) {
     if (err instanceof CursorAgentError) {

@@ -105,6 +105,26 @@ import {
   Client,
   StreamableHTTPClientTransport
 } from "@modelcontextprotocol/client";
+
+// src/async_limit.ts
+function settleWithin(ms, work) {
+  return new Promise((resolve2) => {
+    const timer = setTimeout(resolve2, ms);
+    timer.unref?.();
+    work.then(
+      () => {
+        clearTimeout(timer);
+        resolve2();
+      },
+      () => {
+        clearTimeout(timer);
+        resolve2();
+      }
+    );
+  });
+}
+
+// src/mcp_client.ts
 var KanbanMcpClient = class {
   client = new Client({
     name: "kanban-agent-worker",
@@ -128,7 +148,7 @@ var KanbanMcpClient = class {
     }
   }
   async close() {
-    await this.client.close();
+    await settleWithin(2e3, this.client.close());
   }
   resultText(result) {
     return result.content.filter(
@@ -353,7 +373,7 @@ async function runCursor(job) {
       const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor \u4F1A\u8BDD\u5B8C\u6210" : `Cursor \u72B6\u6001\uFF1A${result.status}`;
       return { ok: result.status === "finished", summary };
     } finally {
-      await agent[Symbol.asyncDispose]();
+      await settleWithin(8e3, agent[Symbol.asyncDispose]());
     }
   } catch (err) {
     if (err instanceof CursorAgentError) {
@@ -364,6 +384,13 @@ async function runCursor(job) {
     }
     throw err;
   }
+}
+
+// src/worker_log.ts
+import { writeSync as writeSync2 } from "node:fs";
+function workerLog(line) {
+  writeSync2(1, `${line}
+`);
 }
 
 // src/run_batch.ts
@@ -378,17 +405,17 @@ async function runBatch(job) {
   const mcp = new KanbanMcpClient();
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
   let processedCards = 0;
-  console.log(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
+  workerLog(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
   try {
     await mcp.connect(job.mcpEndpoint);
-    console.log("Worker \u5DF2\u8FDE\u63A5\u770B\u677F MCP\uFF1BWorker \u53EA\u8BFB\u68C0\u67E5\u961F\u5217\uFF0CSkill \u81EA\u5DF1\u9886\u53D6\u5361\u7247");
+    workerLog("Worker \u5DF2\u8FDE\u63A5\u770B\u677F MCP\uFF1BWorker \u53EA\u8BFB\u68C0\u67E5\u961F\u5217\uFF0CSkill \u81EA\u5DF1\u9886\u53D6\u5361\u7247");
     for (let index = 1; index <= limit; index += 1) {
-      console.log(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${index}/${limit} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
+      workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${index}/${limit} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const peek = await mcp.callJson("peek_next_card", {
         ...job.projectId ? { projectId: job.projectId } : {}
       });
       if (peek.found !== true) {
-        console.log(`[success] Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u65E0\u66F4\u591A\u5361\u7247\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`);
+        workerLog(`[success] Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u65E0\u66F4\u591A\u5361\u7247\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`);
         return {
           ok: true,
           summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u5904\u7406 ${processedCards} \u5F20\uFF0C\u5F53\u524D\u65E0\u66F4\u591A\u5361\u7247`,
@@ -398,7 +425,7 @@ async function runBatch(job) {
       await mcp.callJson("dispatch_begin_agent_session", {
         workerToken: job.workerToken
       });
-      console.log("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
+      workerLog("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
       const result = job.engine === "codex" ? await runCodex(job) : await runCursor(job);
       if (!result.ok) {
         return {
@@ -407,7 +434,7 @@ async function runBatch(job) {
           processedCards
         };
       }
-      console.log("Worker \u5DF2\u786E\u8BA4 Agent \u4F1A\u8BDD\u7ED3\u675F\uFF0C\u6B63\u5728\u8BFB\u53D6\u672C\u8F6E\u5361\u7247\u72B6\u6001");
+      workerLog("Worker \u5DF2\u786E\u8BA4 Agent \u4F1A\u8BDD\u7ED3\u675F\uFF0C\u6B63\u5728\u8BFB\u53D6\u672C\u8F6E\u5361\u7247\u72B6\u6001");
       const session = await mcp.callJson("dispatch_agent_session_status", {
         workerToken: job.workerToken
       });
@@ -433,7 +460,7 @@ async function runBatch(job) {
         ...projectId ? { projectId } : {}
       });
       const state = cardState(latest);
-      console.log(
+      workerLog(
         `Worker \u72B6\u6001\u68C0\u67E5\uFF1AcardId=${cardId} column=${String(latest.columnName ?? latest.columnId ?? "\u672A\u77E5")}`
       );
       if (state === "blocked") {
@@ -451,15 +478,18 @@ async function runBatch(job) {
         };
       }
       processedCards += 1;
-      console.log(`[success] Worker \u786E\u8BA4\u7B2C ${index} \u6B21 Skill \u53EA\u5904\u7406\u4E00\u5F20\u4E14\u5DF2\u9001\u9A8C\uFF1B\u4F1A\u8BDD\u5DF2\u91CA\u653E`);
+      workerLog(`[success] Worker \u786E\u8BA4\u7B2C ${index} \u6B21 Skill \u53EA\u5904\u7406\u4E00\u5F20\u4E14\u5DF2\u9001\u9A8C\uFF1B\u4F1A\u8BDD\u5DF2\u91CA\u653E`);
     }
+    workerLog(`[success] Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u8FBE\u5230\u4E0A\u9650\u5E76\u5904\u7406 ${processedCards} \u5F20`);
     return {
       ok: true,
       summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u8FBE\u5230\u4E0A\u9650\u5E76\u5904\u7406 ${processedCards} \u5F20`,
       processedCards
     };
   } finally {
+    workerLog("Worker \u6B63\u5728\u5173\u95ED\u770B\u677F MCP \u8FDE\u63A5\u2026");
     await mcp.close().catch(() => void 0);
+    workerLog("Worker \u5DF2\u5173\u95ED\u770B\u677F MCP \u8FDE\u63A5");
   }
 }
 
@@ -607,7 +637,9 @@ async function runJob(jobPath) {
     result = { ok: false, error: message };
   }
   writeResult(job.outPath, result);
-  process.exitCode = result.ok ? 0 : 2;
+  const code = result.ok ? 0 : 2;
+  process.exitCode = code;
+  process.exit(code);
 }
 async function main() {
   const argv = process.argv.slice(2);
@@ -629,5 +661,5 @@ async function main() {
 }
 main().catch((err) => {
   console.error(err);
-  process.exitCode = 1;
+  process.exit(1);
 });

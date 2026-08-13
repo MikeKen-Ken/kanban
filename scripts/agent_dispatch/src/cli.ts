@@ -177,7 +177,10 @@ async function runJob(jobPath: string): Promise<void> {
   }
 
   writeResult(job.outPath, result);
-  process.exitCode = result.ok ? 0 : 2;
+  const code = result.ok ? 0 : 2;
+  process.exitCode = code;
+  // Cursor 本地运行时 / MCP SSE 可能留下未关闭句柄，仅设 exitCode 不会退出。
+  process.exit(code);
 }
 
 async function main(): Promise<void> {
@@ -201,5 +204,5 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   console.error(err);
-  process.exitCode = 1;
+  process.exit(1);
 });
