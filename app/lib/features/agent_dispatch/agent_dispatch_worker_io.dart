@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_usage.dart';
+import 'agent_dispatch_windows_job.dart';
 
 class AgentWorkerResult {
   const AgentWorkerResult({
@@ -24,15 +25,19 @@ class AgentWorkerResult {
 
 /// 当前 Worker 及其 Agent 子进程的可终止句柄。
 class AgentWorkerProcess {
-  AgentWorkerProcess(this._process);
+  AgentWorkerProcess(this._process, {AgentDispatchWindowsJob? windowsJob})
+      : _windowsJob = windowsJob;
 
   final Process _process;
+  AgentDispatchWindowsJob? _windowsJob;
   bool _stopRequested = false;
 
   /// 终止 Worker 及其启动的 SDK/CLI 子进程。
   Future<void> stop() async {
     if (_stopRequested) return;
     _stopRequested = true;
+    _windowsJob?.dispose();
+    _windowsJob = null;
     if (Platform.isWindows) {
       await Process.run(
         'taskkill',
@@ -42,6 +47,12 @@ class AgentWorkerProcess {
       return;
     }
     _process.kill(ProcessSignal.sigterm);
+  }
+
+  /// Worker 正常结束后释放 Job 句柄；若仍有意外存活的子进程则一并终止。
+  void dispose() {
+    _windowsJob?.dispose();
+    _windowsJob = null;
   }
 }
 
@@ -150,7 +161,14 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       workingDirectory: packageRoot,
       environment: environment,
     );
-    onProcessStarted?.call(AgentWorkerProcess(process));
+    final workerProcess = AgentWorkerProcess(
+      process,
+      windowsJob: AgentDispatchWindowsJob.tryAttach(
+        process.pid,
+        onWarning: (message) => onLog?.call('[warning] $message'),
+      ),
+    );
+    onProcessStarted?.call(workerProcess);
     process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
@@ -160,6 +178,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
         .transform(const LineSplitter())
         .listen((line) => onLog?.call('[err] $line'));
     final code = await process.exitCode;
+    workerProcess.dispose();
     if (await outFile.exists()) {
       try {
         final map =

@@ -15,7 +15,11 @@ import 'agent_dispatch_worker.dart';
 class AgentDispatchService {
   AgentDispatchService({
     AgentDispatchCredentials credentials = const AgentDispatchCredentials(),
-  }) : _credentials = credentials;
+  }) : _credentials = credentials {
+    _liveServices.add(this);
+  }
+
+  static final Set<AgentDispatchService> _liveServices = {};
 
   final AgentDispatchCredentials _credentials;
 
@@ -27,6 +31,20 @@ class AgentDispatchService {
     _cancelRequested = true;
     final worker = _activeWorker;
     if (worker != null) await worker.stop();
+  }
+
+  /// 应用退出时停止所有由 Agent 工作台创建的 Worker。
+  ///
+  /// 逐个 Worker 使用 `taskkill /T`，以确保 SDK/CLI 子进程不会遗留。
+  static Future<void> stopAllForAppExit() async {
+    final services = _liveServices.toList(growable: false);
+    await Future.wait(services.map((service) => service.requestCancel()));
+  }
+
+  /// 面板销毁后不再参与应用级退出清理；若仍在运行则同时终止。
+  Future<void> dispose() async {
+    _liveServices.remove(this);
+    await requestCancel();
   }
 
   Future<AgentWorkerResult> runOnce({

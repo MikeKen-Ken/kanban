@@ -192,6 +192,36 @@ function Copy-FileWithRetry([string]$From, [string]$To) {
     }
   }
 }
+function Get-AgentWorkerProcesses([string]$WorkerDir) {
+  $workerRoot = (Get-CanonicalPath $WorkerDir).TrimEnd('\\')
+  return @(Get-CimInstance Win32_Process | Where-Object {
+    $_.ProcessId -ne $PID -and (
+      ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($workerRoot, [StringComparison]::OrdinalIgnoreCase)) -or
+      ($_.CommandLine -and (
+        $_.CommandLine.IndexOf($workerRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+        $_.CommandLine.IndexOf('\\agent_worker\\', [StringComparison]::OrdinalIgnoreCase) -ge 0
+      ))
+    )
+  })
+}
+function Stop-AgentWorkerProcesses([string]$InstallDir) {
+  $workerDir = Join-Path $InstallDir 'agent_worker'
+  if (-not (Test-Path -LiteralPath $workerDir)) { return }
+
+  Write-Log "Stopping agent workers under $workerDir"
+  $workers = Get-AgentWorkerProcesses $workerDir
+  foreach ($worker in $workers) {
+    Write-Log "Stopping agent worker PID=$($worker.ProcessId)"
+    Stop-Process -Id $worker.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+
+  $deadline = (Get-Date).AddSeconds(15)
+  while ((Get-Date) -lt $deadline) {
+    if ((Get-AgentWorkerProcesses $workerDir).Count -eq 0) { return }
+    Start-Sleep -Milliseconds 300
+  }
+  throw "Agent worker did not exit before update"
+}
 try {
   Write-Log "Waiting for process exit PID=$TargetPid"
   $deadline = (Get-Date).AddSeconds(90)
@@ -210,6 +240,10 @@ try {
   Write-Log "InstallDir=$InstallDir"
   Write-Log "SourceDir=$SourceDir"
   Write-Log "ExePath=$ExePath"
+  # Agent dispatch runs Node from this folder. It may outlive the Flutter
+  # process and keep native .node files locked, so stop only workers rooted in
+  # this installation before copying the new bundled worker.
+  Stop-AgentWorkerProcesses $InstallDir
   Write-Log "Copy start"
   $copied = 0
   Get-ChildItem -LiteralPath $SourceDir -Recurse -File | ForEach-Object {

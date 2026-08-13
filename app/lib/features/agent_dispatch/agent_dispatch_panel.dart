@@ -467,6 +467,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   @override
   void dispose() {
     _stopHeartbeat();
+    // 关闭工作台不应留下仍在运行的 Worker 或其 Agent 子进程。
+    unawaited(_service.dispose());
     _repoController.dispose();
     _countController.dispose();
     _logController.dispose();

@@ -172,7 +172,8 @@ void main() {
       final client = GithubReleaseClient(
         httpGet: (uri) async {
           if (uri.host == 'github.com') {
-            return const ReleaseHttpResult(statusCode: 503, body: 'unavailable');
+            return const ReleaseHttpResult(
+                statusCode: 503, body: 'unavailable');
           }
           if (uri.host == 'api.github.com') {
             return const ReleaseHttpResult(
@@ -297,7 +298,8 @@ void main() {
         expect(
           result.exitCode,
           0,
-          reason: 'stdout=${result.stdout}\nstderr=${result.stderr}',
+          reason: 'stdout=${result.stdout}\nstderr=${result.stderr}\n'
+              'log=${await logFile.readAsString()}',
         );
 
         expect(await oldExe.readAsString(), 'NEW');
@@ -378,7 +380,8 @@ void main() {
         expect(
           result.exitCode,
           0,
-          reason: 'stdout=${result.stdout}\nstderr=${result.stderr}',
+          reason: 'stdout=${result.stdout}\nstderr=${result.stderr}\n'
+              'log=${await logFile.readAsString()}',
         );
 
         expect(await oldExe.readAsString(), 'NEW');
@@ -386,7 +389,6 @@ void main() {
           await File(p.join(installDir.path, 'data', 'app.so')).readAsString(),
           'so',
         );
-
         // 只应覆盖到安装根目录，不应因相对路径算错多出一层无关目录
         final topNames = installDir
             .listSync()

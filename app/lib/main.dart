@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/board_controller.dart';
+import 'features/agent_dispatch/agent_dispatch_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/project/project_theme.dart';
 import 'screens/home_screen.dart';
@@ -37,8 +38,7 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
 
   void _dismissWithEscape() {
     final focusedContext = FocusManager.instance.primaryFocus?.context;
-    final isEditingText =
-        focusedContext?.widget is EditableText ||
+    final isEditingText = focusedContext?.widget is EditableText ||
         focusedContext?.findAncestorWidgetOfExactType<EditableText>() != null;
     if (isEditingText) return;
     unawaited(_navigatorKey.currentState?.maybePop());
@@ -58,11 +58,17 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Dart 仍可执行清理时，主动结束 Agent Worker 及其子进程。
+    unawaited(AgentDispatchService.stopAllForAppExit());
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      unawaited(AgentDispatchService.stopAllForAppExit());
+      return;
+    }
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.controller.purgeExpiredCompletedCards());
     }
