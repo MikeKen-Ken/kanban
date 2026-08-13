@@ -238,4 +238,17 @@ void main() {
     expect(remaining.single.label, '备用');
     expect(await credentials.readStoredCursorApiKey(), 'second-key');
   });
+
+  test('Cursor API Key 可原地替换当前 Key', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    const credentials = AgentDispatchCredentials();
+
+    await credentials.saveCursorApiKey('first-key', label: '主账号');
+    await credentials.replaceActiveCursorApiKey('updated-key');
+    final keys = await credentials.listStoredCursorApiKeys();
+
+    expect(keys, hasLength(1));
+    expect(keys.single.label, '主账号');
+    expect(await credentials.readStoredCursorApiKey(), 'updated-key');
+  });
 }

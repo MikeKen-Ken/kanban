@@ -61,10 +61,15 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       _message = null;
     });
     try {
-      await widget.credentials.saveCursorApiKey(
-        _controller.text,
-        label: _labelController.text,
-      );
+      final label = _labelController.text.trim();
+      if (label.isEmpty && _activeKey != null) {
+        await widget.credentials.replaceActiveCursorApiKey(_controller.text);
+      } else {
+        await widget.credentials.saveCursorApiKey(
+          _controller.text,
+          label: _labelController.text,
+        );
+      }
       _controller.clear();
       _labelController.clear();
       await _refreshStatus();
@@ -84,6 +89,13 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
 
   Future<void> _selectKey(String id) async {
     if (_busy) return;
+    CursorApiKeySummary? selected;
+    for (final item in _keys) {
+      if (item.id == id) {
+        selected = item;
+        break;
+      }
+    }
     setState(() {
       _busy = true;
       _message = null;
@@ -94,6 +106,10 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       if (!mounted) return;
       setState(() {
         _busy = false;
+        _controller.clear();
+        if (selected != null) {
+          _labelController.text = selected.label;
+        }
         _message = '已切换当前 Key';
       });
     } catch (error) {
@@ -117,6 +133,10 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       if (!mounted) return;
       setState(() {
         _busy = false;
+        if (_activeKey?.id == id) {
+          _controller.clear();
+          _labelController.clear();
+        }
         _message = _keys.isEmpty && _hasEnvironmentKey
             ? '已删除该 Key；仍会使用环境变量 CURSOR_API_KEY'
             : '已删除 Cursor API Key';
@@ -142,29 +162,27 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     final active = _activeKey;
     final available = _keys.isNotEmpty || _hasEnvironmentKey;
     final enabled = widget.enabled && !_busy;
+    final statusText = active != null
+        ? '当前：${active.label}'
+        : _hasEnvironmentKey
+            ? '已检测到环境变量'
+            : '尚未配置';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Text('Cursor API Key',
-                style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(width: 8),
             Icon(
               available ? Icons.check_circle_outline : Icons.info_outline,
-              size: 18,
+              size: 16,
               color: available
                   ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(
-                active != null
-                    ? '当前：${active.label}'
-                    : _hasEnvironmentKey
-                        ? '已检测到环境变量'
-                        : '尚未配置',
+                statusText,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
@@ -182,11 +200,13 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                 enableSuggestions: false,
                 autocorrect: false,
                 decoration: InputDecoration(
-                  hintText: available ? '粘贴新 Key 并保存' : '粘贴 Cursor API Key',
-                  helperText: '仅用于 Cursor SDK；不会写入仓库、偏好或运行日志',
+                  hintText: available
+                      ? '输入新 Key 可替换当前 Key'
+                      : '粘贴 Cursor API Key',
                   suffixIcon: PopupMenuButton<String>(
                     tooltip: '展开已保存 Key',
                     enabled: enabled && _keys.isNotEmpty,
+                    padding: EdgeInsets.zero,
                     icon: const Icon(Icons.arrow_drop_down),
                     onSelected: _selectKey,
                     itemBuilder: (context) => [
@@ -238,7 +258,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
             ),
             IconButton(
               tooltip: _obscure ? '显示' : '隐藏',
-              onPressed: enabled ? () => setState(() => _obscure = !_obscure) : null,
+              onPressed:
+                  enabled ? () => setState(() => _obscure = !_obscure) : null,
               icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
             ),
           ],
@@ -248,12 +269,18 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
           controller: _labelController,
           enabled: enabled,
           decoration: const InputDecoration(
-            hintText: '备注（可选）',
-            helperText: '保存多个 Key 时便于区分',
+            hintText: '备注（可选，填写后保存为新 Key）',
           ),
           onSubmitted: enabled ? (_) => _save() : null,
         ),
         const SizedBox(height: 4),
+        Text(
+          '仅用于 Cursor SDK；不会写入仓库、偏好或运行日志',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           children: [

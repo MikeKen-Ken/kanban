@@ -154,6 +154,36 @@ class AgentDispatchCredentials {
     }
   }
 
+  /// 更新当前激活 Key 的凭据；无已保存 Key 时退化为 [saveCursorApiKey]。
+  Future<void> replaceActiveCursorApiKey(String value, {String? label}) async {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      throw const FormatException('Cursor API Key 不能为空');
+    }
+    final activeId = await _readActiveId();
+    if (activeId == null) {
+      await saveCursorApiKey(normalized, label: label);
+      return;
+    }
+    final meta = await _readMeta();
+    final index = meta.indexWhere((item) => item.id == activeId);
+    if (index < 0) {
+      await saveCursorApiKey(normalized, label: label);
+      return;
+    }
+    final nextLabel = label?.trim().isNotEmpty == true
+        ? label!.trim()
+        : meta[index].label;
+    await _storage.write(key: _valueKey(activeId), value: normalized);
+    final updated = [...meta];
+    updated[index] = _CursorApiKeyMeta(id: activeId, label: nextLabel);
+    await _writeMeta(updated);
+    final stored = await _readValue(activeId);
+    if (stored != normalized) {
+      throw StateError('Cursor API Key 写入后无法从系统安全存储读回');
+    }
+  }
+
   Future<void> deleteCursorApiKey([String? id]) async {
     final targetId = id ?? await _readActiveId();
     if (targetId == null) return;

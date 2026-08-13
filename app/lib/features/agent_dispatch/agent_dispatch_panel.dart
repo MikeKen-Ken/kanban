@@ -603,6 +603,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               ),
               const SizedBox(height: 12),
               if (_settings.engine == AgentDispatchEngine.cursor) ...[
+                Text('Cursor API Key',
+                    style: Theme.of(context).textTheme.labelLarge),
                 CursorApiKeySection(
                   enabled: !_running && !_busy,
                   credentials: _credentials,
