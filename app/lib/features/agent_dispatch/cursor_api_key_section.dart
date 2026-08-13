@@ -31,7 +31,12 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onInputChanged);
     _refreshStatus();
+  }
+
+  void _onInputChanged() {
+    setState(() {});
   }
 
   Future<void> _refreshStatus() async {
@@ -151,6 +156,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
 
   @override
   void dispose() {
+    _controller.removeListener(_onInputChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -159,6 +165,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
   Widget build(BuildContext context) {
     final active = _activeKey;
     final available = _keys.isNotEmpty || _hasEnvironmentKey;
+    final hasInput = _controller.text.trim().isNotEmpty;
+    final showSaveButton = !available || hasInput;
     final enabled = widget.enabled && !_busy;
     final statusText = active != null
         ? '当前：${active.label}'
@@ -282,17 +290,19 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            FilledButton.tonalIcon(
-              onPressed: enabled ? _save : null,
-              icon: const Icon(Icons.key, size: 18),
-              label: const Text('安全保存'),
-            ),
-          ],
-        ),
+        if (showSaveButton) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: enabled ? _save : null,
+                icon: const Icon(Icons.key, size: 18),
+                label: const Text('安全保存'),
+              ),
+            ],
+          ),
+        ],
         if (_message != null)
           Text(_message!, style: Theme.of(context).textTheme.bodySmall),
       ],
