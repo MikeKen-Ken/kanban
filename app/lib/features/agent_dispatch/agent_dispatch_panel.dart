@@ -444,8 +444,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (!mounted) return;
     if (result.ok) {
       _appendLog(result.summary ?? '完成', level: AgentDispatchLogLevel.success);
-    } else {
-      _appendLog(result.error ?? '失败', level: AgentDispatchLogLevel.error);
     }
   }
 

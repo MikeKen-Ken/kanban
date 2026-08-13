@@ -419,7 +419,8 @@ String describeWorkerExitWithoutOutput(int code) {
   // Windows STATUS_ACCESS_VIOLATION
   if (code == -1073741819) {
     return 'worker 在 Windows 上发生访问冲突（0xC0000005）后退出，未能写出 out.json。'
-        '通常是 Cursor 本地运行时（沙箱/SQLite）崩溃，而不是业务逻辑返回了错误码。';
+        '通常是 Cursor 本地运行时在开始执行（send）时原生崩溃，'
+        '而不是看板 MCP 或 Skill 返回了错误码。';
   }
   return 'worker 退出码 $code，且无 out.json';
 }

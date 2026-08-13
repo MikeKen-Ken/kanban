@@ -253,10 +253,10 @@ void main() {
   });
 
   test('访问冲突退出码给出明确说明', () {
-    expect(
-      describeWorkerExitWithoutOutput(-1073741819),
-      contains('0xC0000005'),
-    );
+    final message = describeWorkerExitWithoutOutput(-1073741819);
+    expect(message, contains('0xC0000005'));
+    expect(message, contains('send'));
+    expect(message, isNot(contains('SQLite')));
     expect(describeWorkerExitWithoutOutput(1), contains('退出码 1'));
   });
 }
