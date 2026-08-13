@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">显示当前项目的逾期、今日与待办卡片</string>
+</resources>

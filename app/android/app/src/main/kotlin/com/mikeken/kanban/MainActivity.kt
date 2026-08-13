@@ -13,6 +13,7 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     private val notificationsChannel = "com.mikeken.kanban/notifications"
     private val appUpdateChannel = "com.mikeken.kanban/app_update"
+    private val homeWidgetChannel = "com.mikeken.kanban/home_widget"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -51,6 +52,28 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     } catch (e: Exception) {
                         result.error("install_failed", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            homeWidgetChannel,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "updateSnapshot" -> {
+                    val json = call.argument<String>("json")
+                    if (json.isNullOrBlank()) {
+                        result.error("invalid_args", "缺少 json", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        KanbanWidgetStore(this).saveSnapshot(json)
+                        KanbanHomeWidgetProvider.updateAll(this)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("update_failed", e.message, null)
                     }
                 }
                 else -> result.notImplemented()

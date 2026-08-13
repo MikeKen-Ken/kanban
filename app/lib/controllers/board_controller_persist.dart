@@ -191,6 +191,7 @@ extension BoardControllerPersist on BoardController {
     _syncService.stopPolling();
 
     unawaited(_syncMcpHost());
+    scheduleAndroidHomeWidgetRefresh();
   }
 
   Future<void> _recoverInterruptedRestoreIfNeeded() async {
@@ -238,6 +239,7 @@ extension BoardControllerPersist on BoardController {
       await refreshMissingAttachments();
       await refreshDisplayableWallpapers();
       notifyListeners();
+      scheduleAndroidHomeWidgetRefresh();
     });
   }
 
@@ -255,6 +257,7 @@ extension BoardControllerPersist on BoardController {
       }
       notifyListeners();
       _markWorkspaceChanged();
+      scheduleAndroidHomeWidgetRefresh();
     });
   }
 

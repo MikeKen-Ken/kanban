@@ -15,6 +15,7 @@ import '../features/attachments/card_file_opener.dart' as card_file_opener;
 import '../features/attachments/card_file_picker.dart';
 import '../features/attachments/picked_file_bytes.dart';
 import '../features/activity/activity_models.dart';
+import '../features/android_widget/android_widget.dart';
 import '../features/automations/automations.dart';
 import '../features/completed_auto_clear/completed_auto_clear.dart';
 import '../features/import_export/backup_archive_service.dart';
@@ -63,6 +64,7 @@ part 'board_controller_trash.dart';
 part 'board_controller_sync.dart';
 part 'board_controller_scope.dart';
 part 'board_controller_wallpapers.dart';
+part 'board_controller_android_widget.dart';
 
 enum CardConflictResolution { keepPrimary, keepOther }
 

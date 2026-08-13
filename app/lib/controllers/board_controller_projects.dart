@@ -16,6 +16,7 @@ extension BoardControllerProjects on BoardController {
       await refreshDisplayableWallpapers();
       await _recordProjectUsed(projectId);
       notifyListeners();
+      scheduleAndroidHomeWidgetRefresh();
     });
   }
 
