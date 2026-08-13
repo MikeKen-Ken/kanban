@@ -37,7 +37,7 @@ import 'verify_column.dart';
 @visibleForTesting
 const bool kCardDetailSheetEnableDrag = false;
 
-/// 卡片详情底部弹层：标题、备注、优先级、子任务、验证反馈、卡片背景色、截止日期、标签等
+/// 卡片详情底部弹层：标题、备注、子任务、验证反馈、提交号、优先级、标签、卡片背景色、截止日期等
 Future<void> showCardDetailSheet({
   required BuildContext context,
   required String columnId,
@@ -1043,7 +1043,31 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                           ),
                         const SizedBox(height: 20),
-                        // 优先级在备注下方；子任务与验证反馈紧随其后，再是卡片背景色。
+                        // 子任务与验证反馈；其后依次为提交号、优先级、标签、卡片背景色。
+                        CardDetailChecklistSection(
+                          checklist: _checklist,
+                          verificationFeedback: _verificationFeedback,
+                          checklistInput: _checklistInput,
+                          verificationFeedbackInput: _verificationFeedbackInput,
+                          onAddChecklistItem: _addChecklistItem,
+                          onToggleChecklistItem: _toggleChecklistItem,
+                          onRemoveChecklistItem: _removeChecklistItem,
+                          onEditChecklistItem: _editChecklistItem,
+                          onAddVerificationFeedbackItem:
+                              _addVerificationFeedbackItem,
+                          onToggleVerificationFeedbackItem:
+                              _toggleVerificationFeedbackItem,
+                          onRemoveVerificationFeedbackItem:
+                              _removeVerificationFeedbackItem,
+                          onEditVerificationFeedbackItem:
+                              _editVerificationFeedbackItem,
+                        ),
+                        const SizedBox(height: 20),
+                        CardDetailCommitRefSection(
+                          controller: _commitRefController,
+                          onChanged: () => _safeSetState(() {}),
+                        ),
+                        const SizedBox(height: 20),
                         Text('优先级', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         Wrap(
@@ -1070,23 +1094,37 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           }).toList(),
                         ),
                         const SizedBox(height: 20),
-                        CardDetailChecklistSection(
-                          checklist: _checklist,
-                          verificationFeedback: _verificationFeedback,
-                          checklistInput: _checklistInput,
-                          verificationFeedbackInput: _verificationFeedbackInput,
-                          onAddChecklistItem: _addChecklistItem,
-                          onToggleChecklistItem: _toggleChecklistItem,
-                          onRemoveChecklistItem: _removeChecklistItem,
-                          onEditChecklistItem: _editChecklistItem,
-                          onAddVerificationFeedbackItem:
-                              _addVerificationFeedbackItem,
-                          onToggleVerificationFeedbackItem:
-                              _toggleVerificationFeedbackItem,
-                          onRemoveVerificationFeedbackItem:
-                              _removeVerificationFeedbackItem,
-                          onEditVerificationFeedbackItem:
-                              _editVerificationFeedbackItem,
+                        Row(
+                          children: [
+                            Text('标签', style: theme.textTheme.titleSmall),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () => showLabelEditorDialog(context),
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: const Text('编辑'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final label in allLabels)
+                              Tooltip(
+                                message: label.description ?? label.name,
+                                child: FilterChip(
+                                  label: Text(label.name),
+                                  selected: _labels.contains(label.key),
+                                  onSelected: (_) => _toggleLabel(label.key),
+                                  backgroundColor:
+                                      label.color.withValues(alpha: 0.12),
+                                  selectedColor:
+                                      label.color.withValues(alpha: 0.35),
+                                  checkmarkColor: label.color,
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),
@@ -1169,11 +1207,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _safeSetState(() => _reminderAt = value),
                         ),
                         const SizedBox(height: 20),
-                        CardDetailCommitRefSection(
-                          controller: _commitRefController,
-                          onChanged: () => _safeSetState(() {}),
-                        ),
-                        const SizedBox(height: 20),
                         Text('重复', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         Wrap(
@@ -1237,39 +1270,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ],
                           ),
                         ],
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Text('标签', style: theme.textTheme.titleSmall),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: () => showLabelEditorDialog(context),
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              label: const Text('编辑'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final label in allLabels)
-                              Tooltip(
-                                message: label.description ?? label.name,
-                                child: FilterChip(
-                                  label: Text(label.name),
-                                  selected: _labels.contains(label.key),
-                                  onSelected: (_) => _toggleLabel(label.key),
-                                  backgroundColor:
-                                      label.color.withValues(alpha: 0.12),
-                                  selectedColor:
-                                      label.color.withValues(alpha: 0.35),
-                                  checkmarkColor: label.color,
-                                ),
-                              ),
-                          ],
-                        ),
                         const SizedBox(height: 20),
                         CardDetailRelationsSection(
                           cardId: widget.card.id,
