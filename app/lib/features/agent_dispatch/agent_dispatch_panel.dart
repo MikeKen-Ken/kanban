@@ -83,7 +83,25 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   @override
   void initState() {
     super.initState();
+    _service.addLogListener(_onServiceLog);
+    _service.addRunningListener(_onServiceRunningChanged);
     _bootstrap();
+  }
+
+  void _onServiceLog(AgentDispatchLogEntry entry) {
+    if (!mounted) return;
+    setState(() => _appendLog(entry.message, level: entry.level));
+  }
+
+  void _onServiceRunningChanged() {
+    if (!mounted) return;
+    final running = _service.isRunning;
+    setState(() => _running = running);
+    if (running) {
+      _startHeartbeat();
+    } else {
+      _stopHeartbeat();
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -127,6 +145,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     await _refreshSkillPreview();
     await _refreshWorkerStatus();
     if (!mounted) return;
+    if (_service.isRunning) {
+      setState(() => _running = true);
+      _startHeartbeat();
+    }
     if (_settings.engine == AgentDispatchEngine.cursor && _models.isEmpty) {
       await _loadModels();
     }
@@ -392,7 +414,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   Future<void> _run() async {
-    if (_running) return;
+    if (_running || _service.isRunning) return;
     final board = context.read<BoardController>();
     final count = int.tryParse(_countController.text.trim());
     final repo = _repoController.text.trim();
@@ -449,14 +471,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       skillPath: next.resolveSkillPath(),
       mcpEndpoint: board.mcpHost.endpointUrl,
       workerScriptPath: next.workerScriptPath,
-      onLog: (entry) {
-        if (!mounted) return;
-        setState(() => _appendLog(entry.message, level: entry.level));
-      },
     );
     if (!mounted) return;
-    _stopHeartbeat();
-    setState(() => _running = false);
     if (result.ok) {
       _appendLog(result.summary ?? '完成', level: AgentDispatchLogLevel.success);
     } else {
@@ -466,9 +482,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   @override
   void dispose() {
+    _service.removeLogListener(_onServiceLog);
+    _service.removeRunningListener(_onServiceRunningChanged);
     _stopHeartbeat();
-    // 关闭工作台不应留下仍在运行的 Worker 或其 Agent 子进程。
-    unawaited(_service.dispose());
     _repoController.dispose();
     _countController.dispose();
     _logController.dispose();

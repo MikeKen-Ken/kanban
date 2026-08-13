@@ -12,19 +12,65 @@ import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
 /// 启动一次 Worker 批次；Worker 只调度，每轮 Agent 按 Skill 自己取一张卡。
+///
+/// 单例：关闭工作台面板不会终止批次，重新打开可恢复「运行中」状态。
 class AgentDispatchService {
-  AgentDispatchService({
+  factory AgentDispatchService() => _shared;
+
+  AgentDispatchService._({
     AgentDispatchCredentials credentials = const AgentDispatchCredentials(),
   }) : _credentials = credentials {
     _liveServices.add(this);
   }
+
+  static final AgentDispatchService _shared =
+      AgentDispatchService._();
 
   static final Set<AgentDispatchService> _liveServices = {};
 
   final AgentDispatchCredentials _credentials;
 
   bool _cancelRequested = false;
+  bool _isRunning = false;
   AgentWorkerProcess? _activeWorker;
+  final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
+  final _runningListeners = <void Function()>{};
+
+  bool get isRunning => _isRunning;
+
+  void addLogListener(void Function(AgentDispatchLogEntry entry) listener) {
+    _logListeners.add(listener);
+  }
+
+  void removeLogListener(void Function(AgentDispatchLogEntry entry) listener) {
+    _logListeners.remove(listener);
+  }
+
+  void addRunningListener(void Function() listener) {
+    _runningListeners.add(listener);
+  }
+
+  void removeRunningListener(void Function() listener) {
+    _runningListeners.remove(listener);
+  }
+
+  void _setRunning(bool value) {
+    if (_isRunning == value) return;
+    _isRunning = value;
+    for (final listener in _runningListeners.toList()) {
+      listener();
+    }
+  }
+
+  void _emitLog(
+    String message, {
+    AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
+  }) {
+    final entry = AgentDispatchLogEntry(message, level: level);
+    for (final listener in _logListeners.toList()) {
+      listener(entry);
+    }
+  }
 
   /// 立即停止当前 Worker 及其 SDK/CLI 子进程，并阻止后续会话启动。
   Future<void> requestCancel() async {
@@ -41,12 +87,6 @@ class AgentDispatchService {
     await Future.wait(services.map((service) => service.requestCancel()));
   }
 
-  /// 面板销毁后不再参与应用级退出清理；若仍在运行则同时终止。
-  Future<void> dispose() async {
-    _liveServices.remove(this);
-    await requestCancel();
-  }
-
   Future<AgentWorkerResult> runOnce({
     required AgentDispatchRunOptions options,
     required String skillPath,
@@ -54,7 +94,31 @@ class AgentDispatchService {
     String? workerScriptPath,
     void Function(AgentDispatchLogEntry entry)? onLog,
   }) async {
+    if (_isRunning) {
+      return const AgentWorkerResult(ok: false, error: '已有批次在运行');
+    }
     _cancelRequested = false;
+    _setRunning(true);
+    try {
+      return await _runOnceImpl(
+        options: options,
+        skillPath: skillPath,
+        mcpEndpoint: mcpEndpoint,
+        workerScriptPath: workerScriptPath,
+        onLog: onLog,
+      );
+    } finally {
+      _setRunning(false);
+    }
+  }
+
+  Future<AgentWorkerResult> _runOnceImpl({
+    required AgentDispatchRunOptions options,
+    required String skillPath,
+    required String mcpEndpoint,
+    String? workerScriptPath,
+    void Function(AgentDispatchLogEntry entry)? onLog,
+  }) async {
     final repo = options.repoPath.trim();
     if (repo.isEmpty) {
       return const AgentWorkerResult(ok: false, error: '请填写代码仓库路径');
@@ -75,7 +139,9 @@ class AgentDispatchService {
       String message, {
       AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
     }) {
-      onLog?.call(AgentDispatchLogEntry(message, level: level));
+      final entry = AgentDispatchLogEntry(message, level: level);
+      _emitLog(message, level: level);
+      onLog?.call(entry);
     }
 
     log('项目：${options.projectTitle ?? '看板当前项目'}');
