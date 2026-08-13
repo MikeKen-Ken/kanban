@@ -251,16 +251,20 @@ void main() {
       );
     });
 
-    test('先复制应用文件，agent_worker 失败时仍启动可见窗口', () {
+    test('先复制应用文件；失败时 finally 仍拉起；独立 relaunch 脚本为 ASCII', () {
       expect(windowsUpdaterScript, contains('Copy app files'));
       expect(windowsUpdaterScript, contains('Copy agent worker'));
-      expect(windowsUpdaterScript, contains(r"'\agent_worker\'"));
+      expect(windowsUpdaterScript, contains('Start-KanbanApp'));
+      expect(windowsUpdaterScript, contains('Skip locked file'));
+      expect(windowsUpdaterScript.contains('exit 1'), isTrue);
       expect(
-        windowsUpdaterScript,
-        contains(
-          r'Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir -WindowStyle Normal',
-        ),
+        windowsUpdaterScript.indexOf(r'Start-KanbanApp $ExePath') >
+            windowsUpdaterScript.indexOf(r'$failed = $true'),
+        isTrue,
+        reason: '拉起必须在 catch 的 exit 之前（finally），否则复制失败不会重启',
       );
+      expect(windowsRelaunchScript.runes.where((r) => r > 0x7F), isEmpty);
+      expect(windowsRelaunchScript, contains('Start-KanbanApp'));
     });
 
     test('UTF-8 无 BOM 写入后仍能覆盖安装目录并成功退出', () async {

@@ -110,23 +110,18 @@ class AppUpdateInstaller {
       utf8.encode('\uFEFF$windowsUpdaterScript'),
       flush: true,
     );
+    final relaunchFile = File(
+      p.join(Directory.systemTemp.path, 'kanban_relaunch_$pid.ps1'),
+    );
+    await relaunchFile.writeAsBytes(
+      utf8.encode('\uFEFF$windowsRelaunchScript'),
+      flush: true,
+    );
 
     // 经 cmd start 拉起，避免随本进程 Job 对象一起被结束。
-    await Process.start(
-      'cmd.exe',
-      [
-        '/c',
-        'start',
-        '',
-        '/min',
-        'powershell.exe',
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-WindowStyle',
-        'Hidden',
-        '-File',
-        scriptFile.path,
+    await _startDetachedPowershell(
+      scriptPath: scriptFile.path,
+      extraArgs: [
         '-InstallDir',
         installDir,
         '-SourceDir',
@@ -136,14 +131,50 @@ class AppUpdateInstaller {
         '-TargetPid',
         '$pid',
       ],
-      mode: ProcessStartMode.detached,
-      runInShell: false,
+    );
+    // 独立拉起：复制失败或 updater 被提前结束时，仍根据日志/超时重启界面。
+    await _startDetachedPowershell(
+      scriptPath: relaunchFile.path,
+      extraArgs: [
+        '-InstallDir',
+        installDir,
+        '-ExePath',
+        exePath,
+        '-TargetPid',
+        '$pid',
+      ],
     );
 
     // 给 updater 一点启动时间，再退出以释放文件锁
     await Future<void>.delayed(const Duration(milliseconds: 800));
     exit(0);
   }
+}
+
+Future<void> _startDetachedPowershell({
+  required String scriptPath,
+  required List<String> extraArgs,
+}) {
+  return Process.start(
+    'cmd.exe',
+    [
+      '/c',
+      'start',
+      '',
+      '/min',
+      'powershell.exe',
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-WindowStyle',
+      'Hidden',
+      '-File',
+      scriptPath,
+      ...extraArgs,
+    ],
+    mode: ProcessStartMode.detached,
+    runInShell: false,
+  );
 }
 
 /// Windows 自更新脚本（供单测在短路径 TEMP 下复现覆盖逻辑）。
@@ -179,7 +210,84 @@ function Get-RelativePathFrom([string]$Root, [string]$FullPath) {
   }
   return [Uri]::UnescapeDataString($rootUri.MakeRelativeUri($fileUri).ToString()).Replace('/', '\')
 }
-function Copy-FileWithRetry([string]$From, [string]$To) {
+function Stop-LockingPids([string]$FilePath) {
+  if (-not (Test-Path -LiteralPath $FilePath)) { return }
+  if (-not ('NativeRm' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeRm {
+  public const int CCH = 255;
+  [StructLayout(LayoutKind.Sequential)]
+  public struct RM_UNIQUE_PROCESS {
+    public int dwProcessId;
+    public System.Runtime.InteropServices.ComTypes.FILETIME ProcessStartTime;
+  }
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  public struct RM_PROCESS_INFO {
+    public RM_UNIQUE_PROCESS Process;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+    public string strAppName;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+    public string strServiceShortName;
+    public uint ApplicationType;
+    public uint AppStatus;
+    public uint TSSessionId;
+    [MarshalAs(UnmanagedType.Bool)]
+    public bool bRestartable;
+  }
+  [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
+  public static extern int RmStartSession(out uint pSessionHandle, int dwSessionFlags, string strSessionKey);
+  [DllImport("rstrtmgr.dll")]
+  public static extern int RmEndSession(uint pSessionHandle);
+  [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
+  public static extern int RmRegisterResources(uint pSessionHandle, uint nFiles, string[] rgsFilenames, uint nApplications, IntPtr rgApplications, uint nServices, string[] rgsServiceNames);
+  [DllImport("rstrtmgr.dll")]
+  public static extern int RmGetList(uint dwSessionHandle, out uint pnProcInfoNeeded, ref uint pnProcInfo, [In, Out] RM_PROCESS_INFO[] rgAffectedApps, ref uint lpdwRebootReasons);
+}
+'@
+  }
+  $session = [uint32]0
+  $key = [guid]::NewGuid().ToString()
+  $rc = [NativeRm]::RmStartSession([ref]$session, 0, $key)
+  if ($rc -ne 0) { return }
+  try {
+    $rc = [NativeRm]::RmRegisterResources($session, 1, @($FilePath), 0, [IntPtr]::Zero, 0, $null)
+    if ($rc -ne 0) { return }
+    $needed = [uint32]0
+    $count = [uint32]0
+    $reason = [uint32]0
+    $rc = [NativeRm]::RmGetList($session, [ref]$needed, [ref]$count, $null, [ref]$reason)
+    if ($needed -le 0) { return }
+    $arr = New-Object NativeRm+RM_PROCESS_INFO[] $needed
+    $count = $needed
+    $rc = [NativeRm]::RmGetList($session, [ref]$needed, [ref]$count, $arr, [ref]$reason)
+    if ($rc -ne 0) { return }
+    foreach ($info in $arr) {
+      $lockPid = $info.Process.dwProcessId
+      if ($lockPid -eq $PID -or $lockPid -le 0) { continue }
+      Write-Log "Stopping lock PID=$lockPid ($($info.strAppName)) for $FilePath"
+      Stop-Process -Id $lockPid -Force -ErrorAction SilentlyContinue
+    }
+  } finally {
+    [NativeRm]::RmEndSession($session) | Out-Null
+  }
+}
+function Start-KanbanApp([string]$Exe, [string]$Dir) {
+  if (-not (Test-Path -LiteralPath $Exe)) { return }
+  $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.Path -and $_.Path.Equals($Exe, [StringComparison]::OrdinalIgnoreCase)
+  })
+  if ($running.Count -gt 0) {
+    Write-Log "Already running"
+    return
+  }
+  Write-Log "Launch $Exe cwd=$Dir"
+  $d = $Dir.TrimEnd('\')
+  $line = '/c start "" /D "' + $d + '" "' + $Exe + '"'
+  Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WindowStyle Hidden
+}
+function Copy-FileWithRetry([string]$From, [string]$To, [bool]$AllowSkip) {
   $attempt = 0
   while ($true) {
     try {
@@ -187,7 +295,14 @@ function Copy-FileWithRetry([string]$From, [string]$To) {
       return
     } catch {
       $attempt++
-      if ($attempt -ge 10) { throw }
+      try { Stop-LockingPids $To } catch { }
+      if ($attempt -ge 10) {
+        if ($AllowSkip) {
+          Write-Log ("Skip locked file " + $To)
+          return
+        }
+        throw
+      }
       Start-Sleep -Milliseconds 500
     }
   }
@@ -251,11 +366,12 @@ function Copy-PayloadFiles([bool]$WorkerOnly) {
     if (-not (Test-Path -LiteralPath $destParent)) {
       New-Item -ItemType Directory -Path $destParent -Force | Out-Null
     }
-    Copy-FileWithRetry $_.FullName $dest
+    Copy-FileWithRetry $_.FullName $dest $WorkerOnly
     $n++
   }
   return $n
 }
+$failed = $false
 try {
   Write-Log "Waiting for process exit PID=$TargetPid"
   $deadline = (Get-Date).AddSeconds(90)
@@ -294,17 +410,75 @@ try {
     throw "Exe missing after copy: $ExePath"
   }
   Write-Log "Copied $copied files"
-  if (-not $SkipLaunch) {
-    Write-Log "Launch $ExePath cwd=$InstallDir"
-    Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir -WindowStyle Normal
-  } else {
+  if ($SkipLaunch) {
     Write-Log "SkipLaunch"
   }
   Write-Log "Cleanup"
   Remove-Item -LiteralPath $SourceDir -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   Write-Log ("Update failed: " + $_.Exception.Message)
-  exit 1
+  $failed = $true
+} finally {
+  if (-not $SkipLaunch) {
+    try { Start-KanbanApp $ExePath $InstallDir } catch { }
+  }
+  Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+}
+if ($failed) { exit 1 }
+''';
+
+/// 与 updater 分开拉起，避免复制失败或 `exit` 跳过 finally 时窗口不再出现。
+@visibleForTesting
+const windowsRelaunchScript = r'''
+param(
+  [Parameter(Mandatory = $true)][string]$InstallDir,
+  [Parameter(Mandatory = $true)][string]$ExePath,
+  [Parameter(Mandatory = $true)][int]$TargetPid
+)
+$ErrorActionPreference = 'Stop'
+$log = Join-Path $env:TEMP ("kanban_relaunch_" + $TargetPid + ".log")
+$updLog = Join-Path $env:TEMP ("kanban_updater_" + $TargetPid + ".log")
+function Write-Log([string]$msg) {
+  $line = ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg)
+  Add-Content -LiteralPath $log -Value $line -Encoding UTF8
+}
+function Start-KanbanApp([string]$Exe, [string]$Dir) {
+  if (-not (Test-Path -LiteralPath $Exe)) { return }
+  $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.Path -and $_.Path.Equals($Exe, [StringComparison]::OrdinalIgnoreCase)
+  })
+  if ($running.Count -gt 0) {
+    Write-Log "Already running"
+    return
+  }
+  Write-Log "Launch $Exe cwd=$Dir"
+  $d = $Dir.TrimEnd('\')
+  $line = '/c start "" /D "' + $d + '" "' + $Exe + '"'
+  Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WindowStyle Hidden
+}
+try {
+  Write-Log "Waiting for process exit PID=$TargetPid"
+  $deadline = (Get-Date).AddSeconds(90)
+  while ((Get-Date) -lt $deadline) {
+    if (-not (Get-Process -Id $TargetPid -ErrorAction SilentlyContinue)) { break }
+    Start-Sleep -Milliseconds 400
+  }
+  $deadline = (Get-Date).AddSeconds(180)
+  while ((Get-Date) -lt $deadline) {
+    if (Test-Path -LiteralPath $updLog) {
+      $text = Get-Content -LiteralPath $updLog -Raw -ErrorAction SilentlyContinue
+      if ($text -and ($text -match 'Copied \d+ files' -or $text -match 'Update failed' -or $text -match 'SkipLaunch' -or $text -match 'Continue launch')) {
+        break
+      }
+    }
+    Start-Sleep -Milliseconds 400
+  }
+  Start-Sleep -Seconds 1
+  Start-KanbanApp $ExePath $InstallDir
+  Write-Log "Done"
+} catch {
+  Write-Log ("Relaunch failed: " + $_.Exception.Message)
+  try { Start-KanbanApp $ExePath $InstallDir } catch { }
 } finally {
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
 }
