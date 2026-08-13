@@ -1,9 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
 import '../../common/app_snack_bar.dart';
 import '../../models/kanban_models.dart';
+import 'board_horizontal_scroll.dart';
 import 'column_card_preferences.dart';
 import 'kanban_card_tile.dart';
 
@@ -32,7 +34,21 @@ class KanbanColumnList extends StatefulWidget {
 
 class _KanbanColumnListState extends State<KanbanColumnList> {
   final List<GlobalKey> _cardKeys = [];
+  final ScrollController _scrollController = ScrollController();
   int? _hoverInsertIndex;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    tryClaimVerticalWheelForColumnScroll(
+      event: event,
+      controller: _scrollController,
+    );
+  }
 
   bool get _allowWithinColumnReorder => widget.sortMode == CardSortMode.custom;
 
@@ -152,9 +168,13 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
                         ),
                   ),
                 )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                  children: [
+              : Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerSignal: _onPointerSignal,
+                  child: ListView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                    children: [
                     if (_pinnedCount > 0 && _allowWithinColumnReorder)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4, left: 4),
@@ -201,6 +221,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
                       _InsertionIndicator(colorScheme: colorScheme),
                     const SizedBox(height: 8),
                   ],
+                  ),
                 ),
         );
       },

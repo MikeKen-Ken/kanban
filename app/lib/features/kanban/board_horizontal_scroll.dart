@@ -60,6 +60,39 @@ bool isBoardHorizontalWheelModifierActive() {
   );
 }
 
+/// 在列内认领纵向滚轮，避免外层横向 [Scrollable] 吞掉垂直增量。
+///
+/// 修饰键横滚激活时不认领，以便外层看板接管滚轮。
+bool tryClaimVerticalWheelForColumnScroll({
+  required PointerSignalEvent event,
+  required ScrollController controller,
+}) {
+  if (event is! PointerScrollEvent) return false;
+  if (isBoardHorizontalWheelModifierActive()) return false;
+  if (!controller.hasClients) return false;
+
+  final delta = event.scrollDelta.dy;
+  if (delta == 0) return false;
+
+  GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
+    final scrollEvent = resolved as PointerScrollEvent;
+    if (!controller.hasClients) return;
+    final position = controller.position;
+    final verticalDelta = scrollEvent.scrollDelta.dy;
+    if (verticalDelta == 0) return;
+    final target = clampBoardScrollOffset(
+      pixels: position.pixels,
+      delta: verticalDelta,
+      minScrollExtent: position.minScrollExtent,
+      maxScrollExtent: position.maxScrollExtent,
+    );
+    if (target != position.pixels) {
+      controller.jumpTo(target);
+    }
+  });
+  return true;
+}
+
 /// 在按住 Ctrl 或（非输入焦点下的）空格时认领滚轮，并驱动 [controller] 横向滚动。
 ///
 /// 未按修饰键时不处理，以便列内纵向滚动等默认行为不受影响。

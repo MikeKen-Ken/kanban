@@ -164,6 +164,112 @@ void main() {
     });
   });
 
+  group('tryClaimVerticalWheelForColumnScroll', () {
+    testWidgets('无修饰键时认领列内纵向滚轮', (tester) async {
+      late ScrollController columnController;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 240,
+              height: 200,
+              child: Builder(
+                builder: (context) {
+                  columnController = ScrollController();
+                  return Listener(
+                    onPointerSignal: (event) {
+                      tryClaimVerticalWheelForColumnScroll(
+                        event: event,
+                        controller: columnController,
+                      );
+                    },
+                    child: ListView.builder(
+                      controller: columnController,
+                      itemExtent: 48,
+                      itemCount: 12,
+                      itemBuilder: (_, index) => Text('卡片 $index'),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      addTearDown(columnController.dispose);
+      await tester.pumpAndSettle();
+
+      final center = tester.getCenter(find.text('卡片 0'));
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: center,
+          scrollDelta: const Offset(0, 80),
+        ),
+      );
+      await tester.pump();
+      expect(columnController.offset, 80);
+    });
+
+    testWidgets('修饰键激活时不认领列内滚轮', (tester) async {
+      late ScrollController boardController;
+      late ScrollController columnController;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 240,
+              child: BoardHorizontalScroll(
+                builder: (context, controller) {
+                  boardController = controller;
+                  return ListView(
+                    controller: controller,
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      SizedBox(
+                        width: 240,
+                        child: Listener(
+                          onPointerSignal: (event) {
+                            tryClaimVerticalWheelForColumnScroll(
+                              event: event,
+                              controller: columnController,
+                            );
+                          },
+                          child: ListView.builder(
+                            controller: columnController = ScrollController(),
+                            itemExtent: 48,
+                            itemCount: 12,
+                            itemBuilder: (_, index) => Text('卡片 $index'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 800),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      addTearDown(columnController.dispose);
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+      final center = tester.getCenter(find.text('卡片 0'));
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: center,
+          scrollDelta: const Offset(0, 80),
+        ),
+      );
+      await tester.pump();
+      expect(columnController.offset, 0);
+      expect(boardController.offset, 80);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+    });
+  });
+
   group('BoardHorizontalScroll 修饰键滚轮', () {
     Future<ScrollController> pumpBoard(WidgetTester tester) async {
       late ScrollController controller;
@@ -232,6 +338,66 @@ void main() {
       expect(controller.offset, 0);
     });
 
+    testWidgets('无修饰键时卡片区域滚轮可纵向滚动列', (tester) async {
+      late ScrollController boardController;
+      late ScrollController columnController;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 240,
+              child: BoardHorizontalScroll(
+                builder: (context, controller) {
+                  boardController = controller;
+                  return ListView(
+                    controller: controller,
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      SizedBox(
+                        width: 240,
+                        child: Listener(
+                          onPointerSignal: (event) {
+                            tryClaimVerticalWheelForColumnScroll(
+                              event: event,
+                              controller: columnController,
+                            );
+                          },
+                          child: ListView.builder(
+                            controller: columnController = ScrollController(),
+                            itemExtent: 48,
+                            itemCount: 12,
+                            itemBuilder: (_, index) => Text('卡片 $index'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 800),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      addTearDown(columnController.dispose);
+      await tester.pumpAndSettle();
+
+      expect(boardController.offset, 0);
+      expect(columnController.offset, 0);
+
+      final columnCenter = tester.getCenter(find.text('卡片 0'));
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: columnCenter,
+          scrollDelta: const Offset(0, 80),
+        ),
+      );
+      await tester.pump();
+      expect(columnController.offset, 80);
+      expect(boardController.offset, 0);
+    });
+
     testWidgets('修饰键会把列内滚轮改为看板横向滚动', (tester) async {
       late ScrollController boardController;
       late ScrollController columnController;
@@ -250,11 +416,19 @@ void main() {
                     children: [
                       SizedBox(
                         width: 240,
-                        child: ListView.builder(
-                          controller: columnController = ScrollController(),
-                          itemExtent: 48,
-                          itemCount: 12,
-                          itemBuilder: (_, index) => Text('卡片 $index'),
+                        child: Listener(
+                          onPointerSignal: (event) {
+                            tryClaimVerticalWheelForColumnScroll(
+                              event: event,
+                              controller: columnController,
+                            );
+                          },
+                          child: ListView.builder(
+                            controller: columnController = ScrollController(),
+                            itemExtent: 48,
+                            itemCount: 12,
+                            itemBuilder: (_, index) => Text('卡片 $index'),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 800),
