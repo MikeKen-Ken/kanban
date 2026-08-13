@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'agent_dispatch_credentials.dart';
+import 'agent_dispatch_worker.dart';
 
 /// Cursor SDK 凭据编辑区。输入内容不会写入普通设置或运行日志。
 class CursorApiKeySection extends StatefulWidget {
@@ -8,10 +9,12 @@ class CursorApiKeySection extends StatefulWidget {
     super.key,
     required this.enabled,
     this.credentials = const AgentDispatchCredentials(),
+    this.workerScriptPath,
   });
 
   final bool enabled;
   final AgentDispatchCredentials credentials;
+  final String? workerScriptPath;
 
   @override
   State<CursorApiKeySection> createState() => _CursorApiKeySectionState();
@@ -19,7 +22,6 @@ class CursorApiKeySection extends StatefulWidget {
 
 class _CursorApiKeySectionState extends State<CursorApiKeySection> {
   final _controller = TextEditingController();
-  final _labelController = TextEditingController();
   bool _obscure = true;
   bool _busy = false;
   bool _hasEnvironmentKey = false;
@@ -54,6 +56,17 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     return _keys.isEmpty ? null : _keys.first;
   }
 
+  Future<String?> _resolveLabel(String apiKey) async {
+    try {
+      return await resolveCursorApiKeyLabel(
+        cursorApiKey: apiKey,
+        workerScriptPath: widget.workerScriptPath,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     setState(() {
@@ -61,17 +74,14 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       _message = null;
     });
     try {
-      final label = _labelController.text.trim();
-      if (label.isEmpty && _activeKey != null) {
-        await widget.credentials.replaceActiveCursorApiKey(_controller.text);
+      final apiKey = _controller.text.trim();
+      final label = await _resolveLabel(apiKey);
+      if (_activeKey != null) {
+        await widget.credentials.replaceActiveCursorApiKey(apiKey, label: label);
       } else {
-        await widget.credentials.saveCursorApiKey(
-          _controller.text,
-          label: _labelController.text,
-        );
+        await widget.credentials.saveCursorApiKey(apiKey, label: label);
       }
       _controller.clear();
-      _labelController.clear();
       await _refreshStatus();
       if (!mounted) return;
       setState(() {
@@ -89,13 +99,6 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
 
   Future<void> _selectKey(String id) async {
     if (_busy) return;
-    CursorApiKeySummary? selected;
-    for (final item in _keys) {
-      if (item.id == id) {
-        selected = item;
-        break;
-      }
-    }
     setState(() {
       _busy = true;
       _message = null;
@@ -107,9 +110,6 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       setState(() {
         _busy = false;
         _controller.clear();
-        if (selected != null) {
-          _labelController.text = selected.label;
-        }
         _message = '已切换当前 Key';
       });
     } catch (error) {
@@ -135,7 +135,6 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
         _busy = false;
         if (_activeKey?.id == id) {
           _controller.clear();
-          _labelController.clear();
         }
         _message = _keys.isEmpty && _hasEnvironmentKey
             ? '已删除该 Key；仍会使用环境变量 CURSOR_API_KEY'
@@ -153,7 +152,6 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
   @override
   void dispose() {
     _controller.dispose();
-    _labelController.dispose();
     super.dispose();
   }
 
@@ -263,15 +261,6 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
               icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
             ),
           ],
-        ),
-        const SizedBox(height: 4),
-        TextField(
-          controller: _labelController,
-          enabled: enabled,
-          decoration: const InputDecoration(
-            hintText: '备注（可选，填写后保存为新 Key）',
-          ),
-          onSubmitted: enabled ? (_) => _save() : null,
         ),
         const SizedBox(height: 4),
         Text(

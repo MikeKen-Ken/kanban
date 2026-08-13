@@ -306,6 +306,24 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
   return AgentDispatchUsageSnapshot.fromJson(map);
 }
 
+/// 通过 Cursor.me 解析 API Key 显示名；失败时返回 null，由凭据层回退默认别名。
+Future<String?> resolveCursorApiKeyLabel({
+  required String cursorApiKey,
+  String? workerScriptPath,
+  void Function(String line)? onLog,
+}) async {
+  final snapshot = await fetchAgentDispatchUsage(
+    cursorApiKey: cursorApiKey,
+    workerScriptPath: workerScriptPath,
+    onLog: onLog,
+  );
+  final name = snapshot.apiKeyName?.trim();
+  if (name != null && name.isNotEmpty) return name;
+  final email = snapshot.userEmail?.trim();
+  if (email != null && email.isNotEmpty) return email;
+  return null;
+}
+
 Future<({bool ok, String message})> ensureAgentDispatchWorker({
   String? workerScriptPath,
   void Function(String line)? onLog,

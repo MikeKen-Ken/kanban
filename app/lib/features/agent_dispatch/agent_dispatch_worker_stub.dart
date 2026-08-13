@@ -61,6 +61,13 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
   throw StateError('当前平台不支持本机 Agent 调度');
 }
 
+Future<String?> resolveCursorApiKeyLabel({
+  required String cursorApiKey,
+  String? workerScriptPath,
+  void Function(String line)? onLog,
+}) async =>
+    null;
+
 Future<({bool ok, String message})> ensureAgentDispatchWorker({
   String? workerScriptPath,
   void Function(String line)? onLog,

@@ -577,6 +577,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 CursorApiKeySection(
                   enabled: !_running && !_busy,
                   credentials: _credentials,
+                  workerScriptPath: _settings.workerScriptPath,
                 ),
                 const SizedBox(height: 12),
                 AgentDispatchUsagePane(
