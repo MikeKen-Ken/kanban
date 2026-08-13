@@ -5,6 +5,68 @@ import { runCodex } from "./run_codex.js";
 import { runCursor } from "./run_cursor.js";
 import type { DispatchJob, DispatchResult } from "./types.js";
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableError(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    if ("isRetryable" in err && (err as { isRetryable?: boolean }).isRetryable) {
+      return true;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    const lower = message.toLowerCase();
+    if (
+      lower.includes("network") ||
+      lower.includes("fetch failed") ||
+      lower.includes("connect timeout") ||
+      lower.includes("econnreset") ||
+      lower.includes("etimedout") ||
+      lower.includes("und_err_connect_timeout")
+    ) {
+      return true;
+    }
+    if ("cause" in err && err.cause) {
+      return isRetryableError(err.cause);
+    }
+  }
+  return false;
+}
+
+function formatListModelsError(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err) {
+    const message = String((err as { message?: unknown }).message).trim();
+    if (message) return `Cursor.models.list 失败：${message}`;
+  }
+  return `Cursor.models.list 失败：${String(err)}`;
+}
+
+async function withRetry<T>(
+  operation: string,
+  fn: () => Promise<T>,
+  options?: { maxAttempts?: number; baseDelayMs?: number },
+): Promise<T> {
+  const maxAttempts = options?.maxAttempts ?? 3;
+  const baseDelayMs = options?.baseDelayMs ?? 1000;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt >= maxAttempts || !isRetryableError(err)) {
+        throw err;
+      }
+      const delayMs = baseDelayMs * 2 ** (attempt - 1);
+      console.error(
+        `${operation} 失败（第 ${attempt}/${maxAttempts} 次），${delayMs}ms 后重试…`,
+      );
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
 function writeResult(outPath: string, result: DispatchResult): void {
   writeFileSync(outPath, JSON.stringify(result, null, 2), "utf8");
 }
@@ -42,7 +104,14 @@ async function listModels(): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const models = await Cursor.models.list({ apiKey });
+  let models;
+  try {
+    models = await withRetry("拉取模型列表", () => Cursor.models.list({ apiKey }));
+  } catch (err) {
+    console.error(formatListModelsError(err));
+    process.exitCode = 2;
+    return;
+  }
   const payload = {
     models: models.map((m) => ({
       id: m.id,

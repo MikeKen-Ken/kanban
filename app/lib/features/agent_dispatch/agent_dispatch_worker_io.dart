@@ -186,7 +186,13 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   );
   if (result.exitCode != 0) {
     final err = (result.stderr as String).trim();
-    throw StateError(err.isEmpty ? 'list-models 失败（${result.exitCode}）' : err);
+    final firstLine = err
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .firstWhere((line) => line.isNotEmpty, orElse: () => '');
+    throw StateError(
+      firstLine.isEmpty ? 'list-models 失败（${result.exitCode}）' : firstLine,
+    );
   }
   final stdout = (result.stdout as String).trim();
   final map = jsonDecode(stdout) as Map<String, dynamic>;

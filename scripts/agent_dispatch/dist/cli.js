@@ -179,6 +179,53 @@ async function runCursor(job) {
 }
 
 // src/cli.ts
+function sleep(ms) {
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+function isRetryableError(err) {
+  if (err && typeof err === "object") {
+    if ("isRetryable" in err && err.isRetryable) {
+      return true;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    const lower = message.toLowerCase();
+    if (lower.includes("network") || lower.includes("fetch failed") || lower.includes("connect timeout") || lower.includes("econnreset") || lower.includes("etimedout") || lower.includes("und_err_connect_timeout")) {
+      return true;
+    }
+    if ("cause" in err && err.cause) {
+      return isRetryableError(err.cause);
+    }
+  }
+  return false;
+}
+function formatListModelsError(err) {
+  if (err && typeof err === "object" && "message" in err) {
+    const message = String(err.message).trim();
+    if (message) return `Cursor.models.list \u5931\u8D25\uFF1A${message}`;
+  }
+  return `Cursor.models.list \u5931\u8D25\uFF1A${String(err)}`;
+}
+async function withRetry(operation, fn, options) {
+  const maxAttempts = options?.maxAttempts ?? 3;
+  const baseDelayMs = options?.baseDelayMs ?? 1e3;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt >= maxAttempts || !isRetryableError(err)) {
+        throw err;
+      }
+      const delayMs = baseDelayMs * 2 ** (attempt - 1);
+      console.error(
+        `${operation} \u5931\u8D25\uFF08\u7B2C ${attempt}/${maxAttempts} \u6B21\uFF09\uFF0C${delayMs}ms \u540E\u91CD\u8BD5\u2026`
+      );
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
 function writeResult(outPath, result) {
   writeFileSync2(outPath, JSON.stringify(result, null, 2), "utf8");
 }
@@ -205,7 +252,14 @@ async function listModels() {
     process.exitCode = 2;
     return;
   }
-  const models = await Cursor.models.list({ apiKey });
+  let models;
+  try {
+    models = await withRetry("\u62C9\u53D6\u6A21\u578B\u5217\u8868", () => Cursor.models.list({ apiKey }));
+  } catch (err) {
+    console.error(formatListModelsError(err));
+    process.exitCode = 2;
+    return;
+  }
   const payload = {
     models: models.map((m) => ({
       id: m.id,
