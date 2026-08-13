@@ -27,7 +27,14 @@ void main() {
     try {
       // 某些 CI/沙箱会把 flutter_tester 放进不可嵌套的 Job，Windows 会拒绝
       // 二次分配。正式桌面应用仍应尝试绑定，并在该限制下回退 taskkill /T。
-      if (job == null) return;
+      if (job == null) {
+        expect(
+          warning,
+          isNot(contains('错误 87')),
+          reason: 'KILL_ON_JOB_CLOSE 必须使用 Extended Limit Information',
+        );
+        return;
+      }
       job.dispose();
       await process.exitCode.timeout(const Duration(seconds: 5));
     } finally {
