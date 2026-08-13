@@ -453,10 +453,7 @@ class _CardContent extends StatelessWidget {
                             : CrossAxisAlignment.start,
                     children: [
                       if (columnId != null)
-                        Checkbox(
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
+                        _CardCompleteCheckbox(
                           value: card.completed,
                           onChanged: (_) async {
                             final error = await context
@@ -781,6 +778,74 @@ class _CardContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 卡片左侧完成勾选：点击缩放反馈，并吞掉长按以免触发整卡拖拽/选中。
+class _CardCompleteCheckbox extends StatefulWidget {
+  const _CardCompleteCheckbox({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  State<_CardCompleteCheckbox> createState() => _CardCompleteCheckboxState();
+}
+
+class _CardCompleteCheckboxState extends State<_CardCompleteCheckbox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _scaleController;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _scaleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 140),
+    );
+    _scale = Tween<double>(begin: 1, end: 0.86).animate(
+      CurvedAnimation(
+        parent: _scaleController,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.elasticOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _scaleController.dispose();
+    super.dispose();
+  }
+
+  void _playTapFeedback() {
+    _scaleController.forward().then((_) {
+      if (mounted) _scaleController.reverse();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () {},
+      child: ScaleTransition(
+        scale: _scale,
+        child: Checkbox(
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+          value: widget.value,
+          onChanged: (next) {
+            _playTapFeedback();
+            widget.onChanged(next);
+          },
+        ),
+      ),
     );
   }
 }
