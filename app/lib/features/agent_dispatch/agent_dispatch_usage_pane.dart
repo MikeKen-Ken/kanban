@@ -39,17 +39,6 @@ class AgentDispatchUsagePane extends StatelessWidget {
             ),
           ],
         ),
-        if (snapshot?.userEmail != null || snapshot?.apiKeyName != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              [
-                if (snapshot?.userEmail != null) snapshot!.userEmail,
-                if (snapshot?.apiKeyName != null) snapshot!.apiKeyName,
-              ].join(' · '),
-              style: textTheme.bodySmall,
-            ),
-          ),
         _UsageBar(
           label: 'Auto + Composer',
           remainingPercent: snapshot?.autoRemainingPercent,

@@ -52,6 +52,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   bool _running = false;
   bool _busy = false;
   bool _usageBusy = false;
+  int _cursorKeySectionRevision = 0;
   DateTime _lastLogAt = DateTime.now();
   Timer? _heartbeat;
 
@@ -348,10 +349,21 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         cursorApiKey: await _credentials.resolveCursorApiKey(),
         workerScriptPath: _settings.workerScriptPath,
       );
+      final name = snapshot.apiKeyName?.trim();
+      final email = snapshot.userEmail?.trim();
+      final label = name != null && name.isNotEmpty
+          ? name
+          : email != null && email.isNotEmpty
+              ? email
+              : null;
+      if (label != null) {
+        await _credentials.updateActiveCursorApiKeyLabel(label);
+      }
       if (!mounted) return;
       setState(() {
         _usage = snapshot;
         _usageBusy = false;
+        if (label != null) _cursorKeySectionRevision++;
       });
     } catch (e) {
       if (!mounted) return;
@@ -575,6 +587,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 Text('Cursor API Key',
                     style: Theme.of(context).textTheme.labelLarge),
                 CursorApiKeySection(
+                  key: ValueKey('cursor-key-$_cursorKeySectionRevision'),
                   enabled: !_running && !_busy,
                   credentials: _credentials,
                   workerScriptPath: _settings.workerScriptPath,

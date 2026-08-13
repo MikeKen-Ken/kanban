@@ -135,6 +135,20 @@ class AgentDispatchCredentials {
     await _storage.write(key: _activeIdKey, value: id);
   }
 
+  /// 仅更新当前激活 Key 的显示别名；无已保存 Key 时静默跳过。
+  Future<void> updateActiveCursorApiKeyLabel(String label) async {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) return;
+    final activeId = await _readActiveId();
+    if (activeId == null) return;
+    final meta = await _readMeta();
+    final index = meta.indexWhere((item) => item.id == activeId);
+    if (index < 0 || meta[index].label == trimmed) return;
+    final updated = [...meta];
+    updated[index] = _CursorApiKeyMeta(id: activeId, label: trimmed);
+    await _writeMeta(updated);
+  }
+
   Future<void> saveCursorApiKey(String value, {String? label}) async {
     final normalized = value.trim();
     if (normalized.isEmpty) {
