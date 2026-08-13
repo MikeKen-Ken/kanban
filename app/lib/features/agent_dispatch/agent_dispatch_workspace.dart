@@ -4,7 +4,7 @@ import 'agent_dispatch_log.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
-/// 宽窗口使用「Worker / Skill / 配置 / 对话记录」四列布局；窄窗口则
+/// 宽窗口使用「配置与 Worker / Skill / 对话记录」三列布局；窄窗口则
 /// 回退为纵向滚动，避免字段被压缩到不可用。
 class AgentDispatchWorkspace extends StatelessWidget {
   const AgentDispatchWorkspace({
@@ -28,17 +28,24 @@ class AgentDispatchWorkspace extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(flex: 6, child: worker),
-              const VerticalDivider(width: 25),
-              Expanded(flex: 9, child: skill),
-              const VerticalDivider(width: 25),
               Expanded(
                 flex: 10,
-                child: _ScrollablePane(
-                  title: '调度配置',
-                  child: settings,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _ScrollablePane(
+                        title: '调度配置',
+                        child: settings,
+                      ),
+                    ),
+                    const Divider(height: 32),
+                    worker,
+                  ],
                 ),
               ),
+              const VerticalDivider(width: 25),
+              Expanded(flex: 9, child: skill),
               const VerticalDivider(width: 25),
               Expanded(flex: 12, child: log),
             ],
@@ -49,13 +56,13 @@ class AgentDispatchWorkspace extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(height: 160, child: worker),
-              const Divider(height: 32),
-              SizedBox(height: 400, child: skill),
-              const Divider(height: 32),
               const _PaneTitle(title: '调度配置'),
               const SizedBox(height: 12),
               settings,
+              const Divider(height: 32),
+              worker,
+              const Divider(height: 32),
+              SizedBox(height: 400, child: skill),
               const Divider(height: 32),
               SizedBox(height: 400, child: log),
             ],
