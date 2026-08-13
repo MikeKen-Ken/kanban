@@ -340,9 +340,10 @@ Map<String, String> _workerEnvironment({
   final environment = Map<String, String>.from(Platform.environment);
   final nodeDir = p.dirname(nodeExecutable);
   final original = environment['Path'] ?? environment['PATH'] ?? '';
+  final pathListSeparator = Platform.isWindows ? ';' : ':';
   final merged = original.isEmpty
       ? nodeDir
-      : '$nodeDir${Platform.pathListSeparator}$original';
+      : '${nodeDir}${pathListSeparator}$original';
   environment['Path'] = merged;
   environment['PATH'] = merged;
   if (cursorApiKey != null && cursorApiKey.trim().isNotEmpty) {
