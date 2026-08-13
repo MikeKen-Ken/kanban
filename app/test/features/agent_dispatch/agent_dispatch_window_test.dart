@@ -62,6 +62,40 @@ void main() {
     );
   });
 
+  testWidgets('工作台内下拉菜单可正常选择', (tester) async {
+    String? selected;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => AgentDispatchWindowHost(
+          panel: AlertDialog(
+            content: DropdownButtonFormField<String>(
+              initialValue: 'a',
+              items: const [
+                DropdownMenuItem(value: 'a', child: Text('选项 A')),
+                DropdownMenuItem(value: 'b', child: Text('选项 B')),
+              ],
+              onChanged: (value) => selected = value,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        ),
+        home: const SizedBox.shrink(),
+      ),
+    );
+
+    AgentDispatchWindow.show();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('选项 B').last);
+    await tester.pumpAndSettle();
+
+    expect(selected, 'b');
+  });
+
   testWidgets('builder 插槽中悬停带 tooltip 的按钮能显示文案，不出现巨大灰板',
       (tester) async {
     await tester.pumpWidget(

@@ -107,7 +107,19 @@ class _AgentDispatchScrim extends StatelessWidget {
             onDismiss: onDismiss,
           ),
           SafeArea(
-            child: Center(child: child),
+            child: Center(
+              // 工作台在 MaterialApp.builder 中，与主 Navigator 并列。
+              // 下拉菜单默认推到主 Navigator，会落在遮罩下方导致点击无效。
+              child: HeroControllerScope.none(
+                child: Navigator(
+                  initialRoute: Navigator.defaultRouteName,
+                  onGenerateRoute: (settings) => MaterialPageRoute<void>(
+                    settings: settings,
+                    builder: (context) => child,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
