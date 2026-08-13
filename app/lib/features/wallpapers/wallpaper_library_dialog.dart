@@ -60,7 +60,14 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
     final error =
         await context.read<BoardController>().uploadWallpapersFromGallery();
     if (!mounted) return;
-    setState(() => _busy = false);
+    final controller = context.read<BoardController>();
+    setState(() {
+      _busy = false;
+      _selected = controller.projectSettings.wallpaperIds.toSet();
+      if (_selected.isEmpty && controller.wallpapers.isNotEmpty) {
+        _selected = controller.wallpapers.map((item) => item.id).toSet();
+      }
+    });
     if (error != null) showAppSnackBar(context, message: error);
   }
 

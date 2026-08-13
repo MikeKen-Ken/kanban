@@ -62,11 +62,37 @@ extension BoardControllerWallpapers on BoardController {
         return '图片处理失败';
       }
 
+      final addedIds = added.map((item) => item.id).toList(growable: false);
       await _persistSharedContent(
         sharedContent
             .copyWith(wallpapers: [...sharedContent.wallpapers, ...added]),
       );
+
+      for (final entry in manifest?.projects ?? const <ProjectEntry>[]) {
+        final current = entry.id == activeProjectId
+            ? projectSettings
+            : await _repository.loadProjectSettings(entry.id);
+        final selected =
+            current.wallpaperPlaybackMode == WallpaperPlaybackMode.fixed
+                ? [addedIds.last]
+                : {...current.wallpaperIds, ...addedIds}.toList(growable: false);
+        final next = current
+            .copyWith(
+              wallpaperIds: selected,
+              backgroundAttachmentId: selected.isEmpty ? '' : selected.first,
+              wallpaperPlaybackMode: selected.length > 1
+                  ? current.wallpaperPlaybackMode
+                  : WallpaperPlaybackMode.fixed,
+              clearConflictSide: true,
+            )
+            .bump();
+        await _repository.saveProjectSettings(entry.id, next);
+        if (entry.id == activeProjectId) projectSettings = next;
+      }
+
       await refreshDisplayableWallpapers();
+      notifyListeners();
+      _markWorkspaceChanged();
       return null;
     });
   }
