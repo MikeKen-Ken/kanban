@@ -7,30 +7,33 @@ class AgentDispatchUsagePane extends StatelessWidget {
   const AgentDispatchUsagePane({
     required this.snapshot,
     required this.loading,
-    required this.enabled,
-    required this.onRefresh,
     super.key,
   });
 
   final AgentDispatchUsageSnapshot? snapshot;
   final bool loading;
-  final bool enabled;
-  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final email = snapshot?.userEmail?.trim();
+    final keyName = snapshot?.apiKeyName?.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Text('额度', style: textTheme.labelLarge),
+            Text('Cursor 账号', style: textTheme.labelLarge),
             const Spacer(),
-            TextButton(
-              onPressed: enabled && !loading ? onRefresh : null,
-              child: Text(loading ? '刷新中…' : '刷新额度'),
-            ),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             TextButton(
               onPressed: () => launchUrl(
                 Uri.parse('https://cursor.com/dashboard/usage'),
@@ -39,51 +42,22 @@ class AgentDispatchUsagePane extends StatelessWidget {
             ),
           ],
         ),
-        _UsageBar(
-          label: 'Auto + Composer',
-          remainingPercent: snapshot?.autoRemainingPercent,
-        ),
-        const SizedBox(height: 6),
-        _UsageBar(
-          label: 'API 模型',
-          remainingPercent: snapshot?.apiRemainingPercent,
-        ),
-        if (snapshot?.message != null)
+        if (email != null && email.isNotEmpty)
+          Text('邮箱：$email', style: textTheme.bodySmall),
+        if (keyName != null && keyName.isNotEmpty)
+          Text('Key：$keyName', style: textTheme.bodySmall),
+        if ((email == null || email.isEmpty) &&
+            (keyName == null || keyName.isEmpty) &&
+            !loading)
+          Text(
+            snapshot?.message ?? '尚未加载账号信息',
+            style: textTheme.bodySmall,
+          )
+        else if (snapshot?.message != null)
           Padding(
-            padding: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.only(top: 4),
             child: Text(snapshot!.message!, style: textTheme.bodySmall),
           ),
-      ],
-    );
-  }
-}
-
-class _UsageBar extends StatelessWidget {
-  const _UsageBar({required this.label, required this.remainingPercent});
-
-  final String label;
-  final double? remainingPercent;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final remaining = remainingPercent;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: Text(label, style: textTheme.bodySmall)),
-            Text(
-              remaining == null ? '暂无数据' : '剩余 ${remaining.round()}%',
-              style: textTheme.bodySmall,
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: remaining == null ? 0 : (remaining / 100).clamp(0, 1),
-        ),
       ],
     );
   }

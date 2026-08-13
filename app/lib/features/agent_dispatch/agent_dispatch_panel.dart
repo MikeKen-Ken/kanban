@@ -70,8 +70,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   void _onWindowVisibilityChanged() {
     if (!AgentDispatchWindow.visible.value || !mounted) return;
-    if (_settings.cardLimitMax) return;
-    setState(() => _settings = _settings.copyWith(cardLimitMax: true));
+    if (!_settings.cardLimitMax) {
+      setState(() => _settings = _settings.copyWith(cardLimitMax: true));
+    }
+    if (_settings.engine == AgentDispatchEngine.cursor) {
+      unawaited(_refreshCursorCredentials());
+    }
   }
 
   void _syncLogFromService() {
@@ -147,7 +151,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     }
     if (!mounted) return;
     if (_settings.engine == AgentDispatchEngine.cursor) {
-      unawaited(_loadUsage());
+      unawaited(_loadAccountInfo());
     }
   }
 
@@ -233,7 +237,11 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       next = next.copyWith(repoPathByProject: map);
     }
     await _persist(next);
-    if (mounted) setState(() => _repoErrorText = null);
+    if (!mounted) return;
+    setState(() => _repoErrorText = null);
+    if (_settings.engine == AgentDispatchEngine.cursor) {
+      unawaited(_refreshCursorCredentials());
+    }
   }
 
   AgentDispatchSettings _rememberRepo(
@@ -345,7 +353,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     }
   }
 
-  Future<void> _loadUsage() async {
+  Future<void> _refreshCursorCredentials() async {
+    if (_settings.engine != AgentDispatchEngine.cursor || !mounted) return;
+    setState(() => _cursorKeySectionRevision++);
+    await _loadAccountInfo();
+  }
+
+  Future<void> _loadAccountInfo() async {
     if (_usageBusy || _settings.engine != AgentDispatchEngine.cursor) return;
     setState(() => _usageBusy = true);
     try {
@@ -374,7 +388,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       setState(() {
         _usageBusy = false;
         _usage = AgentDispatchUsageSnapshot(
-          message: '额度刷新失败：$e',
+          message: '账号信息刷新失败：$e',
         );
       });
     }
@@ -529,7 +543,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                             });
                             await _persist(nextSettings);
                             if (!mounted) return;
-                            unawaited(_loadUsage());
+                            unawaited(_refreshCursorCredentials());
                           });
                           return;
                         }
@@ -581,6 +595,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                             _repoController.text = remembered;
                           }
                           setState(() => _projectErrorText = null);
+                          if (_settings.engine == AgentDispatchEngine.cursor) {
+                            unawaited(_refreshCursorCredentials());
+                          }
                         },
                 ),
               const SizedBox(height: 8),
@@ -591,10 +608,16 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 enabled: !_running && !_busy,
                 errorText: _repoErrorText,
                 onChanged: (value) {
+                  final trimmed = value.trim();
+                  final fromHistory = _settings.repoPaths.contains(trimmed);
                   setState(() {
-                    _settings = _settings.copyWith(repoPath: value.trim());
+                    _settings = _settings.copyWith(repoPath: trimmed);
                     _repoErrorText = null;
                   });
+                  if (fromHistory &&
+                      _settings.engine == AgentDispatchEngine.cursor) {
+                    unawaited(_refreshCursorCredentials());
+                  }
                 },
                 onPickDirectory: _pickRepo,
                 onDeletePath: _deleteRepoPath,
@@ -613,8 +636,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 AgentDispatchUsagePane(
                   snapshot: _usage,
                   loading: _usageBusy,
-                  enabled: !_running && !_busy,
-                  onRefresh: _loadUsage,
                 ),
                 const SizedBox(height: 12),
               ],
