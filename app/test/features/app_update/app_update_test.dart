@@ -251,6 +251,18 @@ void main() {
       );
     });
 
+    test('先复制应用文件，agent_worker 失败时仍启动可见窗口', () {
+      expect(windowsUpdaterScript, contains('Copy app files'));
+      expect(windowsUpdaterScript, contains('Copy agent worker'));
+      expect(windowsUpdaterScript, contains(r"'\agent_worker\'"));
+      expect(
+        windowsUpdaterScript,
+        contains(
+          r'Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir -WindowStyle Normal',
+        ),
+      );
+    });
+
     test('UTF-8 无 BOM 写入后仍能覆盖安装目录并成功退出', () async {
       if (!Platform.isWindows) {
         return;

@@ -192,35 +192,69 @@ function Copy-FileWithRetry([string]$From, [string]$To) {
     }
   }
 }
-function Get-AgentWorkerProcesses([string]$WorkerDir) {
-  $workerRoot = (Get-CanonicalPath $WorkerDir).TrimEnd('\\')
-  return @(Get-CimInstance Win32_Process | Where-Object {
-    $_.ProcessId -ne $PID -and (
-      ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($workerRoot, [StringComparison]::OrdinalIgnoreCase)) -or
-      ($_.CommandLine -and (
-        $_.CommandLine.IndexOf($workerRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-        $_.CommandLine.IndexOf('\\agent_worker\\', [StringComparison]::OrdinalIgnoreCase) -ge 0
-      ))
-    )
-  })
+function Test-IsAgentWorkerRel([string]$Rel) {
+  return $Rel -like 'agent_worker\*' -or $Rel -like 'agent_worker/*' -or $Rel -ieq 'agent_worker'
+}
+function Get-AgentWorkerPids([string]$WorkerDir) {
+  $workerRoot = (Get-CanonicalPath $WorkerDir).TrimEnd('\')
+  $ids = @{}
+  Get-CimInstance Win32_Process | ForEach-Object {
+    if ($_.ProcessId -eq $PID) { return }
+    $hit = $false
+    if ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($workerRoot, [StringComparison]::OrdinalIgnoreCase)) {
+      $hit = $true
+    }
+    if (-not $hit -and $_.CommandLine) {
+      if ($_.CommandLine.IndexOf($workerRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $hit = $true }
+      if (-not $hit -and $_.CommandLine.IndexOf('\agent_worker\', [StringComparison]::OrdinalIgnoreCase) -ge 0) { $hit = $true }
+    }
+    if ($hit) { $ids[$_.ProcessId] = $true }
+  }
+  Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+    if ($_.Id -eq $PID) { return }
+    try {
+      foreach ($m in $_.Modules) {
+        if ($m.FileName -and $m.FileName.StartsWith($workerRoot, [StringComparison]::OrdinalIgnoreCase)) {
+          $ids[$_.Id] = $true
+          break
+        }
+      }
+    } catch {}
+  }
+  return @($ids.Keys)
 }
 function Stop-AgentWorkerProcesses([string]$InstallDir) {
   $workerDir = Join-Path $InstallDir 'agent_worker'
   if (-not (Test-Path -LiteralPath $workerDir)) { return }
-
   Write-Log "Stopping agent workers under $workerDir"
-  $workers = Get-AgentWorkerProcesses $workerDir
-  foreach ($worker in $workers) {
-    Write-Log "Stopping agent worker PID=$($worker.ProcessId)"
-    Stop-Process -Id $worker.ProcessId -Force -ErrorAction SilentlyContinue
+  foreach ($wid in (Get-AgentWorkerPids $workerDir)) {
+    Write-Log "Stopping agent worker PID=$wid"
+    Stop-Process -Id $wid -Force -ErrorAction SilentlyContinue
   }
-
   $deadline = (Get-Date).AddSeconds(15)
   while ((Get-Date) -lt $deadline) {
-    if ((Get-AgentWorkerProcesses $workerDir).Count -eq 0) { return }
+    if ((Get-AgentWorkerPids $workerDir).Count -eq 0) { return }
     Start-Sleep -Milliseconds 300
   }
-  throw "Agent worker did not exit before update"
+  Write-Log "Agent worker still running; continue with app file copy"
+}
+function Copy-PayloadFiles([bool]$WorkerOnly) {
+  $n = 0
+  Get-ChildItem -LiteralPath $SourceDir -Recurse -File | ForEach-Object {
+    $rel = Get-RelativePathFrom $SourceDir $_.FullName
+    if ([string]::IsNullOrWhiteSpace($rel)) { return }
+    if ($rel -ieq 'settings.json') { return }
+    $isWorker = Test-IsAgentWorkerRel $rel
+    if ($WorkerOnly -ne $isWorker) { return }
+    $dest = Join-Path $InstallDir $rel
+    $destParent = Split-Path -Parent $dest
+    if (-not (Test-Path -LiteralPath $destParent)) {
+      New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+    }
+    Copy-FileWithRetry $_.FullName $dest
+    $n++
+  }
+  return $n
 }
 try {
   Write-Log "Waiting for process exit PID=$TargetPid"
@@ -240,23 +274,18 @@ try {
   Write-Log "InstallDir=$InstallDir"
   Write-Log "SourceDir=$SourceDir"
   Write-Log "ExePath=$ExePath"
-  # Agent dispatch runs Node from this folder. It may outlive the Flutter
-  # process and keep native .node files locked, so stop only workers rooted in
-  # this installation before copying the new bundled worker.
+  Write-Log "Copy app files"
+  $copied = Copy-PayloadFiles $false
   Stop-AgentWorkerProcesses $InstallDir
-  Write-Log "Copy start"
-  $copied = 0
-  Get-ChildItem -LiteralPath $SourceDir -Recurse -File | ForEach-Object {
-    $rel = Get-RelativePathFrom $SourceDir $_.FullName
-    if ([string]::IsNullOrWhiteSpace($rel)) { return }
-    if ($rel -ieq 'settings.json') { return }
-    $dest = Join-Path $InstallDir $rel
-    $destParent = Split-Path -Parent $dest
-    if (-not (Test-Path -LiteralPath $destParent)) {
-      New-Item -ItemType Directory -Path $destParent -Force | Out-Null
-    }
-    Copy-FileWithRetry $_.FullName $dest
-    $copied++
+  Write-Log "Copy agent worker"
+  try {
+    $copied = $copied + (Copy-PayloadFiles $true)
+  } catch {
+    Write-Log ("Agent worker copy failed: " + $_.Exception.Message)
+    $appSo = Join-Path $InstallDir 'data\app.so'
+    if (-not (Test-Path -LiteralPath $ExePath)) { throw }
+    if (-not (Test-Path -LiteralPath $appSo)) { throw }
+    Write-Log "Continue launch; agent worker left unchanged"
   }
   if ($copied -le 0) {
     throw "No files copied from source dir"
@@ -267,7 +296,7 @@ try {
   Write-Log "Copied $copied files"
   if (-not $SkipLaunch) {
     Write-Log "Launch $ExePath cwd=$InstallDir"
-    Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir
+    Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir -WindowStyle Normal
   } else {
     Write-Log "SkipLaunch"
   }

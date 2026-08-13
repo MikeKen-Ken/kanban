@@ -141,7 +141,9 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '下载 ${((_progress ?? 0) * 100).toStringAsFixed(0)}%',
+                        (_progress ?? 0) >= 0.999
+                            ? '下载完成，正在解压安装…请勿关闭窗口'
+                            : '下载 ${((_progress ?? 0) * 100).toStringAsFixed(0)}%',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
