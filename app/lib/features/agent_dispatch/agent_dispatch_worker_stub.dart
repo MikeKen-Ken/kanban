@@ -1,4 +1,5 @@
 import 'agent_dispatch_config.dart';
+import 'agent_dispatch_usage.dart';
 
 class AgentWorkerResult {
   const AgentWorkerResult({
@@ -38,6 +39,14 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   void Function(String line)? onLog,
 }) async =>
     const [];
+
+Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
+  String? cursorApiKey,
+  String? workerScriptPath,
+  void Function(String line)? onLog,
+}) async {
+  throw StateError('当前平台不支持本机 Agent 调度');
+}
 
 Future<({bool ok, String message})> ensureAgentDispatchWorker({
   String? workerScriptPath,

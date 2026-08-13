@@ -3,6 +3,7 @@ import 'dart:io';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_prompt.dart';
+import 'agent_dispatch_session.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
@@ -51,8 +52,7 @@ class AgentDispatchService {
       'Skill：${options.projectTitle ?? '当前项目'}',
     );
     onLog?.call('仓库：$repo');
-    onLog?.call('上限：${options.cardLimit.label}');
-    onLog?.call('启动新会话（${options.engine.label}）…');
+    onLog?.call('上限：${options.cardLimit.label}（逐张串行启动会话）');
 
     String? cursorApiKey;
     if (options.engine == AgentDispatchEngine.cursor) {
@@ -72,23 +72,63 @@ class AgentDispatchService {
       );
     }
 
-    final result = await runAgentWorkerJob(
-      engine: options.engine,
-      cwd: repo,
-      prompt: prompt,
-      model: options.modelId,
-      modelParams: options.modelParams,
-      cursorApiKey: cursorApiKey,
-      workerScriptPath: workerScriptPath,
-      onLog: (line) {
-        if (_cancelRequested) return;
-        onLog?.call(line);
-      },
+    final sessionLimit = dispatchSessionLimit(options.cardLimit);
+    AgentWorkerResult last = const AgentWorkerResult(
+      ok: false,
+      error: '未启动会话',
     );
-    if (_cancelRequested) {
-      return const AgentWorkerResult(ok: false, error: '已取消');
+    for (var index = 1; index <= sessionLimit; index++) {
+      if (_cancelRequested) {
+        return const AgentWorkerResult(ok: false, error: '已取消');
+      }
+      onLog?.call(
+        '启动新会话（${options.engine.label}）第 $index 张…',
+      );
+      final sessionLog = StringBuffer();
+      last = await runAgentWorkerJob(
+        engine: options.engine,
+        cwd: repo,
+        prompt: prompt,
+        model: options.modelId,
+        modelParams: options.modelParams,
+        cursorApiKey: cursorApiKey,
+        workerScriptPath: workerScriptPath,
+        onLog: (line) {
+          sessionLog.writeln(line);
+          if (_cancelRequested) return;
+          onLog?.call(line);
+        },
+      );
+      if (_cancelRequested) {
+        return const AgentWorkerResult(ok: false, error: '已取消');
+      }
+      if (!shouldContinueDispatch(
+        cardLimit: options.cardLimit,
+        finishedSessions: index,
+        lastResult: last,
+        sessionLog: sessionLog.toString(),
+        cancelRequested: _cancelRequested,
+      )) {
+        if (dispatchSessionHasNoCard(
+          result: last,
+          sessionLog: sessionLog.toString(),
+        )) {
+          onLog?.call('无更多卡片，结束调度');
+          if (index == 1 && last.ok) {
+            return last;
+          }
+          return AgentWorkerResult(
+            ok: last.ok,
+            summary: last.summary ?? '已处理 ${index - 1} 张后无更多卡片',
+            error: last.error,
+            exitCode: last.exitCode,
+          );
+        }
+        return last;
+      }
+      onLog?.call('第 $index 张完成，准备下一张…');
     }
-    return result;
+    return last;
   }
 }
 

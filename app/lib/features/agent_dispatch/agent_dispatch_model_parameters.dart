@@ -82,3 +82,43 @@ String _parameterLabel(AgentDispatchModelParameter parameter) =>
       'fast' => '快速模式（${parameter.displayName ?? parameter.id}）',
       _ => parameter.displayName ?? '模型参数（${parameter.id}）',
     };
+
+bool isAgentDispatchReasoningParam(String id) => switch (id) {
+      'reasoning' ||
+      'reasoning_effort' ||
+      'model_reasoning_effort' ||
+      'effort' ||
+      'thinking' =>
+        true,
+      _ => false,
+    };
+
+/// 快速模式关闭、思考程度 Medium；目录尚未加载时仍带上常见参数名。
+Map<String, String> preferredAgentDispatchModelParamValues(
+  List<AgentDispatchModelParameter> parameters,
+) {
+  if (parameters.isEmpty) {
+    return Map<String, String>.from(
+      AgentDispatchSettingsDefaults.modelParamValues,
+    );
+  }
+  final values = <String, String>{};
+  for (final parameter in parameters) {
+    if (parameter.id == 'fast' && parameter.values.contains('false')) {
+      values['fast'] = 'false';
+    }
+    if (isAgentDispatchReasoningParam(parameter.id) &&
+        parameter.values.contains('medium')) {
+      values[parameter.id] = 'medium';
+    }
+  }
+  return values;
+}
+
+/// 与 [AgentDispatchSettings] 的字面量默认保持一致，避免 config 循环引用。
+class AgentDispatchSettingsDefaults {
+  static const modelParamValues = {
+    'fast': 'false',
+    'reasoning_effort': 'medium',
+  };
+}

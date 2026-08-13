@@ -51,4 +51,28 @@ void main() {
     expect(find.text('思考程度（Reasoning effort）'), findsOneWidget);
     expect(find.text('API 默认（On）'), findsOneWidget);
   });
+
+  test('preferredAgentDispatchModelParamValues 关闭快速模式并选 Medium', () {
+    const parameters = [
+      AgentDispatchModelParameter(
+        id: 'fast',
+        options: [
+          AgentDispatchModelParameterOption(value: 'true'),
+          AgentDispatchModelParameterOption(value: 'false'),
+        ],
+      ),
+      AgentDispatchModelParameter(
+        id: 'reasoning_effort',
+        options: [
+          AgentDispatchModelParameterOption(value: 'low'),
+          AgentDispatchModelParameterOption(value: 'medium'),
+          AgentDispatchModelParameterOption(value: 'high'),
+        ],
+      ),
+    ];
+    expect(
+      preferredAgentDispatchModelParamValues(parameters),
+      {'fast': 'false', 'reasoning_effort': 'medium'},
+    );
+  });
 }

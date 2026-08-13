@@ -20,6 +20,8 @@ import 'agent_dispatch_platform.dart';
 import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
+import 'agent_dispatch_usage.dart';
+import 'agent_dispatch_usage_pane.dart';
 import 'agent_dispatch_worker.dart';
 import 'agent_dispatch_workspace.dart';
 import 'cursor_api_key_section.dart';
@@ -69,8 +71,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   String? _projectErrorText;
   String? _countErrorText;
   String? _modelCatalogMessage;
+  AgentDispatchUsageSnapshot? _usage;
   bool _running = false;
   bool _busy = false;
+  bool _usageBusy = false;
+  DateTime _lastLogAt = DateTime.now();
+  Timer? _heartbeat;
   Future<void> _logSaveQueue = Future.value();
 
   @override
@@ -86,12 +92,26 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final cachedModelId = cachedModels.isEmpty
         ? loaded.modelId
         : resolveAgentDispatchModelId(cachedModels, loaded.modelId);
-    final normalized = cachedModelId == loaded.modelId
+    var normalized = cachedModelId == loaded.modelId
         ? loaded
         : loaded.copyWith(
             modelId: cachedModelId,
             modelParamValues: const {},
           );
+    if (_isStockModelParams(normalized.modelParamValues)) {
+      AgentDispatchModelInfo? selected;
+      for (final model in cachedModels) {
+        if (model.id == (normalized.modelId ?? cachedModelId)) {
+          selected = model;
+          break;
+        }
+      }
+      normalized = normalized.copyWith(
+        modelParamValues: preferredAgentDispatchModelParamValues(
+          selected?.parameters ?? const [],
+        ),
+      );
+    }
     if (normalized != loaded) {
       await prefs.saveAgentDispatchSettings(normalized);
     }
@@ -105,6 +125,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     });
     await _refreshSkillPreview();
     await _refreshWorkerStatus();
+    if (!mounted) return;
+    if (_settings.engine == AgentDispatchEngine.cursor && _models.isEmpty) {
+      await _loadModels();
+    }
+    if (!mounted) return;
+    if (_settings.engine == AgentDispatchEngine.cursor) {
+      unawaited(_loadUsage());
+    }
   }
 
   Future<void> _persist(AgentDispatchSettings next) async {
@@ -114,12 +142,33 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   void _appendLog(String line) {
+    _lastLogAt = DateTime.now();
     final next =
         _logController.text.isEmpty ? line : '${_logController.text}\n$line';
     _logController.text = next;
     _logController.selection = TextSelection.collapsed(offset: next.length);
     _logSaveQueue = _logSaveQueue.then((_) => _saveLog(next));
     unawaited(_logSaveQueue);
+  }
+
+  void _startHeartbeat() {
+    _heartbeat?.cancel();
+    final started = DateTime.now();
+    _lastLogAt = DateTime.now();
+    _heartbeat = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!_running || !mounted) return;
+      if (DateTime.now().difference(_lastLogAt) < const Duration(seconds: 15)) {
+        return;
+      }
+      final elapsed = DateTime.now().difference(started).inSeconds;
+      _appendLog('仍在运行（已 $elapsed 秒）…');
+      setState(() {});
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeat?.cancel();
+    _heartbeat = null;
   }
 
   Future<void> _saveLog(String value) async {
@@ -243,6 +292,19 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         _settings.modelId,
       );
       final selectionChanged = selectedId != _settings.modelId;
+      AgentDispatchModelInfo? selected;
+      for (final model in uniqueModels) {
+        if (model.id == selectedId) {
+          selected = model;
+          break;
+        }
+      }
+      final nextParams = selectionChanged ||
+              _isStockModelParams(_settings.modelParamValues)
+          ? preferredAgentDispatchModelParamValues(
+              selected?.parameters ?? const [],
+            )
+          : _settings.modelParamValues;
       setState(() {
         _models = uniqueModels;
         _busy = false;
@@ -251,12 +313,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.saveAgentDispatchModelCatalog(uniqueModels);
       _appendLog('已加载 ${uniqueModels.length} 个模型');
-      if (selectionChanged) {
-        await _persist(_settings.copyWith(
-          modelId: selectedId,
-          modelParamValues: const {},
-        ));
-      }
+      await _persist(_settings.copyWith(
+        modelId: selectedId,
+        modelParamValues: nextParams,
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -268,6 +328,41 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       });
       _appendLog('拉取模型失败：$e');
     }
+  }
+
+  Future<void> _loadUsage() async {
+    if (_usageBusy || _settings.engine != AgentDispatchEngine.cursor) return;
+    setState(() => _usageBusy = true);
+    try {
+      final snapshot = await fetchAgentDispatchUsage(
+        cursorApiKey: await _credentials.resolveCursorApiKey(),
+        workerScriptPath: _settings.workerScriptPath,
+      );
+      if (!mounted) return;
+      setState(() {
+        _usage = snapshot;
+        _usageBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _usageBusy = false;
+        _usage = AgentDispatchUsageSnapshot(
+          message: '额度刷新失败：$e',
+        );
+      });
+    }
+  }
+
+  bool _isStockModelParams(Map<String, String> values) {
+    if (values.isEmpty) return true;
+    if (values.length == 1 &&
+        (values['fast'] == 'true' || values['fast'] == 'false')) {
+      return true;
+    }
+    const stock = AgentDispatchSettings.defaultModelParamValues;
+    return values.length == stock.length &&
+        stock.entries.every((entry) => values[entry.key] == entry.value);
   }
 
   AgentDispatchModelInfo? get _selectedModel {
@@ -320,6 +415,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     setState(() {
       _running = true;
     });
+    _startHeartbeat();
     _appendLog(
       '\n—— ${DateTime.now().toLocal().toString().substring(0, 19)} 新运行 ——',
     );
@@ -334,6 +430,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       },
     );
     if (!mounted) return;
+    _stopHeartbeat();
     setState(() => _running = false);
     if (result.ok) {
       _appendLog(result.summary ?? '完成');
@@ -344,6 +441,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   @override
   void dispose() {
+    _stopHeartbeat();
     _repoController.dispose();
     _countController.dispose();
     _logController.dispose();
@@ -363,7 +461,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     return AlertDialog(
       insetPadding: const EdgeInsets.all(24),
       title: const Text('Agent 调度工作台'),
-      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       content: SizedBox(
         width: dialogWidth,
         height: dialogHeight,
@@ -382,12 +481,22 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 onSelectionChanged: _running || _busy
                     ? null
                     : (s) {
-                        setState(() => _models = const []);
+                        setState(() {
+                          _models = const [];
+                          _usage = null;
+                        });
                         _persist(_settings.copyWith(
                           engine: s.first,
-                          modelId: null,
-                          modelParamValues: const {},
-                        ));
+                          modelId: AgentDispatchSettings.defaultModelId,
+                          modelParamValues:
+                              AgentDispatchSettings.defaultModelParamValues,
+                        )).then((_) {
+                          if (!mounted) return;
+                          if (s.first == AgentDispatchEngine.cursor) {
+                            unawaited(_loadModels());
+                            unawaited(_loadUsage());
+                          }
+                        });
                       },
               ),
               const SizedBox(height: 12),
@@ -456,6 +565,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   credentials: _credentials,
                 ),
                 const SizedBox(height: 12),
+                AgentDispatchUsagePane(
+                  snapshot: _usage,
+                  loading: _usageBusy,
+                  enabled: !_running && !_busy,
+                  onRefresh: _loadUsage,
+                ),
+                const SizedBox(height: 12),
               ],
               Row(
                 children: [
@@ -509,10 +625,22 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   ],
                   onChanged: _running || _busy
                       ? null
-                      : (id) => _persist(_settings.copyWith(
+                      : (id) {
+                          AgentDispatchModelInfo? selected;
+                          for (final model in _models) {
+                            if (model.id == id) {
+                              selected = model;
+                              break;
+                            }
+                          }
+                          _persist(_settings.copyWith(
                             modelId: id,
-                            modelParamValues: const {},
-                          )),
+                            modelParamValues:
+                                preferredAgentDispatchModelParamValues(
+                              selected?.parameters ?? const [],
+                            ),
+                          ));
+                        },
                 ),
               AgentDispatchModelParameters(
                 parameters: modelParameters,

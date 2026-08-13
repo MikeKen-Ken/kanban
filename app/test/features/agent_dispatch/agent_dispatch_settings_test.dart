@@ -10,11 +10,14 @@ import 'package:kanban/features/agent_dispatch/agent_dispatch_settings.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_worker.dart';
 
 void main() {
-  test('新建设置默认使用 Composer 2.5、Force 和 Max', () {
+  test('新建设置默认使用 Composer 2.5、关闭快速模式、Medium 和 Max', () {
     const settings = AgentDispatchSettings();
 
     expect(settings.modelId, 'composer-2.5');
-    expect(settings.modelParamValues, {'fast': 'true'});
+    expect(settings.modelParamValues, {
+      'fast': 'false',
+      'reasoning_effort': 'medium',
+    });
     expect(settings.cardLimitMax, isTrue);
     expect(
       settings.toRunOptions(projectTitleOf: (_) => null).cardLimit,
@@ -26,7 +29,10 @@ void main() {
     final settings = AgentDispatchSettings.fromJson({});
 
     expect(settings.modelId, 'composer-2.5');
-    expect(settings.modelParamValues, {'fast': 'true'});
+    expect(settings.modelParamValues, {
+      'fast': 'false',
+      'reasoning_effort': 'medium',
+    });
     expect(settings.cardLimitMax, isTrue);
   });
 
@@ -38,7 +44,9 @@ void main() {
     );
     expect(text, contains('Skill 正文'));
     expect(text, contains('name:我的项目'));
-    expect(text, contains('最多 3 张'));
+    expect(text, contains('只处理 1 张卡片'));
+    expect(text, contains('KANBAN_DISPATCH:CARD_DONE'));
+    expect(text, contains('本次运行上限：3'));
   });
 
   test('不指定项目时调用正文为空说明', () {
@@ -48,7 +56,7 @@ void main() {
       cardLimit: AgentDispatchCardLimit.max,
     );
     expect(text, contains('（空：使用看板当前打开的项目）'));
-    expect(text, contains('不限'));
+    expect(text, contains('Max（全部）'));
     expect(text, isNot(contains('name:')));
   });
 

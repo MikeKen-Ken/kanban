@@ -1,7 +1,104 @@
 // src/cli.ts
 import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { resolve } from "node:path";
+import { Cursor as Cursor2 } from "@cursor/sdk";
+
+// src/cursor_usage.ts
 import { Cursor } from "@cursor/sdk";
+function readPercent(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.min(100, value));
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : void 0;
+  }
+  return void 0;
+}
+function pickPercent(record, keys) {
+  for (const key of keys) {
+    const value = readPercent(record[key]);
+    if (value != null) return value;
+  }
+  return void 0;
+}
+function asRecord(value) {
+  return value && typeof value === "object" ? value : null;
+}
+function parseUsageRecord(record) {
+  const nested = asRecord(record.usage) ?? asRecord(record.planUsage) ?? asRecord(record.membershipType) ?? record;
+  return {
+    autoRemainingPercent: pickPercent(nested, [
+      "autoRemainingPercent",
+      "autoPercentRemaining",
+      "autoRemaining",
+      "composerRemainingPercent"
+    ]),
+    apiRemainingPercent: pickPercent(nested, [
+      "apiRemainingPercent",
+      "apiPercentRemaining",
+      "apiRemaining"
+    ])
+  };
+}
+async function tryFetchUsagePools(apiKey) {
+  const endpoints = [
+    "https://api.cursor.com/auth/usage",
+    "https://api.cursor.com/dashboard/get-monthly-invoice"
+  ];
+  for (const url of endpoints) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        }
+      });
+      if (!response.ok) continue;
+      const json = await response.json();
+      const record = asRecord(json);
+      if (record == null) continue;
+      const parsed = parseUsageRecord(record);
+      if (parsed.autoRemainingPercent != null || parsed.apiRemainingPercent != null) {
+        return parsed;
+      }
+    } catch {
+    }
+  }
+  return {};
+}
+async function printCursorUsage() {
+  const apiKey = process.env.CURSOR_API_KEY?.trim();
+  if (!apiKey) {
+    console.error("\u7F3A\u5C11 CURSOR_API_KEY");
+    process.exitCode = 2;
+    return;
+  }
+  let me;
+  try {
+    me = await Cursor.me({ apiKey });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const payload2 = {
+      ok: false,
+      error: `\u8BFB\u53D6 Cursor \u8D26\u53F7\u5931\u8D25\uFF1A${message}`
+    };
+    process.stdout.write(`${JSON.stringify(payload2)}
+`);
+    process.exitCode = 2;
+    return;
+  }
+  const pools = await tryFetchUsagePools(apiKey);
+  const payload = {
+    ok: true,
+    userEmail: me.userEmail,
+    apiKeyName: me.apiKeyName,
+    ...pools,
+    message: pools.autoRemainingPercent == null && pools.apiRemainingPercent == null ? "\u4E2A\u4EBA\u5957\u9910\u7684 Auto+Composer / API \u53CC\u6C60\u5269\u4F59\u767E\u5206\u6BD4\u6CA1\u6709\u516C\u5F00 API\uFF0C\u8BF7\u6253\u5F00 Cursor Dashboard \u67E5\u770B\u3002" : void 0
+  };
+  process.stdout.write(`${JSON.stringify(payload)}
+`);
+}
 
 // src/run_codex.ts
 import { spawn } from "node:child_process";
@@ -131,7 +228,34 @@ async function runCodex(job) {
 }
 
 // src/run_cursor.ts
+import { writeSync } from "node:fs";
 import { Agent, CursorAgentError } from "@cursor/sdk";
+function logLine(line) {
+  writeSync(1, `${line}
+`);
+}
+function clip(text, max = 240) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= max) return compact;
+  return `${compact.slice(0, max)}\u2026`;
+}
+function describeStep(step) {
+  const type = String(step.type ?? "unknown");
+  const message = step.message && typeof step.message === "object" ? step.message : void 0;
+  switch (type) {
+    case "assistantMessage":
+      return `\u52A9\u624B\uFF1A${clip(String(message?.text ?? ""))}`;
+    case "thinkingMessage":
+      return "\u601D\u8003\u4E2D\u2026";
+    case "toolCall":
+      return `\u5DE5\u5177\uFF1A${String(message?.type ?? "tool")}`;
+    case "shellConversationTurn":
+    case "shell":
+      return `\u547D\u4EE4\uFF1A${clip(String(message?.command ?? message?.text ?? ""))}`;
+    default:
+      return `\u6B65\u9AA4\uFF1A${type}`;
+  }
+}
 async function runCursor(job) {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
@@ -142,11 +266,9 @@ async function runCursor(job) {
   }
   const modelId = job.model?.trim() || "composer-2.5";
   const params = resolveModelParams(job);
-  console.log(
-    `Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`
-  );
+  logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
   try {
-    const result = await Agent.prompt(job.prompt, {
+    const agent = await Agent.create({
       apiKey,
       model: {
         id: modelId,
@@ -154,19 +276,38 @@ async function runCursor(job) {
       },
       local: {
         cwd: job.cwd,
-        // 需要用户级 MCP（kanbanMCP）与项目规则
         settingSources: ["user", "project"]
       }
     });
-    if (result.status === "error") {
-      return {
-        ok: false,
-        error: `Cursor run \u5931\u8D25\uFF1A${result.id ?? "unknown"}`,
-        summary: typeof result.result === "string" ? result.result : void 0
-      };
+    try {
+      logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
+      const run = await agent.send(job.prompt, {
+        onStep: ({ step }) => {
+          try {
+            logLine(describeStep(step));
+          } catch {
+            logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
+          }
+        }
+      });
+      const result = await run.wait();
+      if (result.usage) {
+        logLine(
+          `\u672C\u4F1A\u8BDD token\uFF1Ainput=${result.usage.inputTokens} output=${result.usage.outputTokens} total=${result.usage.totalTokens}`
+        );
+      }
+      if (result.status === "error") {
+        return {
+          ok: false,
+          error: `Cursor run \u5931\u8D25\uFF1A${result.error?.message ?? result.id}`,
+          summary: typeof result.result === "string" ? result.result : void 0
+        };
+      }
+      const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor \u4F1A\u8BDD\u5B8C\u6210" : `Cursor \u72B6\u6001\uFF1A${result.status}`;
+      return { ok: result.status === "finished", summary };
+    } finally {
+      await agent[Symbol.asyncDispose]();
     }
-    const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor \u4F1A\u8BDD\u5B8C\u6210" : `Cursor \u72B6\u6001\uFF1A${result.status}`;
-    return { ok: result.status === "finished", summary };
   } catch (err) {
     if (err instanceof CursorAgentError) {
       return {
@@ -254,7 +395,7 @@ async function listModels() {
   }
   let models;
   try {
-    models = await withRetry("\u62C9\u53D6\u6A21\u578B\u5217\u8868", () => Cursor.models.list({ apiKey }));
+    models = await withRetry("\u62C9\u53D6\u6A21\u578B\u5217\u8868", () => Cursor2.models.list({ apiKey }));
   } catch (err) {
     console.error(formatListModelsError(err));
     process.exitCode = 2;
@@ -315,9 +456,15 @@ async function main() {
     await listModels();
     return;
   }
+  if (argv.includes("--usage")) {
+    await printCursorUsage();
+    return;
+  }
   const idx = argv.indexOf("--job");
   if (idx < 0 || !argv[idx + 1]) {
-    throw new Error("\u7528\u6CD5: node cli.js --job <job.json> | --list-models");
+    throw new Error(
+      "\u7528\u6CD5: node cli.js --job <job.json> | --list-models | --usage"
+    );
   }
   await runJob(resolve(argv[idx + 1]));
 }

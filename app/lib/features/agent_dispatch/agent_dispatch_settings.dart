@@ -26,8 +26,11 @@ class AgentDispatchSettings {
   /// 新建调度设置的默认模型。
   static const defaultModelId = 'composer-2.5';
 
-  /// Cursor 将快速模式「Force」传为 `fast=true`。
-  static const defaultModelParamValues = {'fast': 'true'};
+  /// 快速模式关闭，思考程度 Medium。
+  static const defaultModelParamValues = {
+    'fast': 'false',
+    'reasoning_effort': 'medium',
+  };
 
   final AgentDispatchEngine engine;
   final bool useProject;
@@ -147,23 +150,27 @@ class AgentDispatchSettings {
     final legacyParamId = json['effortParamId'] as String?;
     final legacyParamValue =
         json['effortParamValue'] as String? ?? json['effort'] as String?;
-    final modelParamValues = modelParamsRaw == null
+    var modelParamValues = modelParamsRaw == null
         ? <String, String>{
             if (legacyParamId != null && legacyParamValue != null)
               legacyParamId: legacyParamValue,
           }
         : modelParamsRaw.map((key, value) => MapEntry(key, '$value'));
+    if (modelParamsRaw == null &&
+        legacyParamId == null &&
+        legacyParamValue == null) {
+      modelParamValues = Map<String, String>.from(defaultModelParamValues);
+    } else if (modelParamValues.length == 1 &&
+        modelParamValues['fast'] == 'true') {
+      modelParamValues = Map<String, String>.from(defaultModelParamValues);
+    }
     return AgentDispatchSettings(
       engine: AgentDispatchEngine.fromName(json['engine'] as String?),
       useProject: json['useProject'] as bool? ?? false,
       projectId: json['projectId'] as String?,
       repoPath: repoPath,
       modelId: json['modelId'] as String? ?? legacyModel ?? defaultModelId,
-      modelParamValues: modelParamsRaw == null &&
-              legacyParamId == null &&
-              legacyParamValue == null
-          ? defaultModelParamValues
-          : modelParamValues,
+      modelParamValues: modelParamValues,
       cardLimitMax: json['cardLimitMax'] as bool? ??
           (json['useMultiCard'] != true && json['maxCards'] == null
               ? true

@@ -181,19 +181,24 @@ class AgentDispatchLogPane extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
+        if (running) const LinearProgressIndicator(),
+        if (running) const SizedBox(height: 8),
         Expanded(
-          child: TextField(
-            controller: controller,
-            readOnly: true,
-            maxLines: null,
-            expands: true,
-            scrollPhysics: const AlwaysScrollableScrollPhysics(),
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
-              contentPadding: EdgeInsets.all(12),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: TextField(
+              controller: controller,
+              readOnly: true,
+              maxLines: null,
+              expands: true,
+              scrollPhysics: const AlwaysScrollableScrollPhysics(),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding: EdgeInsets.all(12),
+              ),
+              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
             ),
-            style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
           ),
         ),
       ],

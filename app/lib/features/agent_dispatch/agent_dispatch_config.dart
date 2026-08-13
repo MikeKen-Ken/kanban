@@ -121,9 +121,11 @@ class AgentDispatchModelInfo {
 
 String? resolveAgentDispatchModelId(
   List<AgentDispatchModelInfo> models,
-  String? currentId,
-) {
+  String? currentId, {
+  String preferredId = 'composer-2.5',
+}) {
   if (models.any((model) => model.id == currentId)) return currentId;
+  if (models.any((model) => model.id == preferredId)) return preferredId;
   return models.isEmpty ? null : models.first.id;
 }
 

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'agent_dispatch_config.dart';
+import 'agent_dispatch_usage.dart';
 
 class AgentWorkerResult {
   const AgentWorkerResult({
@@ -103,16 +104,16 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       );
     }
     onLog?.call('启动 worker：$cli');
-    final environment = Map<String, String>.from(Platform.environment);
-    if (cursorApiKey != null && cursorApiKey.trim().isNotEmpty) {
-      environment['CURSOR_API_KEY'] = cursorApiKey.trim();
-    }
+    onLog?.call('node：$node');
+    final environment = _workerEnvironment(
+      nodeExecutable: node,
+      cursorApiKey: cursorApiKey,
+    );
     final process = await Process.start(
       node,
       [cli, '--job', jobFile.path],
       workingDirectory: packageRoot,
       environment: environment,
-      runInShell: Platform.isWindows,
     );
     process.stdout
         .transform(utf8.decoder)
@@ -170,17 +171,16 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   if (cursorApiKey == null || cursorApiKey.trim().isEmpty) {
     throw StateError('尚未配置 Cursor API Key');
   }
-  final environment = Map<String, String>.from(Platform.environment)
-    ..['CURSOR_API_KEY'] = cursorApiKey.trim();
+  final environment = _workerEnvironment(
+    nodeExecutable: node,
+    cursorApiKey: cursorApiKey,
+  );
   onLog?.call('拉取模型列表…');
   final result = await Process.run(
     node,
     [cli, '--list-models'],
     workingDirectory: packageRoot,
     environment: environment,
-    runInShell: Platform.isWindows,
-    // Worker 始终以 UTF-8 输出 JSON；不能让 Windows 的本地代码页参与解码，
-    // 否则含有非 ASCII 模型名称或参数名时会破坏 JSON 文本。
     stdoutEncoding: utf8,
     stderrEncoding: utf8,
   );
@@ -202,6 +202,52 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
       .map(AgentDispatchModelInfo.fromJson)
       .where((m) => m.id.isNotEmpty)
       .toList();
+}
+
+Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
+  String? cursorApiKey,
+  String? workerScriptPath,
+  void Function(String line)? onLog,
+}) async {
+  final cli = await resolveAgentDispatchCliPath(workerScriptPath);
+  if (cli == null) {
+    throw StateError('未找到 Worker，请先一键修复');
+  }
+  final packageRoot = p.basename(p.dirname(cli)) == 'dist'
+      ? p.dirname(p.dirname(cli))
+      : p.dirname(cli);
+  final node = await _resolveNodeExecutable(packageRoot: packageRoot);
+  if (node == null) throw StateError('未找到 node');
+  if (cursorApiKey == null || cursorApiKey.trim().isEmpty) {
+    throw StateError('尚未配置 Cursor API Key');
+  }
+  final environment = _workerEnvironment(
+    nodeExecutable: node,
+    cursorApiKey: cursorApiKey,
+  );
+  onLog?.call('拉取 Cursor 额度…');
+  final result = await Process.run(
+    node,
+    [cli, '--usage'],
+    workingDirectory: packageRoot,
+    environment: environment,
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
+  );
+  if (result.exitCode != 0) {
+    final err = (result.stderr as String).trim();
+    final stdout = (result.stdout as String).trim();
+    if (stdout.isNotEmpty) {
+      try {
+        final map = jsonDecode(stdout) as Map<String, dynamic>;
+        return AgentDispatchUsageSnapshot.fromJson(map);
+      } catch (_) {}
+    }
+    throw StateError(err.isEmpty ? 'usage 失败（${result.exitCode}）' : err);
+  }
+  final stdout = (result.stdout as String).trim();
+  final map = jsonDecode(stdout) as Map<String, dynamic>;
+  return AgentDispatchUsageSnapshot.fromJson(map);
 }
 
 Future<({bool ok, String message})> ensureAgentDispatchWorker({
@@ -285,6 +331,24 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     return (ok: false, message: '构建完成但仍未找到 dist/cli.js');
   }
   return (ok: true, message: 'Worker 已修复：$cli');
+}
+
+Map<String, String> _workerEnvironment({
+  required String nodeExecutable,
+  String? cursorApiKey,
+}) {
+  final environment = Map<String, String>.from(Platform.environment);
+  final nodeDir = p.dirname(nodeExecutable);
+  final original = environment['Path'] ?? environment['PATH'] ?? '';
+  final merged = original.isEmpty
+      ? nodeDir
+      : '$nodeDir${Platform.pathListSeparator}$original';
+  environment['Path'] = merged;
+  environment['PATH'] = merged;
+  if (cursorApiKey != null && cursorApiKey.trim().isNotEmpty) {
+    environment['CURSOR_API_KEY'] = cursorApiKey.trim();
+  }
+  return environment;
 }
 
 Future<String?> _resolveNodeExecutable({String? packageRoot}) async {

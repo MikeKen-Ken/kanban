@@ -1,0 +1,137 @@
+import { Cursor } from "@cursor/sdk";
+
+type UsagePayload = {
+  ok: boolean;
+  userEmail?: string;
+  apiKeyName?: string;
+  autoRemainingPercent?: number;
+  apiRemainingPercent?: number;
+  message?: string;
+  error?: string;
+};
+
+function readPercent(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.min(100, value));
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed)
+      ? Math.max(0, Math.min(100, parsed))
+      : undefined;
+  }
+  return undefined;
+}
+
+function pickPercent(
+  record: Record<string, unknown>,
+  keys: string[],
+): number | undefined {
+  for (const key of keys) {
+    const value = readPercent(record[key]);
+    if (value != null) return value;
+  }
+  return undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function parseUsageRecord(record: Record<string, unknown>): {
+  autoRemainingPercent?: number;
+  apiRemainingPercent?: number;
+} {
+  const nested =
+    asRecord(record.usage) ??
+    asRecord(record.planUsage) ??
+    asRecord(record.membershipType) ??
+    record;
+  return {
+    autoRemainingPercent: pickPercent(nested, [
+      "autoRemainingPercent",
+      "autoPercentRemaining",
+      "autoRemaining",
+      "composerRemainingPercent",
+    ]),
+    apiRemainingPercent: pickPercent(nested, [
+      "apiRemainingPercent",
+      "apiPercentRemaining",
+      "apiRemaining",
+    ]),
+  };
+}
+
+async function tryFetchUsagePools(
+  apiKey: string,
+): Promise<{
+  autoRemainingPercent?: number;
+  apiRemainingPercent?: number;
+}> {
+  const endpoints = [
+    "https://api.cursor.com/auth/usage",
+    "https://api.cursor.com/dashboard/get-monthly-invoice",
+  ];
+  for (const url of endpoints) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) continue;
+      const json: unknown = await response.json();
+      const record = asRecord(json);
+      if (record == null) continue;
+      const parsed = parseUsageRecord(record);
+      if (
+        parsed.autoRemainingPercent != null ||
+        parsed.apiRemainingPercent != null
+      ) {
+        return parsed;
+      }
+    } catch {
+      // 个人套餐通常没有公开用量接口，继续尝试下一个。
+    }
+  }
+  return {};
+}
+
+export async function printCursorUsage(): Promise<void> {
+  const apiKey = process.env.CURSOR_API_KEY?.trim();
+  if (!apiKey) {
+    console.error("缺少 CURSOR_API_KEY");
+    process.exitCode = 2;
+    return;
+  }
+
+  let me: { userEmail?: string; apiKeyName?: string } | undefined;
+  try {
+    me = await Cursor.me({ apiKey });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const payload: UsagePayload = {
+      ok: false,
+      error: `读取 Cursor 账号失败：${message}`,
+    };
+    process.stdout.write(`${JSON.stringify(payload)}\n`);
+    process.exitCode = 2;
+    return;
+  }
+
+  const pools = await tryFetchUsagePools(apiKey);
+  const payload: UsagePayload = {
+    ok: true,
+    userEmail: me.userEmail,
+    apiKeyName: me.apiKeyName,
+    ...pools,
+    message:
+      pools.autoRemainingPercent == null && pools.apiRemainingPercent == null
+        ? "个人套餐的 Auto+Composer / API 双池剩余百分比没有公开 API，请打开 Cursor Dashboard 查看。"
+        : undefined,
+  };
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+}

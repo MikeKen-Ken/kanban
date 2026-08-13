@@ -58,4 +58,15 @@ void main() {
     expect(resolveAgentDispatchModelId(models, 'gpt-5.5'), 'gpt-5.5');
     expect(resolveAgentDispatchModelId(const [], 'gpt-5.5'), isNull);
   });
+
+  test('失效的模型 id 优先回退到 Composer 2.5 而不是目录首项', () {
+    const models = [
+      AgentDispatchModelInfo(id: 'gpt-5.5'),
+      AgentDispatchModelInfo(id: 'composer-2.5'),
+    ];
+    expect(
+      resolveAgentDispatchModelId(models, 'retired-model'),
+      'composer-2.5',
+    );
+  });
 }

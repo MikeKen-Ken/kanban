@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor } from "@cursor/sdk";
+import { printCursorUsage } from "./cursor_usage.js";
 import { runCodex } from "./run_codex.js";
 import { runCursor } from "./run_cursor.js";
 import type { DispatchJob, DispatchResult } from "./types.js";
@@ -171,9 +172,15 @@ async function main(): Promise<void> {
     await listModels();
     return;
   }
+  if (argv.includes("--usage")) {
+    await printCursorUsage();
+    return;
+  }
   const idx = argv.indexOf("--job");
   if (idx < 0 || !argv[idx + 1]) {
-    throw new Error("用法: node cli.js --job <job.json> | --list-models");
+    throw new Error(
+      "用法: node cli.js --job <job.json> | --list-models | --usage",
+    );
   }
   await runJob(resolve(argv[idx + 1]!));
 }

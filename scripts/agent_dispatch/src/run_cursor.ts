@@ -1,5 +1,37 @@
+import { writeSync } from "node:fs";
 import { Agent, CursorAgentError } from "@cursor/sdk";
 import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
+
+function logLine(line: string): void {
+  writeSync(1, `${line}\n`);
+}
+
+function clip(text: string, max = 240): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= max) return compact;
+  return `${compact.slice(0, max)}…`;
+}
+
+function describeStep(step: { type?: unknown; message?: unknown }): string {
+  const type = String(step.type ?? "unknown");
+  const message =
+    step.message && typeof step.message === "object"
+      ? (step.message as Record<string, unknown>)
+      : undefined;
+  switch (type) {
+    case "assistantMessage":
+      return `助手：${clip(String(message?.text ?? ""))}`;
+    case "thinkingMessage":
+      return "思考中…";
+    case "toolCall":
+      return `工具：${String(message?.type ?? "tool")}`;
+    case "shellConversationTurn":
+    case "shell":
+      return `命令：${clip(String(message?.command ?? message?.text ?? ""))}`;
+    default:
+      return `步骤：${type}`;
+  }
+}
 
 export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
@@ -12,12 +44,10 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
 
   const modelId = job.model?.trim() || "composer-2.5";
   const params = resolveModelParams(job);
-  console.log(
-    `Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`,
-  );
+  logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
 
   try {
-    const result = await Agent.prompt(job.prompt, {
+    const agent = await Agent.create({
       apiKey,
       model: {
         id: modelId,
@@ -25,27 +55,46 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
       },
       local: {
         cwd: job.cwd,
-        // 需要用户级 MCP（kanbanMCP）与项目规则
         settingSources: ["user", "project"],
       },
     });
+    try {
+      logLine("本地会话已创建，开始执行…");
+      const run = await agent.send(job.prompt, {
+        onStep: ({ step }) => {
+          try {
+            logLine(describeStep(step as { type?: unknown; message?: unknown }));
+          } catch {
+            logLine("收到一步进度");
+          }
+        },
+      });
+      const result = await run.wait();
+      if (result.usage) {
+        logLine(
+          `本会话 token：input=${result.usage.inputTokens} output=${result.usage.outputTokens} total=${result.usage.totalTokens}`,
+        );
+      }
 
-    if (result.status === "error") {
-      return {
-        ok: false,
-        error: `Cursor run 失败：${result.id ?? "unknown"}`,
-        summary: typeof result.result === "string" ? result.result : undefined,
-      };
+      if (result.status === "error") {
+        return {
+          ok: false,
+          error: `Cursor run 失败：${result.error?.message ?? result.id}`,
+          summary: typeof result.result === "string" ? result.result : undefined,
+        };
+      }
+
+      const summary =
+        typeof result.result === "string"
+          ? result.result
+          : result.status === "finished"
+            ? "Cursor 会话完成"
+            : `Cursor 状态：${result.status}`;
+
+      return { ok: result.status === "finished", summary };
+    } finally {
+      await agent[Symbol.asyncDispose]();
     }
-
-    const summary =
-      typeof result.result === "string"
-        ? result.result
-        : result.status === "finished"
-          ? "Cursor 会话完成"
-          : `Cursor 状态：${result.status}`;
-
-    return { ok: result.status === "finished", summary };
   } catch (err) {
     if (err instanceof CursorAgentError) {
       return {
