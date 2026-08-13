@@ -119,6 +119,7 @@ class AppUpdateInstaller {
     );
 
     // 经 cmd start 拉起，避免随本进程 Job 对象一起被结束。
+    // 仅由 relaunch 脚本启动应用，避免 updater finally 与 relaunch 各拉起一次导致双窗口。
     await _startDetachedPowershell(
       scriptPath: scriptFile.path,
       extraArgs: [
@@ -130,6 +131,7 @@ class AppUpdateInstaller {
         exePath,
         '-TargetPid',
         '$pid',
+        '-SkipLaunch',
       ],
     );
     // 独立拉起：复制失败或 updater 被提前结束时，仍根据日志/超时重启界面。

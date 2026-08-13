@@ -255,6 +255,7 @@ void main() {
       expect(windowsUpdaterScript, contains('Copy app files'));
       expect(windowsUpdaterScript, contains('Copy agent worker'));
       expect(windowsUpdaterScript, contains('Start-KanbanApp'));
+      expect(windowsUpdaterScript, contains('[switch]\$SkipLaunch'));
       expect(windowsUpdaterScript, contains('Skip locked file'));
       expect(windowsUpdaterScript.contains('exit 1'), isTrue);
       expect(
