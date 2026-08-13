@@ -47,6 +47,9 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
   logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
 
   try {
+    const startedAt = Date.now();
+    let stepCount = 0;
+    let toolCallCount = 0;
     const agent = await Agent.create({
       apiKey,
       model: {
@@ -63,6 +66,8 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
       const run = await agent.send(job.prompt, {
         onStep: ({ step }) => {
           try {
+            stepCount += 1;
+            if (step.type === "toolCall") toolCallCount += 1;
             logLine(describeStep(step as { type?: unknown; message?: unknown }));
           } catch {
             logLine("收到一步进度");
@@ -70,6 +75,9 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
         },
       });
       const result = await run.wait();
+      logLine(
+        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
+      );
       if (result.usage) {
         logLine(
           `本会话 token：input=${result.usage.inputTokens} output=${result.usage.outputTokens} total=${result.usage.totalTokens}`,

@@ -76,14 +76,29 @@ void main() {
     expect(todo.cards.any((card) => card.id == cardId), isFalse);
   });
 
+  test('peek_next_card 只判断有无，不领取或移动卡片', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '只读检查卡');
+    expect(cardId, isNotNull);
+
+    final result = await mcpPeekNextCard(controller);
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['found'], isTrue);
+
+    final todo = controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final doing = findDoingColumn(controller.board!.columns)!;
+    expect(todo.cards.any((card) => card.id == cardId), isTrue);
+    expect(doing.cards.any((card) => card.id == cardId), isFalse);
+  });
+
   test('pick_next_card includeWorkItems=false 时不含 workItems', () async {
     final todoColumn =
         controller.board!.columns.firstWhere((c) => c.id == 'todo');
     final cardId = await controller.addCard(todoColumn.id, '只取卡');
     expect(cardId, isNotNull);
 
-    final result =
-        await mcpPickNextCard(controller, includeWorkItems: false);
+    final result = await mcpPickNextCard(controller, includeWorkItems: false);
     expect(result.isError, isNot(true));
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
     expect(payload['cardId'], cardId);

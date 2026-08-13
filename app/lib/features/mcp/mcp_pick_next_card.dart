@@ -5,9 +5,27 @@ import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import 'mcp_arg_parsers.dart';
+import 'mcp_dispatch_card_gate.dart';
 import 'mcp_submission_snapshot_store.dart';
 import 'mcp_tool_results.dart';
 import 'mcp_work_scope_result.dart';
+
+/// 只读判断当前项目是否还有可实施卡片；不移动、不领取、不创建快照。
+Future<CallToolResult> mcpPeekNextCard(
+  BoardController controller, {
+  String? projectId,
+}) {
+  return runMcpForProject(controller, projectId, (resolvedProjectId) async {
+    final board = controller.board;
+    if (board == null) return mcpErrorResult('看板未就绪');
+    final next = pickNextWorkCard(board);
+    return mcpJsonResult({
+      'found': next != null,
+      'projectId': resolvedProjectId,
+      if (next != null) 'sourceColumn': next.sourceColumn,
+    });
+  });
+}
 
 /// 取下一条可实施卡，并自动移入「进行中」。
 ///
@@ -19,6 +37,19 @@ Future<CallToolResult> mcpPickNextCard(
   bool includeWorkItems = true,
   McpSubmissionSnapshotStore? submissionSnapshotStore,
 }) {
+  final permission = McpDispatchCardGate.instance.authorizePick();
+  switch (permission) {
+    case McpDispatchPickPermission.allowed:
+      break;
+    case McpDispatchPickPermission.sessionNotOpen:
+      return Future.value(mcpErrorResult(
+        'Agent 调度批次尚未由 Worker 开启本轮会话，禁止领取卡片',
+      ));
+    case McpDispatchPickPermission.alreadyClaimed:
+      return Future.value(mcpErrorResult(
+        '本轮 Agent 会话已经调用过 pick_next_card；请完成当前卡片并结束会话',
+      ));
+  }
   return runMcpForProject(controller, projectId, (resolvedProjectId) async {
     final board = controller.board;
     if (board == null) return mcpErrorResult('看板未就绪');
@@ -70,6 +101,10 @@ Future<CallToolResult> mcpPickNextCard(
         ],
         capturedAt: DateTime.now().millisecondsSinceEpoch,
       ),
+    );
+    McpDispatchCardGate.instance.recordPickedCard(
+      projectId: resolvedProjectId,
+      cardId: card.id,
     );
     final payload = <String, dynamic>{
       'found': true,

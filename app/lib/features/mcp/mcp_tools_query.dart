@@ -13,8 +13,7 @@ import 'mcp_tool_results.dart';
 void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'pick_next_card',
-    description:
-        '取下一条可实施卡并自动移入「进行中」：优先「待办」最新未完成卡，否则「待返工」。'
+    description: '取下一条可实施卡并自动移入「进行中」：优先「待办」最新未完成卡，否则「待返工」。'
         '默认 includeWorkItems=true，一次返回 workItems；有图片/文件时直接内联内容'
         '（图片为 ImageContent，文件为 contentBase64），无需再 list/read。'
         '仅 peek 时可传 includeWorkItems=false。'
@@ -46,8 +45,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'get_work_items',
-    description:
-        '按 cardId 再次拉取本轮 workItems（不含 commit message）。'
+    description: '按 cardId 再次拉取本轮 workItems（不含 commit message）。'
         '含标题/备注/未完成 checklist；有未完成验证反馈时一并返回。'
         '有附件时直接内联内容（同 pick_next_card），无需再 list/read。',
     inputSchema: JsonSchema.object(
@@ -128,8 +126,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
     inputSchema: JsonSchema.object(
       properties: {
         'keyword': JsonSchema.string(
-          description:
-              '标题/备注/提交号/标签/子任务/验证反馈/附件名/外链关键词',
+          description: '标题/备注/提交号/标签/子任务/验证反馈/附件名/外链关键词',
         ),
         'projectId': JsonSchema.string(description: '限定单个项目 id'),
         'projectIds': JsonSchema.array(items: JsonSchema.string()),
@@ -147,7 +144,8 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
           description:
               'dueDate | priority | title | createdAt | updatedAt | project | column | manual',
         ),
-        'sortDirection': JsonSchema.string(description: 'ascending | descending'),
+        'sortDirection':
+            JsonSchema.string(description: 'ascending | descending'),
         'limit': JsonSchema.number(description: '最多返回条数，默认 30'),
         'detail': JsonSchema.string(description: 'summary | full，默认 summary'),
       },
@@ -379,8 +377,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'list_activity',
-    description:
-        '列出项目活动历史（新到旧）；含 source=user|mcp|automation，便于区分 MCP 改动',
+    description: '列出项目活动历史（新到旧）；含 source=user|mcp|automation，便于区分 MCP 改动',
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(description: '省略则用当前项目'),

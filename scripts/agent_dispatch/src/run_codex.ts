@@ -44,6 +44,7 @@ function resolveCodexCommand(): {
 }
 
 export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
+  const startedAt = Date.now();
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
   const promptFile = join(temp, "prompt.txt");
   const lastMessageFile = join(temp, "last.txt");
@@ -94,6 +95,7 @@ export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
       summary = undefined;
     }
 
+    console.log(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex 会话完成" };
     }

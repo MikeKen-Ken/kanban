@@ -100,6 +100,43 @@ async function printCursorUsage() {
 `);
 }
 
+// src/mcp_client.ts
+import {
+  Client,
+  StreamableHTTPClientTransport
+} from "@modelcontextprotocol/client";
+var KanbanMcpClient = class {
+  client = new Client({
+    name: "kanban-agent-worker",
+    version: "1.0.0"
+  });
+  async connect(endpoint) {
+    await this.client.connect(
+      new StreamableHTTPClientTransport(new URL(endpoint))
+    );
+  }
+  async callJson(name, args) {
+    const result = await this.client.callTool({ name, arguments: args });
+    if (result.isError) {
+      throw new Error(`${name} \u5931\u8D25\uFF1A${this.resultText(result)}`);
+    }
+    const text = this.resultText(result);
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`${name} \u8FD4\u56DE\u4E86\u65E0\u6548 JSON\uFF1A${text}`);
+    }
+  }
+  async close() {
+    await this.client.close();
+  }
+  resultText(result) {
+    return result.content.filter(
+      (item) => item.type === "text"
+    ).map((item) => item.text).join("\n").trim();
+  }
+};
+
 // src/run_codex.ts
 import { spawn } from "node:child_process";
 import {
@@ -170,6 +207,7 @@ function resolveCodexCommand() {
   };
 }
 async function runCodex(job) {
+  const startedAt = Date.now();
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
   const promptFile = join(temp, "prompt.txt");
   const lastMessageFile = join(temp, "last.txt");
@@ -215,6 +253,7 @@ async function runCodex(job) {
     } catch {
       summary = void 0;
     }
+    console.log(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
     }
@@ -268,6 +307,9 @@ async function runCursor(job) {
   const params = resolveModelParams(job);
   logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
   try {
+    const startedAt = Date.now();
+    let stepCount = 0;
+    let toolCallCount = 0;
     const agent = await Agent.create({
       apiKey,
       model: {
@@ -284,6 +326,8 @@ async function runCursor(job) {
       const run = await agent.send(job.prompt, {
         onStep: ({ step }) => {
           try {
+            stepCount += 1;
+            if (step.type === "toolCall") toolCallCount += 1;
             logLine(describeStep(step));
           } catch {
             logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
@@ -291,6 +335,9 @@ async function runCursor(job) {
         }
       });
       const result = await run.wait();
+      logLine(
+        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
+      );
       if (result.usage) {
         logLine(
           `\u672C\u4F1A\u8BDD token\uFF1Ainput=${result.usage.inputTokens} output=${result.usage.outputTokens} total=${result.usage.totalTokens}`
@@ -316,6 +363,103 @@ async function runCursor(job) {
       };
     }
     throw err;
+  }
+}
+
+// src/run_batch.ts
+function cardState(card) {
+  const columnId = String(card.columnId ?? "");
+  const columnName = String(card.columnName ?? "");
+  if (columnId === "verify" || columnName === "\u5F85\u9A8C\u8BC1") return "verify";
+  if (columnId === "blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
+  return "active";
+}
+async function runBatch(job) {
+  const mcp = new KanbanMcpClient();
+  const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
+  let processedCards = 0;
+  console.log(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
+  try {
+    await mcp.connect(job.mcpEndpoint);
+    console.log("Worker \u5DF2\u8FDE\u63A5\u770B\u677F MCP\uFF1BWorker \u53EA\u8BFB\u68C0\u67E5\u961F\u5217\uFF0CSkill \u81EA\u5DF1\u9886\u53D6\u5361\u7247");
+    for (let index = 1; index <= limit; index += 1) {
+      console.log(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${index}/${limit} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
+      const peek = await mcp.callJson("peek_next_card", {
+        ...job.projectId ? { projectId: job.projectId } : {}
+      });
+      if (peek.found !== true) {
+        console.log(`[success] Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u65E0\u66F4\u591A\u5361\u7247\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`);
+        return {
+          ok: true,
+          summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u5904\u7406 ${processedCards} \u5F20\uFF0C\u5F53\u524D\u65E0\u66F4\u591A\u5361\u7247`,
+          processedCards
+        };
+      }
+      await mcp.callJson("dispatch_begin_agent_session", {
+        workerToken: job.workerToken
+      });
+      console.log("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
+      const result = job.engine === "codex" ? await runCodex(job) : await runCursor(job);
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: result.error ?? `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u5931\u8D25`,
+          processedCards
+        };
+      }
+      console.log("Worker \u5DF2\u786E\u8BA4 Agent \u4F1A\u8BDD\u7ED3\u675F\uFF0C\u6B63\u5728\u8BFB\u53D6\u672C\u8F6E\u5361\u7247\u72B6\u6001");
+      const session = await mcp.callJson("dispatch_agent_session_status", {
+        workerToken: job.workerToken
+      });
+      const cardId = String(session.cardId ?? "").trim();
+      const projectId = String(session.projectId ?? job.projectId ?? "").trim();
+      const deniedPickCount = Number(session.deniedPickCount ?? 0);
+      if (deniedPickCount > 0) {
+        return {
+          ok: false,
+          error: `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u91CD\u590D\u8C03\u7528\u4E86 pick_next_card\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
+          processedCards
+        };
+      }
+      if (session.pickClaimed !== true || !cardId) {
+        return {
+          ok: false,
+          error: `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u6CA1\u6709\u6210\u529F\u9886\u53D6\u4E00\u5F20\u5361\u7247\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
+          processedCards
+        };
+      }
+      const latest = await mcp.callJson("get_card", {
+        cardId,
+        ...projectId ? { projectId } : {}
+      });
+      const state = cardState(latest);
+      console.log(
+        `Worker \u72B6\u6001\u68C0\u67E5\uFF1AcardId=${cardId} column=${String(latest.columnName ?? latest.columnId ?? "\u672A\u77E5")}`
+      );
+      if (state === "blocked") {
+        return {
+          ok: false,
+          error: `\u5361\u7247 ${cardId} \u5DF2\u8FDB\u5165\u963B\u585E\u4E2D\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
+          processedCards
+        };
+      }
+      if (state !== "verify") {
+        return {
+          ok: false,
+          error: `\u5361\u7247 ${cardId} \u672A\u8FDB\u5165\u5F85\u9A8C\u8BC1\uFF0CWorker \u5224\u5B9A\u672C\u8F6E\u672A\u5B8C\u6210\u5E76\u505C\u6B62\u6279\u6B21`,
+          processedCards
+        };
+      }
+      processedCards += 1;
+      console.log(`[success] Worker \u786E\u8BA4\u7B2C ${index} \u6B21 Skill \u53EA\u5904\u7406\u4E00\u5F20\u4E14\u5DF2\u9001\u9A8C\uFF1B\u4F1A\u8BDD\u5DF2\u91CA\u653E`);
+    }
+    return {
+      ok: true,
+      summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u8FBE\u5230\u4E0A\u9650\u5E76\u5904\u7406 ${processedCards} \u5F20`,
+      processedCards
+    };
+  } finally {
+    await mcp.close().catch(() => void 0);
   }
 }
 
@@ -439,10 +583,25 @@ async function runJob(jobPath) {
     process.exitCode = 2;
     return;
   }
+  if (!job.mcpEndpoint?.trim()) {
+    writeResult(job.outPath, { ok: false, error: "mcpEndpoint \u4E0D\u80FD\u4E3A\u7A7A" });
+    process.exitCode = 2;
+    return;
+  }
+  if (!job.workerToken?.trim()) {
+    writeResult(job.outPath, { ok: false, error: "workerToken \u4E0D\u80FD\u4E3A\u7A7A" });
+    process.exitCode = 2;
+    return;
+  }
+  if (!Number.isFinite(job.cardLimit) || job.cardLimit < 1) {
+    writeResult(job.outPath, { ok: false, error: "cardLimit \u5FC5\u987B\u5927\u4E8E 0" });
+    process.exitCode = 2;
+    return;
+  }
   console.log(`engine=${job.engine} cwd=${job.cwd}`);
   let result;
   try {
-    result = job.engine === "codex" ? await runCodex(job) : await runCursor(job);
+    result = await runBatch(job);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     result = { ok: false, error: message };

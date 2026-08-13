@@ -3,6 +3,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 import '../../controllers/board_controller.dart';
 import 'mcp_tools_automations.dart';
 import 'mcp_tools_cards.dart';
+import 'mcp_tools_dispatch.dart';
 import 'mcp_tools_attachments.dart';
 import 'mcp_tools_labels.dart';
 import 'mcp_tools_productivity.dart';
@@ -16,6 +17,7 @@ import 'mcp_tools_workflow.dart';
 void registerKanbanMcpTools(McpServer server, BoardController controller) {
   registerKanbanMcpStructureTools(server, controller);
   registerKanbanMcpCardTools(server, controller);
+  registerKanbanMcpDispatchTools(server, controller);
   registerKanbanMcpWorkflowTools(server, controller);
   registerKanbanMcpRelationTools(server, controller);
   registerKanbanMcpRunContextTools(server, controller);

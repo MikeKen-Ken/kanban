@@ -46,12 +46,16 @@ class AgentDispatchRunOptions {
     required this.engine,
     required this.repoPath,
     required this.cardLimit,
+    this.projectId,
     this.projectTitle,
     this.modelId,
     this.modelParams = const [],
   });
 
   final AgentDispatchEngine engine;
+
+  /// Worker 调用 MCP 时使用的项目 id；为空则使用看板当前项目。
+  final String? projectId;
 
   /// 非空时作为 skill「本次调用」中的 `name:<标题>`。
   final String? projectTitle;

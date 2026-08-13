@@ -40,9 +40,10 @@ Copy-Item $nodeExecutable (Join-Path $runtimeDestination 'node.exe')
 
 $cliPath = Join-Path $resolvedDestination 'dist\cli.js'
 $sdkPath = Join-Path $resolvedDestination 'node_modules\@cursor\sdk'
+$mcpClientPath = Join-Path $resolvedDestination 'node_modules\@modelcontextprotocol\client'
 $codexPath = Join-Path $resolvedDestination 'node_modules\@openai\codex\bin\codex.js'
 $bundledNode = Join-Path $runtimeDestination 'node.exe'
-if (!(Test-Path $cliPath) -or !(Test-Path $sdkPath) -or !(Test-Path $codexPath) -or !(Test-Path $bundledNode)) {
+if (!(Test-Path $cliPath) -or !(Test-Path $sdkPath) -or !(Test-Path $mcpClientPath) -or !(Test-Path $codexPath) -or !(Test-Path $bundledNode)) {
     throw 'Agent Worker 发布内容不完整'
 }
 

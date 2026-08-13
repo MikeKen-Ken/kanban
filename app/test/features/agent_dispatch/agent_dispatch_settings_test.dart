@@ -40,23 +40,19 @@ void main() {
     final text = buildSkillDispatchPrompt(
       skillMarkdown: '# 看板：做最新一条\n\n## 流程\n',
       projectTitle: '我的项目',
-      cardLimit: AgentDispatchCardLimit.count(3),
     );
     expect(text, contains('Skill 正文'));
     expect(text, contains('name:我的项目'));
-    expect(text, contains('只处理 1 张卡片'));
-    expect(text, contains('KANBAN_DISPATCH:CARD_DONE'));
-    expect(text, contains('本次运行上限：3'));
+    expect(text, isNot(contains('dispatchSessionId')));
+    expect(text, isNot(contains('CARD_DONE')));
   });
 
   test('不指定项目时调用正文为空说明', () {
     final text = buildSkillDispatchPrompt(
       skillMarkdown: 'skill',
       projectTitle: null,
-      cardLimit: AgentDispatchCardLimit.max,
     );
     expect(text, contains('（空：使用看板当前打开的项目）'));
-    expect(text, contains('Max（全部）'));
     expect(text, isNot(contains('name:')));
   });
 
@@ -77,6 +73,7 @@ void main() {
       projectTitleOf: (id) => id == 'p1' ? '项目甲' : null,
     );
     expect(opts.projectTitle, '项目甲');
+    expect(opts.projectId, 'p1');
     expect(opts.repoPath, r'D:\repo');
     expect(opts.modelParams, [
       (id: 'fast', value: 'true'),
@@ -172,6 +169,11 @@ void main() {
         '${temp.path}${Platform.pathSeparator}node_modules'
         '${Platform.pathSeparator}@cursor${Platform.pathSeparator}sdk',
       );
+      final mcpClient = Directory(
+        '${temp.path}${Platform.pathSeparator}node_modules'
+        '${Platform.pathSeparator}@modelcontextprotocol'
+        '${Platform.pathSeparator}client',
+      );
       final codexBin = Directory(
         '${temp.path}${Platform.pathSeparator}node_modules'
         '${Platform.pathSeparator}@openai${Platform.pathSeparator}codex'
@@ -180,6 +182,7 @@ void main() {
       await dist.create(recursive: true);
       await runtime.create(recursive: true);
       await sdk.create(recursive: true);
+      await mcpClient.create(recursive: true);
       await codexBin.create(recursive: true);
       final cli = File('${dist.path}${Platform.pathSeparator}cli.js');
       final nodeName = Platform.isWindows ? 'node.exe' : 'node';
@@ -212,5 +215,27 @@ void main() {
 
     await credentials.deleteCursorApiKey();
     expect(await credentials.readStoredCursorApiKey(), isNull);
+  });
+
+  test('Cursor API Key 支持多个 Key 切换与删除', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    const credentials = AgentDispatchCredentials();
+
+    await credentials.saveCursorApiKey('first-key', label: '主账号');
+    await credentials.saveCursorApiKey('second-key', label: '备用');
+    final keys = await credentials.listStoredCursorApiKeys();
+    expect(keys, hasLength(2));
+    expect(keys.where((item) => item.isActive).single.label, '备用');
+    expect(await credentials.readStoredCursorApiKey(), 'second-key');
+
+    final firstId = keys.firstWhere((item) => item.label == '主账号').id;
+    await credentials.setActiveCursorApiKey(firstId);
+    expect(await credentials.readStoredCursorApiKey(), 'first-key');
+
+    await credentials.deleteCursorApiKey(firstId);
+    final remaining = await credentials.listStoredCursorApiKeys();
+    expect(remaining, hasLength(1));
+    expect(remaining.single.label, '备用');
+    expect(await credentials.readStoredCursorApiKey(), 'second-key');
   });
 }

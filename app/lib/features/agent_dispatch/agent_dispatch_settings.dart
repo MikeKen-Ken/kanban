@@ -107,6 +107,7 @@ class AgentDispatchSettings {
         .toList();
     return AgentDispatchRunOptions(
       engine: engine,
+      projectId: useProject ? projectId : null,
       projectTitle: useProject ? title : null,
       repoPath: repoPath?.trim() ?? '',
       modelId: modelId,

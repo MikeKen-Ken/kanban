@@ -7,23 +7,36 @@ class AgentWorkerResult {
     this.summary,
     this.error,
     this.exitCode,
+    this.processedCards,
   });
 
   final bool ok;
   final String? summary;
   final String? error;
   final int? exitCode;
+  final int? processedCards;
+}
+
+class AgentWorkerProcess {
+  const AgentWorkerProcess();
+
+  Future<void> stop() async {}
 }
 
 Future<AgentWorkerResult> runAgentWorkerJob({
   required AgentDispatchEngine engine,
   required String cwd,
   required String prompt,
+  required String mcpEndpoint,
+  required int cardLimit,
+  required String workerToken,
+  String? projectId,
   String? model,
   List<({String id, String value})> modelParams = const [],
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
+  void Function(AgentWorkerProcess process)? onProcessStarted,
 }) async {
   return const AgentWorkerResult(
     ok: false,

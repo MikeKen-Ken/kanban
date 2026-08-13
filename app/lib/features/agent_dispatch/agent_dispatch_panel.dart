@@ -13,6 +13,7 @@ import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
 import 'agent_dispatch_log_exporter.dart';
+import 'agent_dispatch_log.dart';
 import 'agent_dispatch_log_store.dart';
 import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
@@ -141,10 +142,19 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     await prefs.saveAgentDispatchSettings(next);
   }
 
-  void _appendLog(String line) {
+  void _appendLog(
+    String line, {
+    AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
+  }) {
     _lastLogAt = DateTime.now();
-    final next =
-        _logController.text.isEmpty ? line : '${_logController.text}\n$line';
+    final formatted = line
+        .split(RegExp(r'\r?\n'))
+        .map((part) =>
+            AgentDispatchLogEntry(part, level: level).format(_lastLogAt))
+        .join('\n');
+    final next = _logController.text.isEmpty
+        ? formatted
+        : '${_logController.text}\n$formatted';
     _logController.text = next;
     _logController.selection = TextSelection.collapsed(offset: next.length);
     _logSaveQueue = _logSaveQueue.then((_) => _saveLog(next));
@@ -161,7 +171,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         return;
       }
       final elapsed = DateTime.now().difference(started).inSeconds;
-      _appendLog('仍在运行（已 $elapsed 秒）…');
+      _appendLog('仍在运行（已 $elapsed 秒），等待当前独立调用返回…');
       setState(() {});
     });
   }
@@ -253,7 +263,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final opened = await openAgentDispatchSkillDirectory(
       _settings.resolveSkillPath(),
     );
-    if (!opened) _appendLog('无法打开 Skill 所在目录');
+    if (!opened) {
+      _appendLog('无法打开 Skill 所在目录', level: AgentDispatchLogLevel.warning);
+    }
   }
 
   Future<void> _fixWorker() async {
@@ -268,7 +280,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     );
     if (!mounted) return;
     setState(() => _busy = false);
-    _appendLog(result.message);
+    _appendLog(
+      result.message,
+      level: result.ok
+          ? AgentDispatchLogLevel.success
+          : AgentDispatchLogLevel.error,
+    );
     await _refreshWorkerStatus();
   }
 
@@ -299,12 +316,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           break;
         }
       }
-      final nextParams = selectionChanged ||
-              _isStockModelParams(_settings.modelParamValues)
-          ? preferredAgentDispatchModelParamValues(
-              selected?.parameters ?? const [],
-            )
-          : _settings.modelParamValues;
+      final nextParams =
+          selectionChanged || _isStockModelParams(_settings.modelParamValues)
+              ? preferredAgentDispatchModelParamValues(
+                  selected?.parameters ?? const [],
+                )
+              : _settings.modelParamValues;
       setState(() {
         _models = uniqueModels;
         _busy = false;
@@ -326,7 +343,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           hasCache: _models.isNotEmpty,
         );
       });
-      _appendLog('拉取模型失败：$e');
+      _appendLog('拉取模型失败：$e', level: AgentDispatchLogLevel.error);
     }
   }
 
@@ -408,7 +425,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       projectTitleOf: (id) => board.manifest?.findById(id)?.title,
     );
     if (options.repoPath.isEmpty) {
-      _appendLog('请填写代码仓库路径');
+      _appendLog('请填写代码仓库路径', level: AgentDispatchLogLevel.warning);
+      return;
+    }
+    if (!board.mcpHost.isRunning) {
+      _appendLog(
+        '看板 MCP 未运行，Worker 无法只读检查队列；请先在设置中启用 MCP',
+        level: AgentDispatchLogLevel.warning,
+      );
       return;
     }
 
@@ -423,19 +447,20 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final result = await _service.runOnce(
       options: options,
       skillPath: next.resolveSkillPath(),
+      mcpEndpoint: board.mcpHost.endpointUrl,
       workerScriptPath: next.workerScriptPath,
-      onLog: (line) {
+      onLog: (entry) {
         if (!mounted) return;
-        setState(() => _appendLog(line));
+        setState(() => _appendLog(entry.message, level: entry.level));
       },
     );
     if (!mounted) return;
     _stopHeartbeat();
     setState(() => _running = false);
     if (result.ok) {
-      _appendLog(result.summary ?? '完成');
+      _appendLog(result.summary ?? '完成', level: AgentDispatchLogLevel.success);
     } else {
-      _appendLog(result.error ?? '失败');
+      _appendLog(result.error ?? '失败', level: AgentDispatchLogLevel.error);
     }
   }
 
@@ -710,11 +735,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         ),
         if (_running)
           TextButton(
-            onPressed: () {
-              _service.requestCancel();
-              _appendLog('已请求取消（进行中的会话可能仍会跑完）');
+            onPressed: () async {
+              _appendLog(
+                '正在停止当前 SDK/CLI 会话…',
+                level: AgentDispatchLogLevel.warning,
+              );
+              await _service.requestCancel();
+              if (mounted) setState(() {});
             },
-            child: const Text('取消'),
+            child: const Text('停止运行'),
           ),
         FilledButton.icon(
           onPressed: _running || _busy ? null : _run,

@@ -4,6 +4,10 @@ export type DispatchJob = {
   prompt: string;
   model?: string;
   modelParams?: Array<{ id: string; value: string }>;
+  mcpEndpoint: string;
+  projectId?: string;
+  cardLimit: number;
+  workerToken: string;
   /** @deprecated 旧字段，兼容 */
   effort?: string;
   outPath: string;
@@ -13,6 +17,7 @@ export type DispatchResult = {
   ok: boolean;
   summary?: string;
   error?: string;
+  processedCards?: number;
 };
 
 export function resolveModelParams(

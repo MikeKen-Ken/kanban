@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:uuid/uuid.dart';
+
+import '../mcp/mcp_dispatch_card_gate.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
+import 'agent_dispatch_log.dart';
 import 'agent_dispatch_prompt.dart';
-import 'agent_dispatch_session.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
-/// 启动一次新的 Agent 会话：注入 skill + 本次调用，不在此层取卡/送验。
+/// 启动一次 Worker 批次；Worker 只调度，每轮 Agent 按 Skill 自己取一张卡。
 class AgentDispatchService {
   AgentDispatchService({
     AgentDispatchCredentials credentials = const AgentDispatchCredentials(),
@@ -16,14 +20,21 @@ class AgentDispatchService {
   final AgentDispatchCredentials _credentials;
 
   bool _cancelRequested = false;
+  AgentWorkerProcess? _activeWorker;
 
-  void requestCancel() => _cancelRequested = true;
+  /// 立即停止当前 Worker 及其 SDK/CLI 子进程，并阻止后续会话启动。
+  Future<void> requestCancel() async {
+    _cancelRequested = true;
+    final worker = _activeWorker;
+    if (worker != null) await worker.stop();
+  }
 
   Future<AgentWorkerResult> runOnce({
     required AgentDispatchRunOptions options,
     required String skillPath,
+    required String mcpEndpoint,
     String? workerScriptPath,
-    void Function(String line)? onLog,
+    void Function(AgentDispatchLogEntry entry)? onLog,
   }) async {
     _cancelRequested = false;
     final repo = options.repoPath.trim();
@@ -42,17 +53,16 @@ class AgentDispatchService {
       );
     }
     final skillMarkdown = await skillFile.readAsString();
-    final prompt = buildSkillDispatchPrompt(
-      skillMarkdown: skillMarkdown,
-      projectTitle: options.projectTitle,
-      cardLimit: options.cardLimit,
-    );
+    void log(
+      String message, {
+      AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
+    }) {
+      onLog?.call(AgentDispatchLogEntry(message, level: level));
+    }
 
-    onLog?.call(
-      'Skill：${options.projectTitle ?? '当前项目'}',
-    );
-    onLog?.call('仓库：$repo');
-    onLog?.call('上限：${options.cardLimit.label}（逐张串行启动会话）');
+    log('项目：${options.projectTitle ?? '看板当前项目'}');
+    log('仓库：$repo');
+    log('策略：每张卡片创建一次独立 Agent 调用；上限 ${options.cardLimit.label}');
 
     String? cursorApiKey;
     if (options.engine == AgentDispatchEngine.cursor) {
@@ -72,63 +82,84 @@ class AgentDispatchService {
       );
     }
 
-    final sessionLimit = dispatchSessionLimit(options.cardLimit);
-    AgentWorkerResult last = const AgentWorkerResult(
-      ok: false,
-      error: '未启动会话',
+    final runId = const Uuid().v4();
+    final workerToken = const Uuid().v4();
+    final cardLimit = switch (options.cardLimit) {
+      AgentDispatchCardLimitMax() => 999,
+      AgentDispatchCardLimitCount(:final count) => count,
+    };
+    final prompt = buildSkillDispatchPrompt(
+      skillMarkdown: skillMarkdown,
+      projectTitle: options.projectTitle,
     );
-    for (var index = 1; index <= sessionLimit; index++) {
-      if (_cancelRequested) {
-        return const AgentWorkerResult(ok: false, error: '已取消');
-      }
-      onLog?.call(
-        '启动新会话（${options.engine.label}）第 $index 张…',
-      );
-      final sessionLog = StringBuffer();
-      last = await runAgentWorkerJob(
+    log('批次 id：$runId');
+    log('Worker 只读检查队列；每轮由全新 Skill 会话自己领取并处理一张卡');
+    final stopwatch = Stopwatch()..start();
+    late AgentWorkerResult result;
+    McpDispatchCardGate.instance.beginBatch(workerToken);
+    try {
+      result = await runAgentWorkerJob(
         engine: options.engine,
         cwd: repo,
         prompt: prompt,
+        mcpEndpoint: mcpEndpoint,
+        projectId: options.projectId,
+        cardLimit: cardLimit,
+        workerToken: workerToken,
         model: options.modelId,
         modelParams: options.modelParams,
         cursorApiKey: cursorApiKey,
         workerScriptPath: workerScriptPath,
+        onProcessStarted: (worker) {
+          _activeWorker = worker;
+          if (_cancelRequested) unawaited(worker.stop());
+        },
         onLog: (line) {
-          sessionLog.writeln(line);
           if (_cancelRequested) return;
-          onLog?.call(line);
+          final normalized = line.trimLeft();
+          final level = switch (normalized) {
+            final value when value.startsWith('[success]') =>
+              AgentDispatchLogLevel.success,
+            final value when value.startsWith('[warning]') =>
+              AgentDispatchLogLevel.warning,
+            final value when value.startsWith('[error]') =>
+              AgentDispatchLogLevel.error,
+            final value when value.startsWith('[err]') =>
+              AgentDispatchLogLevel.warning,
+            _ => AgentDispatchLogLevel.info,
+          };
+          final message = normalized.replaceFirst(
+            RegExp(r'^\[(success|warning|error)\]\s*'),
+            '',
+          );
+          log(
+            message,
+            level: level,
+          );
         },
       );
-      if (_cancelRequested) {
-        return const AgentWorkerResult(ok: false, error: '已取消');
-      }
-      if (!shouldContinueDispatch(
-        cardLimit: options.cardLimit,
-        finishedSessions: index,
-        lastResult: last,
-        sessionLog: sessionLog.toString(),
-        cancelRequested: _cancelRequested,
-      )) {
-        if (dispatchSessionHasNoCard(
-          result: last,
-          sessionLog: sessionLog.toString(),
-        )) {
-          onLog?.call('无更多卡片，结束调度');
-          if (index == 1 && last.ok) {
-            return last;
-          }
-          return AgentWorkerResult(
-            ok: last.ok,
-            summary: last.summary ?? '已处理 ${index - 1} 张后无更多卡片',
-            error: last.error,
-            exitCode: last.exitCode,
-          );
-        }
-        return last;
-      }
-      onLog?.call('第 $index 张完成，准备下一张…');
+    } catch (error) {
+      result = AgentWorkerResult(ok: false, error: 'Worker 启动或通信失败：$error');
+    } finally {
+      McpDispatchCardGate.instance.endBatch(workerToken);
+      _activeWorker = null;
+      stopwatch.stop();
     }
-    return last;
+    if (_cancelRequested) {
+      log('Worker 批次已由用户终止', level: AgentDispatchLogLevel.warning);
+      return const AgentWorkerResult(ok: false, error: '已取消');
+    }
+    log(
+      'Worker 退出：exitCode=${result.exitCode ?? '未知'}，'
+      '已处理 ${result.processedCards ?? 0} 张，耗时 ${stopwatch.elapsed.inSeconds} 秒',
+      level: result.ok
+          ? AgentDispatchLogLevel.success
+          : AgentDispatchLogLevel.error,
+    );
+    if (!result.ok) {
+      log(result.error ?? 'Worker 批次失败', level: AgentDispatchLogLevel.error);
+    }
+    return result;
   }
 }
 

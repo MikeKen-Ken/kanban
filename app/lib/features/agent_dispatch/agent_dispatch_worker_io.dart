@@ -12,12 +12,37 @@ class AgentWorkerResult {
     this.summary,
     this.error,
     this.exitCode,
+    this.processedCards,
   });
 
   final bool ok;
   final String? summary;
   final String? error;
   final int? exitCode;
+  final int? processedCards;
+}
+
+/// 当前 Worker 及其 Agent 子进程的可终止句柄。
+class AgentWorkerProcess {
+  AgentWorkerProcess(this._process);
+
+  final Process _process;
+  bool _stopRequested = false;
+
+  /// 终止 Worker 及其启动的 SDK/CLI 子进程。
+  Future<void> stop() async {
+    if (_stopRequested) return;
+    _stopRequested = true;
+    if (Platform.isWindows) {
+      await Process.run(
+        'taskkill',
+        ['/PID', '${_process.pid}', '/T', '/F'],
+        runInShell: true,
+      );
+      return;
+    }
+    _process.kill(ProcessSignal.sigterm);
+  }
 }
 
 Future<String?> resolveAgentDispatchPackageRoot(String? overrideCli) async {
@@ -62,11 +87,16 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   required AgentDispatchEngine engine,
   required String cwd,
   required String prompt,
+  required String mcpEndpoint,
+  required int cardLimit,
+  required String workerToken,
+  String? projectId,
   String? model,
   List<({String id, String value})> modelParams = const [],
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
+  void Function(AgentWorkerProcess process)? onProcessStarted,
 }) async {
   final cli = await resolveAgentDispatchCliPath(workerScriptPath);
   if (cli == null) {
@@ -83,6 +113,11 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     'engine': engine.name,
     'cwd': cwd,
     'prompt': prompt,
+    'mcpEndpoint': mcpEndpoint,
+    'cardLimit': cardLimit,
+    'workerToken': workerToken,
+    if (projectId != null && projectId.trim().isNotEmpty)
+      'projectId': projectId.trim(),
     if (model != null && model.trim().isNotEmpty) 'model': model.trim(),
     if (modelParams.isNotEmpty)
       'modelParams': [
@@ -115,6 +150,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       workingDirectory: packageRoot,
       environment: environment,
     );
+    onProcessStarted?.call(AgentWorkerProcess(process));
     process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
@@ -133,6 +169,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
           summary: map['summary'] as String?,
           error: map['error'] as String?,
           exitCode: code,
+          processedCards: (map['processedCards'] as num?)?.toInt(),
         );
       } catch (e) {
         return AgentWorkerResult(
@@ -259,11 +296,17 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     final existingRoot = p.basename(p.dirname(existing)) == 'dist'
         ? p.dirname(p.dirname(existing))
         : p.dirname(existing);
-    final nodeModules = p.join(
+    final cursorSdk = p.join(
       existingRoot,
       'node_modules',
       '@cursor',
       'sdk',
+    );
+    final mcpClient = p.join(
+      existingRoot,
+      'node_modules',
+      '@modelcontextprotocol',
+      'client',
     );
     final codexCli = p.join(
       existingRoot,
@@ -274,7 +317,8 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
       'codex.js',
     );
     final node = await _resolveNodeExecutable(packageRoot: existingRoot);
-    if (await Directory(nodeModules).exists() &&
+    if (await Directory(cursorSdk).exists() &&
+        await Directory(mcpClient).exists() &&
         await File(codexCli).exists() &&
         node != null) {
       return (ok: true, message: 'Worker 已就绪：$existing');
@@ -341,9 +385,8 @@ Map<String, String> _workerEnvironment({
   final nodeDir = p.dirname(nodeExecutable);
   final original = environment['Path'] ?? environment['PATH'] ?? '';
   final pathListSeparator = Platform.isWindows ? ';' : ':';
-  final merged = original.isEmpty
-      ? nodeDir
-      : '${nodeDir}${pathListSeparator}$original';
+  final merged =
+      original.isEmpty ? nodeDir : '$nodeDir$pathListSeparator$original';
   environment['Path'] = merged;
   environment['PATH'] = merged;
   if (cursorApiKey != null && cursorApiKey.trim().isNotEmpty) {

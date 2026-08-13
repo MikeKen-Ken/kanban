@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'agent_dispatch_log.dart';
+
 /// Agent 调度面板的桌面工作区。
 ///
 /// 宽窗口使用「配置 / Skill 与 Worker / 对话记录」三列布局；窄窗口则
@@ -138,7 +140,7 @@ class AgentDispatchSkillWorkerPane extends StatelessWidget {
   }
 }
 
-class AgentDispatchLogPane extends StatelessWidget {
+class AgentDispatchLogPane extends StatefulWidget {
   const AgentDispatchLogPane({
     required this.controller,
     required this.running,
@@ -155,8 +157,55 @@ class AgentDispatchLogPane extends StatelessWidget {
   final VoidCallback onCopy;
 
   @override
+  State<AgentDispatchLogPane> createState() => _AgentDispatchLogPaneState();
+}
+
+class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onLogChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant AgentDispatchLogPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.removeListener(_onLogChanged);
+    widget.controller.addListener(_onLogChanged);
+  }
+
+  void _onLogChanged() {
+    if (mounted) setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onLogChanged);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Color _lineColor(BuildContext context, AgentDispatchLogLevel level) {
+    final colors = Theme.of(context).colorScheme;
+    return switch (level) {
+      AgentDispatchLogLevel.info => colors.onSurface,
+      AgentDispatchLogLevel.success => Colors.green.shade700,
+      AgentDispatchLogLevel.warning => Colors.orange.shade800,
+      AgentDispatchLogLevel.error => colors.error,
+    };
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final hasLog = controller.text.isNotEmpty;
+    final hasLog = widget.controller.text.isNotEmpty;
+    final lines = widget.controller.text.split('\n');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -165,39 +214,55 @@ class AgentDispatchLogPane extends StatelessWidget {
             const Expanded(child: _PaneTitle(title: '工具对话记录')),
             IconButton(
               tooltip: '清空记录',
-              onPressed: running || !hasLog ? null : onClear,
+              onPressed: widget.running || !hasLog ? null : widget.onClear,
               icon: const Icon(Icons.delete_sweep_outlined, size: 20),
             ),
             IconButton(
               tooltip: '导出记录',
-              onPressed: hasLog ? onExport : null,
+              onPressed: hasLog ? widget.onExport : null,
               icon: const Icon(Icons.file_download_outlined, size: 20),
             ),
             IconButton(
               tooltip: '复制记录',
-              onPressed: hasLog ? onCopy : null,
+              onPressed: hasLog ? widget.onCopy : null,
               icon: const Icon(Icons.copy_outlined, size: 20),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        if (running) const LinearProgressIndicator(),
-        if (running) const SizedBox(height: 8),
+        if (widget.running) const LinearProgressIndicator(),
+        if (widget.running) const SizedBox(height: 8),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: TextField(
-              controller: controller,
-              readOnly: true,
-              maxLines: null,
-              expands: true,
-              scrollPhysics: const AlwaysScrollableScrollPhysics(),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                isDense: true,
-                contentPadding: EdgeInsets.all(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Theme.of(context).dividerColor),
+                borderRadius: BorderRadius.circular(4),
               ),
-              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                child: SelectableText.rich(
+                  TextSpan(
+                    children: [
+                      for (var index = 0; index < lines.length; index++)
+                        TextSpan(
+                          text:
+                              '${lines[index]}${index == lines.length - 1 ? '' : '\n'}',
+                          style: TextStyle(
+                            color: _lineColor(
+                              context,
+                              AgentDispatchLogEntry.levelOf(lines[index]),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+                ),
+              ),
             ),
           ),
         ),

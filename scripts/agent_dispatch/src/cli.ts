@@ -2,8 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor } from "@cursor/sdk";
 import { printCursorUsage } from "./cursor_usage.js";
-import { runCodex } from "./run_codex.js";
-import { runCursor } from "./run_cursor.js";
+import { runBatch } from "./run_batch.js";
 import type { DispatchJob, DispatchResult } from "./types.js";
 
 function sleep(ms: number): Promise<void> {
@@ -152,11 +151,26 @@ async function runJob(jobPath: string): Promise<void> {
     process.exitCode = 2;
     return;
   }
+  if (!job.mcpEndpoint?.trim()) {
+    writeResult(job.outPath, { ok: false, error: "mcpEndpoint 不能为空" });
+    process.exitCode = 2;
+    return;
+  }
+  if (!job.workerToken?.trim()) {
+    writeResult(job.outPath, { ok: false, error: "workerToken 不能为空" });
+    process.exitCode = 2;
+    return;
+  }
+  if (!Number.isFinite(job.cardLimit) || job.cardLimit < 1) {
+    writeResult(job.outPath, { ok: false, error: "cardLimit 必须大于 0" });
+    process.exitCode = 2;
+    return;
+  }
 
   console.log(`engine=${job.engine} cwd=${job.cwd}`);
   let result: DispatchResult;
   try {
-    result = job.engine === "codex" ? await runCodex(job) : await runCursor(job);
+    result = await runBatch(job);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     result = { ok: false, error: message };
