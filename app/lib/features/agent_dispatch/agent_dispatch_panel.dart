@@ -138,9 +138,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       setState(() => _running = true);
       _startHeartbeat();
     }
-    if (_settings.engine == AgentDispatchEngine.cursor && _models.isEmpty) {
-      await _loadModels();
-    }
     if (!mounted) return;
     if (_settings.engine == AgentDispatchEngine.cursor) {
       unawaited(_loadUsage());
@@ -505,22 +502,34 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 onSelectionChanged: _running || _busy
                     ? null
                     : (s) {
+                        final nextEngine = s.first;
+                        final nextSettings = _settings.copyWith(
+                          engine: nextEngine,
+                          modelId: AgentDispatchSettings.defaultModelId,
+                          modelParamValues:
+                              AgentDispatchSettings.defaultModelParamValues,
+                        );
+                        if (nextEngine == AgentDispatchEngine.cursor) {
+                          SharedPreferences.getInstance().then((prefs) async {
+                            final cachedModels =
+                                prefs.loadAgentDispatchModelCatalog();
+                            if (!mounted) return;
+                            setState(() {
+                              _models = cachedModels;
+                              _usage = null;
+                              _modelCatalogMessage = null;
+                            });
+                            await _persist(nextSettings);
+                            if (!mounted) return;
+                            unawaited(_loadUsage());
+                          });
+                          return;
+                        }
                         setState(() {
                           _models = const [];
                           _usage = null;
                         });
-                        _persist(_settings.copyWith(
-                          engine: s.first,
-                          modelId: AgentDispatchSettings.defaultModelId,
-                          modelParamValues:
-                              AgentDispatchSettings.defaultModelParamValues,
-                        )).then((_) {
-                          if (!mounted) return;
-                          if (s.first == AgentDispatchEngine.cursor) {
-                            unawaited(_loadModels());
-                            unawaited(_loadUsage());
-                          }
-                        });
+                        unawaited(_persist(nextSettings));
                       },
               ),
               const SizedBox(height: 12),
@@ -630,7 +639,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 )
               else if (_models.isEmpty)
                 Text(
-                  _settings.modelId ?? '尚未加载；可点刷新，或稍后手动依赖默认模型',
+                  _settings.modelId ??
+                      '尚未加载模型目录；请点击「从 API 刷新」手动拉取',
                   style: Theme.of(context).textTheme.bodySmall,
                 )
               else
