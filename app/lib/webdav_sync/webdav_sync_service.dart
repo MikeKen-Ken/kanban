@@ -18,6 +18,7 @@ import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
 import '../storage/json_file_io.dart';
 import '../storage/kanban_paths.dart';
+import 'bounded_concurrency.dart';
 import 'sync_progress.dart';
 import 'sync_index.dart';
 import 'sync_upload_plan.dart';

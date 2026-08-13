@@ -33,14 +33,11 @@ mixin _WebDavSyncPush
     Client client,
     String base,
     String projectId,
-    Set<String> ensured,
-  ) async {
-    if (!ensured.add(projectId)) return;
-    try {
-      await client.mkdirAll(KanbanPaths.remoteProjectDir(base, projectId));
-    } catch (_) {
-      // note: 目录已存在时忽略
-    }
+  ) {
+    return _ensureRemoteDir(
+      client,
+      KanbanPaths.remoteProjectDir(base, projectId),
+    );
   }
 
   /// 按计划增量上传 JSON；[baseline] 为 null 时全量上传。
@@ -55,7 +52,6 @@ mixin _WebDavSyncPush
       workspace: workspace,
       baseline: baseline,
     );
-    final ensuredDirs = <String>{};
     final total = plan.items.length;
     var completed = 0;
     _setProgress(
@@ -68,15 +64,7 @@ mixin _WebDavSyncPush
       ),
     );
 
-    // note: 先写列文件、再写 board 元数据；计划内保持列项先于同项目 board
-    final ordered = [...plan.items]..sort((a, b) {
-        final aCol = a.kind == SyncUploadKind.column ? 0 : 1;
-        final bCol = b.kind == SyncUploadKind.column ? 0 : 1;
-        if (aCol != bCol) return aCol - bCol;
-        return 0;
-      });
-
-    for (final item in ordered) {
+    Future<void> uploadItem(SyncUploadItem item) async {
       _ensureNotCancelled(runId);
       _setProgress(
         SyncProgress(
@@ -89,7 +77,7 @@ mixin _WebDavSyncPush
       );
       final projectId = item.projectId;
       if (projectId != null) {
-        await _ensureProjectDir(client, base, projectId, ensuredDirs);
+        await _ensureProjectDir(client, base, projectId);
       }
       await _writeJson(
         client,
@@ -107,6 +95,16 @@ mixin _WebDavSyncPush
         ),
       );
     }
+
+    // 先并行写列文件，再并行写 board 等，避免元数据引用尚未上传的列
+    await runBounded(
+      plan.items.where((item) => item.kind == SyncUploadKind.column),
+      action: uploadItem,
+    );
+    await runBounded(
+      plan.items.where((item) => item.kind != SyncUploadKind.column),
+      action: uploadItem,
+    );
 
     for (final projectId in plan.projectsNeedingColumnCleanup) {
       _ensureNotCancelled(runId);
@@ -201,6 +199,7 @@ mixin _WebDavSyncPush
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
+    _resetEnsuredRemoteDirs();
     _setProgress(const SyncProgress(phase: SyncPhase.discovering));
 
     try {

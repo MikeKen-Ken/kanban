@@ -18,18 +18,27 @@ mixin _WebDavSyncPull
 
     final refs =
         (meta['columns'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    final columns = <KanbanColumn>[];
-    for (final ref in refs) {
-      final id = ref['id'] as String;
-      final colJson = await _readJson(
-        client,
-        KanbanPaths.remoteColumnPath(base, id),
-      );
-      if (colJson != null) {
-        columns.add(KanbanColumn.fromJson(colJson));
-      }
-    }
-    return KanbanBoard.fromMetadataJson(meta, columns);
+    final columns = List<KanbanColumn?>.filled(refs.length, null);
+    await runBounded(
+      List<int>.generate(refs.length, (index) => index),
+      action: (index) async {
+        final id = refs[index]['id'] as String;
+        final colJson = await _readJson(
+          client,
+          KanbanPaths.remoteColumnPath(base, id),
+        );
+        if (colJson != null) {
+          columns[index] = KanbanColumn.fromJson(colJson);
+        }
+      },
+    );
+    return KanbanBoard.fromMetadataJson(
+      meta,
+      [
+        for (final column in columns)
+          if (column != null) column,
+      ],
+    );
   }
 
   Future<ProjectWorkspaceSnapshot?> pullRemote({
@@ -137,79 +146,123 @@ mixin _WebDavSyncPull
       final boards = <String, KanbanBoard>{};
       final settings = <String, ProjectSettings>{};
       final projectTrash = <String, TrashBin>{};
+      final boardMetas = <String, Map<String, dynamic>>{};
 
+      final boardJobs = <Future<void> Function()>[];
       for (final entry in manifest.projects) {
         final projectId = entry.id;
         final baseBoard = reuseFrom?.boards[projectId];
-        final boardMeta = await readRel(
-          KanbanPaths.remoteProjectBoardPath(base, projectId),
-          SyncIndexPaths.projectBoard(projectId),
-          baseBoard?.toMetadataJson(),
-        );
-        if (boardMeta == null) continue;
+        boardJobs.add(() async {
+          final boardMeta = await readRel(
+            KanbanPaths.remoteProjectBoardPath(base, projectId),
+            SyncIndexPaths.projectBoard(projectId),
+            baseBoard?.toMetadataJson(),
+          );
+          if (boardMeta == null) return;
+          if (KanbanBoard.isLegacyMonolithic(boardMeta)) {
+            boards[projectId] = KanbanBoard.fromJson(boardMeta);
+          } else {
+            boardMetas[projectId] = boardMeta;
+          }
+        });
+      }
 
-        if (KanbanBoard.isLegacyMonolithic(boardMeta)) {
-          boards[projectId] = KanbanBoard.fromJson(boardMeta);
-        } else {
-          final refs = (boardMeta['columns'] as List<dynamic>? ?? [])
-              .cast<Map<String, dynamic>>();
-          final baseColumnsById = <String, KanbanColumn>{
-            for (final column in baseBoard?.columns ?? const <KanbanColumn>[])
-              column.id: column,
-          };
-          final columns = <KanbanColumn>[];
-          for (final ref in refs) {
-            final colId = ref['id'] as String;
+      var appTrash = TrashBin.empty;
+      var sharedContent = SharedContent.empty;
+      boardJobs.add(() async {
+        final appTrashJson = await readRel(
+          KanbanPaths.remoteAppTrashPath(base),
+          SyncIndexPaths.appTrash,
+          reuseFrom?.appTrash.toJson(),
+        );
+        appTrash = appTrashJson == null
+            ? TrashBin.empty
+            : TrashBin.fromJson(appTrashJson);
+      });
+      boardJobs.add(() async {
+        final baseShared = reuseFrom?.sharedContent;
+        final sharedContentJson = await readRel(
+          KanbanPaths.remoteSharedContentPath(base),
+          SyncIndexPaths.sharedContent,
+          (baseShared == null || baseShared.isUninitialized)
+              ? null
+              : baseShared.toJson(),
+        );
+        sharedContent = sharedContentJson == null
+            ? SharedContent.empty
+            : SharedContent.fromJson(sharedContentJson);
+      });
+      await runBounded(boardJobs, action: (job) => job());
+
+      final followUpJobs = <Future<void> Function()>[];
+      final columnsByProject = <String, Map<String, KanbanColumn>>{};
+
+      for (final entry in manifest.projects) {
+        final projectId = entry.id;
+        final boardMeta = boardMetas[projectId];
+        if (boardMeta == null && !boards.containsKey(projectId)) continue;
+
+        followUpJobs.add(() async {
+          final settingsJson = await readRel(
+            KanbanPaths.remoteProjectSettingsPath(base, projectId),
+            SyncIndexPaths.projectSettings(projectId),
+            reuseFrom?.settings[projectId]?.toJson(),
+          );
+          settings[projectId] = settingsJson == null
+              ? const ProjectSettings()
+              : ProjectSettings.fromJson(settingsJson);
+        });
+        followUpJobs.add(() async {
+          final trashJson = await readRel(
+            KanbanPaths.remoteProjectTrashPath(base, projectId),
+            SyncIndexPaths.projectTrash(projectId),
+            (reuseFrom?.projectTrash[projectId] ?? TrashBin.empty).toJson(),
+          );
+          projectTrash[projectId] =
+              trashJson == null ? TrashBin.empty : TrashBin.fromJson(trashJson);
+        });
+
+        if (boardMeta == null) continue;
+        final refs = (boardMeta['columns'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>();
+        final baseBoard = reuseFrom?.boards[projectId];
+        final baseColumnsById = <String, KanbanColumn>{
+          for (final column in baseBoard?.columns ?? const <KanbanColumn>[])
+            column.id: column,
+        };
+        for (final ref in refs) {
+          final colId = ref['id'] as String;
+          followUpJobs.add(() async {
             final colJson = await readRel(
               KanbanPaths.remoteProjectColumnPath(base, projectId, colId),
               SyncIndexPaths.projectColumn(projectId, colId),
               baseColumnsById[colId]?.toJson(),
             );
-            if (colJson != null) {
-              columns.add(KanbanColumn.fromJson(colJson));
-            }
-          }
-          boards[projectId] = KanbanBoard.fromMetadataJson(boardMeta, columns);
+            if (colJson == null) return;
+            (columnsByProject[projectId] ??= {})[colId] =
+                KanbanColumn.fromJson(colJson);
+          });
         }
-
-        final settingsJson = await readRel(
-          KanbanPaths.remoteProjectSettingsPath(base, projectId),
-          SyncIndexPaths.projectSettings(projectId),
-          reuseFrom?.settings[projectId]?.toJson(),
-        );
-        settings[projectId] = settingsJson == null
-            ? const ProjectSettings()
-            : ProjectSettings.fromJson(settingsJson);
-
-        final trashJson = await readRel(
-          KanbanPaths.remoteProjectTrashPath(base, projectId),
-          SyncIndexPaths.projectTrash(projectId),
-          (reuseFrom?.projectTrash[projectId] ?? TrashBin.empty).toJson(),
-        );
-        projectTrash[projectId] =
-            trashJson == null ? TrashBin.empty : TrashBin.fromJson(trashJson);
       }
+      await runBounded(followUpJobs, action: (job) => job());
 
-      final appTrashJson = await readRel(
-        KanbanPaths.remoteAppTrashPath(base),
-        SyncIndexPaths.appTrash,
-        reuseFrom?.appTrash.toJson(),
-      );
-      final appTrash = appTrashJson == null
-          ? TrashBin.empty
-          : TrashBin.fromJson(appTrashJson);
-
-      final baseShared = reuseFrom?.sharedContent;
-      final sharedContentJson = await readRel(
-        KanbanPaths.remoteSharedContentPath(base),
-        SyncIndexPaths.sharedContent,
-        (baseShared == null || baseShared.isUninitialized)
-            ? null
-            : baseShared.toJson(),
-      );
-      final sharedContent = sharedContentJson == null
-          ? SharedContent.empty
-          : SharedContent.fromJson(sharedContentJson);
+      for (final entry in manifest.projects) {
+        final projectId = entry.id;
+        if (boards.containsKey(projectId)) continue;
+        final boardMeta = boardMetas[projectId];
+        if (boardMeta == null) continue;
+        final refs = (boardMeta['columns'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>();
+        final loaded = columnsByProject[projectId] ?? const {};
+        boards[projectId] = KanbanBoard.fromMetadataJson(
+          boardMeta,
+          [
+            for (final ref in refs)
+              if (loaded[ref['id'] as String] != null)
+                loaded[ref['id'] as String]!,
+          ],
+        );
+      }
 
       if (skipped > 0) {
         print('拉取：跳过 $skipped 个未变更 JSON，下载 $downloaded 个');
@@ -274,6 +327,7 @@ mixin _WebDavSyncPull
     _noteAttempt();
     _setStatus(SyncStatus.syncing);
     _lastAttachmentError = null;
+    _resetEnsuredRemoteDirs();
     _setProgress(const SyncProgress(phase: SyncPhase.discovering));
     try {
       _ensureNotCancelled(runId);

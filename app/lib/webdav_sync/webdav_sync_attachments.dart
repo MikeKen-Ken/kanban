@@ -11,44 +11,44 @@ mixin _WebDavSyncAttachments
     if (!_attachmentSync.isAvailable) return 0;
     final keepIds = sharedContent.wallpapers.map((item) => item.id).toSet();
     final remoteDir = KanbanPaths.remoteWallpapersDir(base);
-    try {
-      await client.mkdirAll(remoteDir);
-    } catch (_) {
-      // note: 目录已存在时忽略
-    }
+    await _ensureRemoteDir(client, remoteDir);
     final remoteNames = await _listRemoteAttachmentNames(client, remoteDir);
     var failed = 0;
+    final jobs = <Future<void> Function()>[];
     for (final id in keepIds) {
-      _ensureNotCancelled();
       for (final thumb in const [false, true]) {
-        if (!await _attachmentSync.wallpaperExists(id, thumb: thumb)) {
-          if (!thumb) failed++;
-          continue;
-        }
-        final name = KanbanPaths.remoteProjectAttachmentFileName(
-          id,
-          thumb: thumb,
-        );
-        if (remoteNames.contains(name)) continue;
-        final bytes = await _attachmentSync.readWallpaper(id, thumb: thumb);
-        if (bytes == null) continue;
-        try {
-          await _writeBytesWithRetry(
-            client,
-            KanbanPaths.remoteWallpaperPath(base, id, thumb: thumb),
-            bytes,
-          );
-          remoteNames.add(name);
-        } catch (e) {
-          if (!thumb) {
-            failed++;
-            _lastAttachmentError ??= e.toString();
-            // ignore: avoid_print
-            print('壁纸上传失败 $id: $e');
+        jobs.add(() async {
+          _ensureNotCancelled();
+          if (!await _attachmentSync.wallpaperExists(id, thumb: thumb)) {
+            if (!thumb) failed++;
+            return;
           }
-        }
+          final name = KanbanPaths.remoteProjectAttachmentFileName(
+            id,
+            thumb: thumb,
+          );
+          if (remoteNames.contains(name)) return;
+          final bytes = await _attachmentSync.readWallpaper(id, thumb: thumb);
+          if (bytes == null) return;
+          try {
+            await _writeBytesWithRetry(
+              client,
+              KanbanPaths.remoteWallpaperPath(base, id, thumb: thumb),
+              bytes,
+            );
+            remoteNames.add(name);
+          } catch (e) {
+            if (!thumb) {
+              failed++;
+              _lastAttachmentError ??= e.toString();
+              // ignore: avoid_print
+              print('壁纸上传失败 $id: $e');
+            }
+          }
+        });
       }
     }
+    await runBounded(jobs, action: (job) => job());
     if (cleanupOrphans) {
       await _cleanupRemoteAttachments(client, remoteDir, keepIds);
       await _attachmentSync.deleteOrphanWallpapers(keepIds);
@@ -64,23 +64,26 @@ mixin _WebDavSyncAttachments
     if (!_attachmentSync.isAvailable) return 0;
     var failed = 0;
     final remoteDir = KanbanPaths.remoteWallpapersDir(base);
-    for (final asset in sharedContent.wallpapers) {
-      _ensureNotCancelled();
-      for (final thumb in const [false, true]) {
-        if (await _attachmentSync.wallpaperExists(asset.id, thumb: thumb)) {
-          continue;
+    await runBounded(
+      sharedContent.wallpapers,
+      action: (asset) async {
+        _ensureNotCancelled();
+        for (final thumb in const [false, true]) {
+          if (await _attachmentSync.wallpaperExists(asset.id, thumb: thumb)) {
+            continue;
+          }
+          final downloaded = await _downloadRemoteWallpaper(
+            client,
+            remoteDir,
+            base,
+            asset.id,
+            thumb: thumb,
+          );
+          if (!downloaded && !thumb) failed++;
         }
-        final downloaded = await _downloadRemoteWallpaper(
-          client,
-          remoteDir,
-          base,
-          asset.id,
-          thumb: thumb,
-        );
-        if (!downloaded && !thumb) failed++;
-      }
-      if (!await _attachmentSync.wallpaperExists(asset.id)) failed++;
-    }
+        if (!await _attachmentSync.wallpaperExists(asset.id)) failed++;
+      },
+    );
     await _attachmentSync.deleteOrphanWallpapers(
       sharedContent.wallpapers.map((item) => item.id).toSet(),
     );
@@ -330,102 +333,109 @@ mixin _WebDavSyncAttachments
     final keepIds = refs.all;
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
+    await _ensureRemoteDir(client, attachmentsDir);
     final remoteNames =
         await _listRemoteAttachmentNames(client, attachmentsDir);
+    final jobs = <Future<void> Function()>[];
 
     for (final id in refs.imageIds) {
-      _ensureNotCancelled();
       for (final thumb in const [false, true]) {
+        jobs.add(() async {
+          _ensureNotCancelled();
+          final localExists = await _attachmentSync.exists(
+            projectId,
+            id,
+            thumb: thumb,
+          );
+          final remoteName = KanbanPaths.remoteProjectAttachmentFileName(
+            id,
+            thumb: thumb,
+          );
+          final remoteExists = remoteNames.contains(remoteName);
+          if (!shouldUploadAttachmentFile(
+            localExists: localExists,
+            remoteExists: remoteExists,
+          )) {
+            return;
+          }
+          final bytes = await _attachmentSync.readFile(
+            projectId,
+            id,
+            thumb: thumb,
+          );
+          if (bytes == null) {
+            if (!thumb) failed++;
+            return;
+          }
+          try {
+            await _writeBytesWithRetry(
+              client,
+              KanbanPaths.remoteProjectAttachmentPath(
+                base,
+                projectId,
+                id,
+                thumb: thumb,
+              ),
+              bytes,
+            );
+            remoteNames.add(remoteName);
+          } catch (e) {
+            if (!thumb) {
+              failed++;
+              _lastAttachmentError ??= e.toString();
+              // ignore: avoid_print
+              print('附件上传失败 $projectId/$id: $e');
+            }
+          }
+        });
+      }
+    }
+
+    for (final id in refs.fileIds) {
+      jobs.add(() async {
+        _ensureNotCancelled();
         final localExists = await _attachmentSync.exists(
           projectId,
           id,
-          thumb: thumb,
+          isFileAttachment: true,
         );
-        final remoteName = KanbanPaths.remoteProjectAttachmentFileName(
-          id,
-          thumb: thumb,
-        );
+        final remoteName = KanbanPaths.remoteProjectFileAttachmentFileName(id);
         final remoteExists = remoteNames.contains(remoteName);
         if (!shouldUploadAttachmentFile(
           localExists: localExists,
           remoteExists: remoteExists,
         )) {
-          continue;
+          return;
         }
         final bytes = await _attachmentSync.readFile(
           projectId,
           id,
-          thumb: thumb,
+          isFileAttachment: true,
         );
         if (bytes == null) {
-          if (!thumb) failed++;
-          continue;
+          failed++;
+          return;
         }
         try {
           await _writeBytesWithRetry(
             client,
-            KanbanPaths.remoteProjectAttachmentPath(
+            KanbanPaths.remoteProjectFileAttachmentPath(
               base,
               projectId,
               id,
-              thumb: thumb,
             ),
             bytes,
           );
           remoteNames.add(remoteName);
         } catch (e) {
-          if (!thumb) {
-            failed++;
-            _lastAttachmentError ??= e.toString();
-            // ignore: avoid_print
-            print('附件上传失败 $projectId/$id: $e');
-          }
+          failed++;
+          _lastAttachmentError ??= e.toString();
+          // ignore: avoid_print
+          print('文件附件上传失败 $projectId/$id: $e');
         }
-      }
+      });
     }
-
-    for (final id in refs.fileIds) {
-      _ensureNotCancelled();
-      final localExists = await _attachmentSync.exists(
-        projectId,
-        id,
-        isFileAttachment: true,
-      );
-      final remoteName = KanbanPaths.remoteProjectFileAttachmentFileName(id);
-      final remoteExists = remoteNames.contains(remoteName);
-      if (!shouldUploadAttachmentFile(
-        localExists: localExists,
-        remoteExists: remoteExists,
-      )) {
-        continue;
-      }
-      final bytes = await _attachmentSync.readFile(
-        projectId,
-        id,
-        isFileAttachment: true,
-      );
-      if (bytes == null) {
-        failed++;
-        continue;
-      }
-      try {
-        await _writeBytesWithRetry(
-          client,
-          KanbanPaths.remoteProjectFileAttachmentPath(
-            base,
-            projectId,
-            id,
-          ),
-          bytes,
-        );
-        remoteNames.add(remoteName);
-      } catch (e) {
-        failed++;
-        _lastAttachmentError ??= e.toString();
-        // ignore: avoid_print
-        print('文件附件上传失败 $projectId/$id: $e');
-      }
-    }
+    await runBounded(jobs, action: (job) => job());
 
     if (cleanupOrphans) {
       try {
@@ -462,40 +472,46 @@ mixin _WebDavSyncAttachments
     final attachmentsDir =
         KanbanPaths.remoteProjectAttachmentsDir(base, projectId);
 
+    final pullJobs = <Future<void> Function()>[];
     for (final id in refs.imageIds) {
-      _ensureNotCancelled();
-      for (final thumb in const [false, true]) {
-        await _downloadRemoteImageAttachment(
+      pullJobs.add(() async {
+        _ensureNotCancelled();
+        for (final thumb in const [false, true]) {
+          await _downloadRemoteImageAttachment(
+            client,
+            attachmentsDir,
+            base,
+            projectId,
+            id,
+            thumb: thumb,
+          );
+        }
+        if (!await _attachmentSync.exists(projectId, id)) {
+          failed++;
+        }
+      });
+    }
+
+    for (final id in refs.fileIds) {
+      pullJobs.add(() async {
+        _ensureNotCancelled();
+        await _downloadRemoteFileAttachment(
           client,
           attachmentsDir,
           base,
           projectId,
           id,
-          thumb: thumb,
         );
-      }
-      if (!await _attachmentSync.exists(projectId, id)) {
-        failed++;
-      }
+        if (!await _attachmentSync.exists(
+          projectId,
+          id,
+          isFileAttachment: true,
+        )) {
+          failed++;
+        }
+      });
     }
-
-    for (final id in refs.fileIds) {
-      _ensureNotCancelled();
-      await _downloadRemoteFileAttachment(
-        client,
-        attachmentsDir,
-        base,
-        projectId,
-        id,
-      );
-      if (!await _attachmentSync.exists(
-        projectId,
-        id,
-        isFileAttachment: true,
-      )) {
-        failed++;
-      }
-    }
+    await runBounded(pullJobs, action: (job) => job());
 
     try {
       await _attachmentSync.deleteOrphans(projectId, keepIds);

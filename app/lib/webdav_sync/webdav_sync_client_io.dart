@@ -1,6 +1,24 @@
 part of 'webdav_sync_service.dart';
 
 mixin _WebDavSyncClientIo on _WebDavSyncHost, _WebDavSyncScheduler {
+  /// 合并同路径 `mkdirAll`，避免并行上传时第二个请求在目录建完前就 PUT。
+  final Map<String, Future<void>> _ensureDirInflight = {};
+
+  void _resetEnsuredRemoteDirs() {
+    _ensureDirInflight.clear();
+  }
+
+  Future<void> _ensureRemoteDir(Client client, String dir) {
+    if (dir.isEmpty) return Future<void>.value();
+    return _ensureDirInflight.putIfAbsent(dir, () async {
+      try {
+        await client.mkdirAll(dir);
+      } catch (_) {
+        // note: 目录已存在时忽略
+      }
+    });
+  }
+
   Client? _client(WebDavConfig config) {
     if (!config.isConfigured) return null;
     var url = config.serverUrl.trim();
@@ -77,12 +95,7 @@ mixin _WebDavSyncClientIo on _WebDavSyncHost, _WebDavSyncScheduler {
   Future<void> _ensureParentDir(Client client, String remoteFilePath) async {
     final lastSlash = remoteFilePath.lastIndexOf('/');
     if (lastSlash <= 0) return;
-    final dir = remoteFilePath.substring(0, lastSlash);
-    try {
-      await client.mkdirAll(dir);
-    } catch (_) {
-      // note: 目录已存在时忽略
-    }
+    await _ensureRemoteDir(client, remoteFilePath.substring(0, lastSlash));
   }
   Future<void> _writeJson(Client client, String path, Object data) async {
     _ensureNotCancelled();
