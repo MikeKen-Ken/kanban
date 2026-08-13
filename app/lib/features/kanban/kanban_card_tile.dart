@@ -800,19 +800,20 @@ class _CardCompleteCheckboxState extends State<_CardCompleteCheckbox>
     with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController;
   late final Animation<double> _scale;
+  bool _handlingTap = false;
 
   @override
   void initState() {
     super.initState();
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 140),
+      duration: const Duration(milliseconds: 100),
     );
-    _scale = Tween<double>(begin: 1, end: 0.86).animate(
+    _scale = Tween<double>(begin: 1, end: 0.88).animate(
       CurvedAnimation(
         parent: _scaleController,
         curve: Curves.easeOutCubic,
-        reverseCurve: Curves.elasticOut,
+        reverseCurve: Curves.easeOutCubic,
       ),
     );
   }
@@ -823,10 +824,23 @@ class _CardCompleteCheckboxState extends State<_CardCompleteCheckbox>
     super.dispose();
   }
 
-  void _playTapFeedback() {
-    _scaleController.forward().then((_) {
-      if (mounted) _scaleController.reverse();
-    });
+  Future<void> _handleChanged(bool? next) async {
+    if (_handlingTap || next == null) return;
+    _handlingTap = true;
+    try {
+      // 先完成按下缩放，再切换完成态；避免列间移动销毁本组件时动画中途被打断。
+      await _scaleController.forward();
+      if (!mounted) {
+        widget.onChanged(next);
+        return;
+      }
+      widget.onChanged(next);
+      if (mounted) {
+        await _scaleController.reverse();
+      }
+    } finally {
+      _handlingTap = false;
+    }
   }
 
   @override
@@ -840,10 +854,7 @@ class _CardCompleteCheckboxState extends State<_CardCompleteCheckbox>
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
           value: widget.value,
-          onChanged: (next) {
-            _playTapFeedback();
-            widget.onChanged(next);
-          },
+          onChanged: _handleChanged,
         ),
       ),
     );
