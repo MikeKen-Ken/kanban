@@ -2,7 +2,40 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+
+/// 标记不参与整卡拖拽的交互区（勾选框、置顶、菜单等）。
+class CardDragInteractionBlocker extends StatelessWidget {
+  const CardDragInteractionBlocker({super.key, required this.child});
+
+  static final Object marker = Object();
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MetaData(
+      metaData: marker,
+      behavior: HitTestBehavior.opaque,
+      child: child,
+    );
+  }
+}
+
+/// 指针落点是否命中 [CardDragInteractionBlocker]。
+bool cardDragHitTestExcludes(Offset globalPosition) {
+  final result = HitTestResult();
+  GestureBinding.instance.hitTest(result, globalPosition);
+  for (final entry in result.path) {
+    final target = entry.target;
+    if (target is RenderMetaData &&
+        identical(target.metaData, CardDragInteractionBlocker.marker)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /// 拖拽反馈卡片中心对准指针（而非左上角）。
 ///
@@ -60,6 +93,56 @@ bool shouldShowCardContextMenuButton(TargetPlatform platform) {
   return isTouchPrimaryPlatform(platform);
 }
 
+/// 即时拖拽：交互控件区域不启动拖卡。
+class CardDraggable<T extends Object> extends Draggable<T> {
+  const CardDraggable({
+    super.key,
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.axis,
+    super.childWhenDragging,
+    super.feedbackOffset,
+    super.dragAnchorStrategy,
+    super.maxSimultaneousDrags,
+    super.onDragStarted,
+    super.onDragUpdate,
+    super.onDraggableCanceled,
+    super.onDragEnd,
+    super.onDragCompleted,
+    super.ignoringFeedbackSemantics,
+    super.ignoringFeedbackPointer,
+    super.allowedButtonsFilter,
+    super.hitTestBehavior,
+    super.rootOverlay,
+  });
+
+  @override
+  ImmediateMultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) {
+    return _CardImmediateMultiDragGestureRecognizer(
+      allowedButtonsFilter: allowedButtonsFilter,
+    )..onStart = onStart;
+  }
+}
+
+class _CardImmediateMultiDragGestureRecognizer
+    extends ImmediateMultiDragGestureRecognizer {
+  _CardImmediateMultiDragGestureRecognizer({super.allowedButtonsFilter});
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    if (cardDragHitTestExcludes(event.position)) {
+      return;
+    }
+    super.addAllowedPointer(event);
+  }
+
+  @override
+  String get debugDescription => 'card immediate multi drag';
+}
+
 /// 长按延迟拖拽：阈值内不因位移自行拒绝，明显滑动时由外层滚动手势胜出。
 class CardLongPressDraggable<T extends Object> extends LongPressDraggable<T> {
   const CardLongPressDraggable({
@@ -111,6 +194,14 @@ class _CardDelayedMultiDragGestureRecognizer
     required super.delay,
     super.allowedButtonsFilter,
   });
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    if (cardDragHitTestExcludes(event.position)) {
+      return;
+    }
+    super.addAllowedPointer(event);
+  }
 
   @override
   MultiDragPointerState createNewPointerState(PointerDownEvent event) {

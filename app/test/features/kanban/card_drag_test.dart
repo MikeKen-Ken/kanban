@@ -153,6 +153,93 @@ void main() {
     });
   });
 
+  group('CardDragInteractionBlocker', () {
+    testWidgets('长按交互区不启动 CardLongPressDraggable', (tester) async {
+      var dragStarted = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 280,
+                height: 120,
+                child: CardLongPressDraggable<int>(
+                  data: 1,
+                  delay: const Duration(milliseconds: 200),
+                  onDragStarted: () => dragStarted = true,
+                  feedback: const SizedBox(width: 280, height: 120),
+                  child: Row(
+                    children: [
+                      CardDragInteractionBlocker(
+                        child: SizedBox(
+                          key: const Key('blocked'),
+                          width: 48,
+                          height: 48,
+                          child: ColoredBox(color: Colors.red.shade200),
+                        ),
+                      ),
+                      const Expanded(
+                        child: SizedBox(
+                          key: Key('draggable'),
+                          height: 48,
+                          child: ColoredBox(color: Colors.blue),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final blocked = find.byKey(const Key('blocked'));
+      final center = tester.getCenter(blocked);
+      final gesture = await tester.startGesture(center);
+      await tester.pump(const Duration(milliseconds: 250));
+      await gesture.up();
+      await tester.pump();
+
+      expect(dragStarted, isFalse);
+    });
+
+    testWidgets('即时拖拽在交互区按下不启动', (tester) async {
+      var dragStarted = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 280,
+                height: 120,
+                child: CardDraggable<int>(
+                  data: 1,
+                  onDragStarted: () => dragStarted = true,
+                  feedback: const SizedBox(width: 280, height: 120),
+                  child: CardDragInteractionBlocker(
+                    child: SizedBox(
+                      key: const Key('blocked-immediate'),
+                      width: 280,
+                      height: 120,
+                      child: ColoredBox(color: Colors.green.shade200),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.drag(
+        find.byKey(const Key('blocked-immediate')),
+        const Offset(40, 0),
+      );
+      expect(dragStarted, isFalse);
+    });
+  });
+
   group('卡片上下文菜单触控入口', () {
     test('Android / iOS 视为触控主平台，桌面否', () {
       expect(isTouchPrimaryPlatform(TargetPlatform.android), isTrue);

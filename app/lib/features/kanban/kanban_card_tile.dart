@@ -241,7 +241,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         }
 
         final Widget draggableChild = immediateDrag
-            ? Draggable<KanbanCard>(
+            ? CardDraggable<KanbanCard>(
                 data: widget.card,
                 dragAnchorStrategy: anchorStrategy,
                 onDragStarted: _onDragStarted,
@@ -453,16 +453,18 @@ class _CardContent extends StatelessWidget {
                             : CrossAxisAlignment.start,
                     children: [
                       if (columnId != null)
-                        _CardCompleteCheckbox(
-                          value: card.completed,
-                          onChanged: (_) async {
-                            final error = await context
-                                .read<BoardController>()
-                                .toggleCardCompleted(columnId!, card.id);
-                            if (error != null && context.mounted) {
-                              showAppSnackBar(context, message: error);
-                            }
-                          },
+                        CardDragInteractionBlocker(
+                          child: _CardCompleteCheckbox(
+                            value: card.completed,
+                            onChanged: (_) async {
+                              final error = await context
+                                  .read<BoardController>()
+                                  .toggleCardCompleted(columnId!, card.id);
+                              if (error != null && context.mounted) {
+                                showAppSnackBar(context, message: error);
+                              }
+                            },
+                          ),
                         )
                       else
                         const SizedBox(width: 8),
@@ -647,65 +649,67 @@ class _CardContent extends StatelessWidget {
                       ),
                       // 操作列：置顶在上，三点菜单紧挨其正下方，尽量不拉宽卡片横向布局
                       if (!dragging && columnId != null)
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: isPinned ? '取消置顶' : '置顶',
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 28,
-                                minHeight: 28,
-                              ),
-                              onPressed: () => context
-                                  .read<BoardController>()
-                                  .toggleCardPin(columnId!, card.id),
-                              icon: Icon(
-                                isPinned
-                                    ? Icons.push_pin
-                                    : Icons.push_pin_outlined,
-                                size: 18,
-                                color: isPinned
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.55),
-                              ),
-                            ),
-                            if (showContextMenuButton && onContextMenu != null)
-                              Builder(
-                                builder: (buttonContext) {
-                                  return IconButton(
-                                    key: const ValueKey(
-                                        'card-context-menu-button'),
-                                    tooltip: '更多（转移/删除）',
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 28,
-                                      minHeight: 28,
-                                    ),
-                                    onPressed: () {
-                                      final box = buttonContext
-                                          .findRenderObject() as RenderBox?;
-                                      if (box == null || !box.hasSize) {
-                                        return;
-                                      }
-                                      final anchor = box.localToGlobal(
-                                        box.size.center(Offset.zero),
-                                      );
-                                      onContextMenu!(anchor);
-                                    },
-                                    icon: Icon(
-                                      Icons.more_vert,
-                                      size: 18,
-                                      color: colorScheme.onSurfaceVariant
+                        CardDragInteractionBlocker(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: isPinned ? '取消置顶' : '置顶',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 28,
+                                  minHeight: 28,
+                                ),
+                                onPressed: () => context
+                                    .read<BoardController>()
+                                    .toggleCardPin(columnId!, card.id),
+                                icon: Icon(
+                                  isPinned
+                                      ? Icons.push_pin
+                                      : Icons.push_pin_outlined,
+                                  size: 18,
+                                  color: isPinned
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurfaceVariant
                                           .withValues(alpha: 0.55),
-                                    ),
-                                  );
-                                },
+                                ),
                               ),
-                          ],
+                              if (showContextMenuButton && onContextMenu != null)
+                                Builder(
+                                  builder: (buttonContext) {
+                                    return IconButton(
+                                      key: const ValueKey(
+                                          'card-context-menu-button'),
+                                      tooltip: '更多（转移/删除）',
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 28,
+                                        minHeight: 28,
+                                      ),
+                                      onPressed: () {
+                                        final box = buttonContext
+                                            .findRenderObject() as RenderBox?;
+                                        if (box == null || !box.hasSize) {
+                                          return;
+                                        }
+                                        final anchor = box.localToGlobal(
+                                          box.size.center(Offset.zero),
+                                        );
+                                        onContextMenu!(anchor);
+                                      },
+                                      icon: Icon(
+                                        Icons.more_vert,
+                                        size: 18,
+                                        color: colorScheme.onSurfaceVariant
+                                            .withValues(alpha: 0.55),
+                                      ),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
                         ),
                     ],
                   ),
@@ -782,7 +786,7 @@ class _CardContent extends StatelessWidget {
   }
 }
 
-/// 卡片左侧完成勾选：点击缩放反馈，并吞掉长按以免触发整卡拖拽/选中。
+/// 卡片左侧完成勾选：点击缩放反馈；拖拽排除由 [CardDragInteractionBlocker] 处理。
 class _CardCompleteCheckbox extends StatefulWidget {
   const _CardCompleteCheckbox({
     required this.value,
@@ -800,20 +804,19 @@ class _CardCompleteCheckboxState extends State<_CardCompleteCheckbox>
     with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController;
   late final Animation<double> _scale;
-  bool _handlingTap = false;
 
   @override
   void initState() {
     super.initState();
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 100),
+      duration: const Duration(milliseconds: 120),
     );
-    _scale = Tween<double>(begin: 1, end: 0.88).animate(
+    _scale = Tween<double>(begin: 1, end: 0.84).animate(
       CurvedAnimation(
         parent: _scaleController,
         curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeOutCubic,
+        reverseCurve: Curves.elasticOut,
       ),
     );
   }
@@ -824,38 +827,23 @@ class _CardCompleteCheckboxState extends State<_CardCompleteCheckbox>
     super.dispose();
   }
 
-  Future<void> _handleChanged(bool? next) async {
-    if (_handlingTap || next == null) return;
-    _handlingTap = true;
-    try {
-      // 先完成按下缩放，再切换完成态；避免列间移动销毁本组件时动画中途被打断。
-      await _scaleController.forward();
-      if (!mounted) {
-        widget.onChanged(next);
-        return;
-      }
-      widget.onChanged(next);
-      if (mounted) {
-        await _scaleController.reverse();
-      }
-    } finally {
-      _handlingTap = false;
-    }
+  void _handleChanged(bool? next) {
+    if (next == null) return;
+    _scaleController.forward(from: 0).then((_) {
+      if (mounted) _scaleController.reverse();
+    });
+    widget.onChanged(next);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onLongPress: () {},
-      child: ScaleTransition(
-        scale: _scale,
-        child: Checkbox(
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-          value: widget.value,
-          onChanged: _handleChanged,
-        ),
+    return ScaleTransition(
+      scale: _scale,
+      child: Checkbox(
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        value: widget.value,
+        onChanged: _handleChanged,
       ),
     );
   }
