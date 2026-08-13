@@ -179,6 +179,10 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
     workingDirectory: packageRoot,
     environment: environment,
     runInShell: Platform.isWindows,
+    // Worker 始终以 UTF-8 输出 JSON；不能让 Windows 的本地代码页参与解码，
+    // 否则含有非 ASCII 模型名称或参数名时会破坏 JSON 文本。
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
   );
   if (result.exitCode != 0) {
     final err = (result.stderr as String).trim();

@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/import_export/backup_file_picker.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
+import 'agent_dispatch_log_exporter.dart';
 import 'agent_dispatch_log_store.dart';
 import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
@@ -129,6 +131,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clearAgentDispatchLog();
     if (mounted) setState(() {});
+  }
+
+  Future<void> _exportLog() async {
+    final exported = await exportAgentDispatchLog(_logController.text);
+    if (!mounted) return;
+    showAppSnackBar(context, message: exported ? '调度记录已导出' : '已取消导出');
   }
 
   Future<void> _refreshSkillPreview() async {
@@ -604,20 +612,30 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                         : _clearLog,
                     child: const Text('清空记录'),
                   ),
+                  TextButton.icon(
+                    onPressed: _logController.text.isEmpty ? null : _exportLog,
+                    icon: const Icon(Icons.file_download_outlined, size: 18),
+                    label: const Text('导出记录'),
+                  ),
                 ],
               ),
               SizedBox(
-                height: 140,
-                child: TextField(
-                  controller: _logController,
-                  readOnly: true,
-                  maxLines: null,
-                  expands: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                height: 220,
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: TextField(
+                    controller: _logController,
+                    readOnly: true,
+                    maxLines: null,
+                    expands: true,
+                    scrollPhysics: const AlwaysScrollableScrollPhysics(),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    style:
+                        const TextStyle(fontFamily: 'Consolas', fontSize: 12),
                   ),
-                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
                 ),
               ),
             ],
