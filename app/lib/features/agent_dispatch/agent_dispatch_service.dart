@@ -95,15 +95,19 @@ class AgentDispatchService {
   void appendLog(
     String message, {
     AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
+    AgentDispatchLogSource source = AgentDispatchLogSource.system,
   }) {
     final now = DateTime.now();
     final formatted = message
         .split(RegExp(r'\r?\n'))
-        .map((part) => AgentDispatchLogEntry(part, level: level).format(now))
+        .map(
+          (part) => AgentDispatchLogEntry(part, level: level, source: source)
+              .format(now),
+        )
         .join('\n');
     _logText = _logText.isEmpty ? formatted : '$_logText\n$formatted';
     _logHydrated = true;
-    _notifyLog(AgentDispatchLogEntry(message, level: level));
+    _notifyLog(AgentDispatchLogEntry(message, level: level, source: source));
     _logSaveQueue = _logSaveQueue.then((_) async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.saveAgentDispatchLog(_logText);
@@ -121,8 +125,9 @@ class AgentDispatchService {
   void _emitLog(
     String message, {
     AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
+    AgentDispatchLogSource source = AgentDispatchLogSource.system,
   }) {
-    appendLog(message, level: level);
+    appendLog(message, level: level, source: source);
   }
 
   /// 立即停止当前 Worker 及其 SDK/CLI 子进程，并阻止后续会话启动。
@@ -191,9 +196,10 @@ class AgentDispatchService {
     void log(
       String message, {
       AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
+      AgentDispatchLogSource source = AgentDispatchLogSource.system,
     }) {
-      final entry = AgentDispatchLogEntry(message, level: level);
-      _emitLog(message, level: level);
+      final entry = AgentDispatchLogEntry(message, level: level, source: source);
+      _emitLog(message, level: level, source: source);
       onLog?.call(entry);
     }
 
@@ -253,25 +259,11 @@ class AgentDispatchService {
         },
         onLog: (line) {
           if (_cancelRequested) return;
-          final normalized = line.trimLeft();
-          final level = switch (normalized) {
-            final value when value.startsWith('[success]') =>
-              AgentDispatchLogLevel.success,
-            final value when value.startsWith('[warning]') =>
-              AgentDispatchLogLevel.warning,
-            final value when value.startsWith('[error]') =>
-              AgentDispatchLogLevel.error,
-            final value when value.startsWith('[err]') =>
-              AgentDispatchLogLevel.warning,
-            _ => AgentDispatchLogLevel.info,
-          };
-          final message = normalized.replaceFirst(
-            RegExp(r'^\[(success|warning|error)\]\s*'),
-            '',
-          );
+          final parsed = AgentDispatchLogEntry.parseWorkerLine(line);
           log(
-            message,
-            level: level,
+            parsed.message,
+            level: parsed.level,
+            source: parsed.source,
           );
         },
       );

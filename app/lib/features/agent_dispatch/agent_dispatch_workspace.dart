@@ -192,14 +192,49 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     super.dispose();
   }
 
-  Color _lineColor(BuildContext context, AgentDispatchLogLevel level) {
-    final colors = Theme.of(context).colorScheme;
-    return switch (level) {
-      AgentDispatchLogLevel.info => colors.onSurface,
-      AgentDispatchLogLevel.success => Colors.green.shade700,
-      AgentDispatchLogLevel.warning => Colors.orange.shade800,
-      AgentDispatchLogLevel.error => colors.error,
+  Color _lineColor(
+    BuildContext context,
+    AgentDispatchLogLevel level,
+    AgentDispatchLogSource source,
+  ) {
+    if (level == AgentDispatchLogLevel.error) {
+      return Theme.of(context).colorScheme.error;
+    }
+    if (level == AgentDispatchLogLevel.warning) {
+      return Colors.orange.shade800;
+    }
+    if (level == AgentDispatchLogLevel.success) {
+      return Colors.green.shade700;
+    }
+    return switch (source) {
+      AgentDispatchLogSource.system =>
+        Theme.of(context).colorScheme.onSurfaceVariant,
+      AgentDispatchLogSource.worker => Colors.indigo.shade700,
+      AgentDispatchLogSource.ai => Colors.teal.shade700,
+      AgentDispatchLogSource.mcp => Colors.deepOrange.shade700,
+      AgentDispatchLogSource.shell => Colors.brown.shade700,
     };
+  }
+
+  Widget _sourceLegend(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 4,
+      children: [
+        for (final source in AgentDispatchLogSource.values)
+          Text(
+            source.label,
+            style: style?.copyWith(
+              color: _lineColor(
+                context,
+                AgentDispatchLogLevel.info,
+                source,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -211,7 +246,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
       children: [
         Row(
           children: [
-            const Expanded(child: _PaneTitle(title: '工具对话记录')),
+            const Expanded(child: _PaneTitle(title: '运行日志')),
             IconButton(
               tooltip: '清空记录',
               onPressed: widget.running || !hasLog ? null : widget.onClear,
@@ -229,6 +264,8 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
             ),
           ],
         ),
+        const SizedBox(height: 4),
+        _sourceLegend(context),
         const SizedBox(height: 8),
         if (widget.running) const LinearProgressIndicator(),
         if (widget.running) const SizedBox(height: 8),
@@ -255,6 +292,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
                             color: _lineColor(
                               context,
                               AgentDispatchLogEntry.levelOf(lines[index]),
+                              AgentDispatchLogEntry.sourceOf(lines[index]),
                             ),
                           ),
                         ),

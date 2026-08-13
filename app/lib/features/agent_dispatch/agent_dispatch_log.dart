@@ -1,22 +1,123 @@
 enum AgentDispatchLogLevel { info, success, warning, error }
 
+/// Agent 工作台日志来源，用于区分系统、Worker、AI、MCP 与命令输出。
+enum AgentDispatchLogSource {
+  system,
+  worker,
+  ai,
+  mcp,
+  shell,
+}
+
 class AgentDispatchLogEntry {
-  const AgentDispatchLogEntry(this.message,
-      {this.level = AgentDispatchLogLevel.info});
+  const AgentDispatchLogEntry(
+    this.message, {
+    this.level = AgentDispatchLogLevel.info,
+    this.source = AgentDispatchLogSource.system,
+  });
 
   final String message;
   final AgentDispatchLogLevel level;
+  final AgentDispatchLogSource source;
 
   String format(DateTime time) {
     final stamp = time.toLocal().toIso8601String().substring(11, 19);
-    return '[$stamp] [${level.label}] $message';
+    return '[$stamp] [${source.label}] [${level.label}] $message';
   }
 
-  static AgentDispatchLogLevel levelOf(String line) {
-    for (final level in AgentDispatchLogLevel.values) {
-      if (line.contains('[${level.label}]')) return level;
+  /// 解析 Worker stdout 一行：先级别前缀，再来源前缀，默认来源为 Worker。
+  static AgentDispatchLogEntry parseWorkerLine(String raw) {
+    var line = raw.trimLeft();
+    var level = AgentDispatchLogLevel.info;
+    final levelMatch = RegExp(r'^\[(success|warning|error|err)\]\s*').firstMatch(line);
+    if (levelMatch != null) {
+      level = switch (levelMatch.group(1)) {
+        'success' => AgentDispatchLogLevel.success,
+        'warning' => AgentDispatchLogLevel.warning,
+        'error' => AgentDispatchLogLevel.error,
+        'err' => AgentDispatchLogLevel.warning,
+        _ => AgentDispatchLogLevel.info,
+      };
+      line = line.substring(levelMatch.end);
     }
-    return AgentDispatchLogLevel.info;
+
+    var source = AgentDispatchLogSource.worker;
+    final sourceMatch =
+        RegExp(r'^\[(worker|ai|mcp|shell)\]\s*', caseSensitive: false)
+            .firstMatch(line);
+    if (sourceMatch != null) {
+      source = AgentDispatchLogSource.values.byName(sourceMatch.group(1)!);
+      line = line.substring(sourceMatch.end);
+    }
+
+    return AgentDispatchLogEntry(line, level: level, source: source);
+  }
+
+  static AgentDispatchLogLevel levelOf(String line) =>
+      _parseFormattedLine(line)?.level ?? AgentDispatchLogLevel.info;
+
+  static AgentDispatchLogSource sourceOf(String line) =>
+      _parseFormattedLine(line)?.source ?? _inferLegacySource(line);
+
+  static ({AgentDispatchLogLevel level, AgentDispatchLogSource source})?
+      _parseFormattedLine(String line) {
+    final match = RegExp(
+      r'^\[\d{2}:\d{2}:\d{2}\] \[([^\]]+)\](?: \[([^\]]+)\])? (.*)$',
+    ).firstMatch(line);
+    if (match == null) return null;
+
+    final tag1 = match.group(1)!;
+    final tag2 = match.group(2);
+    final message = match.group(3) ?? '';
+
+    if (tag2 != null) {
+      final source = _sourceFromLabel(tag1);
+      final level = _levelFromLabel(tag2);
+      if (source != null && level != null) {
+        return (level: level, source: source);
+      }
+    }
+
+    final legacyLevel = _levelFromLabel(tag1);
+    if (legacyLevel != null) {
+      return (
+        level: legacyLevel,
+        source: _inferLegacySource(message),
+      );
+    }
+
+    final legacySource = _sourceFromLabel(tag1);
+    if (legacySource != null) {
+      return (level: AgentDispatchLogLevel.info, source: legacySource);
+    }
+
+    return null;
+  }
+
+  static AgentDispatchLogSource _inferLegacySource(String message) {
+    if (message.startsWith('助手：') || message.startsWith('思考中')) {
+      return AgentDispatchLogSource.ai;
+    }
+    if (message.startsWith('工具：')) return AgentDispatchLogSource.mcp;
+    if (message.startsWith('命令：')) return AgentDispatchLogSource.shell;
+    if (message.startsWith('Worker ') || message.contains('Worker ')) {
+      return AgentDispatchLogSource.worker;
+    }
+    return AgentDispatchLogSource.system;
+  }
+
+  static AgentDispatchLogLevel? _levelFromLabel(String label) {
+    for (final level in AgentDispatchLogLevel.values) {
+      if (label == level.label) return level;
+    }
+    return null;
+  }
+
+  static AgentDispatchLogSource? _sourceFromLabel(String label) {
+    for (final source in AgentDispatchLogSource.values) {
+      if (label == source.label) return source;
+    }
+    return null;
   }
 }
 
@@ -26,5 +127,15 @@ extension AgentDispatchLogLevelLabel on AgentDispatchLogLevel {
         AgentDispatchLogLevel.success => '成功',
         AgentDispatchLogLevel.warning => '警告',
         AgentDispatchLogLevel.error => '失败',
+      };
+}
+
+extension AgentDispatchLogSourceLabel on AgentDispatchLogSource {
+  String get label => switch (this) {
+        AgentDispatchLogSource.system => '系统',
+        AgentDispatchLogSource.worker => 'Worker',
+        AgentDispatchLogSource.ai => 'AI',
+        AgentDispatchLogSource.mcp => 'MCP',
+        AgentDispatchLogSource.shell => '命令',
       };
 }

@@ -1,12 +1,13 @@
-import { mkdirSync, writeSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 import { settleWithin } from "./async_limit.js";
 import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
+import { type WorkerLogSource, workerLog } from "./worker_log.js";
 
-function logLine(line: string): void {
-  writeSync(1, `${line}\n`);
+function logLine(line: string, source: WorkerLogSource = "worker"): void {
+  workerLog(line, source);
 }
 
 function clip(text: string, max = 240): string {
@@ -15,7 +16,10 @@ function clip(text: string, max = 240): string {
   return `${compact.slice(0, max)}…`;
 }
 
-function describeStep(step: { type?: unknown; message?: unknown }): string {
+function describeStep(step: { type?: unknown; message?: unknown }): {
+  text: string;
+  source: WorkerLogSource;
+} {
   const type = String(step.type ?? "unknown");
   const message =
     step.message && typeof step.message === "object"
@@ -23,16 +27,25 @@ function describeStep(step: { type?: unknown; message?: unknown }): string {
       : undefined;
   switch (type) {
     case "assistantMessage":
-      return `助手：${clip(String(message?.text ?? ""))}`;
+      return {
+        text: `助手：${clip(String(message?.text ?? ""))}`,
+        source: "ai",
+      };
     case "thinkingMessage":
-      return "思考中…";
+      return { text: "思考中…", source: "ai" };
     case "toolCall":
-      return `工具：${String(message?.type ?? "tool")}`;
+      return {
+        text: `工具：${String(message?.type ?? "tool")}`,
+        source: "mcp",
+      };
     case "shellConversationTurn":
     case "shell":
-      return `命令：${clip(String(message?.command ?? message?.text ?? ""))}`;
+      return {
+        text: `命令：${clip(String(message?.command ?? message?.text ?? ""))}`,
+        source: "shell",
+      };
     default:
-      return `步骤：${type}`;
+      return { text: `步骤：${type}`, source: "worker" };
   }
 }
 
@@ -85,7 +98,10 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
           try {
             stepCount += 1;
             if (step.type === "toolCall") toolCallCount += 1;
-            logLine(describeStep(step as { type?: unknown; message?: unknown }));
+            const described = describeStep(
+              step as { type?: unknown; message?: unknown },
+            );
+            logLine(described.text, described.source);
           } catch {
             logLine("收到一步进度");
           }
