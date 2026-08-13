@@ -13,7 +13,7 @@ Future<List<ChecklistItem>> editChecklistLikeItem({
   final current = items.where((item) => item.id == id).firstOrNull;
   if (current == null) return items;
   final controller = TextEditingController(text: current.text);
-  final dialogResult = await showDialog<String>(
+  final dialogResult = await showDialog<Object?>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(dialogTitle),
@@ -29,9 +29,12 @@ Future<List<ChecklistItem>> editChecklistLikeItem({
       actions: [
         TextButton(
           onPressed: () {
-            // 清空后点取消视为删除；文本非空则丢弃编辑（返回 null）
+            // 清空后点取消视为删除；文本非空则明确丢弃编辑
             final text = controller.text.trim();
-            Navigator.pop(ctx, text.isEmpty ? '' : null);
+            Navigator.pop(
+              ctx,
+              text.isEmpty ? '' : checklistItemEditCancelled,
+            );
           },
           child: const Text('取消'),
         ),

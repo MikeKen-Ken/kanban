@@ -14,10 +14,20 @@ void main() {
       );
     });
 
-    test('点击遮罩关闭但输入仍非空时保留取消语义', () {
+    test('点击遮罩关闭但输入仍非空时保存当前输入', () {
       expect(
         resolveChecklistItemDialogResult(
           dialogResult: null,
+          draftText: '尚未保存的修改',
+        ),
+        '尚未保存的修改',
+      );
+    });
+
+    test('明确点击取消且文本非空时丢弃编辑', () {
+      expect(
+        resolveChecklistItemDialogResult(
+          dialogResult: checklistItemEditCancelled,
           draftText: '尚未保存的修改',
         ),
         isNull,
