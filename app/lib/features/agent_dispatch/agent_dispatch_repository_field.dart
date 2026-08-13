@@ -32,9 +32,20 @@ class AgentDispatchRepositoryField extends StatelessWidget {
             decoration: InputDecoration(
               hintText: '本机仓库根目录',
               errorText: errorText,
+              suffixIconConstraints: const BoxConstraints(
+                minWidth: 48,
+                maxWidth: 48,
+                minHeight: 48,
+                maxHeight: 48,
+              ),
               suffixIcon: PopupMenuButton<String>(
                 tooltip: '展开历史仓库',
                 enabled: enabled && paths.isNotEmpty,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                constraints: const BoxConstraints(
+                  minWidth: 280,
+                  maxWidth: 440,
+                ),
                 icon: const Icon(Icons.arrow_drop_down),
                 onSelected: (path) {
                   controller.text = path;
@@ -44,8 +55,8 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                   for (final path in paths)
                     PopupMenuItem(
                       value: path,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 440),
+                      child: SizedBox(
+                        width: 320,
                         child: Row(
                           children: [
                             Expanded(

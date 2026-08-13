@@ -201,29 +201,42 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                   hintText: available
                       ? '输入新 Key 可替换当前 Key'
                       : '粘贴 Cursor API Key',
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 48,
+                    maxWidth: 48,
+                    minHeight: 48,
+                    maxHeight: 48,
+                  ),
                   suffixIcon: PopupMenuButton<String>(
                     tooltip: '展开已保存 Key',
                     enabled: enabled && _keys.isNotEmpty,
-                    padding: EdgeInsets.zero,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    constraints: const BoxConstraints(
+                      minWidth: 280,
+                      maxWidth: 440,
+                    ),
                     icon: const Icon(Icons.arrow_drop_down),
                     onSelected: _selectKey,
                     itemBuilder: (context) => [
                       for (final item in _keys)
                         PopupMenuItem(
                           value: item.id,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 440),
+                          child: SizedBox(
+                            width: 320,
                             child: Row(
                               children: [
-                                if (item.isActive)
-                                  Icon(
-                                    Icons.check,
-                                    size: 18,
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                  )
-                                else
-                                  const SizedBox(width: 18),
+                                SizedBox(
+                                  width: 18,
+                                  child: item.isActive
+                                      ? Icon(
+                                          Icons.check,
+                                          size: 18,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                        )
+                                      : null,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
