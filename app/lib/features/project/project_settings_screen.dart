@@ -272,11 +272,15 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(
-                        height: 160,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: settings.hasBackgroundImage
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 260),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 10,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: settings.hasBackgroundImage
                               ? Stack(
                                   fit: StackFit.expand,
                                   children: [
@@ -316,6 +320,8 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                                     ),
                                   ),
                                 ),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
