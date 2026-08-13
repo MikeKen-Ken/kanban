@@ -5,6 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_windows_job.dart';
 
 void main() {
+  test('Job 限制包含关闭时终止，并允许子进程脱离', () {
+    expect(
+      AgentDispatchWindowsJob.jobLimitFlags,
+      0x00002000 | 0x00000800,
+    );
+  });
+
   test('关闭 Job Object 会终止已绑定的 Worker', () async {
     if (!Platform.isWindows) return;
 

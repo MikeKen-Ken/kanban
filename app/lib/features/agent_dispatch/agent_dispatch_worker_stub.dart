@@ -73,3 +73,6 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
   void Function(String line)? onLog,
 }) async =>
     (ok: false, message: '当前平台不支持');
+
+String describeWorkerExitWithoutOutput(int code) =>
+    'worker 退出码 $code，且无 out.json';

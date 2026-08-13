@@ -251,4 +251,12 @@ void main() {
     expect(keys.single.label, '主账号');
     expect(await credentials.readStoredCursorApiKey(), 'updated-key');
   });
+
+  test('访问冲突退出码给出明确说明', () {
+    expect(
+      describeWorkerExitWithoutOutput(-1073741819),
+      contains('0xC0000005'),
+    );
+    expect(describeWorkerExitWithoutOutput(1), contains('退出码 1'));
+  });
 }

@@ -287,8 +287,10 @@ async function runCodex(job) {
 }
 
 // src/run_cursor.ts
-import { writeSync } from "node:fs";
-import { Agent, CursorAgentError } from "@cursor/sdk";
+import { mkdirSync, writeSync } from "node:fs";
+import { homedir } from "node:os";
+import { join as join2 } from "node:path";
+import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 function logLine(line) {
   writeSync(1, `${line}
 `);
@@ -330,6 +332,9 @@ async function runCursor(job) {
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
+    const storeDir = join2(homedir(), ".cursor", "kanban-agent-jsonl-store");
+    mkdirSync(storeDir, { recursive: true });
+    logLine(`\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF08\u907F\u514D Windows \u539F\u751F\u5D29\u6E83\uFF09`);
     const agent = await Agent.create({
       apiKey,
       model: {
@@ -338,7 +343,9 @@ async function runCursor(job) {
       },
       local: {
         cwd: job.cwd,
-        settingSources: ["user", "project"]
+        settingSources: ["user", "project"],
+        store: new JsonlLocalAgentStore(storeDir),
+        sandboxOptions: { enabled: false }
       }
     });
     try {

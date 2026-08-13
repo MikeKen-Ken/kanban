@@ -11,10 +11,16 @@ class AgentDispatchWindowsJob {
 
   static const _jobObjectBasicLimitInformation = 2;
   static const _jobObjectLimitKillOnJobClose = 0x00002000;
+  /// 允许 Cursor 本地运行时用 CREATE_BREAKAWAY_FROM_JOB 自建沙箱 Job。
+  static const _jobObjectLimitBreakawayOk = 0x00000800;
   static const _processTerminate = 0x0001;
   static const _processSetQuota = 0x0100;
   static const _basicLimitInformationSize = 64;
   static const _limitFlagsOffset = 16;
+
+  /// 关闭 Job 时杀掉仍在 Job 内的进程，同时允许子进程主动脱离。
+  static const jobLimitFlags =
+      _jobObjectLimitKillOnJobClose | _jobObjectLimitBreakawayOk;
 
   static final DynamicLibrary _kernel32 = DynamicLibrary.open('kernel32.dll');
   static final _createJobObject =
@@ -57,8 +63,7 @@ class AgentDispatchWindowsJob {
       }
 
       limitInfo = calloc<Uint8>(_basicLimitInformationSize);
-      (limitInfo + _limitFlagsOffset).cast<Uint32>().value =
-          _jobObjectLimitKillOnJobClose;
+      (limitInfo + _limitFlagsOffset).cast<Uint32>().value = jobLimitFlags;
       if (_setInformationJobObject(
             jobHandle,
             _jobObjectBasicLimitInformation,

@@ -200,7 +200,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     }
     return AgentWorkerResult(
       ok: code == 0,
-      error: code == 0 ? null : 'worker 退出码 $code，且无 out.json',
+      error: code == 0 ? null : describeWorkerExitWithoutOutput(code),
       exitCode: code,
     );
   } finally {
@@ -412,6 +412,16 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     return (ok: false, message: '构建完成但仍未找到 dist/cli.js');
   }
   return (ok: true, message: 'Worker 已修复：$cli');
+}
+
+/// Worker 在写出 out.json 前被系统杀掉时的说明。
+String describeWorkerExitWithoutOutput(int code) {
+  // Windows STATUS_ACCESS_VIOLATION
+  if (code == -1073741819) {
+    return 'worker 在 Windows 上发生访问冲突（0xC0000005）后退出，未能写出 out.json。'
+        '通常是 Cursor 本地运行时（沙箱/SQLite）崩溃，而不是业务逻辑返回了错误码。';
+  }
+  return 'worker 退出码 $code，且无 out.json';
 }
 
 Map<String, String> _workerEnvironment({
