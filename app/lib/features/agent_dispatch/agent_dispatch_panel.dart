@@ -752,14 +752,17 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               ),
             ],
           ),
-          skillAndWorker: AgentDispatchSkillWorkerPane(
+          worker: AgentDispatchWorkerPane(
+            workerStatus: _workerStatus,
+            enabled: !_running && !_busy,
+            onFixWorker: _fixWorker,
+          ),
+          skill: AgentDispatchSkillPane(
             skillPath: skillPath,
             skillPreview: _skillPreview,
-            workerStatus: _workerStatus,
             enabled: !_running && !_busy,
             onOpenSkillDirectory: _openSkillDirectory,
             onRefreshSkill: _refreshSkillPreview,
-            onFixWorker: _fixWorker,
           ),
           log: AgentDispatchLogPane(
             controller: _logController,

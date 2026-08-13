@@ -4,18 +4,20 @@ import 'agent_dispatch_log.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
-/// 宽窗口使用「配置 / Skill 与 Worker / 对话记录」三列布局；窄窗口则
+/// 宽窗口使用「Worker / Skill / 配置 / 对话记录」四列布局；窄窗口则
 /// 回退为纵向滚动，避免字段被压缩到不可用。
 class AgentDispatchWorkspace extends StatelessWidget {
   const AgentDispatchWorkspace({
+    required this.worker,
+    required this.skill,
     required this.settings,
-    required this.skillAndWorker,
     required this.log,
     super.key,
   });
 
+  final Widget worker;
+  final Widget skill;
   final Widget settings;
-  final Widget skillAndWorker;
   final Widget log;
 
   @override
@@ -26,6 +28,10 @@ class AgentDispatchWorkspace extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Expanded(flex: 6, child: worker),
+              const VerticalDivider(width: 25),
+              Expanded(flex: 9, child: skill),
+              const VerticalDivider(width: 25),
               Expanded(
                 flex: 10,
                 child: _ScrollablePane(
@@ -33,8 +39,6 @@ class AgentDispatchWorkspace extends StatelessWidget {
                   child: settings,
                 ),
               ),
-              const VerticalDivider(width: 25),
-              Expanded(flex: 9, child: skillAndWorker),
               const VerticalDivider(width: 25),
               Expanded(flex: 12, child: log),
             ],
@@ -45,11 +49,13 @@ class AgentDispatchWorkspace extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              SizedBox(height: 160, child: worker),
+              const Divider(height: 32),
+              SizedBox(height: 400, child: skill),
+              const Divider(height: 32),
               const _PaneTitle(title: '调度配置'),
               const SizedBox(height: 12),
               settings,
-              const Divider(height: 32),
-              SizedBox(height: 400, child: skillAndWorker),
               const Divider(height: 32),
               SizedBox(height: 400, child: log),
             ],
@@ -60,25 +66,55 @@ class AgentDispatchWorkspace extends StatelessWidget {
   }
 }
 
-class AgentDispatchSkillWorkerPane extends StatelessWidget {
-  const AgentDispatchSkillWorkerPane({
+class AgentDispatchWorkerPane extends StatelessWidget {
+  const AgentDispatchWorkerPane({
+    required this.workerStatus,
+    required this.enabled,
+    required this.onFixWorker,
+    super.key,
+  });
+
+  final String? workerStatus;
+  final bool enabled;
+  final VoidCallback onFixWorker;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _PaneTitle(title: 'Worker'),
+        const SizedBox(height: 12),
+        SelectableText(workerStatus ?? '检查中…', style: textTheme.bodySmall),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: enabled ? onFixWorker : null,
+            icon: const Icon(Icons.build_outlined, size: 18),
+            label: const Text('一键修复 Worker'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class AgentDispatchSkillPane extends StatelessWidget {
+  const AgentDispatchSkillPane({
     required this.skillPath,
     required this.skillPreview,
-    required this.workerStatus,
     required this.enabled,
     required this.onOpenSkillDirectory,
     required this.onRefreshSkill,
-    required this.onFixWorker,
     super.key,
   });
 
   final String skillPath;
   final String? skillPreview;
-  final String? workerStatus;
   final bool enabled;
   final VoidCallback onOpenSkillDirectory;
   final VoidCallback onRefreshSkill;
-  final VoidCallback onFixWorker;
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +124,7 @@ class AgentDispatchSkillWorkerPane extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Expanded(child: _PaneTitle(title: 'Skill 与 Worker')),
+            const Expanded(child: _PaneTitle(title: 'Skill')),
             IconButton(
               tooltip: '打开 Skill 目录',
               onPressed: enabled ? onOpenSkillDirectory : null,
@@ -121,18 +157,6 @@ class AgentDispatchSkillWorkerPane extends StatelessWidget {
                 style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Text('Worker', style: textTheme.labelLarge),
-        const SizedBox(height: 4),
-        SelectableText(workerStatus ?? '检查中…', style: textTheme.bodySmall),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: enabled ? onFixWorker : null,
-            icon: const Icon(Icons.build_outlined, size: 18),
-            label: const Text('一键修复 Worker'),
           ),
         ),
       ],
