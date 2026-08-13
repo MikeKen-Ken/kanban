@@ -1,7 +1,7 @@
 // src/cli.ts
 import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { resolve } from "node:path";
-import { Cursor as Cursor3 } from "@cursor/sdk";
+import { Cursor as Cursor2 } from "@cursor/sdk";
 
 // src/cursor_usage.ts
 import { Cursor } from "@cursor/sdk";
@@ -290,7 +290,7 @@ async function runCodex(job) {
 import { mkdirSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { join as join2 } from "node:path";
-import { Agent, Cursor as Cursor2, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
+import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 function logLine(line) {
   writeSync(1, `${line}
 `);
@@ -334,9 +334,8 @@ async function runCursor(job) {
     let toolCallCount = 0;
     const storeDir = join2(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
-    Cursor2.configure({ local: { useHttp1ForAgent: true } });
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF1BHTTP/1.1\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F MCP\uFF08${job.mcpEndpoint}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF1B\u7F51\u7EDC\u4F20\u8F93\u4F7F\u7528 SDK \u9ED8\u8BA4\u914D\u7F6E\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F MCP\uFF08${job.mcpEndpoint}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP`
     );
     const agent = await Agent.create({
       apiKey,
@@ -585,7 +584,7 @@ async function listModels() {
   }
   let models;
   try {
-    models = await withRetry("\u62C9\u53D6\u6A21\u578B\u5217\u8868", () => Cursor3.models.list({ apiKey }));
+    models = await withRetry("\u62C9\u53D6\u6A21\u578B\u5217\u8868", () => Cursor2.models.list({ apiKey }));
   } catch (err) {
     console.error(formatListModelsError(err));
     process.exitCode = 2;

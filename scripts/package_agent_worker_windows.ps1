@@ -5,8 +5,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $workerRoot = Join-Path $PSScriptRoot 'agent_dispatch'
+$repositoryRoot = Split-Path $PSScriptRoot -Parent
+$nodeVersionFile = Join-Path $repositoryRoot '.node-version'
 $resolvedDestination = [System.IO.Path]::GetFullPath($Destination)
 $runtimeDestination = Join-Path $resolvedDestination 'runtime'
+$nodeExecutable = (Get-Command node.exe -ErrorAction Stop).Source
+$expectedNodeVersion = (Get-Content -LiteralPath $nodeVersionFile -Raw).Trim()
+$actualNodeVersion = (& $nodeExecutable --version).Trim().TrimStart('v')
+if ($LASTEXITCODE -ne 0 -or $actualNodeVersion -ne $expectedNodeVersion) {
+    throw "Agent Worker 要求 Node.js $expectedNodeVersion，当前为 $actualNodeVersion"
+}
 
 function Invoke-NpmCommand {
     param([string[]]$Arguments)
@@ -35,7 +43,6 @@ Copy-Item (Join-Path $workerRoot 'package-lock.json') $resolvedDestination
 Copy-Item (Join-Path $workerRoot 'dist') $resolvedDestination -Recurse
 Copy-Item (Join-Path $workerRoot 'node_modules') $resolvedDestination -Recurse
 
-$nodeExecutable = (Get-Command node.exe -ErrorAction Stop).Source
 Copy-Item $nodeExecutable (Join-Path $runtimeDestination 'node.exe')
 
 $cliPath = Join-Path $resolvedDestination 'dist\cli.js'
@@ -46,5 +53,19 @@ $bundledNode = Join-Path $runtimeDestination 'node.exe'
 if (!(Test-Path $cliPath) -or !(Test-Path $sdkPath) -or !(Test-Path $mcpClientPath) -or !(Test-Path $codexPath) -or !(Test-Path $bundledNode)) {
     throw 'Agent Worker 发布内容不完整'
 }
+
+$treeSitterBinding = Join-Path $resolvedDestination 'node_modules\@cursor\sdk-win32-x64\vendor\tree-sitter\binding.node'
+$treeSitterBashBinding = Join-Path $resolvedDestination 'node_modules\@cursor\sdk-win32-x64\vendor\tree-sitter-bash\binding.node'
+foreach ($binding in @($treeSitterBinding, $treeSitterBashBinding)) {
+    if (!(Test-Path -LiteralPath $binding)) {
+        throw "Cursor SDK 原生模块缺失：$binding"
+    }
+    & $bundledNode -e 'require(process.argv[1])' $binding
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cursor SDK 原生模块与 Node.js $expectedNodeVersion 不兼容：$binding（退出码 $LASTEXITCODE）"
+    }
+}
+
+Write-Host "便携 Node.js $expectedNodeVersion 与 Cursor SDK 原生模块校验通过"
 
 Write-Host "Agent Worker 已打包到：$resolvedDestination"

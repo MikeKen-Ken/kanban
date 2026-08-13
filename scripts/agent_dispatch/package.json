@@ -9,10 +9,10 @@
     "start": "node dist/cli.js"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=24.18 <25"
   },
   "dependencies": {
-    "@cursor/sdk": "^1.0.0",
+    "@cursor/sdk": "1.0.28",
     "@modelcontextprotocol/client": "2.0.0",
     "@openai/codex": "^0.147.0"
   },

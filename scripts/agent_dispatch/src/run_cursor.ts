@@ -1,7 +1,7 @@
 import { mkdirSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Agent, Cursor, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
+import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 import { settleWithin } from "./async_limit.js";
 import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
 
@@ -55,9 +55,8 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
     let toolCallCount = 0;
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
-    Cursor.configure({ local: { useHttp1ForAgent: true } });
     logLine(
-      `本地运行：JSONL 存储=${storeDir}；沙箱关闭；HTTP/1.1；` +
+      `本地运行：JSONL 存储=${storeDir}；沙箱关闭；网络传输使用 SDK 默认配置；` +
         `仅注入看板 MCP（${job.mcpEndpoint}），不加载用户级 MCP`,
     );
     const agent = await Agent.create({
