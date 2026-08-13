@@ -258,4 +258,54 @@ void main() {
       isTrue,
     );
   });
+
+  test('上传后本机无文件差异则不排队再推', () {
+    final uploaded = _workspace(
+      projects: [_entry('p1')],
+      boards: {
+        'p1': _board('p1'),
+      },
+    );
+    expect(
+      shouldQueueFollowUpPushAfterUpload(
+        uploaded: uploaded,
+        latest: uploaded,
+      ),
+      isFalse,
+    );
+  });
+
+  test('上传后仅新增本地列才排队增量推送，未改文件不算差异', () {
+    final uploaded = _workspace(
+      projects: [_entry('p1')],
+      boards: {
+        'p1': _board(
+          'p1',
+          columns: [_column('a'), _column('b')],
+        ),
+      },
+    );
+    final latest = _workspace(
+      projects: [_entry('p1')],
+      boards: {
+        'p1': _board(
+          'p1',
+          columns: [_column('a'), _column('b'), _column('c')],
+          revision: 2,
+        ),
+      },
+    );
+    expect(
+      shouldQueueFollowUpPushAfterUpload(
+        uploaded: uploaded,
+        latest: latest,
+      ),
+      isTrue,
+    );
+    expect(
+      countPendingSyncUploads(workspace: latest, baseline: uploaded),
+      2,
+      reason: '看板元数据 + 新列，不应把未改的 a/b 列算进去',
+    );
+  });
 }

@@ -220,6 +220,21 @@ int countPendingSyncUploads({
   ).items.length;
 }
 
+/// 上传成功后是否还要再推一轮。
+///
+/// 已上传快照必须写入 SyncBase（即使本机其间又有新写入）。
+/// 只有相对该快照仍有 JSON 文件差异时才排队增量推送，避免整表重传。
+bool shouldQueueFollowUpPushAfterUpload({
+  required ProjectWorkspaceSnapshot uploaded,
+  required ProjectWorkspaceSnapshot latest,
+}) {
+  return countPendingSyncUploads(
+        workspace: latest,
+        baseline: uploaded,
+      ) >
+      0;
+}
+
 /// 供测试与调试：汇总计划中涉及的项目 id
 Set<String> syncUploadPlanTouchedProjectIds(SyncUploadPlan plan) {
   return {

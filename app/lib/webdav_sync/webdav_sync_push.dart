@@ -237,13 +237,16 @@ mixin _WebDavSyncPush
       }
 
       _setProgress(const SyncProgress(phase: SyncPhase.finalizing));
-      // 仅当本机工作区仍与已上传快照一致时推进 SyncBase，避免覆盖同步期间的新本地写入。
+      // 已上传内容就是新的合并基线。本机若其间又有写入，只排队增量补传，
+      // 不能卡住旧 SyncBase，否则下一轮会把刚传过的文件再全量上传。
       await _withLocalTransaction(() async {
         final latest = await _loadWorkspace();
-        if (_workspaceJsonEquals(latest, captured)) {
-          await _syncBaseStore.save(captured);
-        } else {
-          print('推送后本地已有新变更，保留 SyncBase 并排队再次推送');
+        await _syncBaseStore.save(captured);
+        if (shouldQueueFollowUpPushAfterUpload(
+          uploaded: captured,
+          latest: latest,
+        )) {
+          print('推送后本地已有新变更，已推进 SyncBase，排队增量推送');
           _pushPending = true;
           _pushPendingForce = _pushPendingForce || force;
         }
@@ -270,7 +273,9 @@ mixin _WebDavSyncPush
       }
     } finally {
       _pushInFlight = false;
-      _clearProgress();
+      if (!_pushPending && !_pullPending) {
+        _clearProgress();
+      }
       if (_cancelRequested) {
         _clearCancelFlag();
       }

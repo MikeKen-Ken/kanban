@@ -343,8 +343,8 @@ mixin _WebDavSyncPull
 
       _applyAttachmentSyncWarning(attachmentFailures);
 
-      // note: 合并结果与远端一致时跳过 JSON 回推，但仍需补传本地有、远端缺的附件
-      if (_workspaceJsonEquals(merged, remote)) {
+      // note: 按文件级差异判断；整表 JSON 编码顺序不同不应当触发整表回推
+      if (countPendingSyncUploads(workspace: merged, baseline: remote) == 0) {
         if (shouldReconcileAttachmentsWhenJsonEquals(
               jsonEquals: true,
               attachmentSyncAvailable: _attachmentSync.isAvailable,
@@ -401,7 +401,9 @@ mixin _WebDavSyncPull
       }
     } finally {
       _syncInFlight = false;
-      _clearProgress();
+      if (!_pushPending && !_pullPending && !_pushInFlight) {
+        _clearProgress();
+      }
       if (_cancelRequested) {
         _clearCancelFlag();
       }

@@ -98,6 +98,31 @@ void main() {
     expect(merged.columns.length, 6);
   });
 
+  test('两侧看板 JSON 相同时直接返回本地，不重建列', () {
+    final local = _board(
+      revision: 2,
+      updatedAt: 100,
+      columns: [
+        KanbanColumn(
+          id: 'todo',
+          title: '待办',
+          order: 0,
+          cards: [_card(id: 'c1', title: '同一张卡')],
+        ),
+      ],
+    );
+    final remote = KanbanBoard.fromJson(local.toJson());
+    final base = _board(
+      revision: 1,
+      updatedAt: 50,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: []),
+      ],
+    );
+    final merged = mergeBoards(local: local, remote: remote, base: base);
+    expect(identical(merged, local), isTrue);
+  });
+
   test('同字段冲突 → 有 conflictSide 且主侧为较新', () {
     final local = _board(
       revision: 2,

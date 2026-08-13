@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../models/kanban_models.dart';
 import 'card_merge.dart';
 
@@ -13,6 +15,10 @@ KanbanBoard mergeBoards({
   required KanbanBoard remote,
   KanbanBoard? base,
 }) {
+  // 两侧内容已一致时不要重建列/卡片，避免无意义的序列化差异触发整表回推。
+  if (jsonEncode(local.toJson()) == jsonEncode(remote.toJson())) {
+    return local;
+  }
   final localCards = indexCards(local);
   final remoteCards = indexCards(remote);
   final baseCards = base == null ? <String, PlacedCard>{} : indexCards(base);
