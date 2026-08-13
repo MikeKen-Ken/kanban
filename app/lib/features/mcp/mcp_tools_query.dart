@@ -13,7 +13,7 @@ import 'mcp_tool_results.dart';
 void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'pick_next_card',
-    description: '取下一条可实施卡并自动移入「进行中」：优先「待办」最新未完成卡，否则「待返工」。'
+    description: '取下一条可实施卡并自动移入「进行中」：优先「待返工」最新未完成卡，否则「待办」。'
         '默认 includeWorkItems=true，一次返回 workItems；有图片/文件时直接内联内容'
         '（图片为 ImageContent，文件为 contentBase64），无需再 list/read。'
         '仅 peek 时可传 includeWorkItems=false。'

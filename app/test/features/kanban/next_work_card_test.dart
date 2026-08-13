@@ -37,7 +37,7 @@ KanbanBoard _board(List<KanbanColumn> columns) {
 }
 
 void main() {
-  test('待办有未完成卡时按 updatedAt 取最新，忽略已完成', () {
+  test('待返工有未完成卡时优先取最新，忽略待办与已完成', () {
     final board = _board([
       KanbanColumn(
         id: 'todo',
@@ -55,7 +55,35 @@ void main() {
         title: '待返工',
         order: 1,
         cards: [
-          _card(id: 'r', title: '返工更新', updatedAt: 1000),
+          _card(id: 'r1', title: '旧返工', updatedAt: 5),
+          _card(id: 'r2', title: '新返工', updatedAt: 8),
+        ],
+      ),
+    ]);
+
+    final picked = pickNextWorkCard(board);
+    expect(picked, isNotNull);
+    expect(picked!.sourceColumn, '待返工');
+    expect(picked.card.id, 'r2');
+  });
+
+  test('待返工无未完成卡时回退到待办最新', () {
+    final board = _board([
+      KanbanColumn(
+        id: 'todo',
+        title: '待办',
+        order: 0,
+        cards: [
+          _card(id: 'a', title: '旧', updatedAt: 10),
+          _card(id: 'b', title: '新', updatedAt: 30),
+        ],
+      ),
+      KanbanColumn(
+        id: 'rework',
+        title: '待返工',
+        order: 1,
+        cards: [
+          _card(id: 'done', title: '完', updatedAt: 50, completed: true),
         ],
       ),
     ]);
@@ -66,7 +94,7 @@ void main() {
     expect(picked.card.id, 'b');
   });
 
-  test('待办无未完成卡时回退到待返工最新', () {
+  test('待办无未完成卡时取待返工最新', () {
     final board = _board([
       KanbanColumn(
         id: 'todo',

@@ -29,7 +29,7 @@ Future<CallToolResult> mcpPeekNextCard(
 
 /// 取下一条可实施卡，并自动移入「进行中」。
 ///
-/// 选取规则与 [pickNextWorkCard] 一致：优先「待办」最新未完成卡，否则「待返工」。
+/// 选取规则与 [pickNextWorkCard] 一致：优先「待返工」最新未完成卡，否则「待办」。
 /// 默认 [includeWorkItems]=true，一次返回实施范围与附件内容；仅 peek 时可传 false。
 Future<CallToolResult> mcpPickNextCard(
   BoardController controller, {

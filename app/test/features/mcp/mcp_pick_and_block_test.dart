@@ -164,6 +164,26 @@ void main() {
     expect(payload['attachmentsNote'], contains('已内联'));
   });
 
+  test('pick_next_card 待办与待返工均有卡时优先待返工', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final reworkColumn = controller.board!.columns
+        .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
+    final todoCardId = await controller.addCard(todoColumn.id, '待办卡');
+    final reworkCardId = await controller.addCard(reworkColumn.id, '返工卡');
+    expect(todoCardId, isNotNull);
+    expect(reworkCardId, isNotNull);
+
+    final result = await mcpPickNextCard(controller);
+    expect(result.isError, isNot(true));
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['found'], isTrue);
+    expect(payload['cardId'], reworkCardId);
+    expect(payload['sourceColumn'], '待返工');
+    expect(payload['workMode'], 'normal');
+    expect(payload['movedToDoing'], isFalse);
+  });
+
   test('pick_next_card 待办空时取待返工且 workItems 含背景', () async {
     final reworkColumn = controller.board!.columns
         .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);

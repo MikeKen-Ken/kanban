@@ -39,18 +39,10 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
   return best;
 }
 
-/// 「待办」最新未完成卡；若无则「待返工」最新未完成卡。
+/// 「待返工」最新未完成卡；若无则「待办」最新未完成卡。
 ({KanbanColumn column, KanbanCard card, String sourceColumn})? pickNextWorkCard(
   KanbanBoard board,
 ) {
-  final todo = findTodoColumn(board.columns);
-  if (todo != null) {
-    final card = pickLatestIncompleteCard(todo.cards);
-    if (card != null) {
-      return (column: todo, card: card, sourceColumn: defaultTodoColumnTitle);
-    }
-  }
-
   final rework = findReworkColumn(board.columns);
   if (rework != null) {
     final card = pickLatestIncompleteCard(rework.cards);
@@ -60,6 +52,14 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
         card: card,
         sourceColumn: KanbanBoard.defaultReworkColumnTitle,
       );
+    }
+  }
+
+  final todo = findTodoColumn(board.columns);
+  if (todo != null) {
+    final card = pickLatestIncompleteCard(todo.cards);
+    if (card != null) {
+      return (column: todo, card: card, sourceColumn: defaultTodoColumnTitle);
     }
   }
 
