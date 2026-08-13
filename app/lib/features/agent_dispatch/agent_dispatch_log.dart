@@ -139,3 +139,40 @@ extension AgentDispatchLogSourceLabel on AgentDispatchLogSource {
         AgentDispatchLogSource.shell => '命令',
       };
 }
+
+/// 运行日志中会话指标（token、耗时等）的高亮分段，供界面重点着色。
+class AgentDispatchLogHighlight {
+  AgentDispatchLogHighlight._();
+
+  static final RegExp _emphasisPattern = RegExp(
+    r'本会话 token|'
+    r'\b(?:input|output|total)=\d+|'
+    r'\b(?:steps|tools|elapsedMs)=\d+|'
+    r'批次 id：\S+|'
+    r'Cursor run id=\S+|'
+    r'已处理 \d+ 张|'
+    r'耗时 \d+ 秒',
+  );
+
+  /// 将一行日志拆成普通片段与需重点着色的片段。
+  static List<({String text, bool emphasis})> segments(String line) {
+    final matches = _emphasisPattern.allMatches(line).toList();
+    if (matches.isEmpty) {
+      return [(text: line, emphasis: false)];
+    }
+
+    final result = <({String text, bool emphasis})>[];
+    var cursor = 0;
+    for (final match in matches) {
+      if (match.start > cursor) {
+        result.add((text: line.substring(cursor, match.start), emphasis: false));
+      }
+      result.add((text: match.group(0)!, emphasis: true));
+      cursor = match.end;
+    }
+    if (cursor < line.length) {
+      result.add((text: line.substring(cursor), emphasis: false));
+    }
+    return result;
+  }
+}

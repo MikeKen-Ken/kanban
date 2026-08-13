@@ -192,6 +192,25 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     super.dispose();
   }
 
+  List<TextSpan> _lineSpans(BuildContext context, String line) {
+    final level = AgentDispatchLogEntry.levelOf(line);
+    final source = AgentDispatchLogEntry.sourceOf(line);
+    final baseColor = _lineColor(context, level, source);
+    final emphasisColor = Theme.of(context).colorScheme.primary;
+    const baseStyle = TextStyle(fontFamily: 'Consolas', fontSize: 12);
+
+    return [
+      for (final segment in AgentDispatchLogHighlight.segments(line))
+        TextSpan(
+          text: segment.text,
+          style: baseStyle.copyWith(
+            color: segment.emphasis ? emphasisColor : baseColor,
+            fontWeight: segment.emphasis ? FontWeight.w600 : null,
+          ),
+        ),
+    ];
+  }
+
   Color _lineColor(
     BuildContext context,
     AgentDispatchLogLevel level,
@@ -284,18 +303,10 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
                 child: SelectableText.rich(
                   TextSpan(
                     children: [
-                      for (var index = 0; index < lines.length; index++)
-                        TextSpan(
-                          text:
-                              '${lines[index]}${index == lines.length - 1 ? '' : '\n'}',
-                          style: TextStyle(
-                            color: _lineColor(
-                              context,
-                              AgentDispatchLogEntry.levelOf(lines[index]),
-                              AgentDispatchLogEntry.sourceOf(lines[index]),
-                            ),
-                          ),
-                        ),
+                      for (var index = 0; index < lines.length; index++) ...[
+                        ..._lineSpans(context, lines[index]),
+                        if (index < lines.length - 1) const TextSpan(text: '\n'),
+                      ],
                     ],
                   ),
                   style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),

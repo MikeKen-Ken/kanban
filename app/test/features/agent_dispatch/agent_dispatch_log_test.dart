@@ -28,4 +28,20 @@ void main() {
     expect(entry.source, AgentDispatchLogSource.ai);
     expect(entry.message, '助手：已完成');
   });
+
+  test('会话指标行拆出重点着色片段', () {
+    final line =
+        '[09:08:07] [Worker] [信息] 本会话 token：input=12 output=34 total=46';
+    final segments = AgentDispatchLogHighlight.segments(line);
+
+    expect(
+      segments.where((segment) => segment.emphasis).map((segment) => segment.text),
+      ['本会话 token', 'input=12', 'output=34', 'total=46'],
+    );
+  });
+
+  test('普通日志行不拆分重点片段', () {
+    final segments = AgentDispatchLogHighlight.segments('助手：正在处理任务');
+    expect(segments, [(text: '助手：正在处理任务', emphasis: false)]);
+  });
 }
