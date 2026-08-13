@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 import { settleWithin } from "./async_limit.js";
+import type { WorkerCancellation } from "./cancellation.js";
 import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
 import { type WorkerLogSource, workerLog } from "./worker_log.js";
 
@@ -49,7 +50,10 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
   }
 }
 
-export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
+export async function runCursor(
+  job: DispatchJob,
+  cancellation?: WorkerCancellation,
+): Promise<DispatchResult> {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
     return {
@@ -107,7 +111,17 @@ export async function runCursor(job: DispatchJob): Promise<DispatchResult> {
           }
         },
       });
+      cancellation?.onCancel(() => {
+        void run.cancel().catch(() => undefined);
+      });
+      if (cancellation?.isCancelled) {
+        await run.cancel().catch(() => undefined);
+      }
       const result = await run.wait();
+      if (cancellation?.isCancelled || result.status === "cancelled") {
+        logLine("Cursor 会话已由用户停止", "worker");
+        return { ok: false, error: "已取消" };
+      }
       logLine(
         `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
       );

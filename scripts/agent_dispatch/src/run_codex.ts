@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { WorkerCancellation } from "./cancellation.js";
 import {
   effortToCodexConfigArgs,
   type DispatchJob,
@@ -43,7 +44,10 @@ function resolveCodexCommand(): {
   };
 }
 
-export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
+export async function runCodex(
+  job: DispatchJob,
+  cancellation?: WorkerCancellation,
+): Promise<DispatchResult> {
   const startedAt = Date.now();
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
   const promptFile = join(temp, "prompt.txt");
@@ -70,7 +74,27 @@ export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
   try {
     const code = await new Promise<number>((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
-      const child = spawn(codex.command, [...codex.prefixArgs, ...args], {
+      let child: ChildProcess | undefined;
+      const killChild = (): void => {
+        if (!child || child.killed) return;
+        try {
+          if (process.platform === "win32") {
+            spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+              shell: true,
+            });
+          } else {
+            child.kill("SIGTERM");
+          }
+        } catch {
+          // ignore
+        }
+      };
+      cancellation?.onCancel(killChild);
+      if (cancellation?.isCancelled) {
+        resolvePromise(130);
+        return;
+      }
+      child = spawn(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
         env: process.env,
         stdio: ["pipe", "pipe", "pipe"],
@@ -85,8 +109,19 @@ export async function runCodex(job: DispatchJob): Promise<DispatchResult> {
       child.on("error", reject);
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
-      child.on("close", (exitCode) => resolvePromise(exitCode ?? 1));
+      child.on("close", (exitCode) => {
+        if (cancellation?.isCancelled) {
+          resolvePromise(130);
+          return;
+        }
+        resolvePromise(exitCode ?? 1);
+      });
     });
+
+    if (cancellation?.isCancelled) {
+      console.log(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
+      return { ok: false, error: "已取消" };
+    }
 
     let summary: string | undefined;
     try {

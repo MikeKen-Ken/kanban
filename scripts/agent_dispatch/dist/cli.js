@@ -3,6 +3,73 @@ import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "
 import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
+// src/cancellation.ts
+import { existsSync } from "node:fs";
+var WorkerCancelledError = class extends Error {
+  constructor(message = "\u5DF2\u53D6\u6D88") {
+    super(message);
+    this.name = "WorkerCancelledError";
+  }
+};
+var WorkerCancellation = class {
+  cancelled = false;
+  reason = "\u5DF2\u53D6\u6D88";
+  callbacks = /* @__PURE__ */ new Set();
+  cancelFileTimer;
+  signalInstalled = false;
+  watchCancelFile(path) {
+    const check = () => {
+      if (this.cancelled) return;
+      try {
+        if (existsSync(path)) this.cancel("\u5DF2\u53D6\u6D88");
+      } catch {
+      }
+    };
+    check();
+    this.cancelFileTimer = setInterval(check, 200);
+    this.cancelFileTimer.unref?.();
+  }
+  installSignalHandlers() {
+    if (this.signalInstalled) return;
+    this.signalInstalled = true;
+    const onSignal = () => {
+      this.cancel("\u5DF2\u53D6\u6D88");
+    };
+    process.once("SIGTERM", onSignal);
+    process.once("SIGINT", onSignal);
+  }
+  get isCancelled() {
+    return this.cancelled;
+  }
+  onCancel(callback) {
+    this.callbacks.add(callback);
+    if (this.cancelled) void this.invoke(callback);
+  }
+  cancel(reason = "\u5DF2\u53D6\u6D88") {
+    if (this.cancelled) return;
+    this.cancelled = true;
+    this.reason = reason;
+    for (const callback of this.callbacks) {
+      void this.invoke(callback);
+    }
+  }
+  throwIfCancelled() {
+    if (this.cancelled) throw new WorkerCancelledError(this.reason);
+  }
+  dispose() {
+    if (this.cancelFileTimer) {
+      clearInterval(this.cancelFileTimer);
+      this.cancelFileTimer = void 0;
+    }
+  }
+  async invoke(callback) {
+    try {
+      await callback();
+    } catch {
+    }
+  }
+};
+
 // src/cursor_usage.ts
 import { Cursor } from "@cursor/sdk";
 function readPercent(value) {
@@ -160,7 +227,7 @@ var KanbanMcpClient = class {
 // src/run_codex.ts
 import { spawn } from "node:child_process";
 import {
-  existsSync,
+  existsSync as existsSync2,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -213,7 +280,7 @@ function resolveCodexCommand() {
     "bin",
     "codex.js"
   );
-  if (existsSync(bundledCli)) {
+  if (existsSync2(bundledCli)) {
     return {
       command: process.execPath,
       prefixArgs: [bundledCli],
@@ -226,7 +293,7 @@ function resolveCodexCommand() {
     shell: process.platform === "win32"
   };
 }
-async function runCodex(job) {
+async function runCodex(job, cancellation) {
   const startedAt = Date.now();
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
   const promptFile = join(temp, "prompt.txt");
@@ -250,7 +317,26 @@ async function runCodex(job) {
   try {
     const code = await new Promise((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
-      const child = spawn(codex.command, [...codex.prefixArgs, ...args], {
+      let child;
+      const killChild = () => {
+        if (!child || child.killed) return;
+        try {
+          if (process.platform === "win32") {
+            spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+              shell: true
+            });
+          } else {
+            child.kill("SIGTERM");
+          }
+        } catch {
+        }
+      };
+      cancellation?.onCancel(killChild);
+      if (cancellation?.isCancelled) {
+        resolvePromise(130);
+        return;
+      }
+      child = spawn(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
         env: process.env,
         stdio: ["pipe", "pipe", "pipe"],
@@ -265,8 +351,18 @@ async function runCodex(job) {
       child.on("error", reject);
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
-      child.on("close", (exitCode) => resolvePromise(exitCode ?? 1));
+      child.on("close", (exitCode) => {
+        if (cancellation?.isCancelled) {
+          resolvePromise(130);
+          return;
+        }
+        resolvePromise(exitCode ?? 1);
+      });
     });
+    if (cancellation?.isCancelled) {
+      console.log(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
+      return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+    }
     let summary;
     try {
       summary = readFileSync(lastMessageFile, "utf8").trim();
@@ -287,13 +383,21 @@ async function runCodex(job) {
 }
 
 // src/run_cursor.ts
-import { mkdirSync, writeSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join as join2 } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
-function logLine(line) {
-  writeSync(1, `${line}
+
+// src/worker_log.ts
+import { writeSync } from "node:fs";
+function workerLog(line, source = "worker") {
+  writeSync(1, `[${source}] ${line}
 `);
+}
+
+// src/run_cursor.ts
+function logLine(line, source = "worker") {
+  workerLog(line, source);
 }
 function clip(text, max = 240) {
   const compact = text.replace(/\s+/g, " ").trim();
@@ -305,19 +409,28 @@ function describeStep(step) {
   const message = step.message && typeof step.message === "object" ? step.message : void 0;
   switch (type) {
     case "assistantMessage":
-      return `\u52A9\u624B\uFF1A${clip(String(message?.text ?? ""))}`;
+      return {
+        text: `\u52A9\u624B\uFF1A${clip(String(message?.text ?? ""))}`,
+        source: "ai"
+      };
     case "thinkingMessage":
-      return "\u601D\u8003\u4E2D\u2026";
+      return { text: "\u601D\u8003\u4E2D\u2026", source: "ai" };
     case "toolCall":
-      return `\u5DE5\u5177\uFF1A${String(message?.type ?? "tool")}`;
+      return {
+        text: `\u5DE5\u5177\uFF1A${String(message?.type ?? "tool")}`,
+        source: "mcp"
+      };
     case "shellConversationTurn":
     case "shell":
-      return `\u547D\u4EE4\uFF1A${clip(String(message?.command ?? message?.text ?? ""))}`;
+      return {
+        text: `\u547D\u4EE4\uFF1A${clip(String(message?.command ?? message?.text ?? ""))}`,
+        source: "shell"
+      };
     default:
-      return `\u6B65\u9AA4\uFF1A${type}`;
+      return { text: `\u6B65\u9AA4\uFF1A${type}`, source: "worker" };
   }
 }
-async function runCursor(job) {
+async function runCursor(job, cancellation) {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
     return {
@@ -363,13 +476,26 @@ async function runCursor(job) {
           try {
             stepCount += 1;
             if (step.type === "toolCall") toolCallCount += 1;
-            logLine(describeStep(step));
+            const described = describeStep(
+              step
+            );
+            logLine(described.text, described.source);
           } catch {
             logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
           }
         }
       });
+      cancellation?.onCancel(() => {
+        void run.cancel().catch(() => void 0);
+      });
+      if (cancellation?.isCancelled) {
+        await run.cancel().catch(() => void 0);
+      }
       const result = await run.wait();
+      if (cancellation?.isCancelled || result.status === "cancelled") {
+        logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u505C\u6B62", "worker");
+        return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+      }
       logLine(
         `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
       );
@@ -401,13 +527,6 @@ async function runCursor(job) {
   }
 }
 
-// src/worker_log.ts
-import { writeSync as writeSync2 } from "node:fs";
-function workerLog(line) {
-  writeSync2(1, `${line}
-`);
-}
-
 // src/run_batch.ts
 function cardState(card) {
   const columnId = String(card.columnId ?? "");
@@ -416,15 +535,21 @@ function cardState(card) {
   if (columnId === "blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
   return "active";
 }
-async function runBatch(job) {
+async function runBatch(job, cancellation) {
   const mcp = new KanbanMcpClient();
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
   let processedCards = 0;
   workerLog(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
+  const cancelledResult = () => ({
+    ok: false,
+    error: "\u5DF2\u53D6\u6D88",
+    processedCards
+  });
   try {
     await mcp.connect(job.mcpEndpoint);
     workerLog("Worker \u5DF2\u8FDE\u63A5\u770B\u677F MCP\uFF1BWorker \u53EA\u8BFB\u68C0\u67E5\u961F\u5217\uFF0CSkill \u81EA\u5DF1\u9886\u53D6\u5361\u7247");
     for (let index = 1; index <= limit; index += 1) {
+      cancellation?.throwIfCancelled();
       workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${index}/${limit} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const peek = await mcp.callJson("peek_next_card", {
         ...job.projectId ? { projectId: job.projectId } : {}
@@ -441,8 +566,12 @@ async function runBatch(job) {
         workerToken: job.workerToken
       });
       workerLog("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
-      const result = job.engine === "codex" ? await runCodex(job) : await runCursor(job);
+      const result = job.engine === "codex" ? await runCodex(job, cancellation) : await runCursor(job, cancellation);
+      if (cancellation?.isCancelled) {
+        return cancelledResult();
+      }
       if (!result.ok) {
+        if (result.error === "\u5DF2\u53D6\u6D88") return cancelledResult();
         return {
           ok: false,
           error: result.error ?? `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u5931\u8D25`,
@@ -501,6 +630,11 @@ async function runBatch(job) {
       summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u8FBE\u5230\u4E0A\u9650\u5E76\u5904\u7406 ${processedCards} \u5F20`,
       processedCards
     };
+  } catch (err) {
+    if (err instanceof WorkerCancelledError) {
+      return cancelledResult();
+    }
+    throw err;
   } finally {
     workerLog("Worker \u6B63\u5728\u5173\u95ED\u770B\u677F MCP \u8FDE\u63A5\u2026");
     await mcp.close().catch(() => void 0);
@@ -644,12 +778,23 @@ async function runJob(jobPath) {
     return;
   }
   console.log(`engine=${job.engine} cwd=${job.cwd}`);
+  const cancellation = new WorkerCancellation();
+  cancellation.installSignalHandlers();
+  if (job.cancelFile?.trim()) {
+    cancellation.watchCancelFile(job.cancelFile.trim());
+  }
   let result;
   try {
-    result = await runBatch(job);
+    result = await runBatch(job, cancellation);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    result = { ok: false, error: message };
+    if (err instanceof WorkerCancelledError) {
+      result = { ok: false, error: err.message };
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      result = { ok: false, error: message };
+    }
+  } finally {
+    cancellation.dispose();
   }
   writeResult(job.outPath, result);
   const code = result.ok ? 0 : 2;

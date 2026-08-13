@@ -26,17 +26,30 @@ class AgentWorkerResult {
 
 /// 当前 Worker 及其 Agent 子进程的可终止句柄。
 class AgentWorkerProcess {
-  AgentWorkerProcess(this._process, {AgentDispatchWindowsJob? windowsJob})
-      : _windowsJob = windowsJob;
+  AgentWorkerProcess(
+    this._process, {
+    AgentDispatchWindowsJob? windowsJob,
+    String? cancelFile,
+  })  : _windowsJob = windowsJob,
+        _cancelFile = cancelFile;
 
   final Process _process;
   AgentDispatchWindowsJob? _windowsJob;
+  final String? _cancelFile;
   bool _stopRequested = false;
 
   /// 终止 Worker 及其启动的 SDK/CLI 子进程。
   Future<void> stop() async {
     if (_stopRequested) return;
     _stopRequested = true;
+    final cancelFile = _cancelFile;
+    if (cancelFile != null) {
+      try {
+        await File(cancelFile).writeAsString('');
+      } catch (_) {}
+      // 给 Worker 协作式停止（run.cancel / cancelFile）留出短暂窗口。
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
     _windowsJob?.dispose();
     _windowsJob = null;
     if (Platform.isWindows) {
@@ -128,6 +141,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   final tempDir = await Directory.systemTemp.createTemp('kanban_agent_');
   final jobFile = File(p.join(tempDir.path, 'job.json'));
   final outFile = File(p.join(tempDir.path, 'out.json'));
+  final cancelFile = File(p.join(tempDir.path, 'cancel'));
   final job = <String, dynamic>{
     'engine': engine.name,
     'cwd': cwd,
@@ -142,6 +156,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       'modelParams': [
         for (final item in modelParams) {'id': item.id, 'value': item.value},
       ],
+    'cancelFile': cancelFile.path,
     'outPath': outFile.path,
   };
   await jobFile.writeAsString(jsonEncode(job));
@@ -175,6 +190,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
         process.pid,
         onWarning: (message) => onLog?.call('[warning] $message'),
       ),
+      cancelFile: cancelFile.path,
     );
     onProcessStarted?.call(workerProcess);
     process.stdout

@@ -1,0 +1,80 @@
+import { existsSync } from "node:fs";
+
+export class WorkerCancelledError extends Error {
+  constructor(message = "已取消") {
+    super(message);
+    this.name = "WorkerCancelledError";
+  }
+}
+
+type CancelCallback = () => void | Promise<void>;
+
+/** Worker 批次取消：SIGTERM/SIGINT、cancelFile 轮询与活动会话回调。 */
+export class WorkerCancellation {
+  private cancelled = false;
+  private reason = "已取消";
+  private readonly callbacks = new Set<CancelCallback>();
+  private cancelFileTimer: NodeJS.Timeout | undefined;
+  private signalInstalled = false;
+
+  watchCancelFile(path: string): void {
+    const check = (): void => {
+      if (this.cancelled) return;
+      try {
+        if (existsSync(path)) this.cancel("已取消");
+      } catch {
+        // ignore
+      }
+    };
+    check();
+    this.cancelFileTimer = setInterval(check, 200);
+    this.cancelFileTimer.unref?.();
+  }
+
+  installSignalHandlers(): void {
+    if (this.signalInstalled) return;
+    this.signalInstalled = true;
+    const onSignal = (): void => {
+      this.cancel("已取消");
+    };
+    process.once("SIGTERM", onSignal);
+    process.once("SIGINT", onSignal);
+  }
+
+  get isCancelled(): boolean {
+    return this.cancelled;
+  }
+
+  onCancel(callback: CancelCallback): void {
+    this.callbacks.add(callback);
+    if (this.cancelled) void this.invoke(callback);
+  }
+
+  cancel(reason = "已取消"): void {
+    if (this.cancelled) return;
+    this.cancelled = true;
+    this.reason = reason;
+    for (const callback of this.callbacks) {
+      void this.invoke(callback);
+    }
+  }
+
+  throwIfCancelled(): void {
+    if (this.cancelled) throw new WorkerCancelledError(this.reason);
+  }
+
+  dispose(): void {
+    if (this.cancelFileTimer) {
+      clearInterval(this.cancelFileTimer);
+      this.cancelFileTimer = undefined;
+    }
+  }
+
+  private async invoke(callback: CancelCallback): Promise<void> {
+    try {
+      await callback();
+    } catch {
+      // ignore
+    }
+  }
+}

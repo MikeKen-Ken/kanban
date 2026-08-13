@@ -1,3 +1,4 @@
+import { WorkerCancelledError, type WorkerCancellation } from "./cancellation.js";
 import { KanbanMcpClient } from "./mcp_client.js";
 import { runCodex } from "./run_codex.js";
 import { runCursor } from "./run_cursor.js";
@@ -12,17 +13,27 @@ function cardState(card: Record<string, unknown>): "verify" | "blocked" | "activ
   return "active";
 }
 
-export async function runBatch(job: DispatchJob): Promise<DispatchResult> {
+export async function runBatch(
+  job: DispatchJob,
+  cancellation?: WorkerCancellation,
+): Promise<DispatchResult> {
   const mcp = new KanbanMcpClient();
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
   let processedCards = 0;
   workerLog(`Worker 批次启动：endpoint=${job.mcpEndpoint} limit=${limit}`);
+
+  const cancelledResult = (): DispatchResult => ({
+    ok: false,
+    error: "已取消",
+    processedCards,
+  });
 
   try {
     await mcp.connect(job.mcpEndpoint);
     workerLog("Worker 已连接看板 MCP；Worker 只读检查队列，Skill 自己领取卡片");
 
     for (let index = 1; index <= limit; index += 1) {
+      cancellation?.throwIfCancelled();
       workerLog(`──────── Worker 单卡轮次 ${index}/${limit} ────────`);
       const peek = await mcp.callJson("peek_next_card", {
         ...(job.projectId ? { projectId: job.projectId } : {}),
@@ -43,9 +54,13 @@ export async function runBatch(job: DispatchJob): Promise<DispatchResult> {
       workerLog("Worker 检查结果：还有卡片；正在创建全新的 Skill 会话");
       const result =
         job.engine === "codex"
-          ? await runCodex(job)
-          : await runCursor(job);
+          ? await runCodex(job, cancellation)
+          : await runCursor(job, cancellation);
+      if (cancellation?.isCancelled) {
+        return cancelledResult();
+      }
       if (!result.ok) {
+        if (result.error === "已取消") return cancelledResult();
         return {
           ok: false,
           error: result.error ?? `第 ${index} 次 Skill 会话失败`,
@@ -108,6 +123,11 @@ export async function runBatch(job: DispatchJob): Promise<DispatchResult> {
       summary: `Worker 批次完成：已达到上限并处理 ${processedCards} 张`,
       processedCards,
     };
+  } catch (err) {
+    if (err instanceof WorkerCancelledError) {
+      return cancelledResult();
+    }
+    throw err;
   } finally {
     workerLog("Worker 正在关闭看板 MCP 连接…");
     await mcp.close().catch(() => undefined);

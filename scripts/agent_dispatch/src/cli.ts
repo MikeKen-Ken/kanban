@@ -1,6 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor } from "@cursor/sdk";
+import {
+  WorkerCancelledError,
+  WorkerCancellation,
+} from "./cancellation.js";
 import { printCursorUsage } from "./cursor_usage.js";
 import { runBatch } from "./run_batch.js";
 import type { DispatchJob, DispatchResult } from "./types.js";
@@ -168,12 +172,23 @@ async function runJob(jobPath: string): Promise<void> {
   }
 
   console.log(`engine=${job.engine} cwd=${job.cwd}`);
+  const cancellation = new WorkerCancellation();
+  cancellation.installSignalHandlers();
+  if (job.cancelFile?.trim()) {
+    cancellation.watchCancelFile(job.cancelFile.trim());
+  }
   let result: DispatchResult;
   try {
-    result = await runBatch(job);
+    result = await runBatch(job, cancellation);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    result = { ok: false, error: message };
+    if (err instanceof WorkerCancelledError) {
+      result = { ok: false, error: err.message };
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      result = { ok: false, error: message };
+    }
+  } finally {
+    cancellation.dispose();
   }
 
   writeResult(job.outPath, result);

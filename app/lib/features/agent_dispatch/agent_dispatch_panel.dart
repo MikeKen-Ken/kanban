@@ -50,6 +50,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   String? _modelCatalogMessage;
   AgentDispatchUsageSnapshot? _usage;
   bool _running = false;
+  bool _stopping = false;
   bool _busy = false;
   bool _usageBusy = false;
   int _cursorKeySectionRevision = 0;
@@ -94,7 +95,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   void _onServiceRunningChanged() {
     if (!mounted) return;
     final running = _service.isRunning;
-    setState(() => _running = running);
+    setState(() {
+      _running = running;
+      if (!running) _stopping = false;
+    });
     if (running) {
       _startHeartbeat();
     } else {
@@ -476,6 +480,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (!mounted) return;
     if (result.ok) {
       _appendLog(result.summary ?? '完成', level: AgentDispatchLogLevel.success);
+    } else if (result.error == '已取消') {
+      _appendLog('已停止运行', level: AgentDispatchLogLevel.warning);
     }
   }
 
@@ -780,18 +786,21 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         ),
         if (_running)
           TextButton(
-            onPressed: () async {
-              _appendLog(
-                '正在停止当前 SDK/CLI 会话…',
-                level: AgentDispatchLogLevel.warning,
-              );
-              await _service.requestCancel();
-              if (mounted) setState(() {});
-            },
-            child: const Text('停止运行'),
+            onPressed: _stopping
+                ? null
+                : () async {
+                    setState(() => _stopping = true);
+                    _appendLog(
+                      '正在停止当前 SDK/CLI 会话…',
+                      level: AgentDispatchLogLevel.warning,
+                    );
+                    await _service.requestCancel();
+                    if (mounted) setState(() {});
+                  },
+            child: Text(_stopping ? '正在停止…' : '停止运行'),
           ),
         FilledButton.icon(
-          onPressed: _running || _busy ? null : _run,
+          onPressed: _running || _busy || _stopping ? null : _run,
           icon: _running
               ? const SizedBox(
                   width: 16,
