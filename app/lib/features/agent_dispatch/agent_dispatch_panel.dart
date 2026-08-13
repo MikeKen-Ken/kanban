@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +21,7 @@ import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
+import 'agent_dispatch_workspace.dart';
 import 'cursor_api_key_section.dart';
 
 /// 左上角「新建项目」右侧入口（仅桌面）。
@@ -139,6 +141,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     showAppSnackBar(context, message: exported ? '调度记录已导出' : '已取消导出');
   }
 
+  Future<void> _copyLog() async {
+    await Clipboard.setData(ClipboardData(text: _logController.text));
+    if (!mounted) return;
+    showAppSnackBar(context, message: '调度记录已复制');
+  }
+
   Future<void> _refreshSkillPreview() async {
     final path = _settings.resolveSkillPath();
     final preview = await peekSkillPreview(path);
@@ -184,18 +192,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     return settings.copyWith(repoPaths: paths);
   }
 
-  Future<void> _deleteCurrentRepo() async {
-    final path = _repoController.text.trim();
-    if (path.isEmpty || !_settings.repoPaths.contains(path)) return;
-    final paths = _settings.repoPaths.where((item) => item != path).toList();
-    final byProject = Map<String, String>.from(_settings.repoPathByProject)
-      ..removeWhere((_, value) => value == path);
-    _repoController.clear();
-    await _persist(_settings.copyWith(
-      repoPath: null,
-      repoPaths: paths,
-      repoPathByProject: byProject,
-    ));
+  Future<void> _deleteRepoPath(String path) async {
+    final normalized = path.trim();
+    if (normalized.isEmpty || !_settings.repoPaths.contains(normalized)) return;
+    final wasCurrent = _repoController.text.trim() == normalized;
+    if (wasCurrent) _repoController.clear();
+    await _persist(_settings.forgetRepoPath(normalized));
   }
 
   Future<void> _openSkillDirectory() async {
@@ -354,13 +356,19 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final projects = board.manifest?.projects ?? const [];
     final modelParameters = _selectedModel?.parameters ?? const [];
     final skillPath = _settings.resolveSkillPath();
+    final viewport = MediaQuery.sizeOf(context);
+    final dialogWidth = (viewport.width - 96).clamp(560.0, 1320.0).toDouble();
+    final dialogHeight = (viewport.height - 180).clamp(420.0, 820.0).toDouble();
 
     return AlertDialog(
-      title: const Text('Agent 调度'),
+      insetPadding: const EdgeInsets.all(24),
+      title: const Text('Agent 调度工作台'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: Column(
+        width: dialogWidth,
+        height: dialogHeight,
+        child: AgentDispatchWorkspace(
+          settings: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('引擎', style: Theme.of(context).textTheme.labelLarge),
@@ -439,10 +447,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   });
                 },
                 onPickDirectory: _pickRepo,
-                onDeleteCurrent:
-                    _settings.repoPaths.contains(_repoController.text.trim())
-                        ? _deleteCurrentRepo
-                        : null,
+                onDeletePath: _deleteRepoPath,
               ),
               const SizedBox(height: 12),
               if (_settings.engine == AgentDispatchEngine.cursor) ...[
@@ -550,95 +555,23 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   }
                 },
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Text('Skill', style: Theme.of(context).textTheme.labelLarge),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: '打开 Skill 目录',
-                    onPressed: _running || _busy ? null : _openSkillDirectory,
-                    icon: const Icon(Icons.folder_open_outlined, size: 20),
-                  ),
-                  IconButton(
-                    tooltip: '重新读取 Skill',
-                    onPressed: _running || _busy ? null : _refreshSkillPreview,
-                    icon: const Icon(Icons.refresh, size: 20),
-                  ),
-                ],
-              ),
-              Text(skillPath, style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 4),
-              Container(
-                height: 120,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    _skillPreview ?? '（未找到或无法读取 Skill）',
-                    style:
-                        const TextStyle(fontFamily: 'Consolas', fontSize: 11),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text('Worker', style: Theme.of(context).textTheme.labelLarge),
-              Text(
-                _workerStatus ?? '检查中…',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _running || _busy ? null : _fixWorker,
-                  icon: const Icon(Icons.build_outlined, size: 18),
-                  label: const Text('一键修复 Worker'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    '工具对话记录',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _running || _logController.text.isEmpty
-                        ? null
-                        : _clearLog,
-                    child: const Text('清空记录'),
-                  ),
-                  TextButton.icon(
-                    onPressed: _logController.text.isEmpty ? null : _exportLog,
-                    icon: const Icon(Icons.file_download_outlined, size: 18),
-                    label: const Text('导出记录'),
-                  ),
-                ],
-              ),
-              SizedBox(
-                height: 220,
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: TextField(
-                    controller: _logController,
-                    readOnly: true,
-                    maxLines: null,
-                    expands: true,
-                    scrollPhysics: const AlwaysScrollableScrollPhysics(),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    style:
-                        const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-                  ),
-                ),
-              ),
             ],
+          ),
+          skillAndWorker: AgentDispatchSkillWorkerPane(
+            skillPath: skillPath,
+            skillPreview: _skillPreview,
+            workerStatus: _workerStatus,
+            enabled: !_running && !_busy,
+            onOpenSkillDirectory: _openSkillDirectory,
+            onRefreshSkill: _refreshSkillPreview,
+            onFixWorker: _fixWorker,
+          ),
+          log: AgentDispatchLogPane(
+            controller: _logController,
+            running: _running,
+            onClear: _clearLog,
+            onExport: _exportLog,
+            onCopy: _copyLog,
           ),
         ),
       ),

@@ -10,6 +10,26 @@ import 'package:kanban/features/agent_dispatch/agent_dispatch_settings.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_worker.dart';
 
 void main() {
+  test('新建设置默认使用 Composer 2.5、Force 和 Max', () {
+    const settings = AgentDispatchSettings();
+
+    expect(settings.modelId, 'composer-2.5');
+    expect(settings.modelParamValues, {'fast': 'true'});
+    expect(settings.cardLimitMax, isTrue);
+    expect(
+      settings.toRunOptions(projectTitleOf: (_) => null).cardLimit,
+      isA<AgentDispatchCardLimitMax>(),
+    );
+  });
+
+  test('缺少新字段的旧设置迁移到新的默认值', () {
+    final settings = AgentDispatchSettings.fromJson({});
+
+    expect(settings.modelId, 'composer-2.5');
+    expect(settings.modelParamValues, {'fast': 'true'});
+    expect(settings.cardLimitMax, isTrue);
+  });
+
   test('buildSkillDispatchPrompt 注入 skill 与 name', () {
     final text = buildSkillDispatchPrompt(
       skillMarkdown: '# 看板：做最新一条\n\n## 流程\n',
@@ -79,6 +99,27 @@ void main() {
     });
 
     expect(settings.repoPaths, ['/tmp/current', '/tmp/a']);
+  });
+
+  test('忘记历史仓库时清理对应的项目默认值', () {
+    const settings = AgentDispatchSettings(
+      repoPath: '/tmp/current',
+      repoPaths: ['/tmp/current', '/tmp/remove', '/tmp/keep'],
+      repoPathByProject: {
+        'current': '/tmp/current',
+        'remove': '/tmp/remove',
+        'keep': '/tmp/keep',
+      },
+    );
+
+    final next = settings.forgetRepoPath('/tmp/remove');
+
+    expect(next.repoPath, '/tmp/current');
+    expect(next.repoPaths, ['/tmp/current', '/tmp/keep']);
+    expect(next.repoPathByProject, {
+      'current': '/tmp/current',
+      'keep': '/tmp/keep',
+    });
   });
 
   test('旧版单一模型参数迁移到参数映射', () {

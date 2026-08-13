@@ -7,7 +7,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
     required this.enabled,
     required this.onChanged,
     required this.onPickDirectory,
-    required this.onDeleteCurrent,
+    required this.onDeletePath,
     this.errorText,
     super.key,
   });
@@ -17,7 +17,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String> onChanged;
   final VoidCallback onPickDirectory;
-  final VoidCallback? onDeleteCurrent;
+  final ValueChanged<String> onDeletePath;
   final String? errorText;
 
   @override
@@ -45,11 +45,31 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                     PopupMenuItem(
                       value: path,
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 420),
-                        child: Text(
-                          path,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        constraints: const BoxConstraints(maxWidth: 440),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Tooltip(
+                                message: path,
+                                waitDuration: const Duration(milliseconds: 350),
+                                child: Text(
+                                  _displayPath(path),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '删除此历史仓库',
+                              visualDensity: VisualDensity.compact,
+                              iconSize: 18,
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                onDeletePath(path);
+                              },
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -64,12 +84,16 @@ class AgentDispatchRepositoryField extends StatelessWidget {
           onPressed: enabled ? onPickDirectory : null,
           icon: const Icon(Icons.folder_open),
         ),
-        IconButton(
-          tooltip: '从历史仓库中删除',
-          onPressed: enabled ? onDeleteCurrent : null,
-          icon: const Icon(Icons.delete_outline),
-        ),
       ],
     );
+  }
+
+  String _displayPath(String path) {
+    const maxLength = 56;
+    if (path.length <= maxLength) return path;
+    const prefixLength = 26;
+    const suffixLength = maxLength - prefixLength - 1;
+    return '${path.substring(0, prefixLength)}…'
+        '${path.substring(path.length - suffixLength)}';
   }
 }

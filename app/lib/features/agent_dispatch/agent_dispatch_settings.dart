@@ -13,15 +13,21 @@ class AgentDispatchSettings {
     this.useProject = false,
     this.projectId,
     this.repoPath,
-    this.modelId,
-    this.modelParamValues = const {},
-    this.cardLimitMax = false,
+    this.modelId = defaultModelId,
+    this.modelParamValues = defaultModelParamValues,
+    this.cardLimitMax = true,
     this.cardLimitCount = 1,
     this.workerScriptPath,
     this.skillPath,
     this.repoPathByProject = const {},
     this.repoPaths = const [],
   });
+
+  /// 新建调度设置的默认模型。
+  static const defaultModelId = 'composer-2.5';
+
+  /// Cursor 将快速模式「Force」传为 `fast=true`。
+  static const defaultModelParamValues = {'fast': 'true'};
 
   final AgentDispatchEngine engine;
   final bool useProject;
@@ -69,6 +75,18 @@ class AgentDispatchSettings {
       skillPath: skillPath == _sentinel ? this.skillPath : skillPath as String?,
       repoPathByProject: repoPathByProject ?? this.repoPathByProject,
       repoPaths: repoPaths ?? this.repoPaths,
+    );
+  }
+
+  /// 从本机历史中忘记一个仓库，并移除引用它的项目默认值。
+  AgentDispatchSettings forgetRepoPath(String path) {
+    final normalized = path.trim();
+    if (normalized.isEmpty) return this;
+    return copyWith(
+      repoPath: repoPath?.trim() == normalized ? null : repoPath,
+      repoPaths: repoPaths.where((item) => item != normalized).toList(),
+      repoPathByProject: Map<String, String>.from(repoPathByProject)
+        ..removeWhere((_, value) => value.trim() == normalized),
     );
   }
 
@@ -140,11 +158,15 @@ class AgentDispatchSettings {
       useProject: json['useProject'] as bool? ?? false,
       projectId: json['projectId'] as String?,
       repoPath: repoPath,
-      modelId: json['modelId'] as String? ?? legacyModel,
-      modelParamValues: modelParamValues,
+      modelId: json['modelId'] as String? ?? legacyModel ?? defaultModelId,
+      modelParamValues: modelParamsRaw == null &&
+              legacyParamId == null &&
+              legacyParamValue == null
+          ? defaultModelParamValues
+          : modelParamValues,
       cardLimitMax: json['cardLimitMax'] as bool? ??
           (json['useMultiCard'] != true && json['maxCards'] == null
-              ? false
+              ? true
               : false),
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
           (json['maxCards'] as num?)?.toInt() ??
