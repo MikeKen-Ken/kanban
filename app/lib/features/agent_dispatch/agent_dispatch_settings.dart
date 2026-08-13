@@ -172,10 +172,8 @@ class AgentDispatchSettings {
       repoPath: repoPath,
       modelId: json['modelId'] as String? ?? legacyModel ?? defaultModelId,
       modelParamValues: modelParamValues,
-      cardLimitMax: json['cardLimitMax'] as bool? ??
-          (json['useMultiCard'] != true && json['maxCards'] == null
-              ? true
-              : false),
+      // 始终默认勾选「全部」；仅保留上次填写的张数。
+      cardLimitMax: true,
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
           (json['maxCards'] as num?)?.toInt() ??
           1,
@@ -238,6 +236,9 @@ extension AgentDispatchSettingsStore on SharedPreferences {
   }
 
   Future<void> saveAgentDispatchSettings(AgentDispatchSettings settings) {
-    return setString(_key, jsonEncode(settings.toJson()));
+    return setString(
+      _key,
+      jsonEncode(settings.copyWith(cardLimitMax: true).toJson()),
+    );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_credentials.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_prompt.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_service.dart';
@@ -34,6 +35,32 @@ void main() {
       'reasoning_effort': 'medium',
     });
     expect(settings.cardLimitMax, isTrue);
+  });
+
+  test('加载设置时始终默认勾选全部并保留张数', () {
+    final settings = AgentDispatchSettings.fromJson({
+      'cardLimitMax': false,
+      'cardLimitCount': 7,
+    });
+
+    expect(settings.cardLimitMax, isTrue);
+    expect(settings.cardLimitCount, 7);
+  });
+
+  test('保存设置时始终写入 cardLimitMax=true', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    const settings = AgentDispatchSettings(
+      cardLimitMax: false,
+      cardLimitCount: 7,
+    );
+
+    await prefs.saveAgentDispatchSettings(settings);
+    final loaded = prefs.loadAgentDispatchSettings();
+
+    expect(loaded.cardLimitMax, isTrue);
+    expect(loaded.cardLimitCount, 7);
   });
 
   test('buildSkillDispatchPrompt 注入 skill 与 name', () {
