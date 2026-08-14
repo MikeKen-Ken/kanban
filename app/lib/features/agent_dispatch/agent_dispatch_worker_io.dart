@@ -209,7 +209,9 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     final process = await Process.start(
       node,
       [cli, '--job', jobFile.path],
-      workingDirectory: packageRoot,
+      // Cursor SDK 的内置 Shell 可能继承 Worker 进程目录，因此在进程边界
+      // 就将工作目录固定为用户选择的代码仓库。
+      workingDirectory: cwd,
       environment: environment,
     );
     final workerProcess = AgentWorkerProcess(

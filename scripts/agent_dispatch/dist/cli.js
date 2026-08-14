@@ -563,6 +563,7 @@ async function runCursor(job, cancellation) {
   const params = resolveModelParams(job);
   logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
   try {
+    process.chdir(job.cwd);
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;

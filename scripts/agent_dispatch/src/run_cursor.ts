@@ -130,6 +130,9 @@ export async function runCursor(
   logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
 
   try {
+    // Cursor SDK 的内置 Shell 会从 Worker 进程继承工作目录；在创建 Agent 前
+    // 再次固定到目标仓库，避免 Shell 落到发布包的 agent_worker 目录。
+    process.chdir(job.cwd);
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
