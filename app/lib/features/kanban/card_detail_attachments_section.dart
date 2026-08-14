@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +10,7 @@ import '../attachments/attachment_add_flow.dart';
 import '../attachments/card_attachment_reorder_grid.dart';
 import '../attachments/card_attachment_viewer.dart';
 import '../attachments/card_image_add_sheet.dart';
+import '../attachments/card_image_add_source.dart';
 
 /// 卡片图片附件区块：缺失提示、排序网格与添加入口。
 class CardDetailAttachmentsSection extends StatelessWidget {
@@ -34,7 +37,17 @@ class CardDetailAttachmentsSection extends StatelessWidget {
     return count;
   }
 
-  Future<void> _pickAttachments(BuildContext context) async {
+  Future<CardImageAddSource?> _resolveImageAddSource(BuildContext context) async {
+    if (Platform.isAndroid) {
+      return showCardImageAddSourceSheet(context);
+    }
+    return CardImageAddSource.gallery;
+  }
+
+  Future<void> _pickAttachments(
+    BuildContext context, {
+    CardImageAddSource? source,
+  }) async {
     if (attachments.length >= KanbanCard.maxAttachments) {
       showAppSnackBar(
         context,
@@ -43,8 +56,8 @@ class CardDetailAttachmentsSection extends StatelessWidget {
       return;
     }
 
-    final source = await showCardImageAddSourceSheet(context);
-    if (!context.mounted || source == null) return;
+    final resolvedSource = source ?? await _resolveImageAddSource(context);
+    if (!context.mounted || resolvedSource == null) return;
 
     final controller = context.read<BoardController>();
     final error = await runCardImageAttachmentAddFlow(
@@ -53,7 +66,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
       columnId: columnId,
       cardId: cardId,
       currentCount: attachments.length,
-      source: source,
+      source: resolvedSource,
     );
     if (!context.mounted) return;
     if (error != null) {
@@ -75,15 +88,23 @@ class CardDetailAttachmentsSection extends StatelessWidget {
     BuildContext context,
     String attachmentId,
   ) async {
+    onAttachmentsChanged(
+      attachments.where((item) => item.id != attachmentId).toList(),
+    );
     await context.read<BoardController>().removeCardAttachment(
           columnId,
           cardId,
           attachmentId,
         );
     if (!context.mounted) return;
-    onAttachmentsChanged(
-      attachments.where((item) => item.id != attachmentId).toList(),
-    );
+    final updated = context.read<BoardController>().board?.columns
+        .where((col) => col.id == columnId)
+        .expand((col) => col.cards)
+        .where((card) => card.id == cardId)
+        .firstOrNull;
+    if (updated != null) {
+      onAttachmentsChanged([...updated.sortedAttachments]);
+    }
   }
 
   Future<void> _setCover(BuildContext context, String attachmentId) async {
@@ -226,6 +247,19 @@ class CardDetailAttachmentsSection extends StatelessWidget {
           icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
           label: const Text('添加图片'),
         ),
+        if (Platform.isWindows) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: attachments.length >= KanbanCard.maxAttachments
+                ? null
+                : () => _pickAttachments(
+                      context,
+                      source: CardImageAddSource.clipboard,
+                    ),
+            icon: const Icon(Icons.content_paste_go_outlined, size: 18),
+            label: const Text('粘贴图片'),
+          ),
+        ],
       ],
     );
   }

@@ -109,25 +109,29 @@ class _CardAttachmentViewerState extends State<_CardAttachmentViewer> {
     if (!_canEdit || _busy) return;
     final controller = context.read<BoardController>();
     final attachment = _attachments[_index];
-    setState(() => _busy = true);
+    final nextAttachments =
+        _attachments.where((a) => a.id != attachment.id).toList();
+    final wasLast = nextAttachments.isEmpty;
+
+    if (wasLast) {
+      setState(() => _attachments = nextAttachments);
+      _notifyChanged();
+      if (mounted) Navigator.pop(context);
+    } else {
+      final nextIndex = _index.clamp(0, nextAttachments.length - 1);
+      setState(() {
+        _attachments = nextAttachments;
+        _index = nextIndex;
+      });
+      _pageController.jumpToPage(nextIndex);
+      _notifyChanged();
+    }
+
     await controller.removeCardAttachment(
       widget.columnId!,
       widget.cardId!,
       attachment.id,
     );
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _attachments = _attachments.where((a) => a.id != attachment.id).toList();
-    });
-    _notifyChanged();
-    if (_attachments.isEmpty) {
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-    final nextIndex = _index.clamp(0, _attachments.length - 1);
-    setState(() => _index = nextIndex);
-    _pageController.jumpToPage(nextIndex);
   }
 
   @override

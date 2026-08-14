@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pasteboard/pasteboard.dart';
 
 import 'card_image_add_source.dart';
+import 'native_file_dialog.dart';
 import 'picked_image_bytes.dart';
 
 Future<List<PickedImageBytes>> pickImagesForSource(
@@ -19,6 +20,7 @@ Future<List<PickedImageBytes>> pickImagesForSource(
 }
 
 Future<List<PickedImageBytes>> pickCardImagesFromGallery() async {
+  await yieldBeforeNativeFileDialog();
   if (Platform.isAndroid) {
     final imagePicker = ImagePicker();
     final files = await imagePicker.pickMultiImage();

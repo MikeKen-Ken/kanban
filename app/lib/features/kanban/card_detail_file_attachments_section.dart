@@ -106,15 +106,23 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
     BuildContext context,
     String attachmentId,
   ) async {
+    onAttachmentsChanged(
+      attachments.where((item) => item.id != attachmentId).toList(),
+    );
     await context.read<BoardController>().removeCardFileAttachment(
           columnId,
           cardId,
           attachmentId,
         );
     if (!context.mounted) return;
-    onAttachmentsChanged(
-      attachments.where((item) => item.id != attachmentId).toList(),
-    );
+    final updated = context.read<BoardController>().board?.columns
+        .where((col) => col.id == columnId)
+        .expand((col) => col.cards)
+        .where((card) => card.id == cardId)
+        .firstOrNull;
+    if (updated != null) {
+      onAttachmentsChanged([...updated.sortedFileAttachments]);
+    }
   }
 
   @override

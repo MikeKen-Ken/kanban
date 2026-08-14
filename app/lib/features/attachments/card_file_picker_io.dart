@@ -1,8 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 
+import 'native_file_dialog.dart';
 import 'picked_file_bytes.dart';
 
 Future<List<PickedFileBytes>> pickCardFiles() async {
+  await yieldBeforeNativeFileDialog();
   final result = await FilePicker.pickFiles(
     dialogTitle: '选择要添加的文件',
     allowMultiple: true,

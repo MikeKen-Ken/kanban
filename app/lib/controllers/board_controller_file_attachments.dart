@@ -66,7 +66,7 @@ extension BoardControllerFileAttachments on BoardController {
         cardId,
         fileAttachments: nextAttachments,
       );
-      await refreshMissingAttachments();
+      unawaited(refreshMissingAttachments());
       return null;
     });
   }
@@ -105,7 +105,7 @@ extension BoardControllerFileAttachments on BoardController {
         projectId: activeProjectId!,
         attachmentId: attachmentId,
       );
-      await refreshMissingAttachments();
+      unawaited(refreshMissingAttachments());
       _markWorkspaceChanged();
     });
   }
