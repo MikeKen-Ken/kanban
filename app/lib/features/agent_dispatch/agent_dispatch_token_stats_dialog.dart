@@ -100,9 +100,9 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
         const SizedBox(height: 8),
         Text(
           '输入 ${_formatCount(stats.totalInput)}'
-          '（均 ${stats.averageInput?.round() ?? 0}） · '
+          '（均 ${_formatCount(stats.averageInput?.round() ?? 0)}） · '
           '输出 ${_formatCount(stats.totalOutput)}'
-          '（均 ${stats.averageOutput?.round() ?? 0}）'
+          '（均 ${_formatCount(stats.averageOutput?.round() ?? 0)}）'
           '${stats.inputShare == null ? '' : ' · 输入占比 ${(stats.inputShare! * 100).toStringAsFixed(0)}%'}',
           style: textTheme.bodySmall,
         ),
@@ -117,7 +117,7 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
         Text(
           '共 ${_formatCount(last7.totalTokens)} token · '
           '${last7.sessionCount} 次 · '
-          '日均 ${last7.sessionCount == 0 ? 0 : (last7.totalTokens / 7).round()}',
+          '日均 ${_formatCount(last7.sessionCount == 0 ? 0 : (last7.totalTokens / 7).round())}',
           style: textTheme.bodySmall,
         ),
         const SizedBox(height: 12),
@@ -137,8 +137,8 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
             title: const Text('单次峰值'),
             subtitle: Text(
               '${_formatCount(stats.peakSession!.totalTokens)} '
-              '(入 ${stats.peakSession!.inputTokens} / '
-              '出 ${stats.peakSession!.outputTokens})',
+              '(入 ${_formatCount(stats.peakSession!.inputTokens)} / '
+              '出 ${_formatCount(stats.peakSession!.outputTokens)})',
             ),
           ),
         ],
@@ -247,7 +247,7 @@ class _DailyBars extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     Text(
-                      _compact(day.totalTokens),
+                      _formatCount(day.totalTokens),
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
                     const SizedBox(height: 4),
@@ -280,11 +280,6 @@ String _formatCount(int value) {
   if (value >= 10000) {
     return '${(value / 1000).toStringAsFixed(1)}k';
   }
-  return '$value';
-}
-
-String _compact(int value) {
-  if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
   return '$value';
 }
 
