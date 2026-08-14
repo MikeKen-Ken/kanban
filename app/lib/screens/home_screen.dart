@@ -18,8 +18,8 @@ import '../features/wallpapers/wallpaper_models.dart';
 import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
 import '../features/kanban/swimlane_board.dart';
-import '../main.dart';
 import '../webdav_sync/sync_actions_sheet.dart';
+import '../webdav_sync/sync_actions_switcher.dart';
 import '../webdav_sync/webdav_sync_service.dart';
 import 'settings_screen.dart';
 import '../widgets/kanban_column_widget.dart';
@@ -428,7 +428,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 c.syncProgress,
                 c.pendingSyncUploadCount,
               ),
-              builder: (context, data, _) => _SyncIndicator(
+              builder: (context, data, _) => SyncActionsSwitcher(
                 status: data.$1,
                 error: data.$2,
                 conflictCount: data.$3,
@@ -436,11 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 progress: data.$5,
                 pendingUploadCount: data.$6,
                 compact: compact,
-                onTap: () {
-                  if (data.$3 <= 0) {
-                    _requestSync();
-                    return;
-                  }
+                onConflictTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const ConflictCenterScreen(),
@@ -724,140 +720,6 @@ class _EmptyBoardState extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SyncIndicator extends StatelessWidget {
-  const _SyncIndicator({
-    required this.status,
-    required this.onTap,
-    this.onCancel,
-    this.error,
-    this.conflictCount = 0,
-    this.lastSyncedAt,
-    this.progress,
-    this.pendingUploadCount = 0,
-    this.compact = false,
-  });
-
-  final SyncStatus status;
-  final String? error;
-  final int conflictCount;
-  final DateTime? lastSyncedAt;
-  final SyncProgress? progress;
-  final int pendingUploadCount;
-  final bool compact;
-  final VoidCallback onTap;
-  final VoidCallback? onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = conflictCount > 0
-        ? colorScheme.error
-        : switch (status) {
-            SyncStatus.error => colorScheme.error,
-            SyncStatus.success => colorScheme.tertiary,
-            SyncStatus.syncing => colorScheme.primary,
-            SyncStatus.idle => null,
-          };
-
-    final syncing = status == SyncStatus.syncing;
-    final label = conflictCount > 0
-        ? '有 $conflictCount 处冲突'
-        : syncStatusWithLastSuccessLabel(
-            status,
-            lastSyncedAt,
-            progress: progress,
-            pendingUploadCount: pendingUploadCount,
-          );
-    final compactLabel = conflictCount > 0
-        ? '冲突 $conflictCount'
-        : compactSyncStatusLabel(
-            status,
-            lastSyncedAt,
-            progress: progress,
-            pendingUploadCount: pendingUploadCount,
-          );
-
-    final lastSuccess = lastSyncedAt == null
-        ? '尚未成功同步'
-        : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
-    final pendingDetail =
-        pendingUploadCount > 0 ? '待同步 $pendingUploadCount 个文件（相对上次成功同步）' : null;
-
-    final progressDetail = progress == null
-        ? null
-        : [
-            progress!.phaseLabel,
-            if (progress!.hasTotal) '${progress!.completed}/${progress!.total}',
-            if (progress!.skipped > 0) '跳过 ${progress!.skipped} 个未变更文件',
-            if (progress!.currentLabel != null) progress!.currentLabel!,
-          ].join(' · ');
-
-    final tooltip = conflictCount > 0
-        ? '有未解决的同步冲突，点击进入冲突中心'
-        : syncing
-            ? (progressDetail == null ? '正在同步…可点击取消' : '$progressDetail\n可点击取消')
-            : error == null
-                ? [
-                    lastSuccess,
-                    if (pendingDetail != null) pendingDetail,
-                    '点击选择上传、下载或合并',
-                  ].join('\n')
-                : [
-                    error!,
-                    lastSuccess,
-                    if (pendingDetail != null) pendingDetail,
-                  ].join('\n');
-    final icon = Icon(
-      conflictCount > 0 ? Icons.warning_amber_outlined : syncStatusIcon(status),
-      color: color,
-      size: 20,
-    );
-
-    final syncButton = TextButton.icon(
-      onPressed: onTap,
-      icon: icon,
-      label: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: compact ? 112 : double.infinity),
-        child: Text(
-          compact ? compactLabel : label,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: color, fontSize: 13),
-        ),
-      ),
-    );
-
-    final cancelButton = onCancel == null
-        ? null
-        : IconButton(
-            tooltip: '取消同步',
-            onPressed: onCancel,
-            icon: Icon(
-              Icons.close,
-              color: colorScheme.onSurfaceVariant,
-              size: 20,
-            ),
-          );
-
-    return Semantics(
-      liveRegion: true,
-      label: syncing ? '$label，可取消' : label,
-      button: true,
-      child: Tooltip(
-        message: tooltip,
-        child: cancelButton == null
-            ? syncButton
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  syncButton,
-                  cancelButton,
-                ],
-              ),
       ),
     );
   }

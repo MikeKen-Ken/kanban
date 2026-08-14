@@ -370,9 +370,9 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
     return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
       gestures: <Type, GestureRecognizerFactory>{
-        _ProjectScrubGestureRecognizer:
-            GestureRecognizerFactoryWithHandlers<_ProjectScrubGestureRecognizer>(
-          () => _ProjectScrubGestureRecognizer(
+        ScrubGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<ScrubGestureRecognizer>(
+          () => ScrubGestureRecognizer(
             holdDuration: widget.longPressDelay,
             supportedDevices: _supportedDevices,
           ),
@@ -403,8 +403,8 @@ class _ProjectQuickSwitchGestureState extends State<ProjectQuickSwitchGesture> {
 }
 
 /// 稍长按住，或按住后垂直拖过阈值，均可进入快速切换；短按仍留给子组件菜单。
-class _ProjectScrubGestureRecognizer extends OneSequenceGestureRecognizer {
-  _ProjectScrubGestureRecognizer({
+class ScrubGestureRecognizer extends OneSequenceGestureRecognizer {
+  ScrubGestureRecognizer({
     required this.holdDuration,
     required super.supportedDevices,
   });
