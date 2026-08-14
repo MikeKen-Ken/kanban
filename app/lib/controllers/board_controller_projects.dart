@@ -10,7 +10,6 @@ extension BoardControllerProjects on BoardController {
       await _repository.saveActiveProjectId(projectId);
       board = await _repository.loadBoard(projectId);
       projectSettings = await _repository.loadProjectSettings(projectId);
-      await _ensureReworkColumnPersisted();
       projectThemeIds[projectId] = projectSettings.themeId;
       activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
       await refreshDisplayableWallpapers();
@@ -260,32 +259,6 @@ extension BoardControllerProjects on BoardController {
       );
       return null;
     });
-  }
-
-  /// 为当前看板补齐「待返工」列（已有板迁移）；无变更则跳过。
-  Future<void> ensureReworkColumn() async {
-    return _withBoardMutation(() async {
-      await _ensureReworkColumnPersisted();
-    });
-  }
-
-  Future<void> _ensureReworkColumnPersisted() async {
-    final current = board;
-    if (current == null) return;
-    final next = current
-        .ensureReworkColumn(
-          doneColumnTitle: projectSettings.doneColumnName,
-        )
-        .ensureInboxColumn();
-    if (identical(next, current)) return;
-    final sameShape = next.columns.length == current.columns.length &&
-        List.generate(next.columns.length, (i) {
-          final a = next.columns[i];
-          final b = current.columns[i];
-          return a.id == b.id && a.title == b.title && a.order == b.order;
-        }).every((ok) => ok);
-    if (sameShape) return;
-    await _persistAndSync(_bump(next));
   }
 
   /// 重命名列；与其他列标题冲突时拒绝，返回错误文案。

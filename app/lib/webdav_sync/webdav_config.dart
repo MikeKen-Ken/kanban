@@ -142,7 +142,6 @@ class BoardRepository {
 
   final SharedPreferences _prefs;
   final BoardStorage _storage;
-  static const _legacyBoardKey = 'kanban_board';
   static const _boardIdKey = 'kanban_board_id';
   static const _activeProjectKey = 'kanban_active_project_id';
   static const _webdavKey = 'webdav_config';
@@ -154,32 +153,6 @@ class BoardRepository {
   AttachmentStore? get attachmentStore => createAttachmentStore();
 
   Future<void> ensureInitialized() async {
-    await _storage.migrateFromLegacyIfNeeded();
-
-    final legacy = _prefs.getString(_legacyBoardKey);
-    if (legacy != null) {
-      final board = KanbanBoard.fromJsonString(legacy);
-      final projectId = board.id;
-      await _storage.saveBoard(projectId, board);
-      await _storage.saveProjectSettings(projectId, const ProjectSettings());
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await _storage.saveManifest(ProjectsManifest(
-        projects: [
-          ProjectEntry(
-            id: projectId,
-            title: board.title,
-            updatedAt: now,
-            revision: 1,
-          ),
-        ],
-        updatedAt: now,
-        revision: 1,
-      ));
-      await _prefs.remove(_legacyBoardKey);
-      await _prefs.setString(_activeProjectKey, projectId);
-      return;
-    }
-
     if (!await _storage.hasManifest()) {
       final id = _prefs.getString(_boardIdKey) ?? const Uuid().v4();
       await _prefs.setString(_boardIdKey, id);

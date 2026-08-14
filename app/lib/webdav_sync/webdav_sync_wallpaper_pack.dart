@@ -47,7 +47,6 @@ mixin _WebDavSyncWallpaperPack
         bytes: bytes,
       );
       _ensureNotCancelled(runId);
-      await _cleanupLegacyWallpapersDir(client, base);
       if (!_shouldCommit(runId)) {
         throw const SyncCancelledException();
       }
@@ -112,22 +111,6 @@ mixin _WebDavSyncWallpaperPack
         await _syncBaseStore.saveLiveWallpapersSha256(
           LiveArchiveMarker.hashBytes(bytes),
         );
-      } else {
-        final workspace = await _captureWorkspace();
-        _setProgress(
-          const SyncProgress(
-            phase: SyncPhase.attachments,
-            currentLabel: '兼容旧壁纸目录',
-          ),
-        );
-        final failed = await _pullWallpapers(
-          client,
-          base,
-          workspace.sharedContent,
-        );
-        if (failed > 0) {
-          throw StateError('从旧壁纸目录下载失败 $failed 项');
-        }
       }
       if (!_shouldCommit(runId)) {
         throw const SyncCancelledException();

@@ -8,40 +8,6 @@ mixin _WebDavSyncPull
         _WebDavSyncLiveArchive,
         _WebDavSyncAttachments,
         _WebDavSyncPush {
-  Future<KanbanBoard?> _pullLegacyBoard(Client client, String base) async {
-    final boardPath = KanbanPaths.remoteBoardPath(base);
-    final meta = await _readJson(client, boardPath);
-    if (meta == null) return null;
-
-    if (KanbanBoard.isLegacyMonolithic(meta)) {
-      return KanbanBoard.fromJson(meta);
-    }
-
-    final refs =
-        (meta['columns'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    final columns = List<KanbanColumn?>.filled(refs.length, null);
-    await runBounded(
-      List<int>.generate(refs.length, (index) => index),
-      action: (index) async {
-        final id = refs[index]['id'] as String;
-        final colJson = await _readJson(
-          client,
-          KanbanPaths.remoteColumnPath(base, id),
-        );
-        if (colJson != null) {
-          columns[index] = KanbanColumn.fromJson(colJson);
-        }
-      },
-    );
-    return KanbanBoard.fromMetadataJson(
-      meta,
-      [
-        for (final column in columns)
-          if (column != null) column,
-      ],
-    );
-  }
-
   Future<ProjectWorkspaceSnapshot?> pullRemote({
     ProjectWorkspaceSnapshot? reuseFrom,
   }) async {
@@ -120,28 +86,7 @@ mixin _WebDavSyncPull
         reuseFrom?.manifest.toJson(),
       );
 
-      // note: 兼容旧版 v2 单看板远端结构
-      if (manifestJson == null) {
-        final legacyBoard = await _pullLegacyBoard(client, base);
-        if (legacyBoard == null) return null;
-
-        final now = DateTime.now().millisecondsSinceEpoch;
-        final entry = ProjectEntry(
-          id: legacyBoard.id,
-          title: legacyBoard.title,
-          updatedAt: now,
-          revision: 1,
-        );
-        return ProjectWorkspaceSnapshot(
-          manifest: ProjectsManifest(
-            projects: [entry],
-            updatedAt: now,
-            revision: 1,
-          ),
-          boards: {legacyBoard.id: legacyBoard},
-          settings: {legacyBoard.id: const ProjectSettings()},
-        );
-      }
+      if (manifestJson == null) return null;
 
       final manifest = ProjectsManifest.fromJson(manifestJson);
       final boards = <String, KanbanBoard>{};
@@ -160,11 +105,7 @@ mixin _WebDavSyncPull
             baseBoard?.toMetadataJson(),
           );
           if (boardMeta == null) return;
-          if (KanbanBoard.isLegacyMonolithic(boardMeta)) {
-            boards[projectId] = KanbanBoard.fromJson(boardMeta);
-          } else {
-            boardMetas[projectId] = boardMeta;
-          }
+          boardMetas[projectId] = boardMeta;
         });
       }
 
@@ -201,7 +142,7 @@ mixin _WebDavSyncPull
       for (final entry in manifest.projects) {
         final projectId = entry.id;
         final boardMeta = boardMetas[projectId];
-        if (boardMeta == null && !boards.containsKey(projectId)) continue;
+        if (boardMeta == null) continue;
 
         followUpJobs.add(() async {
           final settingsJson = await readRel(
@@ -249,7 +190,6 @@ mixin _WebDavSyncPull
 
       for (final entry in manifest.projects) {
         final projectId = entry.id;
-        if (boards.containsKey(projectId)) continue;
         final boardMeta = boardMetas[projectId];
         if (boardMeta == null) continue;
         final refs = (boardMeta['columns'] as List<dynamic>? ?? [])

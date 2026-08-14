@@ -32,9 +32,6 @@ abstract class BoardStorage {
   Future<SharedContent> loadSharedContent();
   Future<void> saveSharedContent(SharedContent content);
 
-  /// 从 v2 单项目结构迁移到 v3 多项目结构
-  Future<bool> migrateFromLegacyIfNeeded();
-
   factory BoardStorage({
     Object? baseDirectory,
     required SharedPreferences prefs,

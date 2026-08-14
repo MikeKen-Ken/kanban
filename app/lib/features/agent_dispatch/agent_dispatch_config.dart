@@ -57,7 +57,7 @@ class AgentDispatchRunOptions {
   /// Worker 调用 MCP 时使用的项目 id；为空则使用看板当前项目。
   final String? projectId;
 
-  /// 非空时作为 skill「本次调用」中的 `name:<标题>`。
+  /// 仅用于调度日志与面板展示；不写入 Skill 调用正文。
   final String? projectTitle;
 
   /// Agent 工作目录（必填）。

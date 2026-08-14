@@ -16,16 +16,16 @@ enum CardSortMode {
   static CardSortMode fromName(String? name) {
     return CardSortMode.values.firstWhere(
       (mode) => mode.name == name,
-      orElse: () => CardSortMode.priority,
+      orElse: () => CardSortMode.updatedAt,
     );
   }
 }
 
-/// 未单独保存偏好时的默认排序：已完成列为按时间，其余列为紧急程度。
+/// 未单独保存偏好时的默认排序：全部列为按时间。
 CardSortMode defaultSortModeForColumn({required bool isDoneColumn}) =>
-    isDoneColumn ? CardSortMode.updatedAt : CardSortMode.priority;
+    CardSortMode.updatedAt;
 
-/// 解析列偏好：有存档用存档，否则按是否已完成列给出默认值。
+/// 解析列偏好：有存档用存档，否则使用默认按时间。
 ColumnCardPreferences resolveColumnCardPreferences({
   ColumnCardPreferences? stored,
   required bool isDoneColumn,
@@ -39,7 +39,7 @@ ColumnCardPreferences resolveColumnCardPreferences({
 /// 单列的卡片展示偏好（随项目同步）
 class ColumnCardPreferences {
   const ColumnCardPreferences({
-    this.sortMode = CardSortMode.priority,
+    this.sortMode = CardSortMode.updatedAt,
     this.pinnedCardIds = const [],
   });
 

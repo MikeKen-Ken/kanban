@@ -157,9 +157,7 @@ extension BoardControllerPersist on BoardController {
       board = await _repository.loadBoard(activeProjectId!);
       projectSettings = await _repository.loadProjectSettings(activeProjectId!);
       sharedContent = await _repository.loadSharedContent();
-      await _initializeSharedLabels();
-      await _ensureReworkColumnPersisted();
-      await _ensureInboxColumnOnAllProjects();
+      await _mirrorSharedLabelsToLocalPreferences();
       await _refreshProjectThemeIds();
       await _loadTrashState();
       await refreshDisplayableWallpapers();
@@ -227,32 +225,15 @@ extension BoardControllerPersist on BoardController {
     });
   }
 
-  Future<void> _ensureInboxColumnOnAllProjects() async {
-    final list = manifest?.projects ?? const <ProjectEntry>[];
-    for (final entry in list) {
-      KanbanBoard current;
-      if (entry.id == activeProjectId && board != null) {
-        current = board!;
-      } else {
-        if (!await _repository.storage.hasProjectBoard(entry.id)) continue;
-        current = await _repository.loadBoard(entry.id);
-      }
-      final next = current.ensureInboxColumn();
-      if (identical(next, current)) continue;
-      await _persistAndSync(_bump(next));
-    }
-  }
-
   Future<void> _reloadUiAfterSync() {
     return _withBoardMutation(() async {
       manifest = await _repository.loadManifest();
       sharedContent = await _repository.loadSharedContent();
-      await _initializeSharedLabels();
+      await _mirrorSharedLabelsToLocalPreferences();
       if (activeProjectId != null) {
         board = await _repository.loadBoard(activeProjectId!);
         projectSettings =
             await _repository.loadProjectSettings(activeProjectId!);
-        await _ensureReworkColumnPersisted();
         await _loadTrashState();
       }
       await _refreshProjectThemeIds();
@@ -320,27 +301,6 @@ extension BoardControllerPersist on BoardController {
     await _persistSharedContent(
       sharedContent.copyWith(activityByProject: logs),
     );
-  }
-
-  Future<void> _initializeSharedLabels() async {
-    if (sharedContent.isUninitialized && appSettings.customLabels.isNotEmpty) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await _persistSharedContent(
-        sharedContent.copyWith(
-          labels: [
-            for (final label in appSettings.customLabels)
-              SharedLabel(
-                id: label.key,
-                name: label.name,
-                colorValue: label.colorValue,
-                updatedAt: now,
-              ),
-          ],
-        ),
-      );
-      return;
-    }
-    await _mirrorSharedLabelsToLocalPreferences();
   }
 
   Future<void> _mirrorSharedLabelsToLocalPreferences() async {

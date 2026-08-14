@@ -373,7 +373,6 @@ class AgentDispatchService {
     };
     final prompt = buildSkillDispatchPrompt(
       skillMarkdown: skillMarkdown,
-      projectTitle: options.projectTitle ?? boundProjectId,
       projectId: boundProjectId,
     );
     log('批次 id：$runId');

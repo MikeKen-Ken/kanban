@@ -82,10 +82,6 @@ mixin _WebDavSyncLiveArchive on _WebDavSyncHost, _WebDavSyncClientIo {
     await _removeRemoteIfExists(client, KanbanPaths.remoteColumnsDir(base));
   }
 
-  Future<void> _cleanupLegacyWallpapersDir(Client client, String base) async {
-    await _removeRemoteIfExists(client, KanbanPaths.remoteWallpapersDir(base));
-  }
-
   Future<bool> _anyWallpaperFileMissing(
     ProjectWorkspaceSnapshot workspace,
   ) async {

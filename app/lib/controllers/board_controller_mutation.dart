@@ -84,10 +84,7 @@ extension BoardControllerMutation on BoardController {
 
       try {
         return await runZoned(
-          () async {
-            await _ensureReworkColumnPersisted();
-            return action();
-          },
+          action,
           zoneValues: {_projectMutationScopeKey: scope},
         );
       } finally {

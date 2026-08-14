@@ -11,15 +11,6 @@ class KanbanPathsIo {
   static Directory dataDirectory(Directory base) =>
       Directory(p.join(base.path, 'kanban'));
 
-  static File boardFile(Directory dataDir) =>
-      File(p.join(dataDir.path, KanbanPaths.boardFileName));
-
-  static Directory columnsDirectory(Directory dataDir) =>
-      Directory(p.join(dataDir.path, KanbanPaths.columnsDirName));
-
-  static File columnFile(Directory dataDir, String columnId) =>
-      File(p.join(columnsDirectory(dataDir).path, '$columnId.json'));
-
   static File manifestFile(Directory dataDir) =>
       File(p.join(dataDir.path, KanbanPaths.projectsFileName));
 

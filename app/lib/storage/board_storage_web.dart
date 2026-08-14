@@ -27,8 +27,6 @@ class BoardStorageWeb implements BoardStorage {
   final SharedPreferences _prefs;
 
   static const _manifestKey = 'kanban_v3_manifest';
-  static const _legacyMetaKey = 'kanban_v2_board_meta';
-  static const _legacyColumnIndexKey = 'kanban_v2_column_ids';
 
   String _projectMetaKey(String projectId) =>
       'kanban_v3_project_${projectId}_meta';
@@ -74,10 +72,6 @@ class BoardStorageWeb implements BoardStorage {
     }
 
     final meta = jsonDecode(metaRaw) as Map<String, dynamic>;
-
-    if (KanbanBoard.isLegacyMonolithic(meta)) {
-      return KanbanBoard.fromJson(meta);
-    }
 
     final refs =
         (meta['columns'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
@@ -201,60 +195,6 @@ class BoardStorageWeb implements BoardStorage {
       _sharedContentKey,
       const JsonEncoder.withIndent('  ').convert(content.toJson()),
     );
-  }
-
-  @override
-  Future<bool> migrateFromLegacyIfNeeded() async {
-    if (_prefs.containsKey(_manifestKey)) return false;
-    if (!_prefs.containsKey(_legacyMetaKey)) return false;
-
-    final metaRaw = _prefs.getString(_legacyMetaKey)!;
-    final meta = jsonDecode(metaRaw) as Map<String, dynamic>;
-    KanbanBoard board;
-
-    if (KanbanBoard.isLegacyMonolithic(meta)) {
-      board = KanbanBoard.fromJson(meta);
-    } else {
-      final refs = (meta['columns'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-      final columns = <KanbanColumn>[];
-      for (final ref in refs) {
-        final id = ref['id'] as String;
-        final colRaw = _prefs.getString('kanban_v2_column_$id');
-        if (colRaw == null) continue;
-        final colJson = jsonDecode(colRaw) as Map<String, dynamic>;
-        columns.add(KanbanColumn.fromJson(colJson));
-      }
-      board = KanbanBoard.fromMetadataJson(meta, columns);
-    }
-
-    final projectId = board.id;
-    await saveBoard(projectId, board);
-    await saveProjectSettings(projectId, const ProjectSettings());
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await saveManifest(ProjectsManifest(
-      projects: [
-        ProjectEntry(
-          id: projectId,
-          title: board.title,
-          updatedAt: now,
-          revision: 1,
-        ),
-      ],
-      updatedAt: now,
-      revision: 1,
-    ));
-
-    // note: 清理旧版 v2 键
-    final prevIds = _prefs.getStringList(_legacyColumnIndexKey) ?? const [];
-    for (final id in prevIds) {
-      await _prefs.remove('kanban_v2_column_$id');
-    }
-    await _prefs.remove(_legacyColumnIndexKey);
-    await _prefs.remove(_legacyMetaKey);
-
-    return true;
   }
 
   Future<String> createDefaultProject({String? id, String? title}) async {

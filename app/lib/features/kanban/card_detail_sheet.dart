@@ -567,8 +567,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     )) {
       return;
     }
-    // 移列前按标题补齐/去重「待返工」，避免按固定 id 找不到就另建同名列。
-    await _boardController.ensureReworkColumn();
     final board = _boardController.board;
     if (board == null) return;
     final fromColumnId =
@@ -694,7 +692,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     List<ChecklistItem> feedback,
   ) async {
     if (!hasIncompleteVerificationFeedback(feedback)) return;
-    await _boardController.ensureReworkColumn();
     final board = _boardController.board;
     if (board == null) return;
     final fromColumnId =

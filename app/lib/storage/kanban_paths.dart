@@ -98,17 +98,6 @@ class KanbanPaths {
         '${remoteProjectAttachmentFileName(attachmentId, thumb: thumb)}';
   }
 
-  static String remoteWallpapersDir(String baseDir) =>
-      '$baseDir/$wallpapersDirName';
-
-  static String remoteWallpaperPath(
-    String baseDir,
-    String wallpaperId, {
-    bool thumb = false,
-  }) =>
-      '${remoteWallpapersDir(baseDir)}/'
-      '${remoteProjectAttachmentFileName(wallpaperId, thumb: thumb)}';
-
   static String remoteProjectFileAttachmentFileName(String attachmentId) =>
       '$attachmentId.$fileAttachmentExt';
 

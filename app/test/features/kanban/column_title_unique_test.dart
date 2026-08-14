@@ -48,14 +48,4 @@ void main() {
       '待办',
     );
   });
-
-  test('ensureRework 后再 addColumn 待返工仍失败', () async {
-    await controller.ensureReworkColumn();
-    final err = await controller.addColumn('待返工');
-    expect(err, isNotNull);
-    expect(
-      controller.board!.columns.where((c) => c.title == '待返工').length,
-      1,
-    );
-  });
 }

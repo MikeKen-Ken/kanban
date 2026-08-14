@@ -4,16 +4,16 @@ import 'package:kanban/features/kanban/kanban_labels.dart';
 import 'package:kanban/models/kanban_models.dart';
 
 void main() {
-  test('column sort defaults to priority', () {
-    expect(const ColumnCardPreferences().sortMode, CardSortMode.priority);
-    expect(CardSortMode.fromName(null), CardSortMode.priority);
-    expect(CardSortMode.fromName('unknown'), CardSortMode.priority);
+  test('column sort defaults to updatedAt', () {
+    expect(const ColumnCardPreferences().sortMode, CardSortMode.updatedAt);
+    expect(CardSortMode.fromName(null), CardSortMode.updatedAt);
+    expect(CardSortMode.fromName('unknown'), CardSortMode.updatedAt);
   });
 
-  test('done column defaults to updatedAt when no preference is stored', () {
+  test('all columns default to updatedAt when no preference is stored', () {
     expect(
       defaultSortModeForColumn(isDoneColumn: false),
-      CardSortMode.priority,
+      CardSortMode.updatedAt,
     );
     expect(
       defaultSortModeForColumn(isDoneColumn: true),

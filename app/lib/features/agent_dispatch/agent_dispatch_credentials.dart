@@ -39,7 +39,6 @@ class AgentDispatchCredentials {
     FlutterSecureStorage storage = const FlutterSecureStorage(),
   }) : _storage = storage;
 
-  static const _legacyCursorApiKey = 'agent_dispatch_cursor_api_key';
   static const _metaKey = 'agent_dispatch_cursor_api_keys_meta';
   static const _activeIdKey = 'agent_dispatch_cursor_api_key_active';
   static const _valuePrefix = 'agent_dispatch_cursor_api_key_';
@@ -54,18 +53,7 @@ class AgentDispatchCredentials {
     return 'Key ···${trimmed.substring(trimmed.length - 4)}';
   }
 
-  Future<void> _migrateLegacyIfNeeded() async {
-    final legacy = (await _storage.read(key: _legacyCursorApiKey))?.trim();
-    if (legacy == null || legacy.isEmpty) return;
-    final id = const Uuid().v4();
-    await _storage.write(key: _valueKey(id), value: legacy);
-    await _writeMeta([_CursorApiKeyMeta(id: id, label: _defaultLabel(legacy))]);
-    await _storage.write(key: _activeIdKey, value: id);
-    await _storage.delete(key: _legacyCursorApiKey);
-  }
-
   Future<List<_CursorApiKeyMeta>> _readMeta() async {
-    await _migrateLegacyIfNeeded();
     final raw = await _storage.read(key: _metaKey);
     if (raw == null || raw.trim().isEmpty) return const [];
     final decoded = jsonDecode(raw);

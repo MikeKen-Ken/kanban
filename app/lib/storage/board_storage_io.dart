@@ -76,10 +76,6 @@ class BoardStorageIo implements BoardStorage {
       throw StateError('项目 $projectId 的 board.json 不存在或已损坏');
     }
 
-    if (KanbanBoard.isLegacyMonolithic(meta)) {
-      return KanbanBoard.fromJson(meta);
-    }
-
     final refs =
         (meta['columns'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final columns = <KanbanColumn>[];
@@ -233,64 +229,6 @@ class BoardStorageIo implements BoardStorage {
       KanbanPathsIo.sharedContentFile(dir),
       content.toJson(),
     );
-  }
-
-  @override
-  Future<bool> migrateFromLegacyIfNeeded() async {
-    final dir = await _dataDir();
-    if (await KanbanPathsIo.manifestFile(dir).exists()) return false;
-
-    final legacyBoard = KanbanPathsIo.boardFile(dir);
-    if (!await legacyBoard.exists()) return false;
-
-    final meta = await readJsonFile(legacyBoard);
-    if (meta == null) return false;
-    KanbanBoard board;
-
-    if (KanbanBoard.isLegacyMonolithic(meta)) {
-      board = KanbanBoard.fromJson(meta);
-    } else {
-      final refs = (meta['columns'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-      final columns = <KanbanColumn>[];
-      for (final ref in refs) {
-        final id = ref['id'] as String;
-        final colFile = KanbanPathsIo.columnFile(dir, id);
-        final colJson = await readJsonFile(colFile);
-        if (colJson == null) continue;
-        columns.add(KanbanColumn.fromJson(colJson));
-      }
-      board = KanbanBoard.fromMetadataJson(meta, columns);
-    }
-
-    final projectId = board.id;
-    await saveBoard(projectId, board);
-    await saveProjectSettings(projectId, const ProjectSettings());
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await saveManifest(ProjectsManifest(
-      projects: [
-        ProjectEntry(
-          id: projectId,
-          title: board.title,
-          updatedAt: now,
-          revision: 1,
-        ),
-      ],
-      updatedAt: now,
-      revision: 1,
-    ));
-
-    // note: 清理旧版 v2 文件
-    final legacyColumns = KanbanPathsIo.columnsDirectory(dir);
-    if (await legacyColumns.exists()) {
-      await legacyColumns.delete(recursive: true);
-    }
-    if (await legacyBoard.exists()) {
-      await legacyBoard.delete();
-    }
-
-    return true;
   }
 
   /// note: 供 BoardRepository 在无数据时创建默认项目

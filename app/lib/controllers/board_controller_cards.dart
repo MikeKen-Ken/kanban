@@ -473,7 +473,6 @@ extension BoardControllerCards on BoardController {
           original: original.verificationFeedback,
           next: nextVerificationFeedback,
         )) {
-          await ensureReworkColumn();
           final afterColumnId = findColumnIdForCard(cardId);
           final afterBoard = board;
           final rework = afterBoard == null

@@ -17,7 +17,7 @@ class KanbanColumnList extends StatefulWidget {
     required this.cards,
     required this.allColumns,
     this.searchQuery = '',
-    this.sortMode = CardSortMode.priority,
+    this.sortMode = CardSortMode.updatedAt,
     this.pinnedCardIds = const [],
   });
 
