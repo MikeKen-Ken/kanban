@@ -7,9 +7,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 extension AgentDispatchLogStore on SharedPreferences {
   static const _key = 'agent_dispatch_tool_log';
 
-  String loadAgentDispatchLog() => getString(_key) ?? '';
+  String _storageKey(String? projectId) {
+    final id = projectId?.trim();
+    if (id == null || id.isEmpty) return _key;
+    return '$_key.$id';
+  }
 
-  Future<void> saveAgentDispatchLog(String value) => setString(_key, value);
+  String loadAgentDispatchLog({String? projectId}) =>
+      getString(_storageKey(projectId)) ?? '';
 
-  Future<void> clearAgentDispatchLog() => remove(_key);
+  Future<void> saveAgentDispatchLog(String value, {String? projectId}) =>
+      setString(_storageKey(projectId), value);
+
+  Future<void> clearAgentDispatchLog({String? projectId}) =>
+      remove(_storageKey(projectId));
 }

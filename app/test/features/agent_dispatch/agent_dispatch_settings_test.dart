@@ -63,24 +63,28 @@ void main() {
     expect(loaded.cardLimitCount, 7);
   });
 
-  test('buildSkillDispatchPrompt 注入 skill 与 name', () {
+  test('buildSkillDispatchPrompt 注入 skill、name 与 projectId', () {
     final text = buildSkillDispatchPrompt(
       skillMarkdown: '# 看板：做最新一条\n\n## 流程\n',
       projectTitle: '我的项目',
+      projectId: 'proj-1',
     );
     expect(text, contains('Skill 正文'));
     expect(text, contains('name:我的项目'));
+    expect(text, contains('projectId:proj-1'));
     expect(text, isNot(contains('dispatchSessionId')));
     expect(text, isNot(contains('CARD_DONE')));
   });
 
-  test('不指定项目时调用正文为空说明', () {
+  test('调用正文始终钉死项目，不再回退到界面当前项目', () {
     final text = buildSkillDispatchPrompt(
       skillMarkdown: 'skill',
-      projectTitle: null,
+      projectTitle: '',
+      projectId: 'proj-2',
     );
-    expect(text, contains('（空：使用看板当前打开的项目）'));
-    expect(text, isNot(contains('name:')));
+    expect(text, contains('name:proj-2'));
+    expect(text, contains('projectId:proj-2'));
+    expect(text, isNot(contains('（空：使用看板当前打开的项目）')));
   });
 
   test('toRunOptions：仓库必填字段与 Max', () {

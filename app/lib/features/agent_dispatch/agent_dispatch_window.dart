@@ -1,25 +1,46 @@
 import 'package:flutter/material.dart';
 
-import 'agent_dispatch_panel.dart';
-import 'agent_dispatch_platform.dart';
-import 'agent_dispatch_service.dart';
+import 'agent_dispatch_shell.dart';
 
-/// Agent 工作台窗口：关闭只隐藏，不销毁面板 State。
+/// Agent 工作台窗口：关闭只隐藏，不销毁总览与已打开项目面板的 State。
 ///
-/// Worker 批次由 [AgentDispatchService] 持有；隐藏窗口不会停止运行，
-/// 再次打开时配置、日志与「运行中」状态都还在。
+/// Worker 批次由各项目的调度服务持有；隐藏窗口不会停止运行。
 class AgentDispatchWindow {
   AgentDispatchWindow._();
 
   static final ValueNotifier<bool> visible = ValueNotifier(false);
+  static final ValueNotifier<String?> selectedProjectId = ValueNotifier(null);
+  static final ValueNotifier<List<String>> openedProjectIds =
+      ValueNotifier(const []);
   static bool _sessionCreated = false;
 
   static bool get isVisible => visible.value;
 
   static bool get hasSession => _sessionCreated;
 
-  static void show() {
+  static void showHub() {
     _sessionCreated = true;
+    selectedProjectId.value = null;
+    visible.value = true;
+  }
+
+  /// 测试注入面板时只需显示遮罩。
+  static void show() => showHub();
+
+  static void openProject(String projectId) {
+    final id = projectId.trim();
+    if (id.isEmpty) return;
+    _sessionCreated = true;
+    if (!openedProjectIds.value.contains(id)) {
+      openedProjectIds.value = [...openedProjectIds.value, id];
+    }
+    selectedProjectId.value = id;
+    visible.value = true;
+  }
+
+  static void backToHub() {
+    if (!_sessionCreated) return;
+    selectedProjectId.value = null;
     visible.value = true;
   }
 
@@ -27,9 +48,13 @@ class AgentDispatchWindow {
     visible.value = false;
   }
 
-  /// 若工作台正显示则隐藏并返回 true，供 Esc 优先处理。
+  /// Esc：项目工作台先回到总览；总览再隐藏窗口。
   static bool hideIfVisible() {
     if (!visible.value) return false;
+    if (selectedProjectId.value != null) {
+      selectedProjectId.value = null;
+      return true;
+    }
     hide();
     return true;
   }
@@ -38,6 +63,8 @@ class AgentDispatchWindow {
   static void resetForTest() {
     _sessionCreated = false;
     visible.value = false;
+    selectedProjectId.value = null;
+    openedProjectIds.value = const [];
   }
 }
 
@@ -71,7 +98,7 @@ class AgentDispatchWindowHost extends StatelessWidget {
                   offstage: !visible,
                   child: _AgentDispatchScrim(
                     onDismiss: AgentDispatchWindow.hide,
-                    child: panel ?? const AgentDispatchPanel(),
+                    child: panel ?? const AgentDispatchShell(),
                   ),
                 ),
               ),
@@ -123,50 +150,6 @@ class _AgentDispatchScrim extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-void showAgentDispatchPanel(BuildContext context) {
-  AgentDispatchWindow.show();
-}
-
-/// 左上角「新建项目」右侧入口（仅桌面）。
-class AgentDispatchToolbarButton extends StatefulWidget {
-  const AgentDispatchToolbarButton({super.key});
-
-  @override
-  State<AgentDispatchToolbarButton> createState() =>
-      _AgentDispatchToolbarButtonState();
-}
-
-class _AgentDispatchToolbarButtonState extends State<AgentDispatchToolbarButton> {
-  final _service = AgentDispatchService();
-
-  @override
-  void initState() {
-    super.initState();
-    _service.addRunningListener(_onRunningChanged);
-  }
-
-  @override
-  void dispose() {
-    _service.removeRunningListener(_onRunningChanged);
-    super.dispose();
-  }
-
-  void _onRunningChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!isAgentDispatchDesktop) return const SizedBox.shrink();
-    final running = _service.isRunning;
-    return IconButton(
-      tooltip: running ? 'Agent 调度（运行中）' : 'Agent 调度',
-      icon: Icon(running ? Icons.smart_toy : Icons.smart_toy_outlined),
-      onPressed: () => showAgentDispatchPanel(context),
     );
   }
 }

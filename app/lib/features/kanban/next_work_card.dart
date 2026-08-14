@@ -66,6 +66,24 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
   return null;
 }
 
+/// 待返工与待办中未完成卡片数，供调度进度分母估算。
+int countWorkQueueCards(KanbanBoard board) {
+  var count = 0;
+  final rework = findReworkColumn(board.columns);
+  if (rework != null) {
+    for (final card in rework.cards) {
+      if (!card.completed) count += 1;
+    }
+  }
+  final todo = findTodoColumn(board.columns);
+  if (todo != null) {
+    for (final card in todo.cards) {
+      if (!card.completed) count += 1;
+    }
+  }
+  return count;
+}
+
 /// 本轮实施范围（仅文本；附件由 MCP 层内联二进制）。
 Map<String, dynamic> buildCardWorkScope(KanbanCard card) {
   final rework = isReworkWorkMode(card);

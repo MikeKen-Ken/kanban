@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -11,27 +12,22 @@ import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_log.dart';
 import 'agent_dispatch_log_store.dart';
+import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_prompt.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
 /// 启动一次 Worker 批次；Worker 只调度，每轮 Agent 按 Skill 自己取一张卡。
 ///
-/// 单例：关闭工作台只隐藏窗口，不会终止批次；日志与运行状态由本服务持有。
+/// 每个看板项目一份实例，由 [AgentDispatchRegistry] 持有。
+/// 关闭工作台只隐藏窗口，不会终止批次；日志与运行状态由本服务持有。
 class AgentDispatchService {
-  factory AgentDispatchService() => _shared;
-
-  AgentDispatchService._({
+  AgentDispatchService.internal({
+    required this.projectId,
     AgentDispatchCredentials credentials = const AgentDispatchCredentials(),
-  }) : _credentials = credentials {
-    _liveServices.add(this);
-  }
+  }) : _credentials = credentials;
 
-  static final AgentDispatchService _shared =
-      AgentDispatchService._();
-
-  static final Set<AgentDispatchService> _liveServices = {};
-
+  final String projectId;
   final AgentDispatchCredentials _credentials;
 
   bool _cancelRequested = false;
@@ -39,8 +35,11 @@ class AgentDispatchService {
   bool _isRunning = false;
   AgentWorkerProcess? _activeWorker;
   String? _activeWorkerToken;
+  String? _activeRepoPath;
+  AgentDispatchProgress _progress = AgentDispatchProgress.idle;
   final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
   final _runningListeners = <void Function()>{};
+  final _progressListeners = <void Function()>{};
   String _logText = '';
   bool _logHydrated = false;
   Future<void> _logSaveQueue = Future.value();
@@ -48,6 +47,10 @@ class AgentDispatchService {
   bool get isRunning => _isRunning;
 
   String get logText => _logText;
+
+  String? get activeRepoPath => _activeRepoPath;
+
+  AgentDispatchProgress get progress => _progress;
 
   void addLogListener(void Function(AgentDispatchLogEntry entry) listener) {
     _logListeners.add(listener);
@@ -65,10 +68,25 @@ class AgentDispatchService {
     _runningListeners.remove(listener);
   }
 
+  void addProgressListener(void Function() listener) {
+    _progressListeners.add(listener);
+  }
+
+  void removeProgressListener(void Function() listener) {
+    _progressListeners.remove(listener);
+  }
+
   void _setRunning(bool value) {
     if (_isRunning == value) return;
     _isRunning = value;
     for (final listener in _runningListeners.toList()) {
+      listener();
+    }
+  }
+
+  void _setProgress(AgentDispatchProgress value) {
+    _progress = value;
+    for (final listener in _progressListeners.toList()) {
       listener();
     }
   }
@@ -78,7 +96,7 @@ class AgentDispatchService {
     if (_logHydrated) return;
     _logHydrated = true;
     final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.loadAgentDispatchLog();
+    final stored = prefs.loadAgentDispatchLog(projectId: projectId);
     if (_logText.isEmpty && stored.isNotEmpty) {
       _logText = stored;
       _notifyLog(const AgentDispatchLogEntry(''));
@@ -91,7 +109,7 @@ class AgentDispatchService {
     _notifyLog(const AgentDispatchLogEntry(''));
     _logSaveQueue = _logSaveQueue.then((_) async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.clearAgentDispatchLog();
+      await prefs.clearAgentDispatchLog(projectId: projectId);
     });
     await _logSaveQueue;
   }
@@ -112,9 +130,13 @@ class AgentDispatchService {
     _logText = _logText.isEmpty ? formatted : '$_logText\n$formatted';
     _logHydrated = true;
     _notifyLog(AgentDispatchLogEntry(message, level: level, source: source));
+    if (_isRunning) {
+      final next = applyWorkerProgressLog(_progress, message);
+      if (next != _progress) _setProgress(next);
+    }
     _logSaveQueue = _logSaveQueue.then((_) async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.saveAgentDispatchLog(_logText);
+      await prefs.saveAgentDispatchLog(_logText, projectId: projectId);
     });
   }
 
@@ -161,7 +183,7 @@ class AgentDispatchService {
         final blockResult = await mcpBlockCard(
           boardController,
           cardId: cardId,
-          projectId: status?.projectId,
+          projectId: status?.projectId ?? projectId,
           reason: blockReason ?? '用户点击「下一个」跳过',
         );
         if (blockResult.isError == true) {
@@ -178,19 +200,12 @@ class AgentDispatchService {
     if (worker != null) await worker.requestSkipToNext();
   }
 
-  /// 应用退出时停止所有由 Agent 工作台创建的 Worker。
-  ///
-  /// 逐个 Worker 使用 `taskkill /T`，以确保 SDK/CLI 子进程不会遗留。
-  static Future<void> stopAllForAppExit() async {
-    final services = _liveServices.toList(growable: false);
-    await Future.wait(services.map((service) => service.requestCancel()));
-  }
-
   Future<AgentWorkerResult> runOnce({
     required AgentDispatchRunOptions options,
     required String skillPath,
     required String mcpEndpoint,
     String? workerScriptPath,
+    int queueSize = 0,
     void Function(AgentDispatchLogEntry entry)? onLog,
   }) async {
     if (_isRunning) {
@@ -198,6 +213,20 @@ class AgentDispatchService {
     }
     _cancelRequested = false;
     _drainAfterCurrentRequested = false;
+    _activeRepoPath = options.repoPath.trim();
+    _setProgress(
+      AgentDispatchProgress(
+        running: true,
+        totalCards: plannedDispatchTotal(
+          cardLimitMax: options.cardLimit is AgentDispatchCardLimitMax,
+          cardLimitCount: switch (options.cardLimit) {
+            AgentDispatchCardLimitMax() => 0,
+            AgentDispatchCardLimitCount(:final count) => count,
+          },
+          queueSize: queueSize,
+        ),
+      ),
+    );
     _setRunning(true);
     try {
       return await _runOnceImpl(
@@ -208,6 +237,8 @@ class AgentDispatchService {
         onLog: onLog,
       );
     } finally {
+      _activeRepoPath = null;
+      _setProgress(_progress.copyWith(running: false));
       _setRunning(false);
     }
   }
@@ -225,6 +256,13 @@ class AgentDispatchService {
     }
     if (!await Directory(repo).exists()) {
       return AgentWorkerResult(ok: false, error: '仓库路径不存在：$repo');
+    }
+    final boundProjectId = options.projectId?.trim();
+    if (boundProjectId == null || boundProjectId.isEmpty) {
+      return const AgentWorkerResult(ok: false, error: '缺少看板项目');
+    }
+    if (boundProjectId != projectId) {
+      return const AgentWorkerResult(ok: false, error: '批次项目与工作台不一致');
     }
 
     final skillFile = File(skillPath);
@@ -245,7 +283,7 @@ class AgentDispatchService {
       onLog?.call(entry);
     }
 
-    log('项目：${options.projectTitle ?? '看板当前项目'}');
+    log('项目：${options.projectTitle ?? boundProjectId}');
     log('仓库：$repo');
     log('策略：每张卡片创建一次独立 Agent 调用；上限 ${options.cardLimit.label}');
 
@@ -276,20 +314,24 @@ class AgentDispatchService {
     };
     final prompt = buildSkillDispatchPrompt(
       skillMarkdown: skillMarkdown,
-      projectTitle: options.projectTitle,
+      projectTitle: options.projectTitle ?? boundProjectId,
+      projectId: boundProjectId,
     );
     log('批次 id：$runId');
     log('Worker 只读检查队列；每轮由全新 Skill 会话自己领取并处理一张卡');
     final stopwatch = Stopwatch()..start();
     late AgentWorkerResult result;
-    McpDispatchCardGate.instance.beginBatch(workerToken);
+    McpDispatchCardGate.instance.beginBatch(
+      workerToken,
+      projectId: boundProjectId,
+    );
     try {
       result = await runAgentWorkerJob(
         engine: options.engine,
         cwd: repo,
         prompt: prompt,
         mcpEndpoint: mcpEndpoint,
-        projectId: options.projectId,
+        projectId: boundProjectId,
         cardLimit: cardLimit,
         workerToken: workerToken,
         model: options.modelId,
@@ -318,6 +360,14 @@ class AgentDispatchService {
       _activeWorkerToken = null;
       stopwatch.stop();
     }
+    if (result.processedCards != null) {
+      _setProgress(
+        applyWorkerProgressLog(
+          _progress,
+          '已处理 ${result.processedCards} 张',
+        ),
+      );
+    }
     if (_cancelRequested) {
       log('Worker 批次已由用户终止', level: AgentDispatchLogLevel.warning);
       return const AgentWorkerResult(ok: false, error: '已取消');
@@ -341,11 +391,20 @@ class AgentDispatchService {
     _isRunning = false;
     _activeWorker = null;
     _activeWorkerToken = null;
+    _activeRepoPath = null;
+    _progress = AgentDispatchProgress.idle;
     _logText = '';
     _logHydrated = false;
     _logSaveQueue = Future.value();
     _logListeners.clear();
     _runningListeners.clear();
+    _progressListeners.clear();
+  }
+
+  @visibleForTesting
+  void debugSetProgress(AgentDispatchProgress value) {
+    _setProgress(value);
+    _setRunning(value.running);
   }
 }
 

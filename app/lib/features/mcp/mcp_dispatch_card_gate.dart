@@ -1,72 +1,122 @@
 /// Agent 调度批次的一轮一卡程序闸门。
 ///
-/// Worker 持有批次 token，并在每次启动全新 Agent 会话前重置闸门。
-/// AI 不接触 token；它仍按 Skill 正常调用 `pick_next_card`，但每个会话最多成功一次。
+/// 按项目各持有一条 Worker 批次。Worker 持有批次 token，并在每次启动全新
+/// Agent 会话前重置该项目的闸门。AI 不接触 token；它仍按 Skill 正常调用
+/// `pick_next_card`，但每个项目的会话最多成功一次。
 class McpDispatchCardGate {
   McpDispatchCardGate._();
 
   static final McpDispatchCardGate instance = McpDispatchCardGate._();
 
-  String? _activeWorkerToken;
-  bool _sessionOpen = false;
-  bool _pickClaimed = false;
-  int _deniedPickCount = 0;
-  String? _pickedProjectId;
-  String? _pickedCardId;
+  final _slotsByToken = <String, _McpDispatchSlot>{};
+  final _tokenByProject = <String, String>{};
 
-  String? get activeWorkerToken => _activeWorkerToken;
+  /// 仅一条批次时返回其 token；并行时为 null。测试与旧调用可用来判断「是否空闲」。
+  String? get activeWorkerToken =>
+      _slotsByToken.length == 1 ? _slotsByToken.keys.first : null;
 
-  void beginBatch(String workerToken) {
-    _activeWorkerToken = workerToken;
-    _resetSession(open: false);
+  int get openSessionCount =>
+      _slotsByToken.values.where((slot) => slot.sessionOpen).length;
+
+  /// 当前恰好一轮会话开启时，返回该会话所属项目；否则 null。
+  String? get singleOpenSessionProjectId {
+    String? projectId;
+    for (final slot in _slotsByToken.values) {
+      if (!slot.sessionOpen) continue;
+      if (projectId != null) return null;
+      projectId = slot.projectId;
+    }
+    return projectId;
+  }
+
+  void beginBatch(String workerToken, {required String projectId}) {
+    final existingToken = _tokenByProject[projectId];
+    if (existingToken != null) {
+      _slotsByToken.remove(existingToken);
+    }
+    _slotsByToken[workerToken] = _McpDispatchSlot(
+      workerToken: workerToken,
+      projectId: projectId,
+    );
+    _tokenByProject[projectId] = workerToken;
   }
 
   void endBatch(String workerToken) {
-    if (_activeWorkerToken != workerToken) return;
-    _activeWorkerToken = null;
-    _resetSession(open: false);
+    final slot = _slotsByToken.remove(workerToken);
+    if (slot == null) return;
+    if (_tokenByProject[slot.projectId] == workerToken) {
+      _tokenByProject.remove(slot.projectId);
+    }
   }
 
   bool beginAgentSession(String workerToken) {
-    if (_activeWorkerToken != workerToken) return false;
-    _resetSession(open: true);
+    final slot = _slotsByToken[workerToken];
+    if (slot == null) return false;
+    slot.resetSession(open: true);
     return true;
   }
 
-  McpDispatchPickPermission authorizePick() {
-    if (_activeWorkerToken == null) return McpDispatchPickPermission.allowed;
-    if (!_sessionOpen) return McpDispatchPickPermission.sessionNotOpen;
-    if (_pickClaimed) {
-      _deniedPickCount += 1;
+  McpDispatchPickPermission authorizePick(String projectId) {
+    final token = _tokenByProject[projectId];
+    if (token == null) return McpDispatchPickPermission.allowed;
+    final slot = _slotsByToken[token];
+    if (slot == null) return McpDispatchPickPermission.allowed;
+    if (!slot.sessionOpen) return McpDispatchPickPermission.sessionNotOpen;
+    if (slot.pickClaimed) {
+      slot.deniedPickCount += 1;
       return McpDispatchPickPermission.alreadyClaimed;
     }
-    _pickClaimed = true;
+    slot.pickClaimed = true;
     return McpDispatchPickPermission.allowed;
   }
 
   void recordPickedCard({required String projectId, required String cardId}) {
-    if (_activeWorkerToken == null || !_sessionOpen || !_pickClaimed) return;
-    _pickedProjectId = projectId;
-    _pickedCardId = cardId;
+    final token = _tokenByProject[projectId];
+    if (token == null) return;
+    final slot = _slotsByToken[token];
+    if (slot == null || !slot.sessionOpen || !slot.pickClaimed) return;
+    slot.pickedProjectId = projectId;
+    slot.pickedCardId = cardId;
   }
 
   McpDispatchSessionStatus? sessionStatus(String workerToken) {
-    if (_activeWorkerToken != workerToken) return null;
+    final slot = _slotsByToken[workerToken];
+    if (slot == null) return null;
     return McpDispatchSessionStatus(
-      sessionOpen: _sessionOpen,
-      pickClaimed: _pickClaimed,
-      deniedPickCount: _deniedPickCount,
-      projectId: _pickedProjectId,
-      cardId: _pickedCardId,
+      sessionOpen: slot.sessionOpen,
+      pickClaimed: slot.pickClaimed,
+      deniedPickCount: slot.deniedPickCount,
+      projectId: slot.pickedProjectId,
+      cardId: slot.pickedCardId,
     );
   }
 
-  void _resetSession({required bool open}) {
-    _sessionOpen = open;
-    _pickClaimed = false;
-    _deniedPickCount = 0;
-    _pickedProjectId = null;
-    _pickedCardId = null;
+  void debugReset() {
+    _slotsByToken.clear();
+    _tokenByProject.clear();
+  }
+}
+
+class _McpDispatchSlot {
+  _McpDispatchSlot({
+    required this.workerToken,
+    required this.projectId,
+  });
+
+  final String workerToken;
+  final String projectId;
+  bool sessionOpen = false;
+  bool pickClaimed = false;
+  int deniedPickCount = 0;
+  String? pickedProjectId;
+  String? pickedCardId;
+
+  void resetSession({required bool open}) {
+    sessionOpen = open;
+    pickClaimed = false;
+    deniedPickCount = 0;
+    pickedProjectId = null;
+    pickedCardId = null;
   }
 }
 

@@ -37,20 +37,30 @@ Future<CallToolResult> mcpPickNextCard(
   bool includeWorkItems = true,
   McpSubmissionSnapshotStore? submissionSnapshotStore,
 }) {
-  final permission = McpDispatchCardGate.instance.authorizePick();
-  switch (permission) {
-    case McpDispatchPickPermission.allowed:
-      break;
-    case McpDispatchPickPermission.sessionNotOpen:
-      return Future.value(mcpErrorResult(
-        'Agent 调度批次尚未由 Worker 开启本轮会话，禁止领取卡片',
-      ));
-    case McpDispatchPickPermission.alreadyClaimed:
-      return Future.value(mcpErrorResult(
-        '本轮 Agent 会话已经调用过 pick_next_card；请完成当前卡片并结束会话',
-      ));
+  final requested = mcpTrimmedString(projectId);
+  if (requested == null &&
+      McpDispatchCardGate.instance.openSessionCount > 1) {
+    return Future.value(mcpErrorResult(
+      '多个 Agent 调度批次并行时，pick_next_card 必须传入 projectId',
+    ));
   }
-  return runMcpForProject(controller, projectId, (resolvedProjectId) async {
+  final boundProjectId =
+      requested ?? McpDispatchCardGate.instance.singleOpenSessionProjectId;
+  return runMcpForProject(controller, boundProjectId, (resolvedProjectId) async {
+    final permission =
+        McpDispatchCardGate.instance.authorizePick(resolvedProjectId);
+    switch (permission) {
+      case McpDispatchPickPermission.allowed:
+        break;
+      case McpDispatchPickPermission.sessionNotOpen:
+        return mcpErrorResult(
+          'Agent 调度批次尚未由 Worker 开启本轮会话，禁止领取卡片',
+        );
+      case McpDispatchPickPermission.alreadyClaimed:
+        return mcpErrorResult(
+          '本轮 Agent 会话已经调用过 pick_next_card；请完成当前卡片并结束会话',
+        );
+    }
     final board = controller.board;
     if (board == null) return mcpErrorResult('看板未就绪');
 

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/import_export/backup_file_picker.dart';
+import '../kanban/next_work_card.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
@@ -17,6 +18,7 @@ import 'agent_dispatch_log.dart';
 import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
 import 'agent_dispatch_repository_field.dart';
+import 'agent_dispatch_registry.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_usage.dart';
@@ -27,7 +29,9 @@ import 'agent_dispatch_workspace.dart';
 import 'cursor_api_key_section.dart';
 
 class AgentDispatchPanel extends StatefulWidget {
-  const AgentDispatchPanel({super.key});
+  const AgentDispatchPanel({required this.projectId, super.key});
+
+  final String projectId;
 
   @override
   State<AgentDispatchPanel> createState() => _AgentDispatchPanelState();
@@ -39,7 +43,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   final _repoController = TextEditingController();
   final _countController = TextEditingController(text: '1');
   final _logController = TextEditingController();
-  final _service = AgentDispatchService();
+  late final AgentDispatchService _service;
 
   List<AgentDispatchModelInfo> _models = const [];
   String? _skillPreview;
@@ -62,6 +66,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   @override
   void initState() {
     super.initState();
+    _service = AgentDispatchRegistry.instance.forProject(widget.projectId);
     _running = _service.isRunning;
     _syncLogFromService();
     _service.addLogListener(_onServiceLog);
@@ -146,7 +151,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     setState(() {
       _settings = normalized;
       _models = cachedModels;
-      _repoController.text = normalized.repoPath ?? '';
+      _repoController.text = normalized.repoPathByProject[widget.projectId] ??
+          normalized.repoPath ??
+          '';
       _countController.text = '${normalized.cardLimitCount}';
     });
     await _service.hydrateLog();
@@ -237,15 +244,11 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final path = await pickBackupDirectory();
     if (path == null || !mounted) return;
     _repoController.text = path;
-    final board = context.read<BoardController>();
-    final projectId =
-        _settings.useProject ? _settings.projectId : board.activeProjectId;
+    final projectId = widget.projectId;
     var next = _rememberRepo(_settings.copyWith(repoPath: path), path);
-    if (projectId != null) {
-      final map = Map<String, String>.from(next.repoPathByProject)
-        ..[projectId] = path;
-      next = next.copyWith(repoPathByProject: map);
-    }
+    final map = Map<String, String>.from(next.repoPathByProject)
+      ..[projectId] = path;
+    next = next.copyWith(repoPathByProject: map);
     await _persist(next);
     if (!mounted) return;
     setState(() => _repoErrorText = null);
@@ -429,12 +432,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final board = context.read<BoardController>();
     final count = int.tryParse(_countController.text.trim());
     final repo = _repoController.text.trim();
-    final projectMissing = _settings.useProject && _settings.projectId == null;
+    final projectId = widget.projectId;
+    final projectMissing = board.manifest?.findById(projectId) == null;
     final countInvalid =
         !_settings.cardLimitMax && (count == null || count < 1 || count > 999);
     setState(() {
       _repoErrorText = repo.isEmpty ? '请填写代码仓库路径' : null;
-      _projectErrorText = projectMissing ? '请选择看板项目' : null;
+      _projectErrorText = projectMissing ? '项目不存在' : null;
       _countErrorText = countInvalid ? '请输入 1–999' : null;
     });
     if (repo.isEmpty || projectMissing || countInvalid) {
@@ -442,17 +446,25 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     }
     var next = _rememberRepo(
         _settings.copyWith(
+          useProject: true,
+          projectId: projectId,
           repoPath: repo,
           cardLimitCount: count!,
         ),
         repo);
-    final projectId = next.useProject ? next.projectId : board.activeProjectId;
-    if (projectId != null) {
-      final map = Map<String, String>.from(next.repoPathByProject)
-        ..[projectId] = repo;
-      next = next.copyWith(repoPathByProject: map);
-    }
+    final map = Map<String, String>.from(next.repoPathByProject)
+      ..[projectId] = repo;
+    next = next.copyWith(repoPathByProject: map);
     await _persist(next);
+
+    final conflict = AgentDispatchRegistry.instance.runningWithRepo(
+      repo,
+      exceptProjectId: projectId,
+    );
+    if (conflict != null) {
+      final confirmed = await _confirmSameRepo(board, conflict.projectId, repo);
+      if (!confirmed || !mounted) return;
+    }
 
     final options = next.toRunOptions(
       projectTitleOf: (id) => board.manifest?.findById(id)?.title,
@@ -469,6 +481,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       return;
     }
 
+    var queueSize = 0;
+    await board.runOnProject(projectId, () async {
+      final current = board.board;
+      if (current != null) queueSize = countWorkQueueCards(current);
+    });
+
     setState(() {
       _running = true;
     });
@@ -482,6 +500,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       skillPath: next.resolveSkillPath(),
       mcpEndpoint: board.mcpHost.endpointUrl,
       workerScriptPath: next.workerScriptPath,
+      queueSize: queueSize,
     );
     if (!mounted) return;
     if (result.ok) {
@@ -489,6 +508,36 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     } else if (result.error == '已取消') {
       _appendLog('已停止运行', level: AgentDispatchLogLevel.warning);
     }
+  }
+
+  Future<bool> _confirmSameRepo(
+    BoardController board,
+    String otherProjectId,
+    String repo,
+  ) async {
+    final otherTitle =
+        board.manifest?.findById(otherProjectId)?.title ?? otherProjectId;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('仓库已被其它项目占用'),
+        content: Text(
+          '项目「$otherTitle」正在同一仓库运行：\n$repo\n\n'
+          '并行可能导致互相改到同一批文件。仍要继续吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('仍要运行'),
+          ),
+        ],
+      ),
+    );
+    return go == true;
   }
 
   @override
@@ -506,7 +555,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   @override
   Widget build(BuildContext context) {
     final board = context.watch<BoardController>();
-    final projects = board.manifest?.projects ?? const [];
+    final projectTitle =
+        board.manifest?.findById(widget.projectId)?.title ?? widget.projectId;
     final modelParameters = _selectedModel?.parameters ?? const [];
     final skillPath = _settings.resolveSkillPath();
     final viewport = MediaQuery.sizeOf(context);
@@ -515,7 +565,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
     return AlertDialog(
       insetPadding: const EdgeInsets.all(24),
-      title: const Text('Agent 调度工作台'),
+      title: Text('Agent 调度工作台 · $projectTitle'),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       content: SizedBox(
@@ -567,50 +617,22 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                       },
               ),
               const SizedBox(height: 12),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('指定看板项目（默认使用当前项目）'),
-                value: _settings.useProject,
-                onChanged: _running || _busy
-                    ? null
-                    : (v) {
-                        setState(() => _projectErrorText = null);
-                        _persist(_settings.copyWith(useProject: v ?? false));
-                      },
+              Text('看板项目', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 4),
+              Text(
+                projectTitle,
+                style: Theme.of(context).textTheme.bodyLarge,
               ),
-              if (_settings.useProject)
-                DropdownButtonFormField<String>(
-                  key: ValueKey('project-${_settings.projectId}'),
-                  initialValue: projects.any((p) => p.id == _settings.projectId)
-                      ? _settings.projectId
-                      : null,
-                  decoration: InputDecoration(
-                    labelText: '项目',
-                    errorText: _projectErrorText,
+              if (_projectErrorText != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _projectErrorText!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
+                    ),
                   ),
-                  items: [
-                    for (final p in projects)
-                      DropdownMenuItem(value: p.id, child: Text(p.title)),
-                  ],
-                  onChanged: _running || _busy
-                      ? null
-                      : (id) {
-                          final remembered = id == null
-                              ? null
-                              : _settings.repoPathByProject[id];
-                          _persist(_settings.copyWith(
-                            projectId: id,
-                            repoPath: remembered ?? _settings.repoPath,
-                          ));
-                          if (remembered != null) {
-                            _repoController.text = remembered;
-                          }
-                          setState(() => _projectErrorText = null);
-                          if (_settings.engine == AgentDispatchEngine.cursor) {
-                            unawaited(_refreshCursorCredentials());
-                          }
-                        },
                 ),
               const SizedBox(height: 8),
               Text('代码仓库', style: Theme.of(context).textTheme.labelLarge),
@@ -787,7 +809,11 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       ),
       actions: [
         TextButton(
-          onPressed: () => AgentDispatchWindow.hide(),
+          onPressed: AgentDispatchWindow.backToHub,
+          child: const Text('返回总览'),
+        ),
+        TextButton(
+          onPressed: AgentDispatchWindow.hide,
           child: const Text('关闭'),
         ),
         if (_running) ...[

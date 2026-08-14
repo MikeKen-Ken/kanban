@@ -1,33 +1,42 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_log.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_log_store.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_progress.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_registry.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    AgentDispatchService().debugReset();
+    AgentDispatchRegistry.instance.debugReset();
   });
 
   tearDown(() {
-    AgentDispatchService().debugReset();
+    AgentDispatchRegistry.instance.debugReset();
   });
 
-  test('AgentDispatchService 为单例', () {
-    expect(identical(AgentDispatchService(), AgentDispatchService()), isTrue);
+  test('同一项目复用同一服务，不同项目互相独立', () {
+    final registry = AgentDispatchRegistry.instance;
+    final a1 = registry.forProject('a');
+    final a2 = registry.forProject('a');
+    final b = registry.forProject('b');
+    expect(identical(a1, a2), isTrue);
+    expect(identical(a1, b), isFalse);
   });
 
   test('运行状态变更会通知监听方', () {
-    final service = AgentDispatchService();
+    final service = AgentDispatchRegistry.instance.forProject('p');
     var notified = 0;
     service.addRunningListener(() => notified++);
-    service.removeRunningListener(() {});
-    expect(notified, 0);
+    service.debugSetProgress(const AgentDispatchProgress(running: true));
+    expect(notified, 1);
+    service.debugSetProgress(AgentDispatchProgress.idle);
+    expect(notified, 2);
   });
 
   test('无监听方时仍保留日志，重新订阅可看到全文', () async {
-    final service = AgentDispatchService();
+    final service = AgentDispatchRegistry.instance.forProject('p1');
     service.appendLog('批次开始');
     service.appendLog('工具输出', level: AgentDispatchLogLevel.success);
 
@@ -42,6 +51,10 @@ void main() {
 
     await service.pendingLogPersist;
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.loadAgentDispatchLog(), contains('窗口关闭后的新行'));
+    expect(
+      prefs.loadAgentDispatchLog(projectId: 'p1'),
+      contains('窗口关闭后的新行'),
+    );
+    expect(prefs.loadAgentDispatchLog(projectId: 'p2'), isEmpty);
   });
 }

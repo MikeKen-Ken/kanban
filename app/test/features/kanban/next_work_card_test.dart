@@ -208,4 +208,35 @@ void main() {
     expect(buildCardCommitMessage(card), '新功能\n\n说明\n\n- 子任务');
     expect(buildCardWorkScope(card)['workMode'], 'normal');
   });
+
+  test('countWorkQueueCards 统计待返工与待办未完成卡', () {
+    final board = _board([
+      KanbanColumn(
+        id: 'todo',
+        title: '待办',
+        order: 0,
+        cards: [
+          _card(id: 'a', title: '待办1', updatedAt: 1),
+          _card(id: 'b', title: '完成', updatedAt: 2, completed: true),
+        ],
+      ),
+      KanbanColumn(
+        id: 'rework',
+        title: '待返工',
+        order: 1,
+        cards: [
+          _card(id: 'r1', title: '返工', updatedAt: 3),
+        ],
+      ),
+      KanbanColumn(
+        id: 'doing',
+        title: '进行中',
+        order: 2,
+        cards: [
+          _card(id: 'd1', title: '进行中不计入', updatedAt: 4),
+        ],
+      ),
+    ]);
+    expect(countWorkQueueCards(board), 2);
+  });
 }

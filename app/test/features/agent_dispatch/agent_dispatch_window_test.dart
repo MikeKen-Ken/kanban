@@ -137,6 +137,17 @@ void main() {
     expect(tooltipBox.width, lessThan(240));
     expect(tooltipBox.height, lessThan(80));
   });
+
+  testWidgets('Esc 在项目工作台先回到总览再关闭', (tester) async {
+    AgentDispatchWindow.showHub();
+    AgentDispatchWindow.openProject('p1');
+    expect(AgentDispatchWindow.selectedProjectId.value, 'p1');
+    expect(AgentDispatchWindow.hideIfVisible(), isTrue);
+    expect(AgentDispatchWindow.visible.value, isTrue);
+    expect(AgentDispatchWindow.selectedProjectId.value, isNull);
+    expect(AgentDispatchWindow.hideIfVisible(), isTrue);
+    expect(AgentDispatchWindow.visible.value, isFalse);
+  });
 }
 
 class _KeepAliveMarker extends StatefulWidget {
