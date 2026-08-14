@@ -9,6 +9,7 @@ import '../features/kanban/card_detail_sheet.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_column_list.dart';
 import '../features/kanban/kanban_glass_surface.dart';
+import '../features/kanban/kanban_motion.dart';
 import '../features/templates/create_card_choice_sheet.dart';
 import '../models/kanban_models.dart';
 import '../settings/column_color_picker.dart';
@@ -329,7 +330,7 @@ class KanbanColumnWidget extends StatelessWidget {
                 : Colors.white.withValues(alpha: 0.58)));
     final columnBody = CardLayoutAnchor.column(
       columnId: column.id,
-      child: SizedBox(
+      child: AnimatedKanbanColumnWidth(
       width: effectiveWidth,
       child: KanbanGlassSurface(
         borderRadius: columnRadius,
