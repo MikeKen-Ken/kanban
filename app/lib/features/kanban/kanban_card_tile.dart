@@ -14,6 +14,7 @@ import '../attachments/card_attachment_viewer.dart';
 import 'card_copy_text.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
+import 'kanban_card_context_menu.dart';
 import 'card_tile_meta.dart';
 import 'confirm_delete_card.dart';
 import 'kanban_labels.dart';
@@ -97,23 +98,9 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     if (!mounted || _dragStarted) return;
     final controller = context.read<BoardController>();
     final canTransfer = controller.projects.length > 1;
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
-    final selected = await showMenu<String>(
+    final selected = await showKanbanCardContextMenu<String>(
       context: context,
-      popUpAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 80),
-        reverseDuration: Duration(milliseconds: 50),
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      ),
-      position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        overlaySize.width - globalPosition.dx,
-        overlaySize.height - globalPosition.dy,
-      ),
+      globalPosition: globalPosition,
       items: [
         const PopupMenuItem<String>(
           value: 'copy',
@@ -287,10 +274,13 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
                 child: content,
               );
 
-        return Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: _onPointerDown,
-          child: draggableChild,
+        return CardContextMenuHost(
+          onContextMenu: _showCardContextMenu,
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: _onPointerDown,
+            child: draggableChild,
+          ),
         );
       },
     );
