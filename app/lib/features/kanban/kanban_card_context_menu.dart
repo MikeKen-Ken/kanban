@@ -63,7 +63,6 @@ Future<T?> showKanbanCardContextMenu<T>({
     barrierDismissible: false,
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 80),
-    reverseTransitionDuration: const Duration(milliseconds: 50),
     transitionBuilder: (context, animation, secondaryAnimation, child) => child,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return _KanbanCardContextMenuOverlay<T>(
@@ -129,7 +128,8 @@ class _KanbanCardContextMenuOverlay<T> extends StatelessWidget {
     final theme = Theme.of(context);
     final popupTheme = theme.popupMenuTheme;
     final position = _menuPosition(context);
-    final padding = popupTheme.menuPadding?.resolve(theme.textDirection) ??
+    final padding =
+        popupTheme.menuPadding?.resolve(Directionality.of(context)) ??
         const EdgeInsets.symmetric(vertical: 8);
 
     final menuPanel = Listener(
@@ -151,9 +151,7 @@ class _KanbanCardContextMenuOverlay<T> extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final entry in items) entry.build(context),
-            ],
+            children: items,
           ),
         ),
       ),
@@ -203,7 +201,7 @@ class _PopupMenuPositionDelegate extends SingleChildLayoutDelegate {
     if (y + childSize.height > size.height - position.bottom) {
       y = size.height - position.bottom - childSize.height;
     }
-  if (x < position.left) x = position.left;
+    if (x < position.left) x = position.left;
     if (y < position.top) y = position.top;
     return Offset(x + padding.left, y + padding.top);
   }
