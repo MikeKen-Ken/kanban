@@ -684,7 +684,11 @@ class KanbanCard {
 
   bool get hasLinks => links.isNotEmpty;
 
-  bool get hasRelations => blockedByIds.isNotEmpty || relatedIds.isNotEmpty;
+  bool get hasBlockedBy => blockedByIds.isNotEmpty;
+
+  bool get hasRelated => relatedIds.isNotEmpty;
+
+  bool get hasRelations => hasBlockedBy || hasRelated;
 
   List<CardAttachment> get sortedAttachments {
     final list = [...attachments]..sort((a, b) => a.order.compareTo(b.order));

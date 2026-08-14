@@ -12,6 +12,7 @@ import '../attachments/card_attachment_image.dart';
 import '../attachments/card_attachment_viewer.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
+import 'card_tile_meta.dart';
 import 'confirm_delete_card.dart';
 import 'kanban_labels.dart';
 import 'markdown_plain_text.dart';
@@ -569,8 +570,10 @@ class _CardContent extends StatelessWidget {
                             if (dueInfo != null ||
                                 card.priority != CardPriority.none ||
                                 card.hasChecklist ||
+                                card.hasVerificationFeedback ||
                                 card.hasLinks ||
-                                card.hasRelations) ...[
+                                card.hasBlockedBy ||
+                                card.hasRelated) ...[
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
@@ -604,42 +607,40 @@ class _CardContent extends StatelessWidget {
                                       ],
                                     ),
                                   if (card.hasChecklist)
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.checklist,
-                                          size: 14,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                        const SizedBox(width: 2),
-                                        Text(
+                                    _CardMetaIconBadge(
+                                      icon: Icons.checklist,
+                                      label:
                                           '${card.checklistDone}/${card.checklist.length}',
-                                          style: theme.textTheme.labelSmall,
-                                        ),
-                                      ],
+                                      colorScheme: colorScheme,
+                                      textTheme: theme.textTheme,
+                                    ),
+                                  if (card.hasVerificationFeedback)
+                                    _CardMetaIconBadge(
+                                      icon: Icons.fact_check_outlined,
+                                      label:
+                                          '${card.verificationFeedbackDone}/${card.verificationFeedback.length}',
+                                      colorScheme: colorScheme,
+                                      textTheme: theme.textTheme,
                                     ),
                                   if (card.hasLinks)
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.link,
-                                          size: 14,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          '${card.links.length}',
-                                          style: theme.textTheme.labelSmall,
-                                        ),
-                                      ],
+                                    _CardMetaIconBadge(
+                                      icon: Icons.link,
+                                      label: '${card.links.length}',
+                                      colorScheme: colorScheme,
+                                      textTheme: theme.textTheme,
                                     ),
-                                  if (card.hasRelations)
-                                    Icon(
-                                      Icons.account_tree_outlined,
-                                      size: 14,
-                                      color: colorScheme.onSurfaceVariant,
+                                  if (card.hasBlockedBy)
+                                    _CardMetaIconBadge(
+                                      icon: Icons.block_outlined,
+                                      label: _blockedByCountLabel(),
+                                      colorScheme: colorScheme,
+                                      textTheme: theme.textTheme,
+                                    ),
+                                  if (card.hasRelated)
+                                    _CardMetaIconBadge(
+                                      icon: Icons.account_tree_outlined,
+                                      colorScheme: colorScheme,
+                                      textTheme: theme.textTheme,
                                     ),
                                 ],
                               ),
@@ -746,6 +747,18 @@ class _CardContent extends StatelessWidget {
     return '更新于 $formatted';
   }
 
+  /// 依赖计数：能解析前置卡时展示「已完成/总数」，否则仅展示总数。
+  String? _blockedByCountLabel() {
+    final total = card.blockedByIds.length;
+    final columns = allColumns;
+    if (columns == null) return '$total';
+    final done = countCompletedBlockedBy(
+      blockedByIds: card.blockedByIds,
+      columns: columns,
+    );
+    return '$done/$total';
+  }
+
   /// 仅标题（无置顶徽标/标签/描述/元信息）时，与勾选框垂直居中
   bool _isTitleOnlyContent(Widget? dueInfo, String? descriptionSummary) {
     final hasDescription = descriptionSummary != null;
@@ -755,8 +768,10 @@ class _CardContent extends StatelessWidget {
         dueInfo == null &&
         card.priority == CardPriority.none &&
         !card.hasChecklist &&
+        !card.hasVerificationFeedback &&
         !card.hasLinks &&
-        !card.hasRelations;
+        !card.hasBlockedBy &&
+        !card.hasRelated;
   }
 
   Widget? _dueDateInfo(int? dueMs, ColorScheme scheme) {
@@ -781,6 +796,39 @@ class _CardContent extends StatelessWidget {
             fontWeight: overdue ? FontWeight.w600 : null,
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// 卡片元信息图标徽标；[label] 为空时仅展示图标（用于无数量概念的状态）。
+class _CardMetaIconBadge extends StatelessWidget {
+  const _CardMetaIconBadge({
+    required this.icon,
+    required this.colorScheme,
+    required this.textTheme,
+    this.label,
+  });
+
+  final IconData icon;
+  final ColorScheme colorScheme;
+  final TextTheme textTheme;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 14,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        if (label != null) ...[
+          const SizedBox(width: 2),
+          Text(label!, style: textTheme.labelSmall),
+        ],
       ],
     );
   }
