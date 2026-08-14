@@ -59,7 +59,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   bool _skipping = false;
   bool _busy = false;
   bool _usageBusy = false;
-  int _cursorKeySectionRevision = 0;
   DateTime _lastLogAt = DateTime.now();
   Timer? _heartbeat;
 
@@ -80,9 +79,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (!AgentDispatchWindow.visible.value || !mounted) return;
     if (!_settings.cardLimitMax) {
       setState(() => _settings = _settings.copyWith(cardLimitMax: true));
-    }
-    if (_settings.engine == AgentDispatchEngine.cursor) {
-      unawaited(_refreshCursorCredentials());
     }
   }
 
@@ -252,9 +248,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     await _persist(next);
     if (!mounted) return;
     setState(() => _repoErrorText = null);
-    if (_settings.engine == AgentDispatchEngine.cursor) {
-      unawaited(_refreshCursorCredentials());
-    }
   }
 
   AgentDispatchSettings _rememberRepo(
@@ -366,9 +359,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     }
   }
 
-  Future<void> _refreshCursorCredentials() async {
-    if (_settings.engine != AgentDispatchEngine.cursor || !mounted) return;
-    setState(() => _cursorKeySectionRevision++);
+  Future<void> _onCursorKeyChanged() async {
     await _loadAccountInfo();
   }
 
@@ -394,7 +385,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       setState(() {
         _usage = snapshot;
         _usageBusy = false;
-        if (label != null) _cursorKeySectionRevision++;
       });
     } catch (e) {
       if (!mounted) return;
@@ -605,7 +595,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                             });
                             await _persist(nextSettings);
                             if (!mounted) return;
-                            unawaited(_refreshCursorCredentials());
+                            unawaited(_loadAccountInfo());
                           });
                           return;
                         }
@@ -636,15 +626,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 errorText: _repoErrorText,
                 onChanged: (value) {
                   final trimmed = value.trim();
-                  final fromHistory = _settings.repoPaths.contains(trimmed);
                   setState(() {
                     _settings = _settings.copyWith(repoPath: trimmed);
                     _repoErrorText = null;
                   });
-                  if (fromHistory &&
-                      _settings.engine == AgentDispatchEngine.cursor) {
-                    unawaited(_refreshCursorCredentials());
-                  }
                 },
                 onPickDirectory: _pickRepo,
                 onDeletePath: _deleteRepoPath,
@@ -654,10 +639,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 Text('Cursor API Key',
                     style: Theme.of(context).textTheme.labelLarge),
                 CursorApiKeySection(
-                  key: ValueKey('cursor-key-$_cursorKeySectionRevision'),
                   enabled: !_running && !_busy,
                   credentials: _credentials,
                   workerScriptPath: _settings.workerScriptPath,
+                  onActiveKeyChanged: _onCursorKeyChanged,
                 ),
                 const SizedBox(height: 12),
                 AgentDispatchUsagePane(

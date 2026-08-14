@@ -10,11 +10,13 @@ class CursorApiKeySection extends StatefulWidget {
     required this.enabled,
     this.credentials = const AgentDispatchCredentials(),
     this.workerScriptPath,
+    this.onActiveKeyChanged,
   });
 
   final bool enabled;
   final AgentDispatchCredentials credentials;
   final String? workerScriptPath;
+  final Future<void> Function()? onActiveKeyChanged;
 
   @override
   State<CursorApiKeySection> createState() => _CursorApiKeySectionState();
@@ -88,6 +90,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       }
       _controller.clear();
       await _refreshStatus();
+      await widget.onActiveKeyChanged?.call();
+      await _refreshStatus();
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -110,6 +114,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     });
     try {
       await widget.credentials.setActiveCursorApiKey(id);
+      await _refreshStatus();
+      await widget.onActiveKeyChanged?.call();
       await _refreshStatus();
       if (!mounted) return;
       setState(() {
@@ -134,6 +140,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     });
     try {
       await widget.credentials.deleteCursorApiKey(id);
+      await _refreshStatus();
+      await widget.onActiveKeyChanged?.call();
       await _refreshStatus();
       if (!mounted) return;
       setState(() {
