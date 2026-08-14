@@ -6,25 +6,37 @@ import '../common/app_snack_bar.dart';
 import '../controllers/board_controller.dart';
 import 'webdav_sync_service.dart';
 
-enum SyncManualAction { upload, download, merge }
+enum SyncManualAction {
+  upload,
+  download,
+  merge,
+  uploadWallpapers,
+  downloadWallpapers,
+}
 
 extension SyncManualActionUi on SyncManualAction {
   String get label => switch (this) {
         SyncManualAction.upload => '上传',
         SyncManualAction.download => '下载',
         SyncManualAction.merge => '合并',
+        SyncManualAction.uploadWallpapers => '上传壁纸库',
+        SyncManualAction.downloadWallpapers => '下载壁纸库',
       };
 
   IconData get icon => switch (this) {
         SyncManualAction.upload => Icons.cloud_upload_outlined,
         SyncManualAction.download => Icons.cloud_download_outlined,
         SyncManualAction.merge => Icons.sync_alt,
+        SyncManualAction.uploadWallpapers => Icons.wallpaper_outlined,
+        SyncManualAction.downloadWallpapers => Icons.image_outlined,
       };
 
   String get subtitle => switch (this) {
-        SyncManualAction.upload => '用本机数据全量覆盖云端',
-        SyncManualAction.download => '用云端数据全量覆盖本机',
-        SyncManualAction.merge => '三路合并本机与云端，有差异再回写云端',
+        SyncManualAction.upload => '用本机数据覆盖云端工作区压缩包',
+        SyncManualAction.download => '用云端工作区压缩包覆盖本机',
+        SyncManualAction.merge => '三路合并本机与云端工作区，有差异再回写云端',
+        SyncManualAction.uploadWallpapers => '用本机壁纸库覆盖云端壁纸压缩包',
+        SyncManualAction.downloadWallpapers => '用云端壁纸压缩包覆盖本机壁纸库',
       };
 }
 
@@ -109,8 +121,8 @@ Future<void> runSyncManualAction(
     case SyncManualAction.upload:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: '上传并覆盖云端？',
-        body: '云端现有看板数据将被本机数据全部覆盖，且无法自动撤销。确定继续吗？',
+        title: '上传并覆盖云端工作区？',
+        body: '云端现有看板数据将被本机工作区压缩包覆盖，且无法自动撤销。确定继续吗？',
         confirmLabel: '覆盖云端',
       );
       if (confirmed != true || !context.mounted) return;
@@ -119,8 +131,8 @@ Future<void> runSyncManualAction(
     case SyncManualAction.download:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: '下载并覆盖本机？',
-        body: '本机现有看板数据将被云端数据全部替换，未同步的本地修改会丢失。确定继续吗？',
+        title: '下载并覆盖本机工作区？',
+        body: '本机现有看板数据将被云端工作区压缩包替换，未同步的本地修改会丢失。确定继续吗？',
         confirmLabel: '覆盖本机',
       );
       if (confirmed != true || !context.mounted) return;
@@ -128,6 +140,26 @@ Future<void> runSyncManualAction(
       return;
     case SyncManualAction.merge:
       unawaited(controller.mergeNow());
+      return;
+    case SyncManualAction.uploadWallpapers:
+      final confirmed = await _confirmSyncOverwrite(
+        context,
+        title: '上传并覆盖云端壁纸库？',
+        body: '云端壁纸压缩包将被本机壁纸库覆盖。确定继续吗？',
+        confirmLabel: '覆盖云端壁纸',
+      );
+      if (confirmed != true || !context.mounted) return;
+      unawaited(controller.uploadWallpapersNow());
+      return;
+    case SyncManualAction.downloadWallpapers:
+      final confirmed = await _confirmSyncOverwrite(
+        context,
+        title: '下载并覆盖本机壁纸库？',
+        body: '本机壁纸库将被云端壁纸压缩包替换。确定继续吗？',
+        confirmLabel: '覆盖本机壁纸',
+      );
+      if (confirmed != true || !context.mounted) return;
+      unawaited(controller.downloadWallpapersNow());
   }
 }
 

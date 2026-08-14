@@ -37,6 +37,7 @@ import '../features/templates/card_template.dart';
 import '../features/templates/create_card_choice.dart';
 import '../features/undo/undo_stack.dart';
 import '../features/views/views.dart';
+import '../features/wallpapers/wallpaper_archive_service.dart';
 import '../features/wallpapers/wallpaper_models.dart';
 import '../models/kanban_models.dart';
 import '../features/kanban/column_card_preferences.dart';
@@ -259,6 +260,11 @@ class BoardController extends _BoardControllerBase {
       attachmentSync: attachmentSync,
       runWorkspaceTransaction: <T>(action) =>
           controller._withBoardMutation(action),
+      captureBackupPackage: () => controller.captureBackupPackage(),
+      applyBackupPackage: (package) => controller._applyBackupPackage(package),
+      captureWallpaperPackage: () => controller.captureWallpaperPackage(),
+      applyWallpaperPackage: (package) =>
+          controller.applyWallpaperPackage(package),
     );
     controller = BoardController._(
       repository: repository,

@@ -5,6 +5,7 @@ mixin _WebDavSyncPull
         _WebDavSyncHost,
         _WebDavSyncScheduler,
         _WebDavSyncClientIo,
+        _WebDavSyncLiveArchive,
         _WebDavSyncAttachments,
         _WebDavSyncPush {
   Future<KanbanBoard?> _pullLegacyBoard(Client client, String base) async {
@@ -296,6 +297,61 @@ mixin _WebDavSyncPull
     return mergeWorkspaces(local: local, remote: remote, base: base);
   }
 
+  BackupPackage _mergeBackupPackages({
+    required BackupPackage local,
+    required BackupPackage remote,
+    ProjectWorkspaceSnapshot? base,
+  }) {
+    final mergedLabelTrash = TrashBin(
+      items: local.labelTrash,
+      updatedAt: 0,
+      revision: 0,
+    ).mergeWith(
+      TrashBin(items: remote.labelTrash, updatedAt: 0, revision: 0),
+    );
+    return BackupPackage(
+      workspace: _mergeWorkspaces(local.workspace, remote.workspace, base),
+      attachments: {...remote.attachments, ...local.attachments},
+      labelTrash: mergedLabelTrash.items,
+    );
+  }
+
+  Future<int> _pullLegacyAttachments({
+    required Client client,
+    required String base,
+    required ProjectWorkspaceSnapshot workspace,
+    required int runId,
+  }) async {
+    var failed = 0;
+    final projects = workspace.manifest.projects;
+    var index = 0;
+    for (final entry in projects) {
+      _ensureNotCancelled(runId);
+      index++;
+      final board = workspace.boards[entry.id];
+      if (board == null) continue;
+      final trash = workspace.projectTrash[entry.id] ?? TrashBin.empty;
+      final settings = workspace.settings[entry.id];
+      _setProgress(
+        SyncProgress(
+          phase: SyncPhase.attachments,
+          completed: index - 1,
+          total: projects.length,
+          currentLabel: entry.title.trim().isEmpty ? entry.id : entry.title,
+        ),
+      );
+      failed += await _pullProjectAttachments(
+        client,
+        base,
+        entry.id,
+        board,
+        trash,
+        settings: settings,
+      );
+    }
+    return failed;
+  }
+
   @override
   Future<void> _pullAndMerge({
     bool userInitiated = false,
@@ -316,8 +372,6 @@ mixin _WebDavSyncPull
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return;
 
-    // note: 手动同步不受自动节流/冷却限制，由用户主动触发
-
     if (_cancelRequested) {
       print('跳过拉取：同步已取消');
       _clearCancelFlag();
@@ -332,139 +386,144 @@ mixin _WebDavSyncPull
     _setProgress(const SyncProgress(phase: SyncPhase.discovering));
     try {
       _ensureNotCancelled(runId);
-      // 短事务捕获本地快照；网络拉取在锁外进行。
-      var local = await _captureWorkspace();
+      var localPkg = await _withLocalTransaction(_captureBackupPackage);
+      var local = localPkg.workspace;
       final syncBase = await _syncBaseStore.load();
       _setProgress(const SyncProgress(phase: SyncPhase.downloading));
-      final remote = await pullRemote(
-        reuseFrom: replaceLocal ? null : syncBase,
-      );
+
+      final client = _client(config);
+      final base = client == null ? '' : _remoteBase(config);
+      BackupPackage? remotePkg;
+      var fromArchive = false;
+
+      if (client != null) {
+        final marker = await _readLiveArchiveMarker(
+          client,
+          KanbanPaths.remoteLiveWorkspaceMarkerPath(base),
+        );
+        if (marker != null &&
+            marker.id == KanbanPaths.liveWorkspaceArchiveId) {
+          final knownSha = _syncBaseStore.loadLiveWorkspaceSha256();
+          if (!replaceLocal &&
+              knownSha != null &&
+              knownSha == marker.sha256 &&
+              syncBase != null &&
+              _workspaceJsonEquals(local, syncBase)) {
+            await _noteMissingWallpapersIfNeeded(local);
+            _noteSuccess();
+            _setStatus(SyncStatus.success);
+            unawaited(refreshPendingUploadCount());
+            return;
+          }
+          final bytes = await _readLiveArchiveBytes(
+            client: client,
+            archivePath: KanbanPaths.remoteLiveWorkspaceArchivePath(base),
+            markerPath: KanbanPaths.remoteLiveWorkspaceMarkerPath(base),
+            expectedId: KanbanPaths.liveWorkspaceArchiveId,
+          );
+          if (bytes == null) {
+            throw const FormatException('云端工作区压缩包不完整，请重新上传');
+          }
+          remotePkg = const BackupArchiveService().decode(bytes);
+          fromArchive = true;
+          await _syncBaseStore.saveLiveWorkspaceSha256(
+            LiveArchiveMarker.hashBytes(bytes),
+          );
+        }
+      }
+
+      if (remotePkg == null) {
+        final remoteWorkspace = await pullRemote(
+          reuseFrom: replaceLocal ? null : syncBase,
+        );
+        if (remoteWorkspace != null) {
+          remotePkg = BackupPackage(workspace: remoteWorkspace);
+        }
+      }
+
       _ensureNotCancelled(runId);
-      if (remote == null) {
+      if (remotePkg == null) {
         if (replaceLocal) {
           _setStatus(SyncStatus.error, error: '云端没有可下载的数据');
           return;
         }
-        // note: 合并时远端为空则上传本地；先结束本回合再 push
         _syncInFlight = false;
-        await _pushNow(force: true, workspace: local, baseline: null);
+        await _pushNow(force: true, package: localPkg);
         return;
       }
 
       _setProgress(const SyncProgress(phase: SyncPhase.merging));
-      late ProjectWorkspaceSnapshot merged;
+      late BackupPackage mergedPkg;
+      final remote = remotePkg;
       if (replaceLocal) {
-        merged = await _withLocalTransaction(() async {
-          await _saveWorkspace(remote);
+        mergedPkg = await _withLocalTransaction(() async {
+          await _applySyncedBackupPackage(remote);
           return remote;
         });
-        _ensureNotCancelled(runId);
       } else {
-        merged = _mergeWorkspaces(local, remote, syncBase);
-        _ensureNotCancelled(runId);
-
-        // 合并落盘前重新捕获，避免网络期间的本地写入被旧快照覆盖。
-        merged = await _withLocalTransaction(() async {
-          final latest = await _loadWorkspace();
-          final next = _workspaceJsonEquals(latest, local)
-              ? merged
-              : _mergeWorkspaces(latest, remote, syncBase);
-          await _saveWorkspace(next);
+        mergedPkg = _mergeBackupPackages(
+          local: localPkg,
+          remote: remote,
+          base: syncBase,
+        );
+        mergedPkg = await _withLocalTransaction(() async {
+          final latestPkg = await _captureBackupPackage();
+          final next = _workspaceJsonEquals(
+                latestPkg.workspace,
+                localPkg.workspace,
+              )
+              ? mergedPkg
+              : _mergeBackupPackages(
+                  local: latestPkg,
+                  remote: remote,
+                  base: syncBase,
+                );
+          await _applySyncedBackupPackage(next);
           return next;
         });
       }
 
-      final client = _client(config);
       var attachmentFailures = 0;
-      if (client != null) {
-        final base = _remoteBase(config);
-        attachmentFailures += await _pullWallpapers(
-          client,
-          base,
-          merged.sharedContent,
+      if (!fromArchive && client != null) {
+        attachmentFailures += await _pullLegacyAttachments(
+          client: client,
+          base: base,
+          workspace: mergedPkg.workspace,
+          runId: runId,
         );
-        final projects = merged.manifest.projects;
-        var index = 0;
-        for (final entry in projects) {
-          _ensureNotCancelled(runId);
-          index++;
-          final board = merged.boards[entry.id];
-          if (board == null) continue;
-          final trash = merged.projectTrash[entry.id] ?? TrashBin.empty;
-          final settings = merged.settings[entry.id];
-          _setProgress(
-            SyncProgress(
-              phase: SyncPhase.attachments,
-              completed: index - 1,
-              total: projects.length,
-              currentLabel: entry.title.trim().isEmpty ? entry.id : entry.title,
-            ),
-          );
-          attachmentFailures += await _pullProjectAttachments(
-            client,
-            base,
-            entry.id,
-            board,
-            trash,
-            settings: settings,
-          );
-        }
       }
-
       _applyAttachmentSyncWarning(attachmentFailures);
+      await _noteMissingWallpapersIfNeeded(mergedPkg.workspace);
 
       if (replaceLocal) {
         if (!_shouldCommit(runId)) {
           throw const SyncCancelledException();
         }
-        await _syncBaseStore.save(merged);
+        await _syncBaseStore.save(mergedPkg.workspace);
         _noteSuccess();
         _setStatus(SyncStatus.success);
         unawaited(refreshPendingUploadCount());
         return;
       }
 
-      // note: 按文件级差异判断；整表 JSON 编码顺序不同不应当触发整表回推
-      if (countPendingSyncUploads(workspace: merged, baseline: remote) == 0) {
-        if (shouldReconcileAttachmentsWhenJsonEquals(
-              jsonEquals: true,
-              attachmentSyncAvailable: _attachmentSync.isAvailable,
-            ) &&
-            client != null) {
-          final base = _remoteBase(config);
-          attachmentFailures += await _pushAllProjectAttachments(
-            client: client,
-            base: base,
-            workspace: merged,
-            runId: runId,
-            cleanupOrphans: false,
-          );
-          attachmentFailures += await _pushWallpapers(
-            client,
-            base,
-            merged.sharedContent,
-            cleanupOrphans: false,
-          );
-          _applyAttachmentSyncWarning(attachmentFailures);
-        }
+      if (countPendingSyncUploads(
+            workspace: mergedPkg.workspace,
+            baseline: remotePkg.workspace,
+          ) ==
+          0) {
         if (!_shouldCommit(runId)) {
           throw const SyncCancelledException();
         }
-        await _syncBaseStore.save(merged);
+        await _syncBaseStore.save(mergedPkg.workspace);
         _noteSuccess();
         _setStatus(SyncStatus.success);
         unawaited(refreshPendingUploadCount());
         return;
       }
 
-      // note: 合并后按相对远端的增量回推，避免把并集只留在本机
       _ensureNotCancelled(runId);
       _syncInFlight = false;
-      await _pushNow(
-        force: true,
-        workspace: merged,
-        baseline: remote,
-      );
+      await _pushNow(force: true, package: mergedPkg);
     } on SyncCancelledException {
       print('拉取同步已中止');
       if (status == SyncStatus.syncing) {

@@ -160,7 +160,7 @@ class _SyncStatusTrigger extends StatelessWidget {
         ? '尚未成功同步'
         : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
     final pendingDetail = pendingUploadCount > 0
-        ? '待同步 $pendingUploadCount 个文件（相对上次成功同步）'
+        ? '有未上传的工作区变更'
         : null;
 
     final progressDetail = progress == null

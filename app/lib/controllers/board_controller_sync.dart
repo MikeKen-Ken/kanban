@@ -31,6 +31,10 @@ extension BoardControllerSync on BoardController {
     await _syncService.pullAndMerge(userInitiated: true);
   }
 
+  Future<void> uploadWallpapersNow() => _syncService.uploadWallpapersNow();
+
+  Future<void> downloadWallpapersNow() => _syncService.downloadWallpapersNow();
+
   Future<void> syncNow() => mergeNow();
 
   /// 取消进行中的 WebDAV 同步，恢复可继续操作

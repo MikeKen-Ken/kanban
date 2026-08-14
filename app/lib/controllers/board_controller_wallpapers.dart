@@ -228,4 +228,57 @@ extension BoardControllerWallpapers on BoardController {
       _markWorkspaceChanged();
     });
   }
+
+  Future<WallpaperArchivePackage> captureWallpaperPackage() async {
+    final assets = List<WallpaperAsset>.from(sharedContent.wallpapers);
+    final files = <String, Uint8List>{};
+    final store = attachmentStore;
+    if (store != null) {
+      for (final asset in assets) {
+        final original = await store.readWallpaperBytes(asset.id);
+        if (original != null) {
+          files[WallpaperArchiveService.originalPath(asset.id)] = original;
+        }
+        final thumb = await store.readWallpaperBytes(asset.id, thumb: true);
+        if (thumb != null) {
+          files[WallpaperArchiveService.thumbPath(asset.id)] = thumb;
+        }
+      }
+    }
+    return WallpaperArchivePackage(assets: assets, files: files);
+  }
+
+  Future<void> applyWallpaperPackage(WallpaperArchivePackage package) async {
+    await _persistSharedContent(
+      sharedContent.copyWith(wallpapers: package.assets),
+    );
+    final store = attachmentStore;
+    if (store != null) {
+      for (final asset in package.assets) {
+        final original =
+            package.files[WallpaperArchiveService.originalPath(asset.id)];
+        if (original != null) {
+          await store.writeWallpaperBytes(
+            wallpaperId: asset.id,
+            bytes: original,
+          );
+        }
+        final thumb =
+            package.files[WallpaperArchiveService.thumbPath(asset.id)];
+        if (thumb != null) {
+          await store.writeWallpaperBytes(
+            wallpaperId: asset.id,
+            bytes: thumb,
+            thumb: true,
+          );
+        }
+      }
+      await store.deleteOrphanWallpapers(
+        package.assets.map((item) => item.id).toSet(),
+      );
+    }
+    await refreshDisplayableWallpapers();
+    notifyListeners();
+    _markWorkspaceChanged();
+  }
 }

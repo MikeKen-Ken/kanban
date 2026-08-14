@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
+import '../../webdav_sync/sync_actions_sheet.dart';
 import '../project/project_settings.dart';
 import 'wallpaper_image.dart';
 import 'wallpaper_models.dart';
@@ -140,6 +141,28 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                 icon: const Icon(Icons.delete_outline),
               ),
             ] else ...[
+              IconButton(
+                tooltip: '上传壁纸库到云端',
+                onPressed: _busy
+                    ? null
+                    : () => runSyncManualAction(
+                          context,
+                          context.read<BoardController>(),
+                          SyncManualAction.uploadWallpapers,
+                        ),
+                icon: const Icon(Icons.cloud_upload_outlined),
+              ),
+              IconButton(
+                tooltip: '从云端下载壁纸库',
+                onPressed: _busy
+                    ? null
+                    : () => runSyncManualAction(
+                          context,
+                          context.read<BoardController>(),
+                          SyncManualAction.downloadWallpapers,
+                        ),
+                icon: const Icon(Icons.cloud_download_outlined),
+              ),
               IconButton(
                 tooltip: '批量删除',
                 onPressed: _busy || wallpapers.isEmpty

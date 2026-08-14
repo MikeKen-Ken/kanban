@@ -127,4 +127,10 @@ class AttachmentSyncAdapter {
 
   Future<void> deleteOrphanWallpapers(Set<String> keepIds) async =>
       _storage?.deleteOrphanWallpapers(keepIds);
+
+  Future<Set<String>> listLocalWallpaperIds() async {
+    final storage = _storage;
+    if (storage == null) return {};
+    return storage.listLocalWallpaperIds();
+  }
 }

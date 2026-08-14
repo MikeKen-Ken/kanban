@@ -9,7 +9,9 @@ import 'package:webdav_client/webdav_client.dart';
 import '../common/async_mutex.dart';
 import '../features/attachments/attachment_sync_adapter.dart';
 import '../features/attachments/attachment_sync_plan.dart';
+import '../features/import_export/backup_archive_service.dart';
 import '../features/import_export/backup_history_store.dart';
+import '../features/wallpapers/wallpaper_archive_service.dart';
 import '../features/project/project_settings.dart';
 import '../features/project/projects_manifest.dart';
 import '../features/shared_content/shared_content.dart';
@@ -19,24 +21,37 @@ import '../models/kanban_models.dart';
 import '../storage/json_file_io.dart';
 import '../storage/kanban_paths.dart';
 import 'bounded_concurrency.dart';
+import 'live_archive_marker.dart';
 import 'sync_progress.dart';
 import 'sync_index.dart';
 import 'sync_upload_plan.dart';
 import 'webdav_config.dart';
 
 export '../features/sync_conflict/workspace_snapshot.dart';
+export 'live_archive_marker.dart';
 export 'sync_progress.dart';
 export 'sync_index.dart';
 export 'sync_upload_plan.dart';
 
 part 'webdav_sync_scheduler.dart';
 part 'webdav_sync_client_io.dart';
+part 'webdav_sync_live_archive.dart';
 part 'webdav_sync_attachments.dart';
 part 'webdav_sync_push.dart';
 part 'webdav_sync_pull.dart';
+part 'webdav_sync_wallpaper_pack.dart';
 part 'webdav_sync_backup.dart';
 
 enum SyncStatus { idle, syncing, success, error }
+
+const kDownloadWallpaperLibraryHint = '部分壁纸未在本机，请下载壁纸库';
+
+typedef BackupPackageCapture = Future<BackupPackage> Function();
+typedef BackupPackageApply = Future<void> Function(BackupPackage package);
+typedef WallpaperPackageCapture = Future<WallpaperArchivePackage> Function();
+typedef WallpaperPackageApply = Future<void> Function(
+  WallpaperArchivePackage package,
+);
 
 typedef WorkspaceTransactionRunner = Future<T> Function<T>(
   Future<T> Function() action,
@@ -63,12 +78,20 @@ abstract class _WebDavSyncHost {
     required SyncBaseStore syncBaseStore,
     required AttachmentSyncAdapter attachmentSync,
     required WorkspaceTransactionRunner runWorkspaceTransaction,
+    BackupPackageCapture? captureBackupPackage,
+    BackupPackageApply? applyBackupPackage,
+    WallpaperPackageCapture? captureWallpaperPackage,
+    WallpaperPackageApply? applyWallpaperPackage,
   })  : _loadConfig = loadConfig,
         _loadWorkspace = loadWorkspace,
         _saveWorkspace = saveWorkspace,
         _syncBaseStore = syncBaseStore,
         _attachmentSync = attachmentSync,
-        _runWorkspaceTransaction = runWorkspaceTransaction;
+        _runWorkspaceTransaction = runWorkspaceTransaction,
+        _captureBackupPackageFn = captureBackupPackage,
+        _applyBackupPackageFn = applyBackupPackage,
+        _captureWallpaperPackageFn = captureWallpaperPackage,
+        _applyWallpaperPackageFn = applyWallpaperPackage;
 
   final Future<WebDavConfig> Function() _loadConfig;
   final Future<ProjectWorkspaceSnapshot> Function() _loadWorkspace;
@@ -78,6 +101,10 @@ abstract class _WebDavSyncHost {
   final AttachmentSyncAdapter _attachmentSync;
   final AsyncMutex _backupMutex = AsyncMutex();
   final WorkspaceTransactionRunner _runWorkspaceTransaction;
+  final BackupPackageCapture? _captureBackupPackageFn;
+  final BackupPackageApply? _applyBackupPackageFn;
+  final WallpaperPackageCapture? _captureWallpaperPackageFn;
+  final WallpaperPackageApply? _applyWallpaperPackageFn;
 
   SyncStatus status = SyncStatus.idle;
   String? lastError;
@@ -85,7 +112,7 @@ abstract class _WebDavSyncHost {
   DateTime? lastSyncedAt;
   SyncProgress? progress;
 
-  /// 相对 SyncBase 尚未上传的 JSON 文件数（跨全工作区）
+  /// 相对 SyncBase 是否还有未上传的工作区变更（0 或 1）
   int pendingUploadCount = 0;
 
   /// 最近一次附件上传失败的原始错误（用于提示细节）
@@ -135,6 +162,37 @@ abstract class _WebDavSyncHost {
   Future<ProjectWorkspaceSnapshot> _captureWorkspace() =>
       _withLocalTransaction(_loadWorkspace);
 
+  Future<BackupPackage> _captureBackupPackage() async {
+    final capture = _captureBackupPackageFn;
+    if (capture != null) return capture();
+    return BackupPackage(workspace: await _loadWorkspace());
+  }
+
+  Future<void> _applySyncedBackupPackage(BackupPackage package) async {
+    final apply = _applyBackupPackageFn;
+    if (apply != null) {
+      await apply(package);
+      return;
+    }
+    await _saveWorkspace(package.workspace);
+  }
+
+  Future<WallpaperArchivePackage> _captureWallpaperPackage() async {
+    final capture = _captureWallpaperPackageFn;
+    if (capture != null) return capture();
+    return const WallpaperArchivePackage(assets: []);
+  }
+
+  Future<void> _applySyncedWallpaperPackage(
+    WallpaperArchivePackage package,
+  ) async {
+    final apply = _applyWallpaperPackageFn;
+    if (apply != null) {
+      await apply(package);
+      return;
+    }
+  }
+
   void _setStatus(SyncStatus value, {String? error}) {
     status = value;
     lastError = error;
@@ -154,8 +212,7 @@ abstract class _WebDavSyncHost {
   /// 由 push mixin 实现；调度器等跨职责调用走此抽象入口。
   Future<void> _pushNow({
     bool force = false,
-    ProjectWorkspaceSnapshot? workspace,
-    ProjectWorkspaceSnapshot? baseline,
+    BackupPackage? package,
   });
 
   /// 由 pull mixin 实现；调度器等跨职责调用走此抽象入口。
@@ -170,9 +227,11 @@ class WebDavSyncService extends _WebDavSyncHost
     with
         _WebDavSyncScheduler,
         _WebDavSyncClientIo,
+        _WebDavSyncLiveArchive,
         _WebDavSyncAttachments,
         _WebDavSyncPush,
         _WebDavSyncPull,
+        _WebDavSyncWallpaperPack,
         _WebDavSyncBackup {
   WebDavSyncService({
     required super.loadConfig,
@@ -181,25 +240,28 @@ class WebDavSyncService extends _WebDavSyncHost
     required super.syncBaseStore,
     AttachmentSyncAdapter? attachmentSync,
     WorkspaceTransactionRunner? runWorkspaceTransaction,
+    super.captureBackupPackage,
+    super.applyBackupPackage,
+    super.captureWallpaperPackage,
+    super.applyWallpaperPackage,
   }) : super(
           attachmentSync: attachmentSync ?? AttachmentSyncAdapter(null),
           runWorkspaceTransaction:
               runWorkspaceTransaction ?? _runWorkspaceActionDirectly,
         );
 
-  /// 推送本地工作区。网络 I/O 不持有工作区事务锁。
+  /// 推送本地工作区为固定名压缩包，覆盖云端。
   ///
-  /// [baseline]：相对此快照跳过未变更 JSON；省略时自动使用 SyncBase。
-  /// [workspace]：若已持有待推快照（例如刚合并的结果），可直接传入以免重复捕获。
+  /// [package]：若已持有待推快照（例如刚合并的结果），可直接传入以免重复捕获。
   Future<void> pushNow({
     bool force = false,
     ProjectWorkspaceSnapshot? workspace,
     ProjectWorkspaceSnapshot? baseline,
+    BackupPackage? package,
   }) {
     return _pushNow(
       force: force,
-      workspace: workspace,
-      baseline: baseline,
+      package: package,
     );
   }
 
@@ -211,6 +273,10 @@ class WebDavSyncService extends _WebDavSyncHost
   Future<void> pullAndReplace() {
     return _pullAndMerge(userInitiated: true, replaceLocal: true);
   }
+
+  Future<void> uploadWallpapersNow() => _pushWallpaperPack();
+
+  Future<void> downloadWallpapersNow() => _pullWallpaperPack();
 
   void dispose() {
     _cooldownRetryTimer?.cancel();

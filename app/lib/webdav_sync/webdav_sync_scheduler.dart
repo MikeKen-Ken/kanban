@@ -108,7 +108,7 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
     try {
       final workspace = await _captureWorkspace();
       final baseline = await _syncBaseStore.load();
-      final count = countPendingSyncUploads(
+      final count = countPendingLiveArchiveUploads(
         workspace: workspace,
         baseline: baseline,
       );

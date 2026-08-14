@@ -220,6 +220,16 @@ int countPendingSyncUploads({
   ).items.length;
 }
 
+/// live 压缩包粒度：相对上次成功同步是否还有工作区变更。
+int countPendingLiveArchiveUploads({
+  required ProjectWorkspaceSnapshot workspace,
+  ProjectWorkspaceSnapshot? baseline,
+}) {
+  return countPendingSyncUploads(workspace: workspace, baseline: baseline) > 0
+      ? 1
+      : 0;
+}
+
 /// 上传成功后是否还要再推一轮。
 ///
 /// 已上传快照必须写入 SyncBase（即使本机其间又有新写入）。

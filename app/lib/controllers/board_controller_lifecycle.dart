@@ -103,8 +103,7 @@ extension BoardControllerLifecycle on BoardController {
     });
   }
 
-  Future<Uint8List> createBackupArchive() async {
-    // 短持锁捕获工作区；附件二进制读取放锁外，避免长时间阻塞冲突解决等 UI 写操作。
+  Future<BackupPackage> captureBackupPackage() async {
     final workspace = await _loadWorkspaceSnapshot();
     final labels = labelTrash;
     final attachments = <String, Uint8List>{};
@@ -141,13 +140,16 @@ extension BoardControllerLifecycle on BoardController {
         }
       }
     }
-    return const BackupArchiveService().encode(
-      BackupPackage(
-        workspace: workspace,
-        attachments: attachments,
-        labelTrash: labels,
-      ),
+    return BackupPackage(
+      workspace: workspace,
+      attachments: attachments,
+      labelTrash: labels,
     );
+  }
+
+  Future<Uint8List> createBackupArchive() async {
+    // 短持锁捕获工作区；附件二进制读取放锁外，避免长时间阻塞冲突解决等 UI 写操作。
+    return const BackupArchiveService().encode(await captureBackupPackage());
   }
 
   Future<void> restoreBackupArchive(

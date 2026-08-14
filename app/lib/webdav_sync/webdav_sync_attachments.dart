@@ -2,6 +2,7 @@ part of 'webdav_sync_service.dart';
 
 mixin _WebDavSyncAttachments
     on _WebDavSyncHost, _WebDavSyncScheduler, _WebDavSyncClientIo {
+  // ignore: unused_element
   Future<int> _pushWallpapers(
     Client client,
     String base,
@@ -540,6 +541,7 @@ mixin _WebDavSyncAttachments
     }
   }
 
+  // ignore: unused_element
   Future<int> _pushAllProjectAttachments({
     required Client client,
     required String base,

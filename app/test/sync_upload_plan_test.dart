@@ -307,5 +307,13 @@ void main() {
       2,
       reason: '看板元数据 + 新列，不应把未改的 a/b 列算进去',
     );
+    expect(
+      countPendingLiveArchiveUploads(workspace: latest, baseline: uploaded),
+      1,
+    );
+    expect(
+      countPendingLiveArchiveUploads(workspace: uploaded, baseline: uploaded),
+      0,
+    );
   });
 }

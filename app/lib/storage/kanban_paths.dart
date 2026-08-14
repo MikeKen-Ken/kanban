@@ -17,6 +17,12 @@ class KanbanPaths {
   static const sharedContentFileName = 'shared_content.json';
   static const backupsDirName = 'backups';
   static const backupFileExtension = '.kanban-backup';
+  static const liveWorkspaceArchiveFileName = 'workspace$backupFileExtension';
+  static const liveWorkspaceMarkerFileName = 'workspace.complete.json';
+  static const liveWallpapersArchiveFileName = 'wallpapers$backupFileExtension';
+  static const liveWallpapersMarkerFileName = 'wallpapers.complete.json';
+  static const liveWorkspaceArchiveId = 'workspace';
+  static const liveWallpapersArchiveId = 'wallpapers';
 
   /// 远端根目录；兼容旧配置 `/KanbanApp/board.json`
   static String remoteBaseDir(String remotePath) {
@@ -160,6 +166,18 @@ class KanbanPaths {
 
   static String remoteBackupMarkerPath(String baseDir, String backupId) =>
       '${remoteBackupDir(baseDir, backupId)}/complete.json';
+
+  static String remoteLiveWorkspaceArchivePath(String baseDir) =>
+      '$baseDir/$liveWorkspaceArchiveFileName';
+
+  static String remoteLiveWorkspaceMarkerPath(String baseDir) =>
+      '$baseDir/$liveWorkspaceMarkerFileName';
+
+  static String remoteLiveWallpapersArchivePath(String baseDir) =>
+      '$baseDir/$liveWallpapersArchiveFileName';
+
+  static String remoteLiveWallpapersMarkerPath(String baseDir) =>
+      '$baseDir/$liveWallpapersMarkerFileName';
 
   static String? columnIdFromRemoteFile(String filePath) {
     final name = filePath.split('/').last;
