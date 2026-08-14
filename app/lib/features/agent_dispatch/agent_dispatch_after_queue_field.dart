@@ -23,7 +23,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
         Text('完成后队列', style: theme.textTheme.labelLarge),
         const SizedBox(height: 4),
         Text(
-          '全部卡片处理完后按顺序执行。上传会等到真正结束后才进入下一步；休眠/关机只立即执行一次，不会在下次开机自动重复。',
+          '全部卡片处理完后按顺序执行。上传和推送会等到真正结束后才进入下一步；推送前先 fetch，远端有更新且工作区干净时自动 rebase，冲突则 abort 且不 force push。休眠/关机只立即执行一次，不会在下次开机自动重复。',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -33,7 +33,8 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
           children: [
             for (final step in AgentDispatchAfterStep.values)
               ActionChip(
-                label: Text('添加${step.label}'),
+                tooltip: '添加到完成后队列',
+                label: Text(step.label),
                 onPressed: !enabled || steps.contains(step)
                     ? null
                     : () => onChanged(addAfterQueueStep(steps, step)),
