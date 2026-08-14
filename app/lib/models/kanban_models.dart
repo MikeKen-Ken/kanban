@@ -116,6 +116,12 @@ class KanbanBoard {
   /// 默认「待验证」列标题
   static const defaultVerifyColumnTitle = '待验证';
 
+  /// 默认「收件箱」列 id（采集缓冲，避免打断进行中的流程列）
+  static const defaultInboxColumnId = 'inbox';
+
+  /// 默认「收件箱」列标题
+  static const defaultInboxColumnTitle = '收件箱';
+
   static KanbanBoard empty({
     required String id,
     String title = '我的看板',
@@ -162,6 +168,12 @@ class KanbanBoard {
           id: 'done',
           title: doneColumnTitle,
           order: 5,
+          cards: [],
+        ),
+        KanbanColumn(
+          id: defaultInboxColumnId,
+          title: defaultInboxColumnTitle,
+          order: 6,
           cards: [],
         ),
       ],
@@ -300,6 +312,50 @@ class KanbanBoard {
     );
     if (doneIndex >= 0) return doneIndex;
     return withoutRework.length;
+  }
+
+  /// 确保存在「收件箱」列，并放在全部流程列之后（已完成后面）。
+  ///
+  /// 按标题优先识别；已有同名或默认 id 时不新建、不挪位。
+  /// 若列集合已符合目标，返回 `this`。
+  KanbanBoard ensureInboxColumn() {
+    var sorted = [...columns]..sort((a, b) => a.order.compareTo(b.order));
+
+    var existingIndex = sorted.indexWhere(
+      (col) => col.title == defaultInboxColumnTitle,
+    );
+    if (existingIndex < 0) {
+      existingIndex = sorted.indexWhere(
+        (col) => col.id == defaultInboxColumnId,
+      );
+    }
+
+    if (existingIndex >= 0) {
+      final alreadyNormalized = sorted.asMap().entries.every(
+            (entry) => entry.value.order == entry.key,
+          );
+      if (alreadyNormalized) return this;
+      return copyWith(
+        columns: [
+          for (var i = 0; i < sorted.length; i++)
+            sorted[i].copyWith(order: i),
+        ],
+      );
+    }
+
+    sorted.add(
+      KanbanColumn(
+        id: defaultInboxColumnId,
+        title: defaultInboxColumnTitle,
+        order: sorted.length,
+        cards: const [],
+      ),
+    );
+    return copyWith(
+      columns: [
+        for (var i = 0; i < sorted.length; i++) sorted[i].copyWith(order: i),
+      ],
+    );
   }
 
   String toJsonString() => jsonEncode(toJson());

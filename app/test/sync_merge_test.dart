@@ -95,7 +95,8 @@ void main() {
     expect(merged.columns.map((c) => c.id), contains('blocked'));
     expect(merged.columns.map((c) => c.id), contains('verify'));
     expect(merged.columns.map((c) => c.id), contains('rework'));
-    expect(merged.columns.length, 6);
+    expect(merged.columns.map((c) => c.id), contains('inbox'));
+    expect(merged.columns.length, 7);
   });
 
   test('两侧看板 JSON 相同时直接返回本地，不重建列', () {

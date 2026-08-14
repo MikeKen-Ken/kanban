@@ -272,9 +272,11 @@ extension BoardControllerProjects on BoardController {
   Future<void> _ensureReworkColumnPersisted() async {
     final current = board;
     if (current == null) return;
-    final next = current.ensureReworkColumn(
-      doneColumnTitle: projectSettings.doneColumnName,
-    );
+    final next = current
+        .ensureReworkColumn(
+          doneColumnTitle: projectSettings.doneColumnName,
+        )
+        .ensureInboxColumn();
     if (identical(next, current)) return;
     final sameShape = next.columns.length == current.columns.length &&
         List.generate(next.columns.length, (i) {

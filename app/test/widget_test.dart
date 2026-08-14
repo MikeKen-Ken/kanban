@@ -8,16 +8,16 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('default board has six columns including rework', () {
+  test('default board has seven columns including rework and inbox', () {
     final board = KanbanBoard.empty(id: 'test');
-    expect(board.columns.length, 6);
+    expect(board.columns.length, 7);
     expect(
       board.columns.map((c) => c.id).toList(),
-      ['todo', 'doing', 'blocked', 'verify', 'rework', 'done'],
+      ['todo', 'doing', 'blocked', 'verify', 'rework', 'done', 'inbox'],
     );
     expect(
       board.columns.map((c) => c.title).toList(),
-      ['待办', '进行中', '阻塞中', '待验证', '待返工', '已完成'],
+      ['待办', '进行中', '阻塞中', '待验证', '待返工', '已完成', '收件箱'],
     );
   });
 
@@ -44,7 +44,7 @@ void main() {
     expect(await todoFile.readAsString(), contains('"title": "待办"'));
 
     final loaded = await storage.loadBoard(board.id);
-    expect(loaded.columns.length, 6);
+    expect(loaded.columns.length, 7);
     expect(loaded.columns.first.id, 'todo');
     expect(
       loaded.columns.map((c) => c.id),
@@ -146,6 +146,64 @@ void main() {
     ]);
     final already = KanbanBoard.empty(id: 'ok');
     expect(identical(already.ensureReworkColumn(), already), isTrue);
+  });
+
+  test('ensureInboxColumn appends after done', () {
+    final legacy = KanbanBoard(
+      id: 'legacy-inbox',
+      title: '旧板',
+      updatedAt: 1,
+      revision: 1,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
+        KanbanColumn(id: 'doing', title: '进行中', order: 1, cards: const []),
+        KanbanColumn(id: 'blocked', title: '阻塞中', order: 2, cards: const []),
+        KanbanColumn(id: 'verify', title: '待验证', order: 3, cards: const []),
+        KanbanColumn(id: 'rework', title: '待返工', order: 4, cards: const []),
+        KanbanColumn(id: 'done', title: '已完成', order: 5, cards: const []),
+      ],
+    );
+    final ensured = legacy.ensureInboxColumn();
+    expect(ensured.columns.map((c) => c.title).toList(), [
+      '待办',
+      '进行中',
+      '阻塞中',
+      '待验证',
+      '待返工',
+      '已完成',
+      '收件箱',
+    ]);
+    expect(ensured.columns.last.id, KanbanBoard.defaultInboxColumnId);
+    final alreadyInbox = KanbanBoard.empty(id: 'ok-inbox');
+    expect(identical(alreadyInbox.ensureInboxColumn(), alreadyInbox), isTrue);
+  });
+
+  test('ensureInboxColumn 已有同名列时不新建', () {
+    final board = KanbanBoard(
+      id: 'custom-inbox',
+      title: '板',
+      updatedAt: 1,
+      revision: 1,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: const []),
+        KanbanColumn(id: 'done', title: '已完成', order: 1, cards: const []),
+        KanbanColumn(
+          id: 'uuid-inbox',
+          title: '收件箱',
+          order: 2,
+          cards: const [],
+        ),
+      ],
+    );
+    final ensured = board.ensureInboxColumn();
+    expect(
+      ensured.columns.where((c) => c.title == '收件箱').length,
+      1,
+    );
+    expect(
+      ensured.columns.any((c) => c.id == KanbanBoard.defaultInboxColumnId),
+      isFalse,
+    );
   });
 
   test('ensureReworkColumn 已有自定义 id 同名列时不新建', () {

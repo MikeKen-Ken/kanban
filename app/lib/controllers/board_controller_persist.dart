@@ -156,6 +156,7 @@ extension BoardControllerPersist on BoardController {
       sharedContent = await _repository.loadSharedContent();
       await _initializeSharedLabels();
       await _ensureReworkColumnPersisted();
+      await _ensureInboxColumnOnAllProjects();
       await _refreshProjectThemeIds();
       await _loadTrashState();
       await refreshDisplayableWallpapers();
@@ -221,6 +222,22 @@ extension BoardControllerPersist on BoardController {
       if (!await _repository.storage.hasProjectBoard(projectId)) return null;
       return _repository.loadBoard(projectId);
     });
+  }
+
+  Future<void> _ensureInboxColumnOnAllProjects() async {
+    final list = manifest?.projects ?? const <ProjectEntry>[];
+    for (final entry in list) {
+      KanbanBoard current;
+      if (entry.id == activeProjectId && board != null) {
+        current = board!;
+      } else {
+        if (!await _repository.storage.hasProjectBoard(entry.id)) continue;
+        current = await _repository.loadBoard(entry.id);
+      }
+      final next = current.ensureInboxColumn();
+      if (identical(next, current)) continue;
+      await _persistAndSync(_bump(next));
+    }
   }
 
   Future<void> _reloadUiAfterSync() {
