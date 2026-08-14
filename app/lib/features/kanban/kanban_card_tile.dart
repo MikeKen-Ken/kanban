@@ -85,7 +85,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     );
   }
 
-  /// 卡片上下文菜单（复制 / 转移到… / 删除）。
+  /// 卡片上下文菜单（复制 / 克隆 / 转移到… / 删除）。
   ///
   /// 触发方式：
   /// - 桌面：右键（secondary tap）
@@ -108,8 +108,12 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       ),
       items: [
         const PopupMenuItem<String>(
-          value: 'duplicate',
+          value: 'copy',
           child: Text('复制'),
+        ),
+        const PopupMenuItem<String>(
+          value: 'duplicate',
+          child: Text('克隆'),
         ),
         PopupMenuItem<String>(
           value: 'transfer',
@@ -126,7 +130,9 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       ],
     );
     if (!mounted) return;
-    if (selected == 'duplicate') {
+    if (selected == 'copy') {
+      await _copyCardWorkItems();
+    } else if (selected == 'duplicate') {
       await _duplicateCard();
     } else if (selected == 'transfer') {
       await showTransferCardToProjectFlow(
@@ -140,13 +146,23 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     }
   }
 
-  /// 在当前列创建副本，字段与附件均使用独立标识。
+  /// 在当前列复制 workItems（标题、备注、子任务）。
+  Future<void> _copyCardWorkItems() async {
+    final copiedId = await context
+        .read<BoardController>()
+        .copyCardWorkItems(widget.columnId, widget.card.id);
+    if (copiedId == null && mounted) {
+      showAppSnackBar(context, message: '复制失败：卡片不存在');
+    }
+  }
+
+  /// 在当前列克隆整张卡片，字段与附件均使用独立标识。
   Future<void> _duplicateCard() async {
     final copiedId = await context
         .read<BoardController>()
         .duplicateCard(widget.columnId, widget.card.id);
     if (copiedId == null && mounted) {
-      showAppSnackBar(context, message: '复制失败：卡片不存在');
+      showAppSnackBar(context, message: '克隆失败：卡片不存在');
     }
   }
 

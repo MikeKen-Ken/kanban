@@ -77,7 +77,7 @@ bool isTouchPrimaryPlatform(TargetPlatform platform) {
       platform == TargetPlatform.iOS;
 }
 
-/// 是否用长按打开卡片上下文菜单（复制 / 转移 / 删除）。
+/// 是否用长按打开卡片上下文菜单（复制 / 克隆 / 转移 / 删除）。
 ///
 /// 仅「即时拖拽」时可用：此时长按不再启动拖拽。
 /// 默认延迟拖拽下长按留给 [CardLongPressDraggable]，菜单需另寻入口。

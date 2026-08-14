@@ -78,7 +78,63 @@ extension BoardControllerCards on BoardController {
     });
   }
 
-  /// 在同一列创建一张字段副本；新卡片使用独立的标识、重复系列和附件文件。
+  /// 在同一列创建一张 workItems 副本（标题、备注、子任务文本）；不含附件、关联与其它元数据。
+  Future<String?> copyCardWorkItems(String columnId, String cardId) async {
+    return _withBoardMutation(() async {
+      if (board == null) return null;
+      final sourceColumn =
+          board!.columns.where((column) => column.id == columnId).firstOrNull;
+      if (sourceColumn == null) return null;
+      final source =
+          sourceColumn.cards.where((card) => card.id == cardId).firstOrNull;
+      if (source == null) return null;
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final copiedId = const Uuid().v4();
+      final copied = KanbanCard(
+        id: copiedId,
+        title: source.title,
+        description: source.description,
+        order: sourceColumn.cards.length,
+        createdAt: now,
+        updatedAt: now,
+        checklist: [
+          for (final item in source.checklist)
+            ChecklistItem(
+              id: const Uuid().v4(),
+              text: item.text,
+            ),
+        ],
+      );
+      final columns = board!.columns.map((column) {
+        if (column.id != columnId) return column;
+        return column.copyWith(cards: [...column.cards, copied]);
+      }).toList();
+      await _persistAndSync(_bump(board!.copyWith(columns: columns)));
+
+      String? trashId;
+      _pushUndo(
+        '复制「${source.title}」',
+        () async {
+          trashId = await deleteCard(columnId, copiedId);
+        },
+        redo: () async {
+          final id = trashId;
+          if (id == null) return;
+          final error = await restoreTrashItem(id);
+          if (error != null) throw StateError(error);
+        },
+      );
+      await _recordActivity(
+        entityId: copiedId,
+        entityTitle: copied.title,
+        action: ActivityAction.created,
+      );
+      return copiedId;
+    });
+  }
+
+  /// 在同一列克隆整张卡片；新卡片使用独立的标识、重复系列和附件文件。
   Future<String?> duplicateCard(String columnId, String cardId) async {
     return _withBoardMutation(() async {
       if (board == null) return null;
@@ -125,7 +181,7 @@ extension BoardControllerCards on BoardController {
 
       String? trashId;
       _pushUndo(
-        '复制「${source.title}」',
+        '克隆「${source.title}」',
         () async {
           trashId = await deleteCard(columnId, duplicatedId);
         },
