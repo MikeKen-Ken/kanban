@@ -631,10 +631,19 @@ async function runBatch(job, cancellation) {
           processedCards
         };
       }
-      const latest = await mcp.callJson("get_card", {
-        cardId,
-        ...projectId ? { projectId } : {}
-      });
+      let latest;
+      try {
+        latest = await mcp.callJson("get_card", {
+          cardId,
+          ...projectId ? { projectId } : {}
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        workerLog(
+          `[warn] Worker \u65E0\u6CD5\u8BFB\u53D6\u672C\u8F6E\u5361\u7247\u72B6\u6001\uFF08${message}\uFF09\uFF1B\u53EF\u80FD\u5361\u7247\u5DF2\u88AB\u5220\u9664\uFF0C\u8DF3\u8FC7\u672C\u8F6E\u5E76\u7EE7\u7EED\u4E0B\u4E00\u5F20`
+        );
+        continue;
+      }
       const state = cardState(latest);
       workerLog(
         `Worker \u72B6\u6001\u68C0\u67E5\uFF1AcardId=${cardId} column=${String(latest.columnName ?? latest.columnId ?? "\u672A\u77E5")}`

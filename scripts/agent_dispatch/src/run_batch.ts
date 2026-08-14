@@ -98,10 +98,19 @@ export async function runBatch(
         };
       }
 
-      const latest = await mcp.callJson("get_card", {
-        cardId,
-        ...(projectId ? { projectId } : {}),
-      });
+      let latest: Record<string, unknown>;
+      try {
+        latest = await mcp.callJson("get_card", {
+          cardId,
+          ...(projectId ? { projectId } : {}),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        workerLog(
+          `[warn] Worker 无法读取本轮卡片状态（${message}）；可能卡片已被删除，跳过本轮并继续下一张`,
+        );
+        continue;
+      }
       const state = cardState(latest);
       workerLog(
         `Worker 状态检查：cardId=${cardId} column=${String(latest.columnName ?? latest.columnId ?? "未知")}`,
