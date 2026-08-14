@@ -39,11 +39,21 @@ class _CardDetailAgentModelSectionState
   @override
   void initState() {
     super.initState();
-    SharedPreferences.getInstance().then((prefs) {
-      if (!mounted) return;
-      setState(() {
-        _models = prefs.loadAgentDispatchModelCatalog();
-      });
+    _loadModels();
+  }
+
+  @override
+  void didUpdateWidget(CardDetailAgentModelSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.agentEngine != widget.agentEngine) _loadModels();
+  }
+
+  Future<void> _loadModels() async {
+    final prefs = await SharedPreferences.getInstance();
+    final engine = AgentDispatchEngine.fromName(widget.agentEngine);
+    if (!mounted) return;
+    setState(() {
+      _models = prefs.loadAgentDispatchModelCatalog(engine: engine);
     });
   }
 
@@ -88,7 +98,8 @@ class _CardDetailAgentModelSectionState
         decoration: InputDecoration(
           labelText: label,
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         ),
         items: items,
         onChanged: onChanged,
@@ -173,9 +184,7 @@ class _CardDetailAgentModelSectionState
   @override
   Widget build(BuildContext context) {
     final fast = _isCodex ? null : _param((id) => id == 'fast');
-    final reasoning = _isCodex
-        ? null
-        : _param(isAgentDispatchReasoningParam);
+    final reasoning = _param(isAgentDispatchReasoningParam);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Wrap(
@@ -193,24 +202,23 @@ class _CardDetailAgentModelSectionState
             ),
             onChanged: _onEngine,
           ),
-          if (!_isCodex)
-            _dropdown(
-              label: '模型',
-              value: widget.agentModelId ?? _inherit,
-              items: _items(
-                options: [
-                  for (final model in _models)
-                    (
-                      value: model.id,
-                      label: model.displayName == null ||
-                              model.displayName == model.id
-                          ? model.id
-                          : '${model.displayName}（${model.id}）',
-                    ),
-                ],
-              ),
-              onChanged: _onModel,
+          _dropdown(
+            label: '模型',
+            value: widget.agentModelId ?? _inherit,
+            items: _items(
+              options: [
+                for (final model in _models)
+                  (
+                    value: model.id,
+                    label: model.displayName == null ||
+                            model.displayName == model.id
+                        ? model.id
+                        : '${model.displayName}（${model.id}）',
+                  ),
+              ],
             ),
+            onChanged: _onModel,
+          ),
           if (fast != null)
             _dropdown(
               label: 'Fast',

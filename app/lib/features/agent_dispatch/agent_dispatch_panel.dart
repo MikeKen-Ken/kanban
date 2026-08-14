@@ -124,7 +124,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     final loaded = prefs.loadAgentDispatchSettings();
-    final cachedModels = prefs.loadAgentDispatchModelCatalog();
+    final cachedModels = prefs.loadAgentDispatchModelCatalog(
+      engine: loaded.engine,
+    );
     final cachedModelId = cachedModels.isEmpty
         ? loaded.modelId
         : resolveAgentDispatchModelId(cachedModels, loaded.modelId);
@@ -314,6 +316,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     setState(() => _busy = true);
     try {
       final models = await listAgentDispatchModels(
+        engine: _settings.engine,
         cursorApiKey: await _credentials.resolveCursorApiKey(),
         workerScriptPath: _settings.workerScriptPath,
         onLog: (l) {
@@ -348,7 +351,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         _modelCatalogMessage = null;
       });
       final prefs = await SharedPreferences.getInstance();
-      await prefs.saveAgentDispatchModelCatalog(uniqueModels);
+      await prefs.saveAgentDispatchModelCatalog(
+        uniqueModels,
+        engine: _settings.engine,
+      );
       _appendLog('已加载 ${uniqueModels.length} 个模型');
       await _persist(_settings.copyWith(
         modelId: selectedId,
@@ -425,33 +431,41 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     return null;
   }
 
-  void _onEngineChanged(AgentDispatchEngine? nextEngine) {
+  Future<void> _onEngineChanged(AgentDispatchEngine? nextEngine) async {
     if (nextEngine == null || _running || _busy) return;
+    final prefs = await SharedPreferences.getInstance();
+    final cachedModels = prefs.loadAgentDispatchModelCatalog(
+      engine: nextEngine,
+    );
+    final selectedId = resolveAgentDispatchModelId(
+      cachedModels,
+      null,
+      preferredId: nextEngine == AgentDispatchEngine.cursor
+          ? AgentDispatchSettings.defaultModelId
+          : '',
+    );
+    AgentDispatchModelInfo? selected;
+    for (final model in cachedModels) {
+      if (model.id == selectedId) selected = model;
+    }
     final nextSettings = _settings.copyWith(
       engine: nextEngine,
-      modelId: AgentDispatchSettings.defaultModelId,
-      modelParamValues: AgentDispatchSettings.defaultModelParamValues,
+      modelId: selectedId,
+      modelParamValues: preferredAgentDispatchModelParamValues(
+        selected?.parameters ?? const [],
+      ),
     );
-    if (nextEngine == AgentDispatchEngine.cursor) {
-      SharedPreferences.getInstance().then((prefs) async {
-        final cachedModels = prefs.loadAgentDispatchModelCatalog();
-        if (!mounted) return;
-        setState(() {
-          _models = cachedModels;
-          _usage = null;
-          _modelCatalogMessage = null;
-        });
-        await _persist(nextSettings);
-        if (!mounted) return;
-        unawaited(_loadAccountInfo());
-      });
-      return;
-    }
+    if (!mounted) return;
     setState(() {
-      _models = const [];
+      _models = cachedModels;
       _usage = null;
+      _modelCatalogMessage = null;
     });
-    unawaited(_persist(nextSettings));
+    await _persist(nextSettings);
+    if (!mounted) return;
+    if (nextEngine == AgentDispatchEngine.cursor) {
+      unawaited(_loadAccountInfo());
+    }
   }
 
   Future<void> _run() async {
@@ -674,11 +688,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 children: [
                   Text('模型', style: Theme.of(context).textTheme.labelLarge),
                   const Spacer(),
-                  if (_settings.engine == AgentDispatchEngine.cursor)
-                    TextButton(
-                      onPressed: _running || _busy ? null : _loadModels,
-                      child: Text(_busy ? '刷新中…' : '从 API 刷新'),
-                    ),
+                  TextButton(
+                    onPressed: _running || _busy ? null : _loadModels,
+                    child: Text(_busy ? '刷新中…' : '从 API 刷新'),
+                  ),
                 ],
               ),
               if (_modelCatalogMessage != null)
@@ -692,14 +705,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     ),
                   ),
                 ),
-              if (_settings.engine == AgentDispatchEngine.codex)
+              if (_models.isEmpty)
                 Text(
-                  '使用本机 Codex CLI 的默认模型与登录状态',
-                  style: Theme.of(context).textTheme.bodySmall,
-                )
-              else if (_models.isEmpty)
-                Text(
-                  _settings.modelId ?? '尚未加载模型目录；请点击「从 API 刷新」手动拉取',
+                  '尚未加载模型目录；请点击「从 API 刷新」手动拉取',
                   style: Theme.of(context).textTheme.bodySmall,
                 )
               else

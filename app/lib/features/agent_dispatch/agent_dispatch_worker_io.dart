@@ -267,6 +267,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
 }
 
 Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
+  required AgentDispatchEngine engine,
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
@@ -280,7 +281,8 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
       : p.dirname(cli);
   final node = await _resolveNodeExecutable(packageRoot: packageRoot);
   if (node == null) throw StateError('未找到 node');
-  if (cursorApiKey == null || cursorApiKey.trim().isEmpty) {
+  if (engine == AgentDispatchEngine.cursor &&
+      (cursorApiKey == null || cursorApiKey.trim().isEmpty)) {
     throw StateError('尚未配置 Cursor API Key');
   }
   final environment = _workerEnvironment(
@@ -290,7 +292,7 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   onLog?.call('拉取模型列表…');
   final result = await Process.run(
     node,
-    [cli, '--list-models'],
+    [cli, '--list-models', engine.name],
     workingDirectory: packageRoot,
     environment: environment,
     stdoutEncoding: utf8,

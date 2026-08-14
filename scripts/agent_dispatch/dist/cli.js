@@ -223,65 +223,145 @@ async function printCursorUsage() {
 `);
 }
 
-// src/mcp_client.ts
-import {
-  Client,
-  StreamableHTTPClientTransport
-} from "@modelcontextprotocol/client";
-
-// src/async_limit.ts
-function settleWithin(ms, work) {
-  return new Promise((resolve2) => {
-    const timer = setTimeout(resolve2, ms);
-    timer.unref?.();
-    work.then(
-      () => {
-        clearTimeout(timer);
-        resolve2();
-      },
-      () => {
-        clearTimeout(timer);
-        resolve2();
-      }
-    );
-  });
+// src/codex_models.ts
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
+async function listCodexModels(codex) {
+  const child = spawn(
+    codex.command,
+    [...codex.prefixArgs, "app-server", "--stdio"],
+    { stdio: ["pipe", "pipe", "pipe"], shell: codex.shell }
+  );
+  const stderr = [];
+  child.stderr.on("data", (chunk) => stderr.push(chunk.toString("utf8")));
+  try {
+    const client = new AppServerClient(child);
+    await client.request("initialize", {
+      clientInfo: { name: "kanban-agent-dispatch", version: "1.0.0" },
+      capabilities: { experimentalApi: false }
+    });
+    client.notify("initialized", {});
+    const models = [];
+    let cursor;
+    do {
+      const result = await client.request("model/list", {
+        cursor: cursor ?? null,
+        includeHidden: false
+      });
+      models.push(...result.data ?? []);
+      cursor = result.nextCursor;
+    } while (cursor);
+    return models.map(toCatalogItem).filter((model) => model.id.length > 0);
+  } catch (error) {
+    const detail = stderr.join("").trim();
+    throw new Error(detail ? `${String(error)}
+${detail}` : String(error));
+  } finally {
+    child.kill();
+  }
 }
-
-// src/mcp_client.ts
-var KanbanMcpClient = class {
-  client = new Client({
-    name: "kanban-agent-worker",
-    version: "1.0.0"
-  });
-  async connect(endpoint) {
-    await this.client.connect(
-      new StreamableHTTPClientTransport(new URL(endpoint))
-    );
+function toCatalogItem(model) {
+  const id = (model.model ?? model.id ?? "").trim();
+  const efforts = (model.supportedReasoningEfforts ?? []).map((option) => ({
+    value: option.reasoningEffort?.trim() ?? "",
+    displayName: effortLabel(option.reasoningEffort ?? "")
+  })).filter((option) => option.value.length > 0);
+  const defaultEffort = model.defaultReasoningEffort?.trim();
+  return {
+    id,
+    displayName: model.displayName,
+    description: model.description,
+    parameters: efforts.length === 0 ? [] : [{
+      id: "model_reasoning_effort",
+      displayName: "\u63A8\u7406\u7A0B\u5EA6",
+      values: efforts
+    }],
+    variants: defaultEffort ? [{
+      displayName: `\u9ED8\u8BA4\uFF08${effortLabel(defaultEffort)}\uFF09`,
+      isDefault: true,
+      params: [{ id: "model_reasoning_effort", value: defaultEffort }]
+    }] : []
+  };
+}
+function effortLabel(value) {
+  const labels = {
+    minimal: "Minimal",
+    none: "None",
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    xhigh: "XHigh",
+    max: "Max"
+  };
+  return labels[value] ?? value;
+}
+var AppServerClient = class {
+  constructor(child) {
+    this.child = child;
+    const lines = createInterface({ input: child.stdout });
+    lines.on("line", (line) => this.handleLine(line));
+    child.on("error", (error) => this.rejectAll(error));
+    child.on("close", (code) => {
+      if (this.pending.size > 0) {
+        this.rejectAll(new Error(`Codex app-server \u5DF2\u9000\u51FA\uFF08${code ?? 1}\uFF09`));
+      }
+    });
   }
-  async callJson(name, args) {
-    const result = await this.client.callTool({ name, arguments: args });
-    if (result.isError) {
-      throw new Error(`${name} \u5931\u8D25\uFF1A${this.resultText(result)}`);
-    }
-    const text = this.resultText(result);
+  nextId = 1;
+  pending = /* @__PURE__ */ new Map();
+  request(method, params) {
+    const id = this.nextId++;
+    const promise = new Promise((resolve2, reject) => {
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`${method} \u8BF7\u6C42\u8D85\u65F6`));
+      }, 15e3);
+      this.pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timeout);
+          resolve2(value);
+        },
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        }
+      });
+    });
+    this.write({ id, method, params });
+    return promise;
+  }
+  notify(method, params) {
+    this.write({ method, params });
+  }
+  write(message) {
+    this.child.stdin.write(`${JSON.stringify(message)}
+`);
+  }
+  handleLine(line) {
+    let response;
     try {
-      return JSON.parse(text);
+      response = JSON.parse(line);
     } catch {
-      throw new Error(`${name} \u8FD4\u56DE\u4E86\u65E0\u6548 JSON\uFF1A${text}`);
+      return;
+    }
+    if (typeof response.id !== "number") return;
+    const pending = this.pending.get(response.id);
+    if (!pending) return;
+    this.pending.delete(response.id);
+    if (response.error) {
+      pending.reject(new Error(response.error.message ?? "Codex app-server \u8BF7\u6C42\u5931\u8D25"));
+    } else {
+      pending.resolve(response.result);
     }
   }
-  async close() {
-    await settleWithin(2e3, this.client.close());
-  }
-  resultText(result) {
-    return result.content.filter(
-      (item) => item.type === "text"
-    ).map((item) => item.text).join("\n").trim();
+  rejectAll(error) {
+    for (const pending of this.pending.values()) pending.reject(error);
+    this.pending.clear();
   }
 };
 
 // src/run_codex.ts
-import { spawn } from "node:child_process";
+import { spawn as spawn2 } from "node:child_process";
 import {
   existsSync as existsSync2,
   mkdtempSync,
@@ -395,7 +475,7 @@ async function runCodex(job, cancellation) {
         if (!child || child.killed) return;
         try {
           if (process.platform === "win32") {
-            spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+            spawn2("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
               shell: true
             });
           } else {
@@ -409,7 +489,7 @@ async function runCodex(job, cancellation) {
         resolvePromise(130);
         return;
       }
-      child = spawn(codex.command, [...codex.prefixArgs, ...args], {
+      child = spawn2(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
         env: process.env,
         stdio: ["pipe", "pipe", "pipe"],
@@ -458,6 +538,63 @@ async function runCodex(job, cancellation) {
     }
   }
 }
+
+// src/mcp_client.ts
+import {
+  Client,
+  StreamableHTTPClientTransport
+} from "@modelcontextprotocol/client";
+
+// src/async_limit.ts
+function settleWithin(ms, work) {
+  return new Promise((resolve2) => {
+    const timer = setTimeout(resolve2, ms);
+    timer.unref?.();
+    work.then(
+      () => {
+        clearTimeout(timer);
+        resolve2();
+      },
+      () => {
+        clearTimeout(timer);
+        resolve2();
+      }
+    );
+  });
+}
+
+// src/mcp_client.ts
+var KanbanMcpClient = class {
+  client = new Client({
+    name: "kanban-agent-worker",
+    version: "1.0.0"
+  });
+  async connect(endpoint) {
+    await this.client.connect(
+      new StreamableHTTPClientTransport(new URL(endpoint))
+    );
+  }
+  async callJson(name, args) {
+    const result = await this.client.callTool({ name, arguments: args });
+    if (result.isError) {
+      throw new Error(`${name} \u5931\u8D25\uFF1A${this.resultText(result)}`);
+    }
+    const text = this.resultText(result);
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`${name} \u8FD4\u56DE\u4E86\u65E0\u6548 JSON\uFF1A${text}`);
+    }
+  }
+  async close() {
+    await settleWithin(2e3, this.client.close());
+  }
+  resultText(result) {
+    return result.content.filter(
+      (item) => item.type === "text"
+    ).map((item) => item.text).join("\n").trim();
+  }
+};
 
 // src/run_cursor.ts
 import { mkdirSync } from "node:fs";
@@ -962,7 +1099,18 @@ function normalizeModelParameterValues(input) {
     (item) => item !== null && item.value.length > 0
   );
 }
-async function listModels() {
+async function listModels(engine) {
+  if (engine === "codex") {
+    try {
+      const models2 = await listCodexModels(resolveCodexCommand());
+      process.stdout.write(`${JSON.stringify({ models: models2 })}
+`);
+    } catch (err) {
+      console.error(`Codex model/list \u5931\u8D25\uFF1A${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 2;
+    }
+    return;
+  }
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
     console.error("\u7F3A\u5C11 CURSOR_API_KEY");
@@ -1063,7 +1211,8 @@ async function runJob(jobPath) {
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--list-models")) {
-    await listModels();
+    const engine = argv[argv.indexOf("--list-models") + 1] === "codex" ? "codex" : "cursor";
+    await listModels(engine);
     return;
   }
   if (argv.includes("--usage")) {

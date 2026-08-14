@@ -6,6 +6,8 @@ import {
   WorkerCancellation,
 } from "./cancellation.js";
 import { printCursorUsage } from "./cursor_usage.js";
+import { listCodexModels } from "./codex_models.js";
+import { resolveCodexCommand } from "./run_codex.js";
 import { runBatch } from "./run_batch.js";
 import type { DispatchJob, DispatchResult } from "./types.js";
 
@@ -101,7 +103,17 @@ function normalizeModelParameterValues(
     );
 }
 
-async function listModels(): Promise<void> {
+async function listModels(engine: "cursor" | "codex"): Promise<void> {
+  if (engine === "codex") {
+    try {
+      const models = await listCodexModels(resolveCodexCommand());
+      process.stdout.write(`${JSON.stringify({ models })}\n`);
+    } catch (err) {
+      console.error(`Codex model/list 失败：${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 2;
+    }
+    return;
+  }
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
     console.error("缺少 CURSOR_API_KEY");
@@ -207,7 +219,10 @@ async function runJob(jobPath: string): Promise<void> {
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   if (argv.includes("--list-models")) {
-    await listModels();
+    const engine = argv[argv.indexOf("--list-models") + 1] === "codex"
+      ? "codex"
+      : "cursor";
+    await listModels(engine);
     return;
   }
   if (argv.includes("--usage")) {

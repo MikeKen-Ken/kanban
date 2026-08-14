@@ -16,7 +16,7 @@ import {
   type DispatchResult,
 } from "./types.js";
 
-function resolveCodexCommand(): {
+export function resolveCodexCommand(): {
   command: string;
   prefixArgs: string[];
   shell: boolean;

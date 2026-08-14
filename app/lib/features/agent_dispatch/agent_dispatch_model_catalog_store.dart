@@ -7,8 +7,11 @@ import 'agent_dispatch_config.dart';
 extension AgentDispatchModelCatalogStore on SharedPreferences {
   static const _key = 'agent_dispatch_model_catalog';
 
-  List<AgentDispatchModelInfo> loadAgentDispatchModelCatalog() {
-    final raw = getString(_key);
+  List<AgentDispatchModelInfo> loadAgentDispatchModelCatalog({
+    AgentDispatchEngine engine = AgentDispatchEngine.cursor,
+  }) {
+    final raw = getString('${_key}_${engine.name}') ??
+        (engine == AgentDispatchEngine.cursor ? getString(_key) : null);
     if (raw == null) return const [];
     try {
       final list = jsonDecode(raw) as List<dynamic>;
@@ -23,10 +26,11 @@ extension AgentDispatchModelCatalogStore on SharedPreferences {
   }
 
   Future<void> saveAgentDispatchModelCatalog(
-    List<AgentDispatchModelInfo> models,
-  ) {
+    List<AgentDispatchModelInfo> models, {
+    AgentDispatchEngine engine = AgentDispatchEngine.cursor,
+  }) {
     return setString(
-      _key,
+      '${_key}_${engine.name}',
       jsonEncode(models.map((model) => model.toJson()).toList()),
     );
   }

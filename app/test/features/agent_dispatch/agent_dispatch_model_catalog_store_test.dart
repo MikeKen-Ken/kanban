@@ -44,4 +44,26 @@ void main() {
     expect(cached.single.parameters.single.options.last.displayName, 'Off');
     expect(cached.single.defaultVariant?.params, {'fast': 'true'});
   });
+
+  test('Cursor 与 Codex 使用独立模型目录缓存', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    const cursorModels = [AgentDispatchModelInfo(id: 'composer-2.5')];
+    const codexModels = [AgentDispatchModelInfo(id: 'gpt-5.6-sol')];
+
+    await prefs.saveAgentDispatchModelCatalog(cursorModels);
+    await prefs.saveAgentDispatchModelCatalog(
+      codexModels,
+      engine: AgentDispatchEngine.codex,
+    );
+
+    expect(prefs.loadAgentDispatchModelCatalog().single.id, 'composer-2.5');
+    expect(
+      prefs
+          .loadAgentDispatchModelCatalog(engine: AgentDispatchEngine.codex)
+          .single
+          .id,
+      'gpt-5.6-sol',
+    );
+  });
 }

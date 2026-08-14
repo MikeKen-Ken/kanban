@@ -63,6 +63,7 @@ Future<AgentWorkerHealth> inspectAgentDispatchWorker(
     );
 
 Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
+  required AgentDispatchEngine engine,
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
