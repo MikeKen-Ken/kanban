@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/board_controller.dart';
+import 'features/agent_dispatch/agent_dispatch_after_queue.dart';
 import 'features/agent_dispatch/agent_dispatch_registry.dart';
 import 'features/agent_dispatch/agent_dispatch_window.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -16,6 +17,8 @@ import 'webdav_sync/webdav_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 取消可能残留的延时关机，避免开机后立刻休眠。
+  unawaited(abortStaleWindowsPowerAction());
   // 卡片/详情里的 DateFormat.*('zh_CN') 依赖 locale 数据；未初始化会变成超高 ErrorWidget
   await initializeDateFormatting('zh_CN');
   final controller = await BoardController.create();

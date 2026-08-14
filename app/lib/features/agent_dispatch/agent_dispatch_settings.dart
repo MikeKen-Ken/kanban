@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_config.dart';
 
 /// Agent 调度本机偏好（不同步）。
@@ -17,6 +18,7 @@ class AgentDispatchSettings {
     this.modelParamValues = defaultModelParamValues,
     this.cardLimitMax = true,
     this.cardLimitCount = 1,
+    this.afterQueue = const [],
     this.workerScriptPath,
     this.skillPath,
     this.repoPathByProject = const {},
@@ -44,6 +46,9 @@ class AgentDispatchSettings {
   final bool cardLimitMax;
   final int cardLimitCount;
 
+  /// 批次成功结束后按顺序执行的动作。
+  final List<AgentDispatchAfterStep> afterQueue;
+
   final String? workerScriptPath;
   final String? skillPath;
   final Map<String, String> repoPathByProject;
@@ -58,6 +63,7 @@ class AgentDispatchSettings {
     Map<String, String>? modelParamValues,
     bool? cardLimitMax,
     int? cardLimitCount,
+    List<AgentDispatchAfterStep>? afterQueue,
     Object? workerScriptPath = _sentinel,
     Object? skillPath = _sentinel,
     Map<String, String>? repoPathByProject,
@@ -72,6 +78,7 @@ class AgentDispatchSettings {
       modelParamValues: modelParamValues ?? this.modelParamValues,
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
+      afterQueue: afterQueue ?? this.afterQueue,
       workerScriptPath: workerScriptPath == _sentinel
           ? this.workerScriptPath
           : workerScriptPath as String?,
@@ -127,6 +134,8 @@ class AgentDispatchSettings {
         if (modelParamValues.isNotEmpty) 'modelParamValues': modelParamValues,
         'cardLimitMax': cardLimitMax,
         'cardLimitCount': cardLimitCount,
+        if (afterQueue.isNotEmpty)
+          'afterQueue': afterQueue.map((step) => step.name).toList(),
         if (workerScriptPath != null) 'workerScriptPath': workerScriptPath,
         if (skillPath != null) 'skillPath': skillPath,
         if (repoPathByProject.isNotEmpty)
@@ -177,6 +186,7 @@ class AgentDispatchSettings {
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
           (json['maxCards'] as num?)?.toInt() ??
           1,
+      afterQueue: parseAgentDispatchAfterQueue(json['afterQueue']),
       workerScriptPath: json['workerScriptPath'] as String?,
       skillPath: json['skillPath'] as String?,
       repoPathByProject: mapRaw == null

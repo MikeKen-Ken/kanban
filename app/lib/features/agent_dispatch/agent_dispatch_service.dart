@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../controllers/board_controller.dart';
 import '../mcp/mcp_block_card.dart';
 import '../mcp/mcp_dispatch_card_gate.dart';
+import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_log.dart';
@@ -206,6 +207,8 @@ class AgentDispatchService {
     required String mcpEndpoint,
     String? workerScriptPath,
     int queueSize = 0,
+    List<AgentDispatchAfterStep> afterQueue = const [],
+    AgentDispatchAfterQueueHost? afterQueueHost,
     void Function(AgentDispatchLogEntry entry)? onLog,
   }) async {
     if (_isRunning) {
@@ -233,13 +236,33 @@ class AgentDispatchService {
     );
     _setRunning(true);
     try {
-      return await _runOnceImpl(
+      final result = await _runOnceImpl(
         options: options,
         skillPath: skillPath,
         mcpEndpoint: mcpEndpoint,
         workerScriptPath: workerScriptPath,
         onLog: onLog,
       );
+      final shouldRunAfterQueue = result.ok &&
+          !_cancelRequested &&
+          !_drainAfterCurrentRequested &&
+          afterQueue.isNotEmpty &&
+          afterQueueHost != null;
+      if (shouldRunAfterQueue) {
+        try {
+          await runAgentDispatchAfterQueue(
+            steps: afterQueue,
+            host: afterQueueHost,
+            onLog: _emitLog,
+          );
+        } catch (error) {
+          _emitLog(
+            '完成后队列中断：$error',
+            level: AgentDispatchLogLevel.error,
+          );
+        }
+      }
+      return result;
     } finally {
       _activeRepoPath = null;
       _setProgress(_progress.copyWith(running: false));

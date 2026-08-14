@@ -9,6 +9,8 @@ import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/import_export/backup_file_picker.dart';
 import '../kanban/next_work_card.dart';
+import 'agent_dispatch_after_queue.dart';
+import 'agent_dispatch_after_queue_field.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
@@ -491,6 +493,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       mcpEndpoint: board.mcpHost.endpointUrl,
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
+      afterQueue: next.afterQueue,
+      afterQueueHost: AgentDispatchAfterQueueHost(
+        uploadAll: board.uploadNow,
+        sleep: windowsSleepNow,
+        shutdown: windowsShutdownNow,
+      ),
     );
     if (!mounted) return;
     if (result.ok) {
@@ -761,6 +769,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     setState(() => _countErrorText = null);
                   }
                 },
+              ),
+              const SizedBox(height: 12),
+              AgentDispatchAfterQueueField(
+                steps: _settings.afterQueue,
+                enabled: !_running && !_busy,
+                onChanged: (steps) =>
+                    _persist(_settings.copyWith(afterQueue: steps)),
               ),
             ],
           ),

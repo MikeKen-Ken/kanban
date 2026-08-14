@@ -1,6 +1,7 @@
 /// 桌面端本机 Agent 调度（Cursor SDK / Codex exec + Skill）。
 library;
 
+export 'agent_dispatch_after_queue.dart';
 export 'agent_dispatch_config.dart';
 export 'agent_dispatch_hub.dart';
 export 'agent_dispatch_log_exporter.dart';
