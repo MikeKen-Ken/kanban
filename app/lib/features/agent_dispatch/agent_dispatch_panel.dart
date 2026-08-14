@@ -420,6 +420,35 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     return null;
   }
 
+  void _onEngineChanged(AgentDispatchEngine? nextEngine) {
+    if (nextEngine == null || _running || _busy) return;
+    final nextSettings = _settings.copyWith(
+      engine: nextEngine,
+      modelId: AgentDispatchSettings.defaultModelId,
+      modelParamValues: AgentDispatchSettings.defaultModelParamValues,
+    );
+    if (nextEngine == AgentDispatchEngine.cursor) {
+      SharedPreferences.getInstance().then((prefs) async {
+        final cachedModels = prefs.loadAgentDispatchModelCatalog();
+        if (!mounted) return;
+        setState(() {
+          _models = cachedModels;
+          _usage = null;
+          _modelCatalogMessage = null;
+        });
+        await _persist(nextSettings);
+        if (!mounted) return;
+        unawaited(_loadAccountInfo());
+      });
+      return;
+    }
+    setState(() {
+      _models = const [];
+      _usage = null;
+    });
+    unawaited(_persist(nextSettings));
+  }
+
   Future<void> _run() async {
     if (_running || _service.isRunning) return;
     final board = context.read<BoardController>();
@@ -576,44 +605,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
             children: [
               Text('引擎', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 8),
-              SegmentedButton<AgentDispatchEngine>(
-                segments: [
+              DropdownButtonFormField<AgentDispatchEngine>(
+                key: ValueKey('engine-${_settings.engine}'),
+                initialValue: _settings.engine,
+                decoration: const InputDecoration(labelText: 'AI 平台'),
+                items: [
                   for (final e in AgentDispatchEngine.values)
-                    ButtonSegment(value: e, label: Text(e.label)),
+                    DropdownMenuItem(value: e, child: Text(e.label)),
                 ],
-                selected: {_settings.engine},
-                onSelectionChanged: _running || _busy
-                    ? null
-                    : (s) {
-                        final nextEngine = s.first;
-                        final nextSettings = _settings.copyWith(
-                          engine: nextEngine,
-                          modelId: AgentDispatchSettings.defaultModelId,
-                          modelParamValues:
-                              AgentDispatchSettings.defaultModelParamValues,
-                        );
-                        if (nextEngine == AgentDispatchEngine.cursor) {
-                          SharedPreferences.getInstance().then((prefs) async {
-                            final cachedModels =
-                                prefs.loadAgentDispatchModelCatalog();
-                            if (!mounted) return;
-                            setState(() {
-                              _models = cachedModels;
-                              _usage = null;
-                              _modelCatalogMessage = null;
-                            });
-                            await _persist(nextSettings);
-                            if (!mounted) return;
-                            unawaited(_loadAccountInfo());
-                          });
-                          return;
-                        }
-                        setState(() {
-                          _models = const [];
-                          _usage = null;
-                        });
-                        unawaited(_persist(nextSettings));
-                      },
+                onChanged: _running || _busy ? null : _onEngineChanged,
               ),
               const SizedBox(height: 12),
               if (_projectErrorText != null)
