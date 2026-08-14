@@ -7,6 +7,7 @@ import '../controllers/board_controller.dart';
 import '../features/kanban/card_detail_sheet.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_column_list.dart';
+import '../features/kanban/kanban_glass_surface.dart';
 import '../features/templates/create_card_choice_sheet.dart';
 import '../models/kanban_models.dart';
 import '../settings/column_color_picker.dart';
@@ -318,21 +319,21 @@ class KanbanColumnWidget extends StatelessWidget {
           )
         : width;
 
-    final columnBody = Container(
+    final columnRadius = BorderRadius.circular(12);
+    final columnBorderColor = overWip
+        ? colorScheme.error
+        : (columnColor ??
+            (Theme.of(context).brightness == Brightness.dark
+                ? Colors.white.withValues(alpha: 0.20)
+                : Colors.white.withValues(alpha: 0.58)));
+    final columnBody = SizedBox(
       width: effectiveWidth,
-      decoration: BoxDecoration(
-        color: columnColor != null
-            ? columnColor.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: overWip
-              ? colorScheme.error
-              : (columnColor ?? colorScheme.outlineVariant),
-          width: overWip || columnColor != null ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
+      child: KanbanGlassSurface(
+        borderRadius: columnRadius,
+        tint: columnColor ?? colorScheme.surfaceContainerHighest,
+        borderColor: columnBorderColor,
+        borderWidth: overWip || columnColor != null ? 1.5 : 1,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
@@ -447,17 +448,12 @@ class KanbanColumnWidget extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              decoration: BoxDecoration(
-                color: colorScheme.surface.withValues(alpha: 0.55),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: KanbanGlassSurface(
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(7),
+                tint: colorScheme.surface,
+                blurSigma: 28,
                 child: KanbanColumnList(
                   columnId: column.id,
                   cards: cards,
@@ -470,6 +466,7 @@ class KanbanColumnWidget extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
 

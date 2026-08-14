@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -344,16 +346,24 @@ class _CardContent extends StatelessWidget {
     final cardBackground = solidBackground.withValues(alpha: opacity);
 
     final hasConflict = card.hasConflict;
+    final isDark = theme.brightness == Brightness.dark;
+    final glassEdge = isDark
+        ? Colors.white.withValues(alpha: 0.20)
+        : Colors.white.withValues(alpha: 0.58);
     final BorderSide cardOutline = hasConflict
         ? BorderSide(color: colorScheme.error, width: 1.5)
         : isPinned
             ? BorderSide(color: colorScheme.primary.withValues(alpha: 0.55))
-            : BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.95),
-              );
-    return Card(
-      // 拖拽反馈去掉列间距 margin，尺寸与可见卡片本体一致
-      margin: dragging ? EdgeInsets.zero : const EdgeInsets.only(bottom: 8),
+            : BorderSide(color: glassEdge);
+    return Padding(
+      padding: dragging ? EdgeInsets.zero : const EdgeInsets.only(bottom: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Card(
+      // 拖拽反馈去掉列间距 margin；间距由外层 Padding 承担
+      margin: EdgeInsets.zero,
       color: cardBackground,
       surfaceTintColor: Colors.transparent,
       // 仅反馈层抬升阴影；列表态 elevation 0，避免本体再垫一层阴影板
@@ -749,6 +759,9 @@ class _CardContent extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+          ),
         ),
       ),
     );
