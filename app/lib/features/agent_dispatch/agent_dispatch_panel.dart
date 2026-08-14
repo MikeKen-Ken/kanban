@@ -23,6 +23,7 @@ import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_registry.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
+import 'agent_dispatch_token_stats_dialog.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_usage_pane.dart';
 import 'agent_dispatch_window.dart';
@@ -656,6 +657,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 AgentDispatchUsagePane(
                   snapshot: _usage,
                   loading: _usageBusy,
+                  onOpenTokenStats: () => showAgentDispatchTokenStatsDialog(
+                    context: context,
+                    projectId: widget.projectId,
+                  ),
                 ),
                 const SizedBox(height: 12),
               ],

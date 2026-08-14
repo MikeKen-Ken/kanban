@@ -12,6 +12,8 @@ import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_log.dart';
+import 'agent_dispatch_token.dart';
+import 'agent_dispatch_token_store.dart';
 import 'agent_dispatch_log_store.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_prompt.dart';
@@ -138,6 +140,10 @@ class AgentDispatchService {
     _logSaveQueue = _logSaveQueue.then((_) async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.saveAgentDispatchLog(_logText, projectId: projectId);
+      final usage = AgentDispatchTokenRecord.tryParse(message, at: now);
+      if (usage != null) {
+        await prefs.appendAgentDispatchToken(usage, projectId: projectId);
+      }
     });
   }
 

@@ -7,11 +7,13 @@ class AgentDispatchUsagePane extends StatelessWidget {
   const AgentDispatchUsagePane({
     required this.snapshot,
     required this.loading,
+    this.onOpenTokenStats,
     super.key,
   });
 
   final AgentDispatchUsageSnapshot? snapshot;
   final bool loading;
+  final VoidCallback? onOpenTokenStats;
 
   /// 额度接口缺失时的说明对工作台没有帮助，只保留真正的加载失败。
   static String _accountFallbackText(String? message) {
@@ -41,6 +43,10 @@ class AgentDispatchUsagePane extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            TextButton(
+              onPressed: onOpenTokenStats,
+              child: const Text('Token 统计'),
+            ),
             TextButton(
               onPressed: () => launchUrl(
                 Uri.parse('https://cursor.com/dashboard/usage'),
