@@ -663,6 +663,9 @@ class KanbanCard {
     this.blockedByIds = const [],
     this.relatedIds = const [],
     this.commitRef,
+    this.agentEngine,
+    this.agentModelId,
+    this.agentModelParamValues,
     this.colorValue,
     this.conflictSide,
     this.conflictColumnId,
@@ -707,6 +710,15 @@ class KanbanCard {
 
   /// 完成该任务时对应的 Git 提交号（完整或短 hash）
   final String? commitRef;
+
+  /// Agent 引擎覆盖：`cursor` / `codex`；null 表示沿用工作台。
+  final String? agentEngine;
+
+  /// Agent 模型 id 覆盖；null 表示沿用工作台。
+  final String? agentModelId;
+
+  /// 已显式选择的模型参数（如 fast / reasoning_effort）；空或 null 表示沿用工作台。
+  final Map<String, String>? agentModelParamValues;
 
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
@@ -789,6 +801,9 @@ class KanbanCard {
     List<String>? blockedByIds,
     List<String>? relatedIds,
     Object? commitRef = _sentinel,
+    Object? agentEngine = _sentinel,
+    Object? agentModelId = _sentinel,
+    Object? agentModelParamValues = _sentinel,
     Object? colorValue = _sentinel,
     Object? conflictSide = _sentinel,
     Object? conflictColumnId = _sentinel,
@@ -826,6 +841,15 @@ class KanbanCard {
       relatedIds: relatedIds ?? this.relatedIds,
       commitRef:
           commitRef == _sentinel ? this.commitRef : commitRef as String?,
+      agentEngine: agentEngine == _sentinel
+          ? this.agentEngine
+          : agentEngine as String?,
+      agentModelId: agentModelId == _sentinel
+          ? this.agentModelId
+          : agentModelId as String?,
+      agentModelParamValues: agentModelParamValues == _sentinel
+          ? this.agentModelParamValues
+          : agentModelParamValues as Map<String, String>?,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
       conflictSide: clearConflict
@@ -878,6 +902,12 @@ class KanbanCard {
       if (blockedByIds.isNotEmpty) 'blockedByIds': blockedByIds,
       if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
       if (commitRef != null && commitRef!.isNotEmpty) 'commitRef': commitRef,
+      if (agentEngine != null && agentEngine!.isNotEmpty)
+        'agentEngine': agentEngine,
+      if (agentModelId != null && agentModelId!.isNotEmpty)
+        'agentModelId': agentModelId,
+      if (agentModelParamValues != null && agentModelParamValues!.isNotEmpty)
+        'agentModelParamValues': agentModelParamValues,
       if (colorValue != null) 'color': colorValue,
     };
     if (includeConflict) {
@@ -937,6 +967,9 @@ class KanbanCard {
           .map((e) => e as String)
           .toList(),
       commitRef: json['commitRef'] as String?,
+      agentEngine: json['agentEngine'] as String?,
+      agentModelId: json['agentModelId'] as String?,
+      agentModelParamValues: _stringMap(json['agentModelParamValues']),
       colorValue: json['color'] as int?,
       conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
       conflictColumnId: json['conflictColumnId'] as String?,
@@ -976,6 +1009,29 @@ class KanbanCard {
     }
     return false;
   }
+
+  /// Worker peek / get_card 用的覆盖字段；未选择时不输出。
+  Map<String, dynamic> agentDispatchOverridePayload() => {
+        if (agentEngine != null && agentEngine!.trim().isNotEmpty)
+          'agentEngine': agentEngine!.trim(),
+        if (agentModelId != null && agentModelId!.trim().isNotEmpty)
+          'agentModelId': agentModelId!.trim(),
+        if (agentModelParamValues != null && agentModelParamValues!.isNotEmpty)
+          'agentModelParamValues': agentModelParamValues,
+      };
+}
+
+Map<String, String>? _stringMap(Object? raw) {
+  if (raw is! Map) return null;
+  final map = <String, String>{};
+  for (final entry in raw.entries) {
+    final value = entry.value;
+    if (value == null) continue;
+    final text = '$value'.trim();
+    if (text.isEmpty) continue;
+    map['${entry.key}'] = text;
+  }
+  return map.isEmpty ? null : map;
 }
 
 enum CardRecurrence {

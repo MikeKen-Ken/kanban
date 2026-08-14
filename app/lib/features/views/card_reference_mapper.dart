@@ -50,6 +50,9 @@ List<CardReference> buildCardReferences({
             blockedByIds: [...card.blockedByIds],
             relatedIds: [...card.relatedIds],
             commitRef: card.commitRef,
+            agentEngine: card.agentEngine,
+            agentModelId: card.agentModelId,
+            agentModelParamValues: card.agentModelParamValues,
             links: [
               for (final link in card.sortedLinks)
                 {

@@ -22,7 +22,11 @@ Future<CallToolResult> mcpPeekNextCard(
     return mcpJsonResult({
       'found': next != null,
       'projectId': resolvedProjectId,
-      if (next != null) 'sourceColumn': next.sourceColumn,
+      if (next != null) ...{
+        'sourceColumn': next.sourceColumn,
+        'cardId': next.card.id,
+        ...next.card.agentDispatchOverridePayload(),
+      },
     });
   });
 }

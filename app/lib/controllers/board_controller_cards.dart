@@ -228,6 +228,12 @@ extension BoardControllerCards on BoardController {
     List<String>? relatedIds,
     String? commitRef,
     bool clearCommitRef = false,
+    String? agentEngine,
+    bool clearAgentEngine = false,
+    String? agentModelId,
+    bool clearAgentModelId = false,
+    Map<String, String>? agentModelParamValues,
+    bool clearAgentModelParamValues = false,
     int? colorValue,
     bool clearColor = false,
   }) async {
@@ -278,6 +284,15 @@ extension BoardControllerCards on BoardController {
             commitRef: clearCommitRef
                 ? null
                 : (commitRef ?? card.commitRef),
+            agentEngine: clearAgentEngine
+                ? null
+                : (agentEngine ?? card.agentEngine),
+            agentModelId: clearAgentModelId
+                ? null
+                : (agentModelId ?? card.agentModelId),
+            agentModelParamValues: clearAgentModelParamValues
+                ? null
+                : (agentModelParamValues ?? card.agentModelParamValues),
             colorValue: clearColor ? null : (colorValue ?? card.colorValue),
             updatedAt: now,
           );
@@ -313,6 +328,15 @@ extension BoardControllerCards on BoardController {
         final restoredCommitRef = clearCommitRef
             ? null
             : (commitRef ?? original.commitRef);
+        final restoredAgentEngine = clearAgentEngine
+            ? null
+            : (agentEngine ?? original.agentEngine);
+        final restoredAgentModelId = clearAgentModelId
+            ? null
+            : (agentModelId ?? original.agentModelId);
+        final restoredAgentModelParamValues = clearAgentModelParamValues
+            ? null
+            : (agentModelParamValues ?? original.agentModelParamValues);
         final restoredColor =
             clearColor ? null : (colorValue ?? original.colorValue);
         _pushUndo(
@@ -342,6 +366,12 @@ extension BoardControllerCards on BoardController {
               relatedIds: original.relatedIds,
               commitRef: original.commitRef,
               clearCommitRef: original.commitRef == null,
+              agentEngine: original.agentEngine,
+              clearAgentEngine: original.agentEngine == null,
+              agentModelId: original.agentModelId,
+              clearAgentModelId: original.agentModelId == null,
+              agentModelParamValues: original.agentModelParamValues,
+              clearAgentModelParamValues: original.agentModelParamValues == null,
               colorValue: original.colorValue,
               clearColor: original.colorValue == null,
             );
@@ -372,6 +402,12 @@ extension BoardControllerCards on BoardController {
               relatedIds: restoredRelated,
               commitRef: restoredCommitRef,
               clearCommitRef: restoredCommitRef == null,
+              agentEngine: restoredAgentEngine,
+              clearAgentEngine: restoredAgentEngine == null,
+              agentModelId: restoredAgentModelId,
+              clearAgentModelId: restoredAgentModelId == null,
+              agentModelParamValues: restoredAgentModelParamValues,
+              clearAgentModelParamValues: restoredAgentModelParamValues == null,
               colorValue: restoredColor,
               clearColor: restoredColor == null,
             );

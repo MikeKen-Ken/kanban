@@ -26,7 +26,29 @@ export type DispatchResult = {
   processedCards?: number;
 };
 
-export function resolveModelParams(
+export function mergeJobWithCardOverrides(
+  job: DispatchJob,
+  peek: Record<string, unknown>,
+): DispatchJob {
+  const engineRaw = String(peek.agentEngine ?? "").trim();
+  const engine =
+    engineRaw === "cursor" || engineRaw === "codex" ? engineRaw : job.engine;
+  const modelRaw = String(peek.agentModelId ?? "").trim();
+  const model = modelRaw || job.model;
+  const paramsRaw = peek.agentModelParamValues;
+  let modelParams = job.modelParams;
+  if (paramsRaw && typeof paramsRaw === "object" && !Array.isArray(paramsRaw)) {
+    const extras = Object.entries(paramsRaw as Record<string, unknown>)
+      .filter(([, value]) => typeof value === "string" && value.trim() !== "")
+      .map(([id, value]) => ({ id, value: String(value) }));
+    if (extras.length > 0) {
+      const byId = new Map((job.modelParams ?? []).map((item) => [item.id, item]));
+      for (const item of extras) byId.set(item.id, item);
+      modelParams = [...byId.values()];
+    }
+  }
+  return { ...job, engine, model, modelParams };
+}
   job: DispatchJob,
 ): Array<{ id: string; value: string }> | undefined {
   if (job.modelParams && job.modelParams.length > 0) {

@@ -163,6 +163,39 @@ void main() {
     expect(restored.coverAttachment?.id, 'att-1');
   });
 
+  test('KanbanCard 可序列化 Agent 覆盖且缺省省略', () {
+    final unset = KanbanCard(
+      id: 'card-1',
+      title: '无覆盖',
+      order: 0,
+      createdAt: 1,
+    );
+    expect(unset.toJson().containsKey('agentEngine'), isFalse);
+    expect(unset.toJson().containsKey('agentModelId'), isFalse);
+    expect(unset.toJson().containsKey('agentModelParamValues'), isFalse);
+
+    final card = KanbanCard(
+      id: 'card-2',
+      title: '有覆盖',
+      order: 0,
+      createdAt: 1,
+      agentEngine: 'cursor',
+      agentModelId: 'composer-2.5',
+      agentModelParamValues: const {
+        'fast': 'true',
+        'reasoning_effort': 'high',
+      },
+    );
+    final restored = KanbanCard.fromJson(card.toJson());
+    expect(restored.agentEngine, 'cursor');
+    expect(restored.agentModelId, 'composer-2.5');
+    expect(restored.agentModelParamValues, {
+      'fast': 'true',
+      'reasoning_effort': 'high',
+    });
+    expect(restored.copyWith(agentEngine: null).agentEngine, isNull);
+  });
+
   test('KanbanCard conflictSide serializes without nesting', () {
     final card = KanbanCard(
       id: 'card-1',

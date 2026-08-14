@@ -13,6 +13,7 @@ import '../../features/project/project_theme.dart';
 import '../completed_auto_clear/completed_auto_clear.dart';
 import '../labels/label_editor_dialog.dart';
 import 'card_detail_actions_bar.dart';
+import 'card_detail_agent_model_section.dart';
 import 'card_detail_attachments_section.dart';
 import 'card_detail_file_attachments_section.dart';
 import 'card_detail_checklist_section.dart';
@@ -103,6 +104,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late List<CardLink> _links;
   late List<String> _blockedByIds;
   late List<String> _relatedIds;
+  String? _agentEngine;
+  String? _agentModelId;
+  late Map<String, String> _agentModelParamValues;
   int? _colorValue;
   final _checklistInput = TextEditingController();
   final _verificationFeedbackInput = TextEditingController();
@@ -156,6 +160,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _links = [...widget.card.sortedLinks];
     _blockedByIds = [...widget.card.blockedByIds];
     _relatedIds = [...widget.card.relatedIds];
+    _agentEngine = widget.card.agentEngine;
+    _agentModelId = widget.card.agentModelId;
+    _agentModelParamValues = {
+      ...?widget.card.agentModelParamValues,
+    };
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
@@ -331,6 +340,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (!_linksEqual(_links, widget.card.sortedLinks)) return true;
     if (!_listEquals(_blockedByIds, widget.card.blockedByIds)) return true;
     if (!_listEquals(_relatedIds, widget.card.relatedIds)) return true;
+    if (_agentEngine != widget.card.agentEngine) return true;
+    if (_agentModelId != widget.card.agentModelId) return true;
+    if (!_stringMapEquals(
+      _agentModelParamValues,
+      widget.card.agentModelParamValues ?? const {},
+    )) {
+      return true;
+    }
     return false;
   }
 
@@ -351,6 +368,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static bool _stringMapEquals(Map<String, String> a, Map<String, String> b) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (b[entry.key] != entry.value) return false;
     }
     return true;
   }
@@ -414,6 +439,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_blockedByIds.isNotEmpty || _relatedIds.isNotEmpty) return true;
     if (_colorValue != null) return true;
     if (_commitRefController.text.trim().isNotEmpty) return true;
+    if (_agentEngine != null ||
+        _agentModelId != null ||
+        _agentModelParamValues.isNotEmpty) {
+      return true;
+    }
     return false;
   }
 
@@ -473,6 +503,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final links = List<CardLink>.from(_links);
     final blockedByIds = List<String>.from(_blockedByIds);
     final relatedIds = List<String>.from(_relatedIds);
+    final agentEngine = _agentEngine;
+    final agentModelId = _agentModelId;
+    final agentModelParamValues = Map<String, String>.from(
+      _agentModelParamValues,
+    );
     final colorValue = _colorValue;
     final clearColor = _colorValue == null;
 
@@ -505,6 +540,12 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         links: links,
         blockedByIds: blockedByIds,
         relatedIds: relatedIds,
+        agentEngine: agentEngine,
+        clearAgentEngine: agentEngine == null,
+        agentModelId: agentModelId,
+        clearAgentModelId: agentModelId == null,
+        agentModelParamValues: agentModelParamValues,
+        clearAgentModelParamValues: agentModelParamValues.isEmpty,
         colorValue: colorValue,
         clearColor: clearColor,
       );
@@ -1033,6 +1074,22 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 ),
                               ),
                             );
+                          },
+                        ),
+                        CardDetailAgentModelSection(
+                          agentEngine: _agentEngine,
+                          agentModelId: _agentModelId,
+                          agentModelParamValues: _agentModelParamValues,
+                          onChanged: ({
+                            agentEngine,
+                            agentModelId,
+                            agentModelParamValues = const {},
+                          }) {
+                            _safeSetState(() {
+                              _agentEngine = agentEngine;
+                              _agentModelId = agentModelId;
+                              _agentModelParamValues = agentModelParamValues;
+                            });
                           },
                         ),
                         Row(

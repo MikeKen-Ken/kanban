@@ -25,6 +25,9 @@ class CardReference {
     this.relatedIds = const [],
     this.links = const [],
     this.commitRef,
+    this.agentEngine,
+    this.agentModelId,
+    this.agentModelParamValues,
     this.source,
   });
 
@@ -49,6 +52,9 @@ class CardReference {
   final List<String> blockedByIds;
   final List<String> relatedIds;
   final String? commitRef;
+  final String? agentEngine;
+  final String? agentModelId;
+  final Map<String, String>? agentModelParamValues;
 
   /// 外链摘要：`{id, url, title?}`
   final List<Map<String, dynamic>> links;
@@ -78,6 +84,12 @@ class CardReference {
         if (blockedByIds.isNotEmpty) 'blockedByIds': blockedByIds,
         if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
         if (commitRef != null && commitRef!.isNotEmpty) 'commitRef': commitRef,
+        if (agentEngine != null && agentEngine!.isNotEmpty)
+          'agentEngine': agentEngine,
+        if (agentModelId != null && agentModelId!.isNotEmpty)
+          'agentModelId': agentModelId,
+        if (agentModelParamValues != null && agentModelParamValues!.isNotEmpty)
+          'agentModelParamValues': agentModelParamValues,
         if (links.isNotEmpty) 'links': links,
       };
 
@@ -108,6 +120,11 @@ class CardReference {
       relatedIds: _strings(json['relatedIds']),
       commitRef:
           json['commitRef'] is String ? json['commitRef'] as String : null,
+      agentEngine:
+          json['agentEngine'] is String ? json['agentEngine'] as String : null,
+      agentModelId:
+          json['agentModelId'] is String ? json['agentModelId'] as String : null,
+      agentModelParamValues: _stringMap(json['agentModelParamValues']),
       links: _linkMaps(json['links']),
     );
   }
@@ -125,6 +142,19 @@ List<String> _strings(Object? value) {
 int _int(Object? value) => value is num ? value.toInt() : 0;
 
 int? _nullableInt(Object? value) => value is num ? value.toInt() : null;
+
+Map<String, String>? _stringMap(Object? raw) {
+  if (raw is! Map) return null;
+  final map = <String, String>{};
+  for (final entry in raw.entries) {
+    final value = entry.value;
+    if (value == null) continue;
+    final text = '$value'.trim();
+    if (text.isEmpty) continue;
+    map['${entry.key}'] = text;
+  }
+  return map.isEmpty ? null : map;
+}
 
 List<Map<String, dynamic>> _linkMaps(Object? value) {
   if (value is! List) return const [];

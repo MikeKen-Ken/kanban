@@ -3,6 +3,7 @@ import { KanbanMcpClient } from "./mcp_client.js";
 import { runCodex } from "./run_codex.js";
 import { runCursor } from "./run_cursor.js";
 import type { DispatchJob, DispatchResult } from "./types.js";
+import { mergeJobWithCardOverrides } from "./types.js";
 import { workerLog } from "./worker_log.js";
 
 function cardState(card: Record<string, unknown>): "verify" | "blocked" | "active" {
@@ -60,10 +61,16 @@ export async function runBatch(
         workerToken: job.workerToken,
       });
       workerLog("Worker 检查结果：还有卡片；正在创建全新的 Skill 会话");
+      const roundJob = mergeJobWithCardOverrides(job, peek);
+      if (roundJob.engine !== job.engine || roundJob.model !== job.model) {
+        workerLog(
+          `本卡模型覆盖：engine=${roundJob.engine} model=${roundJob.model ?? "(工作台)"} cardId=${String(peek.cardId ?? "")}`,
+        );
+      }
       const result =
-        job.engine === "codex"
-          ? await runCodex(job, cancellation)
-          : await runCursor(job, cancellation);
+        roundJob.engine === "codex"
+          ? await runCodex(roundJob, cancellation)
+          : await runCursor(roundJob, cancellation);
       if (cancellation?.isSkipRequested) {
         cancellation.clearSkipRequest();
         workerLog(

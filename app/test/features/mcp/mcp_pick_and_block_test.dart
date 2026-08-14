@@ -85,11 +85,34 @@ void main() {
     final result = await mcpPeekNextCard(controller);
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
     expect(payload['found'], isTrue);
+    expect(payload['cardId'], cardId);
 
     final todo = controller.board!.columns.firstWhere((c) => c.id == 'todo');
     final doing = findDoingColumn(controller.board!.columns)!;
     expect(todo.cards.any((card) => card.id == cardId), isTrue);
     expect(doing.cards.any((card) => card.id == cardId), isFalse);
+  });
+
+  test('peek_next_card 返回卡片 Agent 覆盖字段', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '覆盖模型卡');
+    expect(cardId, isNotNull);
+    await controller.updateCardFull(
+      todoColumn.id,
+      cardId!,
+      agentEngine: 'cursor',
+      agentModelId: 'composer-2.5',
+      agentModelParamValues: const {'fast': 'true'},
+    );
+
+    final result = await mcpPeekNextCard(controller);
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(payload['found'], isTrue);
+    expect(payload['cardId'], cardId);
+    expect(payload['agentEngine'], 'cursor');
+    expect(payload['agentModelId'], 'composer-2.5');
+    expect(payload['agentModelParamValues'], {'fast': 'true'});
   });
 
   test('pick_next_card includeWorkItems=false 时不含 workItems', () async {
