@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'adaptive_popup_menu.dart';
+import 'agent_dispatch_field_style.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_worker.dart';
 
@@ -168,6 +169,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final active = _activeKey;
     final available = _keys.isNotEmpty || _hasEnvironmentKey;
     final hasInput = _controller.text.trim().isNotEmpty;
@@ -191,14 +193,14 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                 available ? Icons.check_circle_outline : Icons.info_outline,
                 size: 16,
                 color: available
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   statusText,
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall,
                 ),
               ),
             ],
@@ -215,6 +217,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                 obscureText: _obscure,
                 enableSuggestions: false,
                 autocorrect: false,
+                style: agentDispatchFieldTextStyle(theme),
                 decoration: InputDecoration(
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
@@ -224,6 +227,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                   hintText: available
                       ? '输入新 Key 可添加账号并切换'
                       : '粘贴 Cursor API Key',
+                  hintStyle: agentDispatchFieldHintStyle(theme),
                   suffixIconConstraints: const BoxConstraints(
                     minWidth: 28,
                     maxWidth: 28,
@@ -303,8 +307,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
         const SizedBox(height: 4),
         Text(
           '仅用于 Cursor SDK；不会写入仓库、偏好或运行日志',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+          style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
         ),
         if (showSaveButton) ...[
@@ -321,7 +325,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
           ),
         ],
         if (_message != null)
-          Text(_message!, style: Theme.of(context).textTheme.bodySmall),
+          Text(_message!, style: theme.textTheme.bodySmall),
       ],
     );
   }

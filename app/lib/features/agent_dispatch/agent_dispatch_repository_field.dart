@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'adaptive_popup_menu.dart';
+import 'agent_dispatch_field_style.dart';
 
 class AgentDispatchRepositoryField extends StatelessWidget {
   const AgentDispatchRepositoryField({
@@ -24,6 +25,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final menuWidth = adaptivePopupMenuWidth(
       context: context,
       labels: paths,
@@ -36,6 +38,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
           child: TextField(
             controller: controller,
             enabled: enabled,
+            style: agentDispatchFieldTextStyle(theme),
             decoration: InputDecoration(
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(
@@ -43,6 +46,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                 vertical: 10,
               ),
               hintText: '本机仓库根目录',
+              hintStyle: agentDispatchFieldHintStyle(theme),
               errorText: errorText,
               suffixIconConstraints: const BoxConstraints(
                 minWidth: 28,

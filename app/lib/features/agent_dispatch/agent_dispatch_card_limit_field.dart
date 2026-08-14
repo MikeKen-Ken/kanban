@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'agent_dispatch_field_style.dart';
+
 class AgentDispatchCardLimitField extends StatelessWidget {
   const AgentDispatchCardLimitField({
     required this.controller,
@@ -20,12 +22,13 @@ class AgentDispatchCardLimitField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Wrap(
       spacing: 12,
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text('卡片上限', style: Theme.of(context).textTheme.labelLarge),
+        Text('卡片上限', style: theme.textTheme.labelLarge),
         InkWell(
           onTap: enabled ? () => onMaxChanged(!useMax) : null,
           child: Row(
@@ -49,8 +52,10 @@ class AgentDispatchCardLimitField extends StatelessWidget {
             enabled: enabled && !useMax,
             keyboardType: TextInputType.number,
             onChanged: onCountChanged,
+            style: agentDispatchFieldTextStyle(theme),
             decoration: InputDecoration(
               hintText: '1',
+              hintStyle: agentDispatchFieldHintStyle(theme),
               errorText: errorText,
               isDense: true,
             ),
