@@ -89,17 +89,20 @@ class _CardDetailAgentModelSectionState
     required ValueChanged<String?> onChanged,
   }) {
     final known = items.any((item) => item.value == value);
-    return SizedBox(
-      width: 168,
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11);
+    return Expanded(
       child: DropdownButtonFormField<String>(
         key: ValueKey('$label-$value'),
         initialValue: known ? value : _inherit,
         isDense: true,
+        isExpanded: true,
+        style: style,
         decoration: InputDecoration(
           labelText: label,
           isDense: true,
+          labelStyle: const TextStyle(fontSize: 11),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         ),
         items: items,
         onChanged: onChanged,
@@ -109,12 +112,24 @@ class _CardDetailAgentModelSectionState
 
   List<DropdownMenuItem<String>> _items({
     required List<({String value, String label})> options,
-  }) =>
-      [
-        const DropdownMenuItem(value: _inherit, child: Text('默认（工作台）')),
-        for (final option in options)
-          DropdownMenuItem(value: option.value, child: Text(option.label)),
-      ];
+  }) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11);
+    return [
+      DropdownMenuItem(
+        value: _inherit,
+        child: Text('默认', style: style, overflow: TextOverflow.ellipsis),
+      ),
+      for (final option in options)
+        DropdownMenuItem(
+          value: option.value,
+          child: Text(
+            option.label,
+            style: style,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+    ];
+  }
 
   void _emit({
     Object? agentEngine = _omit,
@@ -187,9 +202,7 @@ class _CardDetailAgentModelSectionState
     final reasoning = _param(isAgentDispatchReasoningParam);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      child: Row(
         children: [
           _dropdown(
             label: 'AI 平台',
@@ -202,24 +215,20 @@ class _CardDetailAgentModelSectionState
             ),
             onChanged: _onEngine,
           ),
+          const SizedBox(width: 6),
           _dropdown(
             label: '模型',
             value: widget.agentModelId ?? _inherit,
             items: _items(
               options: [
                 for (final model in _models)
-                  (
-                    value: model.id,
-                    label: model.displayName == null ||
-                            model.displayName == model.id
-                        ? model.id
-                        : '${model.displayName}（${model.id}）',
-                  ),
+                  (value: model.id, label: model.label),
               ],
             ),
             onChanged: _onModel,
           ),
-          if (fast != null)
+          if (fast != null) ...[
+            const SizedBox(width: 6),
             _dropdown(
               label: 'Fast',
               value: widget.agentModelParamValues[fast.id] ?? _inherit,
@@ -234,7 +243,9 @@ class _CardDetailAgentModelSectionState
               ),
               onChanged: (value) => _onParam(fast.id, value),
             ),
-          if (reasoning != null)
+          ],
+          if (reasoning != null) ...[
+            const SizedBox(width: 6),
             _dropdown(
               label: '推理程度',
               value: widget.agentModelParamValues[reasoning.id] ?? _inherit,
@@ -249,6 +260,7 @@ class _CardDetailAgentModelSectionState
               ),
               onChanged: (value) => _onParam(reasoning.id, value),
             ),
+          ],
         ],
       ),
     );

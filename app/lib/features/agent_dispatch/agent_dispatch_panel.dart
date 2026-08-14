@@ -723,11 +723,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     for (final m in _models)
                       DropdownMenuItem(
                         value: m.id,
-                        child: Text(
-                          m.displayName == null || m.displayName == m.id
-                              ? m.id
-                              : '${m.displayName}（${m.id}）',
-                        ),
+                        child: Text(m.label),
                       ),
                   ],
                   onChanged: _running || _busy

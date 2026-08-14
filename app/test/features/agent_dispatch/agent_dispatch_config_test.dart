@@ -43,8 +43,22 @@ void main() {
     });
 
     expect(model.displayName, 'Composer 2.5');
+    expect(model.label, 'Composer 2.5');
     expect(model.defaultVariant?.displayName, 'Fast');
     expect(model.defaultVariant?.params, {'fast': 'true'});
+  });
+
+  test('模型下拉标签只用官方名，不附加 id 括号', () {
+    const named = AgentDispatchModelInfo(
+      id: 'composer-2.5',
+      displayName: 'Composer 2.5',
+    );
+    const same = AgentDispatchModelInfo(id: 'Composer', displayName: 'Composer');
+    const unnamed = AgentDispatchModelInfo(id: 'gpt-5.5');
+
+    expect(named.label, 'Composer 2.5');
+    expect(same.label, 'Composer');
+    expect(unnamed.label, 'gpt-5.5');
   });
 
   test('失效的模型 id 回退到目录首项', () {

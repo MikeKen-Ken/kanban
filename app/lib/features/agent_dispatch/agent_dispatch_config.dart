@@ -94,6 +94,13 @@ class AgentDispatchModelInfo {
     return null;
   }
 
+  /// 下拉展示用名称：只显示官方名，不附加 id 括号。
+  String get label {
+    final name = displayName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return id;
+  }
+
   factory AgentDispatchModelInfo.fromJson(Map<String, dynamic> json) {
     final raw = json['parameters'] as List<dynamic>? ?? const [];
     return AgentDispatchModelInfo(
