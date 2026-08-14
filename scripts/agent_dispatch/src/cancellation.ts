@@ -13,10 +13,12 @@ type CancelCallback = () => void | Promise<void>;
 export class WorkerCancellation {
   private cancelled = false;
   private drainAfterCurrent = false;
+  private skipRequested = false;
   private reason = "已取消";
   private readonly callbacks = new Set<CancelCallback>();
   private cancelFileTimer: NodeJS.Timeout | undefined;
   private drainFileTimer: NodeJS.Timeout | undefined;
+  private skipFileTimer: NodeJS.Timeout | undefined;
   private signalInstalled = false;
 
   watchCancelFile(path: string): void {
@@ -47,6 +49,20 @@ export class WorkerCancellation {
     this.drainFileTimer.unref?.();
   }
 
+  watchSkipFile(path: string): void {
+    const check = (): void => {
+      if (this.skipRequested || this.cancelled) return;
+      try {
+        if (existsSync(path)) this.requestSkipCurrentSession();
+      } catch {
+        // ignore
+      }
+    };
+    check();
+    this.skipFileTimer = setInterval(check, 200);
+    this.skipFileTimer.unref?.();
+  }
+
   installSignalHandlers(): void {
     if (this.signalInstalled) return;
     this.signalInstalled = true;
@@ -61,6 +77,10 @@ export class WorkerCancellation {
     return this.cancelled;
   }
 
+  get isSkipRequested(): boolean {
+    return this.skipRequested;
+  }
+
   get shouldStopAfterCurrentSession(): boolean {
     return this.cancelled || this.drainAfterCurrent;
   }
@@ -68,6 +88,19 @@ export class WorkerCancellation {
   requestDrainAfterCurrent(): void {
     if (this.cancelled || this.drainAfterCurrent) return;
     this.drainAfterCurrent = true;
+  }
+
+  /** 跳过当前 Skill 会话并继续批次下一张；不标记整批取消。 */
+  requestSkipCurrentSession(): void {
+    if (this.cancelled || this.skipRequested) return;
+    this.skipRequested = true;
+    for (const callback of this.callbacks) {
+      void this.invoke(callback);
+    }
+  }
+
+  clearSkipRequest(): void {
+    this.skipRequested = false;
   }
 
   onCancel(callback: CancelCallback): void {
@@ -96,6 +129,10 @@ export class WorkerCancellation {
     if (this.drainFileTimer) {
       clearInterval(this.drainFileTimer);
       this.drainFileTimer = undefined;
+    }
+    if (this.skipFileTimer) {
+      clearInterval(this.skipFileTimer);
+      this.skipFileTimer = undefined;
     }
   }
 

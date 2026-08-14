@@ -24,6 +24,8 @@ class AgentWorkerProcess {
   Future<void> stop() async {}
 
   Future<void> requestDrainAfterCurrent() async {}
+
+  Future<void> requestSkipToNext() async {}
 }
 
 Future<AgentWorkerResult> runAgentWorkerJob({

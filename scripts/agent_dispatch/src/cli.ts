@@ -180,6 +180,9 @@ async function runJob(jobPath: string): Promise<void> {
   if (job.drainFile?.trim()) {
     cancellation.watchDrainFile(job.drainFile.trim());
   }
+  if (job.skipFile?.trim()) {
+    cancellation.watchSkipFile(job.skipFile.trim());
+  }
   let result: DispatchResult;
   try {
     result = await runBatch(job, cancellation);

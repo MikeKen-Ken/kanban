@@ -64,11 +64,25 @@ export async function runBatch(
         job.engine === "codex"
           ? await runCodex(job, cancellation)
           : await runCursor(job, cancellation);
+      if (cancellation?.isSkipRequested) {
+        cancellation.clearSkipRequest();
+        workerLog(
+          "[warn] 用户请求跳过当前卡片，终止本轮会话并继续下一张",
+        );
+        continue;
+      }
       if (cancellation?.isCancelled) {
         return cancelledResult();
       }
       if (!result.ok) {
         if (result.error === "已取消") return cancelledResult();
+        if (result.error === "已跳过") {
+          cancellation?.clearSkipRequest();
+          workerLog(
+            "[warn] 用户请求跳过当前卡片，终止本轮会话并继续下一张",
+          );
+          continue;
+        }
         return {
           ok: false,
           error: result.error ?? `第 ${index} 次 Skill 会话失败`,

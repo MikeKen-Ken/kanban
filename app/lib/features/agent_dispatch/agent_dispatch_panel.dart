@@ -52,6 +52,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   bool _running = false;
   bool _stopping = false;
   bool _drainPending = false;
+  bool _skipping = false;
   bool _busy = false;
   bool _usageBusy = false;
   int _cursorKeySectionRevision = 0;
@@ -101,6 +102,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       if (!running) {
         _stopping = false;
         _drainPending = false;
+        _skipping = false;
       }
     });
     if (running) {
@@ -790,7 +792,23 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         ),
         if (_running) ...[
           TextButton(
-            onPressed: _drainPending || _stopping
+            onPressed: _skipping || _stopping || _drainPending
+                ? null
+                : () async {
+                    setState(() => _skipping = true);
+                    _appendLog(
+                      '正在将当前卡片移入阻塞中并切换到下一张…',
+                      level: AgentDispatchLogLevel.warning,
+                    );
+                    await _service.requestSkipToNext(
+                      boardController: context.read<BoardController>(),
+                    );
+                    if (mounted) setState(() {});
+                  },
+            child: Text(_skipping ? '正在切换…' : '下一个'),
+          ),
+          TextButton(
+            onPressed: _drainPending || _stopping || _skipping
                 ? null
                 : () async {
                     setState(() => _drainPending = true);
@@ -804,7 +822,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
             child: Text(_drainPending ? '当前会话后停止中…' : '当前会话后停止'),
           ),
           TextButton(
-            onPressed: _stopping
+            onPressed: _stopping || _skipping
                 ? null
                 : () async {
                     setState(() => _stopping = true);
@@ -819,7 +837,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           ),
         ],
         FilledButton.icon(
-          onPressed: _running || _busy || _stopping || _drainPending ? null : _run,
+          onPressed:
+              _running || _busy || _stopping || _drainPending || _skipping
+                  ? null
+                  : _run,
           icon: _running
               ? const SizedBox(
                   width: 16,

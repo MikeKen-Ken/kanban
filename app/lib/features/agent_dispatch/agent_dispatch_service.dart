@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../controllers/board_controller.dart';
+import '../mcp/mcp_block_card.dart';
 import '../mcp/mcp_dispatch_card_gate.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
@@ -36,6 +38,7 @@ class AgentDispatchService {
   bool _drainAfterCurrentRequested = false;
   bool _isRunning = false;
   AgentWorkerProcess? _activeWorker;
+  String? _activeWorkerToken;
   final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
   final _runningListeners = <void Function()>{};
   String _logText = '';
@@ -145,6 +148,36 @@ class AgentDispatchService {
     if (worker != null) await worker.requestDrainAfterCurrent();
   }
 
+  /// 将当前卡片移入阻塞中，终止当前 Skill 会话，并继续批次下一张。
+  Future<void> requestSkipToNext({
+    required BoardController boardController,
+    String? blockReason,
+  }) async {
+    final workerToken = _activeWorkerToken;
+    if (workerToken != null) {
+      final status = McpDispatchCardGate.instance.sessionStatus(workerToken);
+      final cardId = status?.cardId?.trim();
+      if (cardId != null && cardId.isNotEmpty) {
+        final blockResult = await mcpBlockCard(
+          boardController,
+          cardId: cardId,
+          projectId: status?.projectId,
+          reason: blockReason ?? '用户点击「下一个」跳过',
+        );
+        if (blockResult.isError == true) {
+          _emitLog(
+            '移入阻塞中失败，仍将终止当前会话',
+            level: AgentDispatchLogLevel.warning,
+          );
+        } else {
+          _emitLog('已将卡片 $cardId 移入阻塞中');
+        }
+      }
+    }
+    final worker = _activeWorker;
+    if (worker != null) await worker.requestSkipToNext();
+  }
+
   /// 应用退出时停止所有由 Agent 工作台创建的 Worker。
   ///
   /// 逐个 Worker 使用 `taskkill /T`，以确保 SDK/CLI 子进程不会遗留。
@@ -236,6 +269,7 @@ class AgentDispatchService {
 
     final runId = const Uuid().v4();
     final workerToken = const Uuid().v4();
+    _activeWorkerToken = workerToken;
     final cardLimit = switch (options.cardLimit) {
       AgentDispatchCardLimitMax() => 999,
       AgentDispatchCardLimitCount(:final count) => count,
@@ -281,6 +315,7 @@ class AgentDispatchService {
     } finally {
       McpDispatchCardGate.instance.endBatch(workerToken);
       _activeWorker = null;
+      _activeWorkerToken = null;
       stopwatch.stop();
     }
     if (_cancelRequested) {
@@ -305,6 +340,7 @@ class AgentDispatchService {
     _drainAfterCurrentRequested = false;
     _isRunning = false;
     _activeWorker = null;
+    _activeWorkerToken = null;
     _logText = '';
     _logHydrated = false;
     _logSaveQueue = Future.value();

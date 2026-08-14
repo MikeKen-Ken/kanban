@@ -31,14 +31,17 @@ class AgentWorkerProcess {
     AgentDispatchWindowsJob? windowsJob,
     String? cancelFile,
     String? drainFile,
+    String? skipFile,
   })  : _windowsJob = windowsJob,
         _cancelFile = cancelFile,
-        _drainFile = drainFile;
+        _drainFile = drainFile,
+        _skipFile = skipFile;
 
   final Process _process;
   AgentDispatchWindowsJob? _windowsJob;
   final String? _cancelFile;
   final String? _drainFile;
+  final String? _skipFile;
   bool _stopRequested = false;
 
   /// 在当前 Skill 会话结束后停止批次，不中断进行中的会话。
@@ -47,6 +50,15 @@ class AgentWorkerProcess {
     if (drainFile == null) return;
     try {
       await File(drainFile).writeAsString('');
+    } catch (_) {}
+  }
+
+  /// 跳过当前 Skill 会话并继续批次下一张；不标记整批取消。
+  Future<void> requestSkipToNext() async {
+    final skipFile = _skipFile;
+    if (skipFile == null) return;
+    try {
+      await File(skipFile).writeAsString('');
     } catch (_) {}
   }
 
@@ -155,6 +167,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   final outFile = File(p.join(tempDir.path, 'out.json'));
   final cancelFile = File(p.join(tempDir.path, 'cancel'));
   final drainFile = File(p.join(tempDir.path, 'drain'));
+  final skipFile = File(p.join(tempDir.path, 'skip'));
   final job = <String, dynamic>{
     'engine': engine.name,
     'cwd': cwd,
@@ -171,6 +184,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       ],
     'cancelFile': cancelFile.path,
     'drainFile': drainFile.path,
+    'skipFile': skipFile.path,
     'outPath': outFile.path,
   };
   await jobFile.writeAsString(jsonEncode(job));
@@ -206,6 +220,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       ),
       cancelFile: cancelFile.path,
       drainFile: drainFile.path,
+      skipFile: skipFile.path,
     );
     onProcessStarted?.call(workerProcess);
     process.stdout

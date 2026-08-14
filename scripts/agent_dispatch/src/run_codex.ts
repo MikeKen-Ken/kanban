@@ -90,7 +90,7 @@ export async function runCodex(
         }
       };
       cancellation?.onCancel(killChild);
-      if (cancellation?.isCancelled) {
+      if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         resolvePromise(130);
         return;
       }
@@ -110,7 +110,7 @@ export async function runCodex(
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
-        if (cancellation?.isCancelled) {
+        if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
           resolvePromise(130);
           return;
         }
@@ -118,6 +118,10 @@ export async function runCodex(
       });
     });
 
+    if (cancellation?.isSkipRequested) {
+      console.log(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
+      return { ok: false, error: "已跳过" };
+    }
     if (cancellation?.isCancelled) {
       console.log(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
       return { ok: false, error: "已取消" };

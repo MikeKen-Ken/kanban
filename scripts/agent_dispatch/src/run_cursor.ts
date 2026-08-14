@@ -114,10 +114,14 @@ export async function runCursor(
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => undefined);
       });
-      if (cancellation?.isCancelled) {
+      if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => undefined);
       }
       const result = await run.wait();
+      if (cancellation?.isSkipRequested) {
+        logLine("Cursor 会话已由用户跳过", "worker");
+        return { ok: false, error: "已跳过" };
+      }
       if (cancellation?.isCancelled || result.status === "cancelled") {
         logLine("Cursor 会话已由用户停止", "worker");
         return { ok: false, error: "已取消" };

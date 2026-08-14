@@ -14,10 +14,12 @@ var WorkerCancelledError = class extends Error {
 var WorkerCancellation = class {
   cancelled = false;
   drainAfterCurrent = false;
+  skipRequested = false;
   reason = "\u5DF2\u53D6\u6D88";
   callbacks = /* @__PURE__ */ new Set();
   cancelFileTimer;
   drainFileTimer;
+  skipFileTimer;
   signalInstalled = false;
   watchCancelFile(path) {
     const check = () => {
@@ -43,6 +45,18 @@ var WorkerCancellation = class {
     this.drainFileTimer = setInterval(check, 200);
     this.drainFileTimer.unref?.();
   }
+  watchSkipFile(path) {
+    const check = () => {
+      if (this.skipRequested || this.cancelled) return;
+      try {
+        if (existsSync(path)) this.requestSkipCurrentSession();
+      } catch {
+      }
+    };
+    check();
+    this.skipFileTimer = setInterval(check, 200);
+    this.skipFileTimer.unref?.();
+  }
   installSignalHandlers() {
     if (this.signalInstalled) return;
     this.signalInstalled = true;
@@ -55,12 +69,26 @@ var WorkerCancellation = class {
   get isCancelled() {
     return this.cancelled;
   }
+  get isSkipRequested() {
+    return this.skipRequested;
+  }
   get shouldStopAfterCurrentSession() {
     return this.cancelled || this.drainAfterCurrent;
   }
   requestDrainAfterCurrent() {
     if (this.cancelled || this.drainAfterCurrent) return;
     this.drainAfterCurrent = true;
+  }
+  /** 跳过当前 Skill 会话并继续批次下一张；不标记整批取消。 */
+  requestSkipCurrentSession() {
+    if (this.cancelled || this.skipRequested) return;
+    this.skipRequested = true;
+    for (const callback of this.callbacks) {
+      void this.invoke(callback);
+    }
+  }
+  clearSkipRequest() {
+    this.skipRequested = false;
   }
   onCancel(callback) {
     this.callbacks.add(callback);
@@ -85,6 +113,10 @@ var WorkerCancellation = class {
     if (this.drainFileTimer) {
       clearInterval(this.drainFileTimer);
       this.drainFileTimer = void 0;
+    }
+    if (this.skipFileTimer) {
+      clearInterval(this.skipFileTimer);
+      this.skipFileTimer = void 0;
     }
   }
   async invoke(callback) {
@@ -357,7 +389,7 @@ async function runCodex(job, cancellation) {
         }
       };
       cancellation?.onCancel(killChild);
-      if (cancellation?.isCancelled) {
+      if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         resolvePromise(130);
         return;
       }
@@ -377,13 +409,17 @@ async function runCodex(job, cancellation) {
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
-        if (cancellation?.isCancelled) {
+        if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
           resolvePromise(130);
           return;
         }
         resolvePromise(exitCode ?? 1);
       });
     });
+    if (cancellation?.isSkipRequested) {
+      console.log(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
+      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+    }
     if (cancellation?.isCancelled) {
       console.log(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
       return { ok: false, error: "\u5DF2\u53D6\u6D88" };
@@ -513,10 +549,14 @@ async function runCursor(job, cancellation) {
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => void 0);
       });
-      if (cancellation?.isCancelled) {
+      if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => void 0);
       }
       const result = await run.wait();
+      if (cancellation?.isSkipRequested) {
+        logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u8DF3\u8FC7", "worker");
+        return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+      }
       if (cancellation?.isCancelled || result.status === "cancelled") {
         logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u505C\u6B62", "worker");
         return { ok: false, error: "\u5DF2\u53D6\u6D88" };
@@ -599,11 +639,25 @@ async function runBatch(job, cancellation) {
       });
       workerLog("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
       const result = job.engine === "codex" ? await runCodex(job, cancellation) : await runCursor(job, cancellation);
+      if (cancellation?.isSkipRequested) {
+        cancellation.clearSkipRequest();
+        workerLog(
+          "[warn] \u7528\u6237\u8BF7\u6C42\u8DF3\u8FC7\u5F53\u524D\u5361\u7247\uFF0C\u7EC8\u6B62\u672C\u8F6E\u4F1A\u8BDD\u5E76\u7EE7\u7EED\u4E0B\u4E00\u5F20"
+        );
+        continue;
+      }
       if (cancellation?.isCancelled) {
         return cancelledResult();
       }
       if (!result.ok) {
         if (result.error === "\u5DF2\u53D6\u6D88") return cancelledResult();
+        if (result.error === "\u5DF2\u8DF3\u8FC7") {
+          cancellation?.clearSkipRequest();
+          workerLog(
+            "[warn] \u7528\u6237\u8BF7\u6C42\u8DF3\u8FC7\u5F53\u524D\u5361\u7247\uFF0C\u7EC8\u6B62\u672C\u8F6E\u4F1A\u8BDD\u5E76\u7EE7\u7EED\u4E0B\u4E00\u5F20"
+          );
+          continue;
+        }
         return {
           ok: false,
           error: result.error ?? `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u5931\u8D25`,
@@ -829,6 +883,9 @@ async function runJob(jobPath) {
   }
   if (job.drainFile?.trim()) {
     cancellation.watchDrainFile(job.drainFile.trim());
+  }
+  if (job.skipFile?.trim()) {
+    cancellation.watchSkipFile(job.skipFile.trim());
   }
   let result;
   try {

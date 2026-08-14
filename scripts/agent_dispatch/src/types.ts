@@ -14,6 +14,8 @@ export type DispatchJob = {
   cancelFile?: string;
   /** Dart 侧 touch 此文件以在当前 Skill 会话结束后停止批次 */
   drainFile?: string;
+  /** Dart 侧 touch 此文件以跳过当前卡片并继续下一张 */
+  skipFile?: string;
   outPath: string;
 };
 
