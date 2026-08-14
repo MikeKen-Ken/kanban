@@ -64,6 +64,8 @@ function parseJsonRecord(value: unknown): Record<string, unknown> | undefined {
     return undefined;
   }
 }
+
+function usefulJson(value: unknown, max = 4000): string {
   if (value === undefined || value === null) return "";
   if (typeof value === "string") return value.trim();
   const text = formatJson(value, max);

@@ -49,6 +49,8 @@ export function mergeJobWithCardOverrides(
   }
   return { ...job, engine, model, modelParams };
 }
+
+export function resolveModelParams(
   job: DispatchJob,
 ): Array<{ id: string; value: string }> | undefined {
   if (job.modelParams && job.modelParams.length > 0) {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
@@ -31,13 +33,16 @@ Future<CallToolResult> mcpPrepareCardSubmission(
     final workMode =
         snapshot?.workMode ?? (isReworkWorkMode(card) ? 'rework' : 'normal');
     final rework = workMode == 'rework';
+    final suggestedCommitMessage =
+        snapshot?.suggestedCommitMessage ?? buildCardCommitMessage(card);
     return mcpJsonResult({
       'ok': true,
       'cardId': cardId,
       'projectId': resolvedProjectId,
       'workMode': workMode,
-      'suggestedCommitMessage':
-          snapshot?.suggestedCommitMessage ?? buildCardCommitMessage(card),
+      'suggestedCommitMessage': suggestedCommitMessage,
+      'suggestedCommitMessageBase64':
+          base64Encode(utf8.encode(suggestedCommitMessage)),
       if (rework)
         'incompleteFeedbackIds': snapshot?.incompleteFeedbackIds ??
             [

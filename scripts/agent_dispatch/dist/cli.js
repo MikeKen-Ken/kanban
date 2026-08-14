@@ -217,8 +217,7 @@ async function printCursorUsage() {
     ok: true,
     userEmail: me.userEmail,
     apiKeyName: me.apiKeyName,
-    ...pools,
-    message: pools.autoRemainingPercent == null && pools.apiRemainingPercent == null ? "\u4E2A\u4EBA\u5957\u9910\u7684 Auto+Composer / API \u53CC\u6C60\u5269\u4F59\u767E\u5206\u6BD4\u6CA1\u6709\u516C\u5F00 API\uFF0C\u8BF7\u6253\u5F00 Cursor Dashboard \u67E5\u770B\u3002" : void 0
+    ...pools
   };
   process.stdout.write(`${JSON.stringify(payload)}
 `);
@@ -295,6 +294,23 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // src/types.ts
+function mergeJobWithCardOverrides(job, peek) {
+  const engineRaw = String(peek.agentEngine ?? "").trim();
+  const engine = engineRaw === "cursor" || engineRaw === "codex" ? engineRaw : job.engine;
+  const modelRaw = String(peek.agentModelId ?? "").trim();
+  const model = modelRaw || job.model;
+  const paramsRaw = peek.agentModelParamValues;
+  let modelParams = job.modelParams;
+  if (paramsRaw && typeof paramsRaw === "object" && !Array.isArray(paramsRaw)) {
+    const extras = Object.entries(paramsRaw).filter(([, value]) => typeof value === "string" && value.trim() !== "").map(([id, value]) => ({ id, value: String(value) }));
+    if (extras.length > 0) {
+      const byId = new Map((job.modelParams ?? []).map((item) => [item.id, item]));
+      for (const item of extras) byId.set(item.id, item);
+      modelParams = [...byId.values()];
+    }
+  }
+  return { ...job, engine, model, modelParams };
+}
 function resolveModelParams(job) {
   if (job.modelParams && job.modelParams.length > 0) {
     return job.modelParams;
@@ -485,6 +501,9 @@ function expandMultiline(prefix, body) {
   }
   return result;
 }
+function asRecord2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
 function pickString(message, ...keys) {
   if (!message) return "";
   for (const key of keys) {
@@ -493,9 +512,72 @@ function pickString(message, ...keys) {
   }
   return "";
 }
+function parseJsonRecord(value) {
+  if (typeof value !== "string") return void 0;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return void 0;
+  try {
+    return asRecord2(JSON.parse(trimmed));
+  } catch {
+    return void 0;
+  }
+}
+function usefulJson(value, max = 4e3) {
+  if (value === void 0 || value === null) return "";
+  if (typeof value === "string") return value.trim();
+  const text = formatJson(value, max);
+  if (!text || text === "{}" || text === "[]" || text === "null") return "";
+  return text;
+}
+function toolPayload(step) {
+  return asRecord2(step.message) ?? asRecord2(step.toolCall) ?? asRecord2(step.call) ?? asRecord2(step.tool) ?? asRecord2(asRecord2(step.message)?.toolCall) ?? asRecord2(asRecord2(step.message)?.call);
+}
+function extractToolDetail(payload) {
+  if (!payload) return "";
+  const nested = asRecord2(payload.args) ?? asRecord2(payload.arguments) ?? asRecord2(payload.input) ?? asRecord2(payload.params) ?? asRecord2(asRecord2(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord2(payload.function)?.arguments);
+  const command = pickString(
+    payload,
+    "command",
+    "cmd",
+    "shellCommand",
+    "query",
+    "pattern",
+    "glob_pattern",
+    "globPattern"
+  );
+  if (command) return command;
+  if (nested) {
+    const nestedCommand = pickString(
+      nested,
+      "command",
+      "cmd",
+      "shellCommand",
+      "query",
+      "pattern",
+      "glob_pattern",
+      "globPattern"
+    );
+    if (nestedCommand) {
+      const extra = { ...nested };
+      delete extra.command;
+      delete extra.cmd;
+      delete extra.shellCommand;
+      const rest = usefulJson(extra, 2e3);
+      return rest ? `${nestedCommand}  ${rest}` : nestedCommand;
+    }
+    return usefulJson(nested);
+  }
+  const rawArgs = payload.args ?? payload.arguments ?? payload.input ?? payload.params;
+  if (typeof rawArgs === "string" && rawArgs.trim()) return rawArgs.trim();
+  return "";
+}
+function isShellTool(name) {
+  return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
+}
 function describeStep(step) {
-  const type = String(step.type ?? "unknown");
-  const message = step.message && typeof step.message === "object" ? step.message : void 0;
+  const record = asRecord2(step) ?? {};
+  const type = String(record.type ?? "unknown");
+  const message = toolPayload(record);
   switch (type) {
     case "assistantMessage":
       return {
@@ -505,47 +587,51 @@ function describeStep(step) {
     case "thinkingMessage": {
       const text = pickString(message, "text", "thinking", "content");
       return {
-        lines: text ? expandMultiline("\u601D\u8003\uFF1A", text) : ["\u601D\u8003\u4E2D\u2026"],
+        lines: text ? expandMultiline("\u601D\u8003\uFF1A", text) : [],
         source: "ai"
       };
     }
     case "toolCall": {
-      const toolName = pickString(
-        message,
-        "name",
-        "toolName",
-        "functionName",
-        "type"
-      ) || "tool";
-      const args = message?.args ?? message?.arguments ?? message?.input;
-      const lines = [`\u5DE5\u5177\uFF1A${toolName}`];
-      if (args !== void 0) {
-        lines.push(`  \u53C2\u6570\uFF1A${formatJson(args)}`);
+      const toolName = pickString(message, "name", "toolName", "functionName", "type") || pickString(record, "name", "toolName") || "tool";
+      const detail = extractToolDetail(message);
+      if (!detail) {
+        return { lines: [], source: isShellTool(toolName) ? "shell" : "mcp" };
       }
-      return { lines, source: "mcp" };
+      if (isShellTool(toolName)) {
+        return { lines: expandMultiline("\u547D\u4EE4\uFF1A", detail), source: "shell" };
+      }
+      return {
+        lines: expandMultiline(`\u5DE5\u5177\uFF1A${toolName} `, detail),
+        source: "mcp"
+      };
     }
     case "toolResult": {
       const toolName = pickString(message, "name", "toolName", "type") || "tool";
       const result = message?.result ?? message?.output ?? message?.content ?? message?.text;
-      const lines = [`\u5DE5\u5177\u7ED3\u679C\uFF1A${toolName}`];
-      if (result !== void 0) {
-        const body = typeof result === "string" ? result : formatJson(result);
-        lines.push(...expandMultiline("  \u8FD4\u56DE\uFF1A", body));
+      if (result === void 0) {
+        return { lines: [], source: "mcp" };
       }
-      return { lines, source: "mcp" };
+      const body = typeof result === "string" ? result : formatJson(result);
+      if (!String(body).trim()) return { lines: [], source: "mcp" };
+      return {
+        lines: expandMultiline(`\u5DE5\u5177\u7ED3\u679C\uFF1A${toolName} `, body),
+        source: "mcp"
+      };
     }
     case "shellConversationTurn":
     case "shell": {
-      const command = pickString(message, "command", "text");
+      const command = extractToolDetail(message) || pickString(message, "command", "text");
+      if (!command) return { lines: [], source: "shell" };
       return {
         lines: expandMultiline("\u547D\u4EE4\uFF1A", command),
         source: "shell"
       };
     }
     default: {
-      const detail = message ? formatJson(message, 800) : "";
+      const detail = message ? usefulJson(message, 800) : "";
+      if (!detail) return { lines: [], source: "worker" };
       return {
-        lines: detail ? [`\u6B65\u9AA4\uFF1A${type} ${detail}`] : [`\u6B65\u9AA4\uFF1A${type}`],
+        lines: [`\u6B65\u9AA4\uFF1A${type} ${detail}`],
         source: "worker"
       };
     }
@@ -601,7 +687,9 @@ async function runCursor(job, cancellation) {
             const described = describeStep(
               step
             );
-            logLines(described.lines, described.source);
+            if (described.lines.length > 0) {
+              logLines(described.lines, described.source);
+            }
           } catch {
             logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
           }
@@ -699,7 +787,13 @@ async function runBatch(job, cancellation) {
         workerToken: job.workerToken
       });
       workerLog("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
-      const result = job.engine === "codex" ? await runCodex(job, cancellation) : await runCursor(job, cancellation);
+      const roundJob = mergeJobWithCardOverrides(job, peek);
+      if (roundJob.engine !== job.engine || roundJob.model !== job.model) {
+        workerLog(
+          `\u672C\u5361\u6A21\u578B\u8986\u76D6\uFF1Aengine=${roundJob.engine} model=${roundJob.model ?? "(\u5DE5\u4F5C\u53F0)"} cardId=${String(peek.cardId ?? "")}`
+        );
+      }
+      const result = roundJob.engine === "codex" ? await runCodex(roundJob, cancellation) : await runCursor(roundJob, cancellation);
       if (cancellation?.isSkipRequested) {
         cancellation.clearSkipRequest();
         workerLog(

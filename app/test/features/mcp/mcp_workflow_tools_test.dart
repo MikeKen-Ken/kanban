@@ -78,6 +78,14 @@ void main() {
       _jsonOf(result)['suggestedCommitMessage'],
       '只读准备\n\n提交正文\n\n- 待完成子任务',
     );
+    expect(
+      utf8.decode(
+        base64Decode(
+          _jsonOf(result)['suggestedCommitMessageBase64'] as String,
+        ),
+      ),
+      '只读准备\n\n提交正文\n\n- 待完成子任务',
+    );
     expect(controller.findColumnIdForCard(cardId), doingColumnId);
   });
 
@@ -115,6 +123,12 @@ void main() {
     final payload = _jsonOf(result);
     expect(payload['workMode'], 'rework');
     expect(payload['suggestedCommitMessage'], '修复问题一');
+    expect(
+      utf8.decode(
+        base64Decode(payload['suggestedCommitMessageBase64'] as String),
+      ),
+      '修复问题一',
+    );
     expect(payload['incompleteFeedbackIds'], ['fb1']);
   });
 
