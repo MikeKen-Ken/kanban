@@ -193,6 +193,10 @@ class AgentDispatchLogPane extends StatefulWidget {
 
 class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   final _scrollController = ScrollController();
+  AgentDispatchLogSource? _sourceFilter;
+  var _pinToBottom = true;
+
+  static const _bottomThreshold = 48.0;
 
   @override
   void initState() {
@@ -208,12 +212,30 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     widget.controller.addListener(_onLogChanged);
   }
 
+  bool get _isAtBottom {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    return position.pixels >= position.maxScrollExtent - _bottomThreshold;
+  }
+
+  void _onUserScroll() {
+    _pinToBottom = _isAtBottom;
+  }
+
   void _onLogChanged() {
     if (mounted) setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+      if (!_scrollController.hasClients || !_pinToBottom) return;
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     });
+  }
+
+  List<String> _visibleLines() {
+    return widget.controller.text.split('\n').where((line) {
+      if (AgentDispatchLogEntry.isLowValue(line)) return false;
+      if (_sourceFilter == null) return true;
+      return AgentDispatchLogEntry.sourceOf(line) == _sourceFilter;
+    }).toList();
   }
 
   @override
@@ -273,13 +295,32 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
       runSpacing: 4,
       children: [
         for (final source in AgentDispatchLogSource.values)
-          Text(
-            source.label,
-            style: style?.copyWith(
-              color: _lineColor(
-                context,
-                AgentDispatchLogLevel.info,
-                source,
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _sourceFilter = _sourceFilter == source ? null : source;
+                });
+              },
+              child: Text(
+                source.label,
+                key: ValueKey('agent-dispatch-log-source-${source.name}'),
+                style: style?.copyWith(
+                  color: _lineColor(
+                    context,
+                    AgentDispatchLogLevel.info,
+                    source,
+                  ).withValues(
+                    alpha: _sourceFilter == null || _sourceFilter == source
+                        ? 1
+                        : 0.35,
+                  ),
+                  fontWeight: _sourceFilter == source ? FontWeight.w700 : null,
+                  decoration: _sourceFilter == source
+                      ? TextDecoration.underline
+                      : null,
+                ),
               ),
             ),
           ),
@@ -290,7 +331,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   @override
   Widget build(BuildContext context) {
     final hasLog = widget.controller.text.isNotEmpty;
-    final lines = widget.controller.text.split('\n');
+    final lines = _visibleLines();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -329,18 +370,26 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
                 border: Border.all(color: Theme.of(context).dividerColor),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                child: SelectableText.rich(
-                  TextSpan(
-                    children: [
-                      for (var index = 0; index < lines.length; index++) ...[
-                        ..._lineSpans(context, lines[index]),
-                        if (index < lines.length - 1) const TextSpan(text: '\n'),
+              child: NotificationListener<UserScrollNotification>(
+                onNotification: (notification) {
+                  _onUserScroll();
+                  return false;
+                },
+                child: SingleChildScrollView(
+                  key: const ValueKey('agent-dispatch-log-scroll'),
+                  controller: _scrollController,
+                  child: SelectableText.rich(
+                    TextSpan(
+                      children: [
+                        for (var index = 0; index < lines.length; index++) ...[
+                          ..._lineSpans(context, lines[index]),
+                          if (index < lines.length - 1)
+                            const TextSpan(text: '\n'),
+                        ],
                       ],
-                    ],
+                    ),
+                    style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
                   ),
-                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
                 ),
               ),
             ),

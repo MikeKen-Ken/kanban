@@ -59,6 +59,24 @@ class AgentDispatchLogEntry {
   static AgentDispatchLogSource sourceOf(String line) =>
       _parseFormattedLine(line)?.source ?? _inferLegacySource(line);
 
+  static String messageOf(String line) {
+    final match = RegExp(
+      r'^\[\d{2}:\d{2}:\d{2}\] \[[^\]]+\](?: \[[^\]]+\])? (.*)$',
+    ).firstMatch(line);
+    return (match?.group(1) ?? line).trim();
+  }
+
+  /// 没有具体内容的进度行不展示，避免刷屏。
+  static bool isLowValue(String line) {
+    final message = messageOf(line);
+    if (message == '思考中…' || message == '思考中') return true;
+    if (RegExp(r'^工具：\S+$').hasMatch(message)) return true;
+    if (RegExp(r'^工具结果：\S+$').hasMatch(message)) return true;
+    if (RegExp(r'^命令：（空）$').hasMatch(message)) return true;
+    if (RegExp(r'^步骤：\S+$').hasMatch(message)) return true;
+    return false;
+  }
+
   static ({AgentDispatchLogLevel level, AgentDispatchLogSource source})?
       _parseFormattedLine(String line) {
     final match = RegExp(

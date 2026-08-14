@@ -40,6 +40,27 @@ void main() {
     );
   });
 
+  test('没有具体内容的进度行视为低价值', () {
+    expect(
+      AgentDispatchLogEntry.isLowValue('[09:08:07] [AI] [信息] 思考中…'),
+      isTrue,
+    );
+    expect(
+      AgentDispatchLogEntry.isLowValue('[09:08:07] [MCP] [信息] 工具：glob'),
+      isTrue,
+    );
+    expect(
+      AgentDispatchLogEntry.isLowValue(
+        '[09:08:07] [MCP] [信息] 工具：grep {"pattern":"foo"}',
+      ),
+      isFalse,
+    );
+    expect(
+      AgentDispatchLogEntry.isLowValue('[09:08:07] [命令] [信息] 命令：git status'),
+      isFalse,
+    );
+  });
+
   test('普通日志行不拆分重点片段', () {
     final segments = AgentDispatchLogHighlight.segments('助手：正在处理任务');
     expect(segments, [(text: '助手：正在处理任务', emphasis: false)]);

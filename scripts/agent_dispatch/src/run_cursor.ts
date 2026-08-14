@@ -39,6 +39,12 @@ function expandMultiline(prefix: string, body: string): string[] {
   return result;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 function pickString(message: Record<string, unknown> | undefined, ...keys: string[]): string {
   if (!message) return "";
   for (const key of keys) {
@@ -48,15 +54,93 @@ function pickString(message: Record<string, unknown> | undefined, ...keys: strin
   return "";
 }
 
+function parseJsonRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
+  try {
+    return asRecord(JSON.parse(trimmed));
+  } catch {
+    return undefined;
+  }
+}
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value.trim();
+  const text = formatJson(value, max);
+  if (!text || text === "{}" || text === "[]" || text === "null") return "";
+  return text;
+}
+
+function toolPayload(step: Record<string, unknown>): Record<string, unknown> | undefined {
+  return (
+    asRecord(step.message) ??
+    asRecord(step.toolCall) ??
+    asRecord(step.call) ??
+    asRecord(step.tool) ??
+    asRecord(asRecord(step.message)?.toolCall) ??
+    asRecord(asRecord(step.message)?.call)
+  );
+}
+
+function extractToolDetail(payload: Record<string, unknown> | undefined): string {
+  if (!payload) return "";
+  const nested =
+    asRecord(payload.args) ??
+    asRecord(payload.arguments) ??
+    asRecord(payload.input) ??
+    asRecord(payload.params) ??
+    asRecord(asRecord(payload.function)?.arguments) ??
+    parseJsonRecord(payload.args) ??
+    parseJsonRecord(payload.arguments) ??
+    parseJsonRecord(asRecord(payload.function)?.arguments);
+  const command = pickString(
+    payload,
+    "command",
+    "cmd",
+    "shellCommand",
+    "query",
+    "pattern",
+    "glob_pattern",
+    "globPattern",
+  );
+  if (command) return command;
+  if (nested) {
+    const nestedCommand = pickString(
+      nested,
+      "command",
+      "cmd",
+      "shellCommand",
+      "query",
+      "pattern",
+      "glob_pattern",
+      "globPattern",
+    );
+    if (nestedCommand) {
+      const extra = { ...nested };
+      delete extra.command;
+      delete extra.cmd;
+      delete extra.shellCommand;
+      const rest = usefulJson(extra, 2000);
+      return rest ? `${nestedCommand}  ${rest}` : nestedCommand;
+    }
+    return usefulJson(nested);
+  }
+  const rawArgs = payload.args ?? payload.arguments ?? payload.input ?? payload.params;
+  if (typeof rawArgs === "string" && rawArgs.trim()) return rawArgs.trim();
+  return "";
+}
+
+function isShellTool(name: string): boolean {
+  return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
+}
+
 function describeStep(step: { type?: unknown; message?: unknown }): {
   lines: string[];
   source: WorkerLogSource;
 } {
-  const type = String(step.type ?? "unknown");
-  const message =
-    step.message && typeof step.message === "object"
-      ? (step.message as Record<string, unknown>)
-      : undefined;
+  const record = asRecord(step) ?? {};
+  const type = String(record.type ?? "unknown");
+  const message = toolPayload(record);
   switch (type) {
     case "assistantMessage":
       return {
@@ -66,47 +150,54 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
     case "thinkingMessage": {
       const text = pickString(message, "text", "thinking", "content");
       return {
-        lines: text ? expandMultiline("思考：", text) : ["思考中…"],
+        lines: text ? expandMultiline("思考：", text) : [],
         source: "ai",
       };
     }
     case "toolCall": {
-      const toolName = pickString(
-        message,
-        "name",
-        "toolName",
-        "functionName",
-        "type",
-      ) || "tool";
-      const args = message?.args ?? message?.arguments ?? message?.input;
-      const lines = [`工具：${toolName}`];
-      if (args !== undefined) {
-        lines.push(`  参数：${formatJson(args)}`);
+      const toolName =
+        pickString(message, "name", "toolName", "functionName", "type") ||
+        pickString(record, "name", "toolName") ||
+        "tool";
+      const detail = extractToolDetail(message);
+      if (!detail) {
+        return { lines: [], source: isShellTool(toolName) ? "shell" : "mcp" };
       }
-      return { lines, source: "mcp" };
+      if (isShellTool(toolName)) {
+        return { lines: expandMultiline("命令：", detail), source: "shell" };
+      }
+      return {
+        lines: expandMultiline(`工具：${toolName} `, detail),
+        source: "mcp",
+      };
     }
     case "toolResult": {
       const toolName = pickString(message, "name", "toolName", "type") || "tool";
       const result = message?.result ?? message?.output ?? message?.content ?? message?.text;
-      const lines = [`工具结果：${toolName}`];
-      if (result !== undefined) {
-        const body = typeof result === "string" ? result : formatJson(result);
-        lines.push(...expandMultiline("  返回：", body));
+      if (result === undefined) {
+        return { lines: [], source: "mcp" };
       }
-      return { lines, source: "mcp" };
+      const body = typeof result === "string" ? result : formatJson(result);
+      if (!String(body).trim()) return { lines: [], source: "mcp" };
+      return {
+        lines: expandMultiline(`工具结果：${toolName} `, body),
+        source: "mcp",
+      };
     }
     case "shellConversationTurn":
     case "shell": {
-      const command = pickString(message, "command", "text");
+      const command = extractToolDetail(message) || pickString(message, "command", "text");
+      if (!command) return { lines: [], source: "shell" };
       return {
         lines: expandMultiline("命令：", command),
         source: "shell",
       };
     }
     default: {
-      const detail = message ? formatJson(message, 800) : "";
+      const detail = message ? usefulJson(message, 800) : "";
+      if (!detail) return { lines: [], source: "worker" };
       return {
-        lines: detail ? [`步骤：${type} ${detail}`] : [`步骤：${type}`],
+        lines: [`步骤：${type} ${detail}`],
         source: "worker",
       };
     }
@@ -171,7 +262,9 @@ export async function runCursor(
             const described = describeStep(
               step as { type?: unknown; message?: unknown },
             );
-            logLines(described.lines, described.source);
+            if (described.lines.length > 0) {
+              logLines(described.lines, described.source);
+            }
           } catch {
             logLine("收到一步进度");
           }
