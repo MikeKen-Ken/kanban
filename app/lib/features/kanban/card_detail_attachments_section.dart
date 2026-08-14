@@ -194,7 +194,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
             onReorder: (oldIndex, newIndex) =>
                 _reorderAttachments(context, oldIndex, newIndex),
             onTap: (index) => _openAttachmentViewer(context, index),
-            onLongPress: (index) async {
+            onMenu: (index) async {
               final attachment = attachments[index];
               final isCover = index == 0;
               final action = await showModalBottomSheet<String>(
