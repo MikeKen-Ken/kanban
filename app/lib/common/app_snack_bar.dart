@@ -150,34 +150,41 @@ class _AppTopSnackBarState extends State<_AppTopSnackBar>
               position: _slide,
               child: FadeTransition(
                 opacity: _fade,
-                child: Material(
-                  elevation: elevation,
-                  color: backgroundColor,
-                  shape: shape,
-                  clipBehavior: Clip.antiAlias,
-                  child: Padding(
-                    padding: contentPadding,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(widget.message, style: contentStyle),
-                        ),
-                        if (widget.action != null) ...[
-                          const SizedBox(width: 8),
-                          TextButton(
-                            onPressed: _onActionPressed,
-                            style: TextButton.styleFrom(
-                              foregroundColor: actionColor,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                child: IntrinsicWidth(
+                  child: Material(
+                    elevation: elevation,
+                    color: backgroundColor,
+                    shape: shape,
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: contentPadding,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.message,
+                              style: contentStyle,
+                              textAlign: TextAlign.center,
                             ),
-                            child: Text(widget.action!.label),
                           ),
+                          if (widget.action != null) ...[
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: _onActionPressed,
+                              style: TextButton.styleFrom(
+                                foregroundColor: actionColor,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(widget.action!.label),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
