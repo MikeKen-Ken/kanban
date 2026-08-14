@@ -11,14 +11,45 @@ function logLine(line: string, source: WorkerLogSource = "worker"): void {
   workerLog(line, source);
 }
 
-function clip(text: string, max = 240): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= max) return compact;
-  return `${compact.slice(0, max)}…`;
+function logLines(lines: string[], source: WorkerLogSource = "worker"): void {
+  for (const line of lines) {
+    logLine(line, source);
+  }
+}
+
+function formatJson(value: unknown, max = 4000): string {
+  if (value === undefined) return "";
+  try {
+    const text = JSON.stringify(value);
+    if (text.length <= max) return text;
+    return `${text.slice(0, max)}…`;
+  } catch {
+    return String(value);
+  }
+}
+
+function expandMultiline(prefix: string, body: string): string[] {
+  const trimmed = body.trimEnd();
+  if (!trimmed) return [`${prefix}（空）`];
+  const lines = trimmed.split(/\r?\n/);
+  const result = [`${prefix}${lines[0]}`];
+  for (let i = 1; i < lines.length; i++) {
+    result.push(`  │ ${lines[i]}`);
+  }
+  return result;
+}
+
+function pickString(message: Record<string, unknown> | undefined, ...keys: string[]): string {
+  if (!message) return "";
+  for (const key of keys) {
+    const value = message[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
 }
 
 function describeStep(step: { type?: unknown; message?: unknown }): {
-  text: string;
+  lines: string[];
   source: WorkerLogSource;
 } {
   const type = String(step.type ?? "unknown");
@@ -29,24 +60,56 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
   switch (type) {
     case "assistantMessage":
       return {
-        text: `助手：${clip(String(message?.text ?? ""))}`,
+        lines: expandMultiline("助手：", String(message?.text ?? "")),
         source: "ai",
       };
-    case "thinkingMessage":
-      return { text: "思考中…", source: "ai" };
-    case "toolCall":
+    case "thinkingMessage": {
+      const text = pickString(message, "text", "thinking", "content");
       return {
-        text: `工具：${String(message?.type ?? "tool")}`,
-        source: "mcp",
+        lines: text ? expandMultiline("思考：", text) : ["思考中…"],
+        source: "ai",
       };
+    }
+    case "toolCall": {
+      const toolName = pickString(
+        message,
+        "name",
+        "toolName",
+        "functionName",
+        "type",
+      ) || "tool";
+      const args = message?.args ?? message?.arguments ?? message?.input;
+      const lines = [`工具：${toolName}`];
+      if (args !== undefined) {
+        lines.push(`  参数：${formatJson(args)}`);
+      }
+      return { lines, source: "mcp" };
+    }
+    case "toolResult": {
+      const toolName = pickString(message, "name", "toolName", "type") || "tool";
+      const result = message?.result ?? message?.output ?? message?.content ?? message?.text;
+      const lines = [`工具结果：${toolName}`];
+      if (result !== undefined) {
+        const body = typeof result === "string" ? result : formatJson(result);
+        lines.push(...expandMultiline("  返回：", body));
+      }
+      return { lines, source: "mcp" };
+    }
     case "shellConversationTurn":
-    case "shell":
+    case "shell": {
+      const command = pickString(message, "command", "text");
       return {
-        text: `命令：${clip(String(message?.command ?? message?.text ?? ""))}`,
+        lines: expandMultiline("命令：", command),
         source: "shell",
       };
-    default:
-      return { text: `步骤：${type}`, source: "worker" };
+    }
+    default: {
+      const detail = message ? formatJson(message, 800) : "";
+      return {
+        lines: detail ? [`步骤：${type} ${detail}`] : [`步骤：${type}`],
+        source: "worker",
+      };
+    }
   }
 }
 
@@ -105,7 +168,7 @@ export async function runCursor(
             const described = describeStep(
               step as { type?: unknown; message?: unknown },
             );
-            logLine(described.text, described.source);
+            logLines(described.lines, described.source);
           } catch {
             logLine("收到一步进度");
           }

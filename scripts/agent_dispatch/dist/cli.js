@@ -460,10 +460,38 @@ function workerLog(line, source = "worker") {
 function logLine(line, source = "worker") {
   workerLog(line, source);
 }
-function clip(text, max = 240) {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= max) return compact;
-  return `${compact.slice(0, max)}\u2026`;
+function logLines(lines, source = "worker") {
+  for (const line of lines) {
+    logLine(line, source);
+  }
+}
+function formatJson(value, max = 4e3) {
+  if (value === void 0) return "";
+  try {
+    const text = JSON.stringify(value);
+    if (text.length <= max) return text;
+    return `${text.slice(0, max)}\u2026`;
+  } catch {
+    return String(value);
+  }
+}
+function expandMultiline(prefix, body) {
+  const trimmed = body.trimEnd();
+  if (!trimmed) return [`${prefix}\uFF08\u7A7A\uFF09`];
+  const lines = trimmed.split(/\r?\n/);
+  const result = [`${prefix}${lines[0]}`];
+  for (let i = 1; i < lines.length; i++) {
+    result.push(`  \u2502 ${lines[i]}`);
+  }
+  return result;
+}
+function pickString(message, ...keys) {
+  if (!message) return "";
+  for (const key of keys) {
+    const value = message[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
 }
 function describeStep(step) {
   const type = String(step.type ?? "unknown");
@@ -471,24 +499,56 @@ function describeStep(step) {
   switch (type) {
     case "assistantMessage":
       return {
-        text: `\u52A9\u624B\uFF1A${clip(String(message?.text ?? ""))}`,
+        lines: expandMultiline("\u52A9\u624B\uFF1A", String(message?.text ?? "")),
         source: "ai"
       };
-    case "thinkingMessage":
-      return { text: "\u601D\u8003\u4E2D\u2026", source: "ai" };
-    case "toolCall":
+    case "thinkingMessage": {
+      const text = pickString(message, "text", "thinking", "content");
       return {
-        text: `\u5DE5\u5177\uFF1A${String(message?.type ?? "tool")}`,
-        source: "mcp"
+        lines: text ? expandMultiline("\u601D\u8003\uFF1A", text) : ["\u601D\u8003\u4E2D\u2026"],
+        source: "ai"
       };
+    }
+    case "toolCall": {
+      const toolName = pickString(
+        message,
+        "name",
+        "toolName",
+        "functionName",
+        "type"
+      ) || "tool";
+      const args = message?.args ?? message?.arguments ?? message?.input;
+      const lines = [`\u5DE5\u5177\uFF1A${toolName}`];
+      if (args !== void 0) {
+        lines.push(`  \u53C2\u6570\uFF1A${formatJson(args)}`);
+      }
+      return { lines, source: "mcp" };
+    }
+    case "toolResult": {
+      const toolName = pickString(message, "name", "toolName", "type") || "tool";
+      const result = message?.result ?? message?.output ?? message?.content ?? message?.text;
+      const lines = [`\u5DE5\u5177\u7ED3\u679C\uFF1A${toolName}`];
+      if (result !== void 0) {
+        const body = typeof result === "string" ? result : formatJson(result);
+        lines.push(...expandMultiline("  \u8FD4\u56DE\uFF1A", body));
+      }
+      return { lines, source: "mcp" };
+    }
     case "shellConversationTurn":
-    case "shell":
+    case "shell": {
+      const command = pickString(message, "command", "text");
       return {
-        text: `\u547D\u4EE4\uFF1A${clip(String(message?.command ?? message?.text ?? ""))}`,
+        lines: expandMultiline("\u547D\u4EE4\uFF1A", command),
         source: "shell"
       };
-    default:
-      return { text: `\u6B65\u9AA4\uFF1A${type}`, source: "worker" };
+    }
+    default: {
+      const detail = message ? formatJson(message, 800) : "";
+      return {
+        lines: detail ? [`\u6B65\u9AA4\uFF1A${type} ${detail}`] : [`\u6B65\u9AA4\uFF1A${type}`],
+        source: "worker"
+      };
+    }
   }
 }
 async function runCursor(job, cancellation) {
@@ -540,7 +600,7 @@ async function runCursor(job, cancellation) {
             const described = describeStep(
               step
             );
-            logLine(described.text, described.source);
+            logLines(described.lines, described.source);
           } catch {
             logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
           }

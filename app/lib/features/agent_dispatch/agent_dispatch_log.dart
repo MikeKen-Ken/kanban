@@ -95,7 +95,9 @@ class AgentDispatchLogEntry {
   }
 
   static AgentDispatchLogSource _inferLegacySource(String message) {
-    if (message.startsWith('助手：') || message.startsWith('思考中')) {
+    if (message.startsWith('助手：') ||
+        message.startsWith('思考：') ||
+        message.startsWith('思考中')) {
       return AgentDispatchLogSource.ai;
     }
     if (message.startsWith('工具：')) return AgentDispatchLogSource.mcp;
