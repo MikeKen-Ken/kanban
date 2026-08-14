@@ -1,9 +1,21 @@
+export type ModelParam = { id: string; value: string };
+
+export type EngineDefault = {
+  model?: string;
+  modelParams?: ModelParam[];
+  models?: Array<{
+    id: string;
+    parameters?: Array<{ id: string; values?: string[] }>;
+  }>;
+};
+
 export type DispatchJob = {
   engine: "cursor" | "codex";
   cwd: string;
   prompt: string;
   model?: string;
-  modelParams?: Array<{ id: string; value: string }>;
+  modelParams?: ModelParam[];
+  engineDefaults?: Partial<Record<"cursor" | "codex", EngineDefault>>;
   mcpEndpoint: string;
   projectId?: string;
   cardLimit: number;
@@ -26,28 +38,97 @@ export type DispatchResult = {
   processedCards?: number;
 };
 
+export function isReasoningParamId(id: string): boolean {
+  return (
+    id === "reasoning" ||
+    id === "reasoning_effort" ||
+    id === "model_reasoning_effort" ||
+    id === "effort" ||
+    id === "thinking"
+  );
+}
+
+export function conservativeParamValue(
+  id: string,
+  values: string[],
+): string | undefined {
+  const allowed = values.map((value) => value.trim()).filter(Boolean);
+  const middle = allowed[Math.floor((allowed.length - 1) / 2)];
+  if (isReasoningParamId(id)) {
+    if (allowed.includes("medium")) return "medium";
+    return allowed.length === 0 ? "medium" : middle;
+  }
+  if (id === "fast") {
+    if (allowed.includes("false")) return "false";
+    return allowed.length === 0 ? "false" : middle;
+  }
+  return allowed.length === 0 ? undefined : middle;
+}
+
+function parseEngine(
+  raw: unknown,
+  fallback: "cursor" | "codex",
+): "cursor" | "codex" {
+  const text = String(raw ?? "").trim();
+  return text === "cursor" || text === "codex" ? text : fallback;
+}
+
+function parseCardParams(raw: unknown): ModelParam[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(raw as Record<string, unknown>)
+    .filter(([, value]) => typeof value === "string" && value.trim() !== "")
+    .map(([id, value]) => ({ id, value: String(value).trim() }));
+}
+
+function engineFallback(
+  job: DispatchJob,
+  engine: "cursor" | "codex",
+): EngineDefault {
+  const stored = job.engineDefaults?.[engine];
+  if (stored) return stored;
+  if (engine === job.engine) {
+    return { model: job.model, modelParams: job.modelParams };
+  }
+  return {};
+}
+
 export function mergeJobWithCardOverrides(
   job: DispatchJob,
   peek: Record<string, unknown>,
 ): DispatchJob {
-  const engineRaw = String(peek.agentEngine ?? "").trim();
-  const engine =
-    engineRaw === "cursor" || engineRaw === "codex" ? engineRaw : job.engine;
-  const modelRaw = String(peek.agentModelId ?? "").trim();
-  const model = modelRaw || job.model;
-  const paramsRaw = peek.agentModelParamValues;
-  let modelParams = job.modelParams;
-  if (paramsRaw && typeof paramsRaw === "object" && !Array.isArray(paramsRaw)) {
-    const extras = Object.entries(paramsRaw as Record<string, unknown>)
-      .filter(([, value]) => typeof value === "string" && value.trim() !== "")
-      .map(([id, value]) => ({ id, value: String(value) }));
-    if (extras.length > 0) {
-      const byId = new Map((job.modelParams ?? []).map((item) => [item.id, item]));
-      for (const item of extras) byId.set(item.id, item);
-      modelParams = [...byId.values()];
+  const engine = parseEngine(peek.agentEngine, job.engine);
+  const defaults = engineFallback(job, engine);
+  const cardModel = String(peek.agentModelId ?? "").trim();
+  const model = cardModel || defaults.model || undefined;
+  const cardParams = parseCardParams(peek.agentModelParamValues);
+  const byId = new Map(
+    (defaults.modelParams ?? []).map((item) => [item.id, item]),
+  );
+  for (const item of cardParams) byId.set(item.id, item);
+
+  const catalog = defaults.models?.find((item) => item.id === model);
+  const parameters = catalog?.parameters ?? [];
+  if (parameters.length > 0) {
+    const allowed = new Set(
+      parameters.map((item) => String(item.id ?? "").trim()).filter(Boolean),
+    );
+    for (const id of [...byId.keys()]) {
+      if (!allowed.has(id)) byId.delete(id);
+    }
+    for (const parameter of parameters) {
+      const id = String(parameter.id ?? "").trim();
+      if (!id || byId.has(id)) continue;
+      const value = conservativeParamValue(id, parameter.values ?? []);
+      if (value) byId.set(id, { id, value });
+    }
+  } else if (cardModel) {
+    const hasReasoning = [...byId.keys()].some(isReasoningParamId);
+    if (!hasReasoning) {
+      byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
     }
   }
-  return { ...job, engine, model, modelParams };
+
+  return { ...job, engine, model, modelParams: [...byId.values()] };
 }
 
 export function resolveModelParams(

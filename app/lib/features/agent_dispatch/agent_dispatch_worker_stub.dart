@@ -38,6 +38,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   String? projectId,
   String? model,
   List<({String id, String value})> modelParams = const [],
+  Map<String, dynamic> engineDefaults = const {},
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,

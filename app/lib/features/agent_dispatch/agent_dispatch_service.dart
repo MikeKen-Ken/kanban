@@ -360,15 +360,19 @@ class AgentDispatchService {
     log('策略：每张卡片创建一次独立 Agent 调用；上限 ${options.cardLimit.label}');
 
     String? cursorApiKey;
-    if (options.engine == AgentDispatchEngine.cursor) {
-      try {
-        cursorApiKey = await _credentials.resolveCursorApiKey();
-      } catch (error) {
+    try {
+      cursorApiKey = await _credentials.resolveCursorApiKey();
+    } catch (error) {
+      if (options.engine == AgentDispatchEngine.cursor) {
         return AgentWorkerResult(
           ok: false,
           error: '读取 Cursor API Key 的系统安全存储失败：$error',
         );
       }
+      log(
+        '读取 Cursor API Key 失败：$error；本批次默认不是 Cursor，仅当卡片指定 Cursor 时才会失败',
+        level: AgentDispatchLogLevel.warning,
+      );
     }
     if (options.engine == AgentDispatchEngine.cursor && cursorApiKey == null) {
       return const AgentWorkerResult(
@@ -407,6 +411,7 @@ class AgentDispatchService {
         workerToken: workerToken,
         model: options.modelId,
         modelParams: options.modelParams,
+        engineDefaults: options.engineDefaultsJobJson(),
         cursorApiKey: cursorApiKey,
         workerScriptPath: workerScriptPath,
         onProcessStarted: (worker) {

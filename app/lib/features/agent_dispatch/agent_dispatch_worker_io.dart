@@ -142,6 +142,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   String? projectId,
   String? model,
   List<({String id, String value})> modelParams = const [],
+  Map<String, dynamic> engineDefaults = const {},
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
@@ -182,6 +183,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       'modelParams': [
         for (final item in modelParams) {'id': item.id, 'value': item.value},
       ],
+    if (engineDefaults.isNotEmpty) 'engineDefaults': engineDefaults,
     'cancelFile': cancelFile.path,
     'drainFile': drainFile.path,
     'skipFile': skipFile.path,

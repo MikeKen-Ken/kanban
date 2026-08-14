@@ -62,9 +62,14 @@ export async function runBatch(
       });
       workerLog("Worker 检查结果：还有卡片；正在创建全新的 Skill 会话");
       const roundJob = mergeJobWithCardOverrides(job, peek);
-      if (roundJob.engine !== job.engine || roundJob.model !== job.model) {
+      if (
+        roundJob.engine !== job.engine ||
+        roundJob.model !== job.model ||
+        JSON.stringify(roundJob.modelParams ?? []) !==
+          JSON.stringify(job.modelParams ?? [])
+      ) {
         workerLog(
-          `本卡模型覆盖：engine=${roundJob.engine} model=${roundJob.model ?? "(工作台)"} cardId=${String(peek.cardId ?? "")}`,
+          `本卡覆盖：engine=${roundJob.engine} model=${roundJob.model ?? "(平台默认)"} params=${JSON.stringify(roundJob.modelParams ?? [])} cardId=${String(peek.cardId ?? "")}`,
         );
       }
       const result =

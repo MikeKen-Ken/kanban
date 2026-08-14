@@ -40,6 +40,39 @@ final class AgentDispatchCardLimitCount extends AgentDispatchCardLimit {
   final int count;
 }
 
+/// 某一平台在工作台里保存的默认模型，供卡片未覆盖时回退。
+class AgentDispatchEngineRunDefaults {
+  const AgentDispatchEngineRunDefaults({
+    this.modelId,
+    this.modelParams = const [],
+    this.models = const [],
+  });
+
+  final String? modelId;
+  final List<({String id, String value})> modelParams;
+  final List<AgentDispatchModelInfo> models;
+
+  Map<String, dynamic> toJobJson() => {
+        if (modelId != null && modelId!.trim().isNotEmpty)
+          'model': modelId!.trim(),
+        if (modelParams.isNotEmpty)
+          'modelParams': [
+            for (final item in modelParams) {'id': item.id, 'value': item.value},
+          ],
+        if (models.isNotEmpty)
+          'models': [
+            for (final model in models)
+              {
+                'id': model.id,
+                'parameters': [
+                  for (final parameter in model.parameters)
+                    {'id': parameter.id, 'values': parameter.values},
+                ],
+              },
+          ],
+      };
+}
+
 /// 一次运行选项。
 class AgentDispatchRunOptions {
   const AgentDispatchRunOptions({
@@ -50,6 +83,7 @@ class AgentDispatchRunOptions {
     this.projectTitle,
     this.modelId,
     this.modelParams = const [],
+    this.engineDefaults = const {},
   });
 
   final AgentDispatchEngine engine;
@@ -68,7 +102,15 @@ class AgentDispatchRunOptions {
   /// 来自 Cursor.models.list 的 params，如 fast / reasoning_effort。
   final List<({String id, String value})> modelParams;
 
+  /// 各平台工作台默认；卡片指定其它平台时回退到对应项，而不是当前平台。
+  final Map<String, AgentDispatchEngineRunDefaults> engineDefaults;
+
   final AgentDispatchCardLimit cardLimit;
+
+  Map<String, dynamic> engineDefaultsJobJson() => {
+        for (final entry in engineDefaults.entries)
+          entry.key: entry.value.toJobJson(),
+      };
 }
 
 /// 模型目录项（worker --list-models）。

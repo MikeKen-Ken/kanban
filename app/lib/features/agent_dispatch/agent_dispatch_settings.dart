@@ -7,6 +7,32 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_config.dart';
 
+/// 单个 AI 平台在工作台里记住的模型与参数。
+class AgentDispatchEngineProfile {
+  const AgentDispatchEngineProfile({
+    this.modelId,
+    this.modelParamValues = const {},
+  });
+
+  final String? modelId;
+  final Map<String, String> modelParamValues;
+
+  Map<String, dynamic> toJson() => {
+        if (modelId != null && modelId!.trim().isNotEmpty) 'modelId': modelId,
+        if (modelParamValues.isNotEmpty) 'modelParamValues': modelParamValues,
+      };
+
+  factory AgentDispatchEngineProfile.fromJson(Map<String, dynamic> json) {
+    final raw = json['modelParamValues'] as Map<String, dynamic>?;
+    return AgentDispatchEngineProfile(
+      modelId: json['modelId'] as String?,
+      modelParamValues: raw == null
+          ? const {}
+          : raw.map((key, value) => MapEntry(key, '$value')),
+    );
+  }
+}
+
 /// Agent 调度本机偏好（不同步）。
 class AgentDispatchSettings {
   const AgentDispatchSettings({
@@ -16,6 +42,7 @@ class AgentDispatchSettings {
     this.repoPath,
     this.modelId = defaultModelId,
     this.modelParamValues = defaultModelParamValues,
+    this.engineProfiles = const {},
     this.cardLimitMax = true,
     this.cardLimitCount = 1,
     this.afterQueue = const [],
@@ -44,6 +71,9 @@ class AgentDispatchSettings {
   /// 当前模型的参数值，参数定义来自 Cursor 模型 catalog。
   final Map<String, String> modelParamValues;
 
+  /// 各平台上次配置；切换下拉框时恢复，不互相覆盖。
+  final Map<String, AgentDispatchEngineProfile> engineProfiles;
+
   final bool cardLimitMax;
   final int cardLimitCount;
 
@@ -65,6 +95,7 @@ class AgentDispatchSettings {
     Object? repoPath = _sentinel,
     Object? modelId = _sentinel,
     Map<String, String>? modelParamValues,
+    Map<String, AgentDispatchEngineProfile>? engineProfiles,
     bool? cardLimitMax,
     int? cardLimitCount,
     List<AgentDispatchAfterStep>? afterQueue,
@@ -81,6 +112,7 @@ class AgentDispatchSettings {
       repoPath: repoPath == _sentinel ? this.repoPath : repoPath as String?,
       modelId: modelId == _sentinel ? this.modelId : modelId as String?,
       modelParamValues: modelParamValues ?? this.modelParamValues,
+      engineProfiles: engineProfiles ?? this.engineProfiles,
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       afterQueue: afterQueue ?? this.afterQueue,
@@ -107,18 +139,70 @@ class AgentDispatchSettings {
     );
   }
 
-  AgentDispatchRunOptions toRunOptions({
-    required String? Function(String projectId) projectTitleOf,
-  }) {
-    final title =
-        useProject && projectId != null ? projectTitleOf(projectId!) : null;
-    final params = modelParamValues.entries
+  /// 把当前平台的模型写回分平台配置，避免切换后丢失。
+  AgentDispatchSettings rememberActiveEngineProfile() {
+    final profiles =
+        Map<String, AgentDispatchEngineProfile>.from(engineProfiles);
+    profiles[engine.name] = AgentDispatchEngineProfile(
+      modelId: modelId,
+      modelParamValues: modelParamValues,
+    );
+    return copyWith(engineProfiles: profiles);
+  }
+
+  /// 切换平台时先记住当前项，再恢复目标平台上次的模型。
+  AgentDispatchSettings switchEngine(AgentDispatchEngine next) {
+    final saved = rememberActiveEngineProfile();
+    if (next == engine) return saved;
+    final profile = saved.engineProfiles[next.name];
+    return saved.copyWith(
+      engine: next,
+      modelId: profile?.modelId,
+      modelParamValues: profile?.modelParamValues ?? const {},
+    );
+  }
+
+  Map<String, AgentDispatchEngineProfile> resolvedEngineProfiles() {
+    final profiles =
+        Map<String, AgentDispatchEngineProfile>.from(engineProfiles);
+    profiles[engine.name] = AgentDispatchEngineProfile(
+      modelId: modelId,
+      modelParamValues: modelParamValues,
+    );
+    return profiles;
+  }
+
+  static List<({String id, String value})> _runParams(
+    Map<String, String> values,
+  ) {
+    return values.entries
         .where((entry) =>
             entry.key.trim().isNotEmpty &&
             entry.value.trim().isNotEmpty &&
             entry.value != 'default')
         .map((entry) => (id: entry.key, value: entry.value))
         .toList();
+  }
+
+  AgentDispatchRunOptions toRunOptions({
+    required String? Function(String projectId) projectTitleOf,
+    Map<AgentDispatchEngine, List<AgentDispatchModelInfo>> catalogs =
+        const {},
+  }) {
+    final title =
+        useProject && projectId != null ? projectTitleOf(projectId!) : null;
+    final params = _runParams(modelParamValues);
+    final profiles = resolvedEngineProfiles();
+    final engineDefaults = <String, AgentDispatchEngineRunDefaults>{
+      for (final item in AgentDispatchEngine.values)
+        item.name: AgentDispatchEngineRunDefaults(
+          modelId: profiles[item.name]?.modelId,
+          modelParams: _runParams(
+            profiles[item.name]?.modelParamValues ?? const {},
+          ),
+          models: catalogs[item] ?? const [],
+        ),
+    };
     return AgentDispatchRunOptions(
       engine: engine,
       projectId: useProject ? projectId : null,
@@ -126,6 +210,7 @@ class AgentDispatchSettings {
       repoPath: repoPath?.trim() ?? '',
       modelId: modelId,
       modelParams: params,
+      engineDefaults: engineDefaults,
       cardLimit: cardLimitMax
           ? AgentDispatchCardLimit.max
           : AgentDispatchCardLimit.count(cardLimitCount),
@@ -139,6 +224,11 @@ class AgentDispatchSettings {
         if (repoPath != null) 'repoPath': repoPath,
         if (modelId != null) 'modelId': modelId,
         if (modelParamValues.isNotEmpty) 'modelParamValues': modelParamValues,
+        if (engineProfiles.isNotEmpty)
+          'engineProfiles': {
+            for (final entry in engineProfiles.entries)
+              entry.key: entry.value.toJson(),
+          },
         'cardLimitMax': cardLimitMax,
         'cardLimitCount': cardLimitCount,
         if (afterQueue.isNotEmpty)
@@ -182,13 +272,32 @@ class AgentDispatchSettings {
         modelParamValues['fast'] == 'true') {
       modelParamValues = Map<String, String>.from(defaultModelParamValues);
     }
+    final engine = AgentDispatchEngine.fromName(json['engine'] as String?);
+    final modelId =
+        json['modelId'] as String? ?? legacyModel ?? defaultModelId;
+    final profilesRaw = json['engineProfiles'] as Map<String, dynamic>?;
+    final engineProfiles = <String, AgentDispatchEngineProfile>{
+      if (profilesRaw != null)
+        for (final entry in profilesRaw.entries)
+          if (entry.value is Map)
+            entry.key: AgentDispatchEngineProfile.fromJson(
+              Map<String, dynamic>.from(entry.value as Map),
+            ),
+    };
+    if (engineProfiles[engine.name] == null) {
+      engineProfiles[engine.name] = AgentDispatchEngineProfile(
+        modelId: modelId,
+        modelParamValues: modelParamValues,
+      );
+    }
     return AgentDispatchSettings(
-      engine: AgentDispatchEngine.fromName(json['engine'] as String?),
+      engine: engine,
       useProject: json['useProject'] as bool? ?? false,
       projectId: json['projectId'] as String?,
       repoPath: repoPath,
-      modelId: json['modelId'] as String? ?? legacyModel ?? defaultModelId,
+      modelId: modelId,
       modelParamValues: modelParamValues,
+      engineProfiles: engineProfiles,
       // 始终默认勾选「全部」；仅保留上次填写的张数。
       cardLimitMax: true,
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??

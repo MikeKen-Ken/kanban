@@ -110,6 +110,49 @@ void main() {
       (id: 'reasoning_effort', value: 'high'),
     ]);
     expect(opts.cardLimit, isA<AgentDispatchCardLimitMax>());
+    expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
+    expect(opts.engineDefaults['codex']?.modelId, isNull);
+  });
+
+  test('切换平台会记住并恢复各自的模型', () {
+    const cursor = AgentDispatchSettings(
+      engine: AgentDispatchEngine.cursor,
+      modelId: 'composer-2.5',
+      modelParamValues: {'fast': 'false', 'reasoning_effort': 'high'},
+    );
+
+    final toCodex = cursor.switchEngine(AgentDispatchEngine.codex).copyWith(
+          modelId: 'gpt-5',
+          modelParamValues: {'model_reasoning_effort': 'low'},
+        );
+    final back = toCodex.rememberActiveEngineProfile().switchEngine(
+          AgentDispatchEngine.cursor,
+        );
+
+    expect(back.engine, AgentDispatchEngine.cursor);
+    expect(back.modelId, 'composer-2.5');
+    expect(back.modelParamValues, {
+      'fast': 'false',
+      'reasoning_effort': 'high',
+    });
+    expect(
+      back.engineProfiles['codex']?.modelId,
+      'gpt-5',
+    );
+  });
+
+  test('旧设置会把当前引擎模型迁入分平台配置', () {
+    final settings = AgentDispatchSettings.fromJson({
+      'engine': 'cursor',
+      'modelId': 'composer-2.5',
+      'modelParamValues': {'fast': 'false', 'reasoning_effort': 'high'},
+    });
+
+    expect(settings.engineProfiles['cursor']?.modelId, 'composer-2.5');
+    expect(settings.engineProfiles['cursor']?.modelParamValues, {
+      'fast': 'false',
+      'reasoning_effort': 'high',
+    });
   });
 
   test('settings JSON 往返保留仓库', () {

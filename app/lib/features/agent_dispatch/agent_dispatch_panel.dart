@@ -179,9 +179,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   Future<void> _persist(AgentDispatchSettings next) async {
-    setState(() => _settings = next);
+    final synced = next.rememberActiveEngineProfile();
+    setState(() => _settings = synced);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.saveAgentDispatchSettings(next);
+    await prefs.saveAgentDispatchSettings(synced);
   }
 
   void _appendLog(
@@ -433,13 +434,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   Future<void> _onEngineChanged(AgentDispatchEngine? nextEngine) async {
     if (nextEngine == null || _running || _busy) return;
+    final switched = _settings.switchEngine(nextEngine);
     final prefs = await SharedPreferences.getInstance();
     final cachedModels = prefs.loadAgentDispatchModelCatalog(
       engine: nextEngine,
     );
     final selectedId = resolveAgentDispatchModelId(
       cachedModels,
-      null,
+      switched.modelId,
       preferredId: nextEngine == AgentDispatchEngine.cursor
           ? AgentDispatchSettings.defaultModelId
           : '',
@@ -448,12 +450,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     for (final model in cachedModels) {
       if (model.id == selectedId) selected = model;
     }
-    final nextSettings = _settings.copyWith(
+    final modelChanged = selectedId != switched.modelId;
+    final nextSettings = switched.copyWith(
       engine: nextEngine,
       modelId: selectedId,
-      modelParamValues: preferredAgentDispatchModelParamValues(
-        selected?.parameters ?? const [],
-      ),
+      modelParamValues: modelChanged || switched.modelParamValues.isEmpty
+          ? preferredAgentDispatchModelParamValues(
+              selected?.parameters ?? const [],
+            )
+          : switched.modelParamValues,
     );
     if (!mounted) return;
     setState(() {
@@ -507,8 +512,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       if (!confirmed || !mounted) return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final catalogs = {
+      for (final engine in AgentDispatchEngine.values)
+        engine: prefs.loadAgentDispatchModelCatalog(engine: engine),
+    };
     final options = next.toRunOptions(
       projectTitleOf: (id) => board.manifest?.findById(id)?.title,
+      catalogs: catalogs,
     );
     if (options.repoPath.isEmpty) {
       _appendLog('请填写代码仓库路径', level: AgentDispatchLogLevel.warning);
