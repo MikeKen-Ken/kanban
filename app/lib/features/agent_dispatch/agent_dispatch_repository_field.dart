@@ -30,22 +30,28 @@ class AgentDispatchRepositoryField extends StatelessWidget {
             controller: controller,
             enabled: enabled,
             decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               hintText: '本机仓库根目录',
               errorText: errorText,
               suffixIconConstraints: const BoxConstraints(
-                minWidth: 48,
-                maxWidth: 48,
-                minHeight: 48,
-                maxHeight: 48,
+                minWidth: 28,
+                maxWidth: 28,
+                minHeight: 28,
+                maxHeight: 28,
               ),
               suffixIcon: PopupMenuButton<String>(
                 tooltip: '展开历史仓库',
                 enabled: enabled && paths.isNotEmpty,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(
                   minWidth: 280,
                   maxWidth: 440,
                 ),
+                iconSize: 20,
                 icon: const Icon(Icons.arrow_drop_down),
                 onSelected: (path) {
                   controller.text = path;

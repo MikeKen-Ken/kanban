@@ -128,10 +128,6 @@ export async function printCursorUsage(): Promise<void> {
     userEmail: me.userEmail,
     apiKeyName: me.apiKeyName,
     ...pools,
-    message:
-      pools.autoRemainingPercent == null && pools.apiRemainingPercent == null
-        ? "个人套餐的 Auto+Composer / API 双池剩余百分比没有公开 API，请打开 Cursor Dashboard 查看。"
-        : undefined,
   };
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }

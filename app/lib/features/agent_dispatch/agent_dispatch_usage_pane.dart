@@ -13,6 +13,13 @@ class AgentDispatchUsagePane extends StatelessWidget {
   final AgentDispatchUsageSnapshot? snapshot;
   final bool loading;
 
+  /// 额度接口缺失时的说明对工作台没有帮助，只保留真正的加载失败。
+  static String _accountFallbackText(String? message) {
+    final text = message?.trim() ?? '';
+    if (text.contains('失败')) return text;
+    return '尚未加载账号信息';
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -50,13 +57,8 @@ class AgentDispatchUsagePane extends StatelessWidget {
             (keyName == null || keyName.isEmpty) &&
             !loading)
           Text(
-            snapshot?.message ?? '尚未加载账号信息',
+            _accountFallbackText(snapshot?.message),
             style: textTheme.bodySmall,
-          )
-        else if (snapshot?.message != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(snapshot!.message!, style: textTheme.bodySmall),
           ),
       ],
     );

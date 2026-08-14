@@ -617,15 +617,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                       },
               ),
               const SizedBox(height: 12),
-              Text('看板项目', style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 4),
-              Text(
-                projectTitle,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
               if (_projectErrorText != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
                     _projectErrorText!,
                     style: TextStyle(
@@ -634,7 +628,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
               Text('代码仓库', style: Theme.of(context).textTheme.labelLarge),
               AgentDispatchRepositoryField(
                 controller: _repoController,

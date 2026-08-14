@@ -168,33 +168,33 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     final hasInput = _controller.text.trim().isNotEmpty;
     final showSaveButton = !available || hasInput;
     final enabled = widget.enabled && !_busy;
-    final statusText = active != null
-        ? '当前：${active.label}'
-        : _hasEnvironmentKey
-            ? '已检测到环境变量'
-            : '尚未配置';
+    final statusText = available
+        ? (_hasEnvironmentKey && active == null ? '已检测到环境变量' : null)
+        : '尚未配置';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Icon(
-              available ? Icons.check_circle_outline : Icons.info_outline,
-              size: 16,
-              color: available
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                statusText,
-                style: Theme.of(context).textTheme.bodySmall,
+        if (statusText != null) ...[
+          Row(
+            children: [
+              Icon(
+                available ? Icons.check_circle_outline : Icons.info_outline,
+                size: 16,
+                color: available
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  statusText,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -206,23 +206,29 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                 enableSuggestions: false,
                 autocorrect: false,
                 decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   hintText: available
                       ? '输入新 Key 可替换当前 Key'
                       : '粘贴 Cursor API Key',
                   suffixIconConstraints: const BoxConstraints(
-                    minWidth: 48,
-                    maxWidth: 48,
-                    minHeight: 48,
-                    maxHeight: 48,
+                    minWidth: 28,
+                    maxWidth: 28,
+                    minHeight: 28,
+                    maxHeight: 28,
                   ),
                   suffixIcon: PopupMenuButton<String>(
                     tooltip: '展开已保存 Key',
                     enabled: enabled && _keys.isNotEmpty,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
                       minWidth: 280,
                       maxWidth: 440,
                     ),
+                    iconSize: 20,
                     icon: const Icon(Icons.arrow_drop_down),
                     onSelected: _selectKey,
                     itemBuilder: (context) => [
