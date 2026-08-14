@@ -36,14 +36,19 @@ class SyncActionsSwitcher extends StatelessWidget {
   static const double _menuMinWidth = 280;
   static const double _menuMaxWidth = 360;
 
+  /// AppBar 圆形 [IconButton] 默认 48 触控区、24 图标，两侧各留 12。
+  /// 同步入口不是 IconButton，补同样水平留白，避免贴回收站/设置过近。
+  static const double _appBarIconButtonSideInset = 12;
+
   @override
   Widget build(BuildContext context) {
     final controller = context.read<BoardController>();
     final syncing = status == SyncStatus.syncing;
     final hasConflict = conflictCount > 0;
 
+    final Widget child;
     if (hasConflict) {
-      return _SyncStatusTrigger(
+      child = _SyncStatusTrigger(
         status: status,
         error: error,
         conflictCount: conflictCount,
@@ -55,10 +60,8 @@ class SyncActionsSwitcher extends StatelessWidget {
         onTap: onConflictTap,
         onCancel: onCancel,
       );
-    }
-
-    if (syncing) {
-      return _SyncStatusTrigger(
+    } else if (syncing) {
+      child = _SyncStatusTrigger(
         status: status,
         error: error,
         conflictCount: conflictCount,
@@ -72,31 +75,36 @@ class SyncActionsSwitcher extends StatelessWidget {
         },
         onCancel: onCancel,
       );
+    } else {
+      child = SyncQuickSwitchGesture(
+        longPressDelay: controller.appSettings.dragDelay,
+        onCommit: (action) => runSyncManualAction(context, controller, action),
+        child: PopupMenuButton<SyncManualAction>(
+          tooltip: '同步（短按菜单，长按滑动快速选择；滑到「取消」松手可放弃）',
+          constraints: const BoxConstraints(
+            minWidth: _menuMinWidth,
+            maxWidth: _menuMaxWidth,
+          ),
+          onSelected: (action) =>
+              runSyncManualAction(context, controller, action),
+          itemBuilder: (_) => syncActionPopupMenuItems(),
+          child: _SyncStatusTrigger(
+            status: status,
+            error: error,
+            conflictCount: conflictCount,
+            lastSyncedAt: lastSyncedAt,
+            progress: progress,
+            pendingUploadCount: pendingUploadCount,
+            compact: compact,
+            showDropdownArrow: true,
+          ),
+        ),
+      );
     }
 
-    return SyncQuickSwitchGesture(
-      longPressDelay: controller.appSettings.dragDelay,
-      onCommit: (action) => runSyncManualAction(context, controller, action),
-      child: PopupMenuButton<SyncManualAction>(
-        tooltip: '同步（短按菜单，长按滑动快速选择；滑到「取消」松手可放弃）',
-        constraints: const BoxConstraints(
-          minWidth: _menuMinWidth,
-          maxWidth: _menuMaxWidth,
-        ),
-        onSelected: (action) =>
-            runSyncManualAction(context, controller, action),
-        itemBuilder: (_) => syncActionPopupMenuItems(),
-        child: _SyncStatusTrigger(
-          status: status,
-          error: error,
-          conflictCount: conflictCount,
-          lastSyncedAt: lastSyncedAt,
-          progress: progress,
-          pendingUploadCount: pendingUploadCount,
-          compact: compact,
-          showDropdownArrow: true,
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: _appBarIconButtonSideInset),
+      child: child,
     );
   }
 }
