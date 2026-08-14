@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../models/kanban_models.dart';
+import '../kanban/next_work_card.dart';
+import '../kanban/verify_column.dart';
 import '../project/projects_manifest.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_registry.dart';
@@ -37,9 +40,10 @@ class AgentDispatchHub extends StatelessWidget {
       builder: (context, _) {
         final registry = AgentDispatchRegistry.instance;
         final currentId = board.uiActiveProjectId ?? board.activeProjectId;
+        final currentBoard = board.board;
         final items = [
           for (final project in board.manifest?.projects ?? const <ProjectEntry>[])
-            _itemFor(registry, project, currentId),
+            _itemFor(registry, project, currentId, currentBoard),
         ]..sort((a, b) {
             if (a.running != b.running) return a.running ? -1 : 1;
             return a.title.compareTo(b.title);
@@ -57,8 +61,23 @@ class AgentDispatchHub extends StatelessWidget {
     AgentDispatchRegistry registry,
     ProjectEntry project,
     String? currentId,
+    KanbanBoard? currentBoard,
   ) {
-    final progress = registry.progressOf(project.id);
+    var progress = registry.progressOf(project.id);
+    if (progress.running &&
+        currentBoard != null &&
+        currentBoard.id == project.id) {
+      final liveTotal = liveDispatchTotal(
+        cardLimitMax: progress.cardLimitMax,
+        cardLimitCount: progress.cardLimitCount,
+        processedCards: progress.processedCards,
+        remainingQueue: countWorkQueueCards(currentBoard),
+        hasActiveCard: hasIncompleteDoingCard(currentBoard),
+      );
+      if (liveTotal != progress.totalCards) {
+        progress = progress.copyWith(totalCards: liveTotal);
+      }
+    }
     return AgentDispatchHubItem(
       projectId: project.id,
       title: project.title,

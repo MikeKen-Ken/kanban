@@ -80,6 +80,16 @@ bool isDoingColumnId({
   return columnId == defaultDoingColumnId;
 }
 
+/// 「进行中」是否有未完成卡（调度当前正在做的那张）。
+bool hasIncompleteDoingCard(KanbanBoard board) {
+  final doing = findDoingColumn(board.columns);
+  if (doing == null) return false;
+  for (final card in doing.cards) {
+    if (!card.completed) return true;
+  }
+  return false;
+}
+
 /// [columnId] 是否对应看板中的「阻塞中」列。
 ///
 /// 阻塞列在已有看板中可能使用 UUID，按标题识别后再回退默认 id。

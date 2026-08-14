@@ -148,6 +148,65 @@ void main() {
     expect(AgentDispatchWindow.hideIfVisible(), isTrue);
     expect(AgentDispatchWindow.visible.value, isFalse);
   });
+
+  testWidgets('总览点击空白关闭窗口', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => AgentDispatchWindowHost(
+          panel: const Center(
+            child: SizedBox(
+              width: 120,
+              height: 80,
+              child: ColoredBox(
+                color: Colors.red,
+                child: Center(child: Text('总览面板')),
+              ),
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        ),
+        home: const SizedBox.shrink(),
+      ),
+    );
+
+    AgentDispatchWindow.showHub();
+    await tester.pumpAndSettle();
+    expect(find.text('总览面板'), findsOneWidget);
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(AgentDispatchWindow.visible.value, isFalse);
+  });
+
+  testWidgets('项目工作台点击空白回到总览', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => AgentDispatchWindowHost(
+          panel: const Center(
+            child: SizedBox(
+              width: 120,
+              height: 80,
+              child: ColoredBox(
+                color: Colors.red,
+                child: Center(child: Text('项目面板')),
+              ),
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        ),
+        home: const SizedBox.shrink(),
+      ),
+    );
+
+    AgentDispatchWindow.showHub();
+    AgentDispatchWindow.openProject('p1');
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(AgentDispatchWindow.visible.value, isTrue);
+    expect(AgentDispatchWindow.selectedProjectId.value, isNull);
+  });
 }
 
 class _KeepAliveMarker extends StatefulWidget {

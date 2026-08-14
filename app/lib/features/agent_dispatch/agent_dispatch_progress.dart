@@ -5,6 +5,8 @@ class AgentDispatchProgress {
     this.processedCards = 0,
     this.totalCards = 0,
     this.currentRound = 0,
+    this.cardLimitMax = false,
+    this.cardLimitCount = 0,
   });
 
   static const idle = AgentDispatchProgress();
@@ -13,6 +15,8 @@ class AgentDispatchProgress {
   final int processedCards;
   final int totalCards;
   final int currentRound;
+  final bool cardLimitMax;
+  final int cardLimitCount;
 
   String get fractionLabel {
     if (totalCards <= 0) return '$processedCards/…';
@@ -32,12 +36,16 @@ class AgentDispatchProgress {
     int? processedCards,
     int? totalCards,
     int? currentRound,
+    bool? cardLimitMax,
+    int? cardLimitCount,
   }) {
     return AgentDispatchProgress(
       running: running ?? this.running,
       processedCards: processedCards ?? this.processedCards,
       totalCards: totalCards ?? this.totalCards,
       currentRound: currentRound ?? this.currentRound,
+      cardLimitMax: cardLimitMax ?? this.cardLimitMax,
+      cardLimitCount: cardLimitCount ?? this.cardLimitCount,
     );
   }
 }
@@ -50,6 +58,22 @@ int plannedDispatchTotal({
   if (queueSize <= 0) return cardLimitMax ? 0 : cardLimitCount;
   if (cardLimitMax) return queueSize;
   return cardLimitCount < queueSize ? cardLimitCount : queueSize;
+}
+
+/// 已处理张数 + 队列剩余 + 进行中的当前卡，再套用启动时的上限规则。
+int liveDispatchTotal({
+  required bool cardLimitMax,
+  required int cardLimitCount,
+  required int processedCards,
+  required int remainingQueue,
+  required bool hasActiveCard,
+}) {
+  final remainingWork = remainingQueue + (hasActiveCard ? 1 : 0);
+  return plannedDispatchTotal(
+    cardLimitMax: cardLimitMax,
+    cardLimitCount: cardLimitCount,
+    queueSize: processedCards + remainingWork,
+  );
 }
 
 final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)/(\d+)');

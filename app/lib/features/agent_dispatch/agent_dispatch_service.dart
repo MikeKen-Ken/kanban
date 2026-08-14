@@ -214,15 +214,19 @@ class AgentDispatchService {
     _cancelRequested = false;
     _drainAfterCurrentRequested = false;
     _activeRepoPath = options.repoPath.trim();
+    final cardLimitMax = options.cardLimit is AgentDispatchCardLimitMax;
+    final cardLimitCount = switch (options.cardLimit) {
+      AgentDispatchCardLimitMax() => 0,
+      AgentDispatchCardLimitCount(:final count) => count,
+    };
     _setProgress(
       AgentDispatchProgress(
         running: true,
+        cardLimitMax: cardLimitMax,
+        cardLimitCount: cardLimitCount,
         totalCards: plannedDispatchTotal(
-          cardLimitMax: options.cardLimit is AgentDispatchCardLimitMax,
-          cardLimitCount: switch (options.cardLimit) {
-            AgentDispatchCardLimitMax() => 0,
-            AgentDispatchCardLimitCount(:final count) => count,
-          },
+          cardLimitMax: cardLimitMax,
+          cardLimitCount: cardLimitCount,
           queueSize: queueSize,
         ),
       ),

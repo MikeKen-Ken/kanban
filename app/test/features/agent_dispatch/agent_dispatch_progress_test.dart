@@ -42,6 +42,42 @@ void main() {
     expect(progress.fractionLabel, '2/5');
   });
 
+  test('队列中途加卡时 Max 分母随剩余工作量增加', () {
+    expect(
+      liveDispatchTotal(
+        cardLimitMax: true,
+        cardLimitCount: 0,
+        processedCards: 3,
+        remainingQueue: 9,
+        hasActiveCard: true,
+      ),
+      13,
+    );
+    expect(
+      liveDispatchTotal(
+        cardLimitMax: true,
+        cardLimitCount: 0,
+        processedCards: 3,
+        remainingQueue: 8,
+        hasActiveCard: true,
+      ),
+      12,
+    );
+  });
+
+  test('固定张数上限不会因加卡超过上限', () {
+    expect(
+      liveDispatchTotal(
+        cardLimitMax: false,
+        cardLimitCount: 10,
+        processedCards: 2,
+        remainingQueue: 12,
+        hasActiveCard: true,
+      ),
+      10,
+    );
+  });
+
   test('总览能读到各项目运行进度', () {
     final registry = AgentDispatchRegistry.instance;
     addTearDown(registry.debugReset);

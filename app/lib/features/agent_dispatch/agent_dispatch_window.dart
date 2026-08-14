@@ -97,7 +97,9 @@ class AgentDispatchWindowHost extends StatelessWidget {
                 child: Offstage(
                   offstage: !visible,
                   child: _AgentDispatchScrim(
-                    onDismiss: AgentDispatchWindow.hide,
+                    onDismiss: () {
+                      AgentDispatchWindow.hideIfVisible();
+                    },
                     child: panel ?? const AgentDispatchShell(),
                   ),
                 ),
@@ -123,32 +125,25 @@ class _AgentDispatchScrim extends StatelessWidget {
     // 工作台插在 MaterialApp.builder 中，是 Navigator Overlay 的兄弟而不是后代。
     // Tooltip / 下拉菜单 / PopupMenu 都需要 Overlay 祖先，否则悬停会插入失败，
     // 在 Release 里表现为一块巨大的空灰色 ErrorWidget。
+    // 用 DialogRoute 自带遮罩：空白处可点，对话框本身不拦截全屏命中。
     return Overlay.wrap(
       clipBehavior: Clip.none,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ModalBarrier(
-            dismissible: true,
-            color: Colors.black54,
-            onDismiss: onDismiss,
-          ),
-          SafeArea(
-            child: Center(
-              // 工作台在 MaterialApp.builder 中，与主 Navigator 并列。
-              // 下拉菜单默认推到主 Navigator，会落在遮罩下方导致点击无效。
-              child: HeroControllerScope.none(
-                child: Navigator(
-                  initialRoute: Navigator.defaultRouteName,
-                  onGenerateRoute: (settings) => MaterialPageRoute<void>(
-                    settings: settings,
-                    builder: (context) => child,
-                  ),
-                ),
-              ),
+      child: HeroControllerScope.none(
+        child: Navigator(
+          onGenerateRoute: (settings) => DialogRoute<void>(
+            context: context,
+            barrierDismissible: true,
+            barrierColor: Colors.black54,
+            settings: settings,
+            builder: (routeContext) => PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) {
+                if (!didPop) onDismiss();
+              },
+              child: child,
             ),
           ),
-        ],
+        ),
       ),
     );
   }
