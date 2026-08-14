@@ -5,6 +5,25 @@ import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
 
+/// 缩略图/原图字节的进程内缓存，避免拖拽重建时 FutureBuilder 先闪占位色。
+class _AttachmentImageBytesCache {
+  static const _maxEntries = 48;
+  static final Map<String, Uint8List> _bytes = {};
+
+  static String keyFor(String attachmentId,
+          {required bool thumb, String? projectId}) =>
+      '${projectId ?? ''}::$attachmentId::${thumb ? 1 : 0}';
+
+  static Uint8List? get(String key) => _bytes[key];
+
+  static void put(String key, Uint8List bytes) {
+    if (!_bytes.containsKey(key) && _bytes.length >= _maxEntries) {
+      _bytes.remove(_bytes.keys.first);
+    }
+    _bytes[key] = bytes;
+  }
+}
+
 /// 从本地缓存加载卡片附件图片
 class CardAttachmentImage extends StatefulWidget {
   const CardAttachmentImage({
@@ -30,15 +49,36 @@ class CardAttachmentImage extends StatefulWidget {
 
 class _CardAttachmentImageState extends State<CardAttachmentImage> {
   Future<Uint8List?>? _future;
+  Uint8List? _cachedBytes;
+
+  String get _cacheKey => _AttachmentImageBytesCache.keyFor(
+        widget.attachmentId,
+        thumb: widget.thumb,
+        projectId: widget.projectId,
+      );
+
+  void _beginLoad() {
+    _cachedBytes = _AttachmentImageBytesCache.get(_cacheKey);
+    _future = context
+        .read<BoardController>()
+        .readAttachmentBytes(
+          widget.attachmentId,
+          thumb: widget.thumb,
+          projectId: widget.projectId,
+        )
+        .then((bytes) {
+      if (bytes != null) {
+        _AttachmentImageBytesCache.put(_cacheKey, bytes);
+        _cachedBytes = bytes;
+      }
+      return bytes;
+    });
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= context.read<BoardController>().readAttachmentBytes(
-          widget.attachmentId,
-          thumb: widget.thumb,
-          projectId: widget.projectId,
-        );
+    if (_future == null) _beginLoad();
   }
 
   @override
@@ -47,11 +87,7 @@ class _CardAttachmentImageState extends State<CardAttachmentImage> {
     if (oldWidget.attachmentId != widget.attachmentId ||
         oldWidget.thumb != widget.thumb ||
         oldWidget.projectId != widget.projectId) {
-      _future = context.read<BoardController>().readAttachmentBytes(
-            widget.attachmentId,
-            thumb: widget.thumb,
-            projectId: widget.projectId,
-          );
+      _beginLoad();
     }
   }
 
@@ -67,7 +103,7 @@ class _CardAttachmentImageState extends State<CardAttachmentImage> {
     return FutureBuilder<Uint8List?>(
       future: _future,
       builder: (context, snapshot) {
-        final bytes = snapshot.data;
+        final bytes = snapshot.data ?? _cachedBytes;
         Widget child;
         if (bytes == null) {
           child = ColoredBox(
@@ -98,7 +134,11 @@ class _CardAttachmentImageState extends State<CardAttachmentImage> {
             ),
           );
         } else {
-          child = Image.memory(bytes, fit: widget.fit);
+          child = Image.memory(
+            bytes,
+            fit: widget.fit,
+            gaplessPlayback: true,
+          );
         }
 
         if (widget.borderRadius != null) {
