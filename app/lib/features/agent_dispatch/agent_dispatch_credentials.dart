@@ -142,8 +142,23 @@ class AgentDispatchCredentials {
     if (normalized.isEmpty) {
       throw const FormatException('Cursor API Key 不能为空');
     }
-    final id = const Uuid().v4();
     final meta = await _readMeta();
+    for (final item in meta) {
+      final existing = await _readValue(item.id);
+      if (existing != normalized) continue;
+      await _storage.write(key: _activeIdKey, value: item.id);
+      final nextLabel = label?.trim().isNotEmpty == true
+          ? label!.trim()
+          : item.label;
+      if (nextLabel != item.label) {
+        final updated = [...meta];
+        final index = updated.indexWhere((entry) => entry.id == item.id);
+        updated[index] = _CursorApiKeyMeta(id: item.id, label: nextLabel);
+        await _writeMeta(updated);
+      }
+      return;
+    }
+    final id = const Uuid().v4();
     final nextLabel = label?.trim().isNotEmpty == true
         ? label!.trim()
         : _defaultLabel(normalized);

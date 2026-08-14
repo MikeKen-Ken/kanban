@@ -84,11 +84,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     try {
       final apiKey = _controller.text.trim();
       final label = await _resolveLabel(apiKey);
-      if (_activeKey != null) {
-        await widget.credentials.replaceActiveCursorApiKey(apiKey, label: label);
-      } else {
-        await widget.credentials.saveCursorApiKey(apiKey, label: label);
-      }
+      await widget.credentials.saveCursorApiKey(apiKey, label: label);
       _controller.clear();
       await _refreshStatus();
       await widget.onActiveKeyChanged?.call();
@@ -96,7 +92,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _message = 'Cursor API Key 已保存，并已通过安全存储读回验证';
+        _message = '已添加 Cursor API Key，可随时从下拉菜单切换';
       });
     } catch (error) {
       if (!mounted) return;
@@ -226,7 +222,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                     vertical: 10,
                   ),
                   hintText: available
-                      ? '输入新 Key 可替换当前 Key'
+                      ? '输入新 Key 可添加账号并切换'
                       : '粘贴 Cursor API Key',
                   suffixIconConstraints: const BoxConstraints(
                     minWidth: 28,
@@ -319,7 +315,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
               FilledButton.tonalIcon(
                 onPressed: enabled ? _save : null,
                 icon: const Icon(Icons.key, size: 18),
-                label: const Text('安全保存'),
+                label: Text(_keys.isEmpty ? '安全保存' : '添加并切换'),
               ),
             ],
           ),
