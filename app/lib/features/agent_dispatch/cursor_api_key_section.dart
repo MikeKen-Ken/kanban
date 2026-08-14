@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_popup_menu.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_worker.dart';
 
@@ -176,6 +177,11 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     final hasInput = _controller.text.trim().isNotEmpty;
     final showSaveButton = !available || hasInput;
     final enabled = widget.enabled && !_busy;
+    final keyMenuWidth = adaptivePopupMenuWidth(
+      context: context,
+      labels: _keys.map((item) => item.label),
+      trailingWidth: kAdaptivePopupMenuKeyTrailingWidth,
+    );
     final statusText = available
         ? (_hasEnvironmentKey && active == null ? '已检测到环境变量' : null)
         : '尚未配置';
@@ -232,19 +238,19 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                     tooltip: '展开已保存 Key',
                     enabled: enabled && _keys.isNotEmpty,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 280,
-                      maxWidth: 440,
-                    ),
+                    constraints: BoxConstraints.tightFor(width: keyMenuWidth),
                     iconSize: 20,
                     icon: const Icon(Icons.arrow_drop_down),
                     onSelected: _selectKey,
-                    itemBuilder: (context) => [
-                      for (final item in _keys)
-                        PopupMenuItem(
-                          value: item.id,
-                          child: SizedBox(
-                            width: 320,
+                    itemBuilder: (context) {
+                      final itemWidth =
+                          keyMenuWidth - kAdaptivePopupMenuItemPadding;
+                      return [
+                        for (final item in _keys)
+                          PopupMenuItem(
+                            value: item.id,
+                            child: SizedBox(
+                              width: itemWidth,
                             child: Row(
                               children: [
                                 SizedBox(
@@ -283,7 +289,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                             ),
                           ),
                         ),
-                    ],
+                      ];
+                    },
                   ),
                 ),
                 onSubmitted: enabled ? (_) => _save() : null,

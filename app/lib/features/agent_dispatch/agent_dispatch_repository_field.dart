@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_popup_menu.dart';
+
 class AgentDispatchRepositoryField extends StatelessWidget {
   const AgentDispatchRepositoryField({
     required this.controller,
@@ -22,6 +24,11 @@ class AgentDispatchRepositoryField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final menuWidth = adaptivePopupMenuWidth(
+      context: context,
+      labels: paths,
+      trailingWidth: kAdaptivePopupMenuDeleteButtonWidth,
+    );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -47,22 +54,21 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                 tooltip: '展开历史仓库',
                 enabled: enabled && paths.isNotEmpty,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 280,
-                  maxWidth: 440,
-                ),
+                constraints: BoxConstraints.tightFor(width: menuWidth),
                 iconSize: 20,
                 icon: const Icon(Icons.arrow_drop_down),
                 onSelected: (path) {
                   controller.text = path;
                   onChanged(path);
                 },
-                itemBuilder: (context) => [
-                  for (final path in paths)
-                    PopupMenuItem(
-                      value: path,
-                      child: SizedBox(
-                        width: 320,
+                itemBuilder: (context) {
+                  final itemWidth = menuWidth - kAdaptivePopupMenuItemPadding;
+                  return [
+                    for (final path in paths)
+                      PopupMenuItem(
+                        value: path,
+                        child: SizedBox(
+                          width: itemWidth,
                         child: Row(
                           children: [
                             Expanded(
@@ -70,7 +76,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                                 message: path,
                                 waitDuration: const Duration(milliseconds: 350),
                                 child: Text(
-                                  _displayPath(path),
+                                  path,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -90,7 +96,8 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                         ),
                       ),
                     ),
-                ],
+                  ];
+                },
               ),
             ),
             onChanged: onChanged,
@@ -103,14 +110,5 @@ class AgentDispatchRepositoryField extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  String _displayPath(String path) {
-    const maxLength = 56;
-    if (path.length <= maxLength) return path;
-    const prefixLength = 26;
-    const suffixLength = maxLength - prefixLength - 1;
-    return '${path.substring(0, prefixLength)}…'
-        '${path.substring(path.length - suffixLength)}';
   }
 }
