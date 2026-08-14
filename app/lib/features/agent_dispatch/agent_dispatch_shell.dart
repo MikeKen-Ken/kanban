@@ -19,7 +19,7 @@ class AgentDispatchShell extends StatelessWidget {
         final selected = AgentDispatchWindow.selectedProjectId.value;
         final opened = AgentDispatchWindow.openedProjectIds.value;
         return Stack(
-          fit: StackFit.expand,
+          alignment: Alignment.center,
           children: [
             Offstage(
               offstage: selected != null,

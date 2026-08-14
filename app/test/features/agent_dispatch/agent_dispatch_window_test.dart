@@ -149,6 +149,36 @@ void main() {
     expect(AgentDispatchWindow.visible.value, isFalse);
   });
 
+  testWidgets('全屏面板点空白仍关闭窗口', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => AgentDispatchWindowHost(
+          panel: const SizedBox.expand(
+            child: Center(
+              child: SizedBox(
+                width: 120,
+                height: 80,
+                child: ColoredBox(
+                  color: Colors.red,
+                  child: Center(child: Text('全屏面板')),
+                ),
+              ),
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        ),
+        home: const SizedBox.shrink(),
+      ),
+    );
+
+    AgentDispatchWindow.showHub();
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(AgentDispatchWindow.visible.value, isFalse);
+  });
+
   testWidgets('总览点击空白关闭窗口', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

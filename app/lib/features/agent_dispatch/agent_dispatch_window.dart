@@ -122,25 +122,28 @@ class _AgentDispatchScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 工作台插在 MaterialApp.builder 中，是 Navigator Overlay 的兄弟而不是后代。
-    // Tooltip / 下拉菜单 / PopupMenu 都需要 Overlay 祖先，否则悬停会插入失败，
-    // 在 Release 里表现为一块巨大的空灰色 ErrorWidget。
-    // 用 DialogRoute 自带遮罩：空白处可点，对话框本身不拦截全屏命中。
+    // 工作台插在 MaterialApp.builder 中，是根 Navigator Overlay 的兄弟。
+    // Overlay：Tooltip / 下拉菜单需要 Overlay 祖先。
+    // 内层 Navigator：面板内 showDialog 必须压在工作台之上，不能落到根路由后面。
+    // 遮罩不能用「仅一条 DialogRoute」的 barrierDismissible：它是内层 Navigator
+    // 的根路由，maybePop 会 bubble，点空白不会关闭。
     return Overlay.wrap(
       clipBehavior: Clip.none,
       child: HeroControllerScope.none(
         child: Navigator(
-          onGenerateRoute: (settings) => DialogRoute<void>(
-            context: context,
-            barrierDismissible: true,
-            barrierColor: Colors.black54,
+          onGenerateRoute: (settings) => PageRouteBuilder<void>(
             settings: settings,
-            builder: (routeContext) => PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (didPop, _) {
-                if (!didPop) onDismiss();
-              },
-              child: child,
+            opaque: false,
+            pageBuilder: (routeContext, _, __) => Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onDismiss,
+                  child: const ColoredBox(color: Colors.black54),
+                ),
+                child,
+              ],
             ),
           ),
         ),
