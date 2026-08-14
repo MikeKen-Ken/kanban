@@ -15,6 +15,69 @@ void main() {
     expect(record.totalTokens, 46);
   });
 
+  test('解析含缓存字段的日志，口径与 Dashboard 一致', () {
+    final record = AgentDispatchTokenRecord.tryParse(
+      '本会话 token：input=16332 output=2695 cacheRead=223836 cacheWrite=0 total=242863',
+      at: DateTime(2026, 8, 14, 16),
+    );
+    expect(record, isNotNull);
+    expect(record!.inputTokens, 16332);
+    expect(record.outputTokens, 2695);
+    expect(record.cacheReadTokens, 223836);
+    expect(record.cacheWriteTokens, 0);
+    expect(record.totalTokens, 242863);
+  });
+
+  test('纠正 SDK 把 Cache Read 同时计入 input 与 total 的重复累计', () {
+    final record = AgentDispatchTokenRecord.fromUsage(
+      at: DateTime(2026, 8, 14, 16),
+      inputTokens: 240168,
+      outputTokens: 2695,
+      cacheReadTokens: 223836,
+      cacheWriteTokens: 0,
+      totalTokens: 466699,
+    );
+    expect(record.inputTokens, 16332);
+    expect(record.outputTokens, 2695);
+    expect(record.cacheReadTokens, 223836);
+    expect(record.totalTokens, 242863);
+  });
+
+  test('SDK 已按未缓存 input 上报时保持 Dashboard 分项', () {
+    final record = AgentDispatchTokenRecord.fromUsage(
+      at: DateTime(2026, 8, 14, 16),
+      inputTokens: 16332,
+      outputTokens: 2695,
+      cacheReadTokens: 223836,
+      cacheWriteTokens: 0,
+      totalTokens: 242863,
+    );
+    expect(record.inputTokens, 16332);
+    expect(record.cacheReadTokens, 223836);
+    expect(record.totalTokens, 242863);
+  });
+
+  test('旧日志无缓存字段时按重复累计拆出 Cache Read', () {
+    final record = AgentDispatchTokenRecord.tryParse(
+      '本会话 token：input=240168 output=2695 total=466699',
+      at: DateTime(2026, 8, 14, 16),
+    );
+    expect(record!.inputTokens, 16332);
+    expect(record.cacheReadTokens, 223836);
+    expect(record.totalTokens, 242863);
+  });
+
+  test('读取旧持久化记录时同样纠正重复累计', () {
+    final record = AgentDispatchTokenRecord.fromJson({
+      'at': '2026-08-14T08:00:00.000Z',
+      'input': 240168,
+      'output': 2695,
+      'total': 466699,
+    });
+    expect(record.inputTokens, 16332);
+    expect(record.totalTokens, 242863);
+  });
+
   test('无关日志不解析为用量', () {
     expect(AgentDispatchTokenRecord.tryParse('助手：已完成'), isNull);
   });
@@ -72,5 +135,22 @@ void main() {
     await prefs.appendAgentDispatchToken(record, projectId: 'p1');
     expect(prefs.loadAgentDispatchTokens(projectId: 'p1').single.totalTokens, 30);
     expect(prefs.loadAgentDispatchTokens(projectId: 'p2'), isEmpty);
+  });
+
+  test('加载旧项目历史时纠正重复累计后再汇总', () async {
+    SharedPreferences.setMockInitialValues({
+      'agent_dispatch_token_history.p1':
+          '[{"at":"2026-08-14T08:00:00.000Z","input":240168,"output":2695,"total":466699}]',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final records = prefs.loadAgentDispatchTokens(projectId: 'p1');
+    final stats = AgentDispatchTokenStats(
+      records: records,
+      now: DateTime(2026, 8, 14, 18),
+    );
+    expect(stats.totalInput, 16332);
+    expect(stats.totalCacheRead, 223836);
+    expect(stats.totalOutput, 2695);
+    expect(stats.totalTokens, 242863);
   });
 }

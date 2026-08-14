@@ -166,7 +166,7 @@ class AgentDispatchLogHighlight {
 
   static final RegExp _emphasisPattern = RegExp(
     r'本会话 token|'
-    r'\b(?:input|output|total)=\d+|'
+    r'\b(?:input|output|cacheRead|cacheWrite|total)=\d+|'
     r'\b(?:steps|tools|elapsedMs)=\d+|'
     r'批次 id：\S+|'
     r'Cursor run id=\S+|'

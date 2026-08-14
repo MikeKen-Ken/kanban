@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 import { settleWithin } from "./async_limit.js";
 import type { WorkerCancellation } from "./cancellation.js";
+import { formatSessionTokenLog } from "./cursor_token_usage.js";
 import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
 import { type WorkerLogSource, workerLog } from "./worker_log.js";
 
@@ -291,9 +292,7 @@ export async function runCursor(
         `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
       );
       if (result.usage) {
-        logLine(
-          `本会话 token：input=${result.usage.inputTokens} output=${result.usage.outputTokens} total=${result.usage.totalTokens}`,
-        );
+        logLine(formatSessionTokenLog(result.usage));
       }
 
       if (result.status === "error") {

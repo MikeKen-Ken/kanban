@@ -1,46 +1,87 @@
-/// 一次 Cursor 会话的 token 用量。
+import 'agent_dispatch_token_usage.dart';
+
+/// 一次 Cursor 会话的 token 用量（Dashboard 口径，不含重复累计）。
 class AgentDispatchTokenRecord {
   const AgentDispatchTokenRecord({
     required this.at,
     required this.inputTokens,
     required this.outputTokens,
+    this.cacheReadTokens = 0,
+    this.cacheWriteTokens = 0,
     required this.totalTokens,
   });
 
   final DateTime at;
+  /// 未缓存 prompt，对应 Dashboard Input。
   final int inputTokens;
   final int outputTokens;
+  final int cacheReadTokens;
+  final int cacheWriteTokens;
   final int totalTokens;
 
   Map<String, dynamic> toJson() => {
         'at': at.toUtc().toIso8601String(),
         'input': inputTokens,
         'output': outputTokens,
+        'cacheRead': cacheReadTokens,
+        'cacheWrite': cacheWriteTokens,
         'total': totalTokens,
       };
 
   factory AgentDispatchTokenRecord.fromJson(Map<String, dynamic> json) {
-    return AgentDispatchTokenRecord(
+    return AgentDispatchTokenRecord.fromUsage(
       at: DateTime.parse(json['at'] as String).toLocal(),
-      inputTokens: (json['input'] as num).toInt(),
-      outputTokens: (json['output'] as num).toInt(),
-      totalTokens: (json['total'] as num).toInt(),
+      inputTokens: (json['input'] as num?)?.toInt() ?? 0,
+      outputTokens: (json['output'] as num?)?.toInt() ?? 0,
+      cacheReadTokens: (json['cacheRead'] as num?)?.toInt() ?? 0,
+      cacheWriteTokens: (json['cacheWrite'] as num?)?.toInt() ?? 0,
+      totalTokens: (json['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  factory AgentDispatchTokenRecord.fromUsage({
+    required DateTime at,
+    required int inputTokens,
+    required int outputTokens,
+    int cacheReadTokens = 0,
+    int cacheWriteTokens = 0,
+    int totalTokens = 0,
+  }) {
+    final usage = toDashboardTokenUsage(
+      CursorTokenUsageRaw(
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+        cacheReadTokens: cacheReadTokens,
+        cacheWriteTokens: cacheWriteTokens,
+        totalTokens: totalTokens,
+      ),
+    );
+    return AgentDispatchTokenRecord(
+      at: at,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheReadTokens: usage.cacheReadTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      totalTokens: usage.totalTokens,
     );
   }
 
   static final _pattern = RegExp(
-    r'本会话 token：input=(\d+) output=(\d+) total=(\d+)',
+    r'本会话 token：input=(\d+) output=(\d+)'
+    r'(?: cacheRead=(\d+) cacheWrite=(\d+))? total=(\d+)',
   );
 
   /// 从 Worker 日志行解析用量；无法识别时返回 null。
   static AgentDispatchTokenRecord? tryParse(String message, {DateTime? at}) {
     final match = _pattern.firstMatch(message);
     if (match == null) return null;
-    return AgentDispatchTokenRecord(
+    return AgentDispatchTokenRecord.fromUsage(
       at: at ?? DateTime.now(),
       inputTokens: int.parse(match.group(1)!),
       outputTokens: int.parse(match.group(2)!),
-      totalTokens: int.parse(match.group(3)!),
+      cacheReadTokens: int.parse(match.group(3) ?? '0'),
+      cacheWriteTokens: int.parse(match.group(4) ?? '0'),
+      totalTokens: int.parse(match.group(5)!),
     );
   }
 }
@@ -51,6 +92,8 @@ class AgentDispatchDailyToken {
     required this.sessions,
     required this.inputTokens,
     required this.outputTokens,
+    this.cacheReadTokens = 0,
+    this.cacheWriteTokens = 0,
     required this.totalTokens,
   });
 
@@ -58,6 +101,8 @@ class AgentDispatchDailyToken {
   final int sessions;
   final int inputTokens;
   final int outputTokens;
+  final int cacheReadTokens;
+  final int cacheWriteTokens;
   final int totalTokens;
 
   int get averageTotal => sessions == 0 ? 0 : (totalTokens / sessions).round();
@@ -78,6 +123,12 @@ class AgentDispatchTokenStats {
   int get totalInput =>
       records.fold(0, (sum, item) => sum + item.inputTokens);
 
+  int get totalCacheRead =>
+      records.fold(0, (sum, item) => sum + item.cacheReadTokens);
+
+  int get totalCacheWrite =>
+      records.fold(0, (sum, item) => sum + item.cacheWriteTokens);
+
   int get totalOutput =>
       records.fold(0, (sum, item) => sum + item.outputTokens);
 
@@ -92,9 +143,6 @@ class AgentDispatchTokenStats {
 
   double? get averageTotal =>
       sessionCount == 0 ? null : totalTokens / sessionCount;
-
-  double? get inputShare =>
-      totalTokens == 0 ? null : totalInput / totalTokens;
 
   AgentDispatchTokenRecord? get lastSession =>
       records.isEmpty ? null : records.last;
@@ -148,6 +196,9 @@ class AgentDispatchTokenStats {
           sessions: entry.value.length,
           inputTokens: entry.value.fold(0, (s, r) => s + r.inputTokens),
           outputTokens: entry.value.fold(0, (s, r) => s + r.outputTokens),
+          cacheReadTokens: entry.value.fold(0, (s, r) => s + r.cacheReadTokens),
+          cacheWriteTokens:
+              entry.value.fold(0, (s, r) => s + r.cacheWriteTokens),
           totalTokens: entry.value.fold(0, (s, r) => s + r.totalTokens),
         ),
     ];

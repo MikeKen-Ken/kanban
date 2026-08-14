@@ -96,19 +96,21 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
           ],
         ),
         const SizedBox(height: 20),
-        Text('输入 / 输出', style: textTheme.titleMedium),
+        Text('输入 / 缓存 / 输出', style: textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
           '输入 ${_formatCount(stats.totalInput)}'
           '（均 ${_formatCount(stats.averageInput?.round() ?? 0)}） · '
+          '缓存读 ${_formatCount(stats.totalCacheRead)} · '
+          '缓存写 ${_formatCount(stats.totalCacheWrite)} · '
           '输出 ${_formatCount(stats.totalOutput)}'
-          '（均 ${_formatCount(stats.averageOutput?.round() ?? 0)}）'
-          '${stats.inputShare == null ? '' : ' · 输入占比 ${(stats.inputShare! * 100).toStringAsFixed(0)}%'}',
+          '（均 ${_formatCount(stats.averageOutput?.round() ?? 0)}）',
           style: textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
         _SplitBar(
           input: stats.totalInput,
+          cache: stats.totalCacheRead + stats.totalCacheWrite,
           output: stats.totalOutput,
         ),
         const SizedBox(height: 20),
@@ -138,6 +140,7 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
             subtitle: Text(
               '${_formatCount(stats.peakSession!.totalTokens)} '
               '(入 ${_formatCount(stats.peakSession!.inputTokens)} / '
+              '缓存 ${_formatCount(stats.peakSession!.cacheReadTokens + stats.peakSession!.cacheWriteTokens)} / '
               '出 ${_formatCount(stats.peakSession!.outputTokens)})',
             ),
           ),
@@ -192,14 +195,19 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _SplitBar extends StatelessWidget {
-  const _SplitBar({required this.input, required this.output});
+  const _SplitBar({
+    required this.input,
+    required this.cache,
+    required this.output,
+  });
 
   final int input;
+  final int cache;
   final int output;
 
   @override
   Widget build(BuildContext context) {
-    final total = input + output;
+    final total = input + cache + output;
     if (total <= 0) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return ClipRRect(
@@ -212,6 +220,11 @@ class _SplitBar extends StatelessWidget {
               flex: input.clamp(1, total),
               child: ColoredBox(color: scheme.primary),
             ),
+            if (cache > 0)
+              Expanded(
+                flex: cache.clamp(1, total),
+                child: ColoredBox(color: scheme.secondary),
+              ),
             Expanded(
               flex: output.clamp(1, total),
               child: ColoredBox(color: scheme.tertiary),

@@ -40,6 +40,23 @@ void main() {
     );
   });
 
+  test('会话 token 行高亮缓存字段', () {
+    final line =
+        '[09:08:07] [Worker] [信息] 本会话 token：input=1 output=2 cacheRead=3 cacheWrite=0 total=6';
+    final segments = AgentDispatchLogHighlight.segments(line);
+    expect(
+      segments.where((segment) => segment.emphasis).map((segment) => segment.text),
+      [
+        '本会话 token',
+        'input=1',
+        'output=2',
+        'cacheRead=3',
+        'cacheWrite=0',
+        'total=6',
+      ],
+    );
+  });
+
   test('没有具体内容的进度行视为低价值', () {
     expect(
       AgentDispatchLogEntry.isLowValue('[09:08:07] [AI] [信息] 思考中…'),
