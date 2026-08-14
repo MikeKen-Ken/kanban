@@ -603,6 +603,16 @@ void main() {
     expect(settings.wallpaperIntervalSeconds, 10);
   });
 
+  test('新项目默认引用工作区全部壁纸', () {
+    final settings = ProjectSettings.defaultsForNewProject(['w1', '', 'w2']);
+    expect(settings.wallpaperIds, ['w1', 'w2']);
+    expect(settings.wallpaperActiveId, 'w1');
+    expect(settings.backgroundAttachmentId, 'w1');
+    expect(settings.wallpaperPlaybackMode, WallpaperPlaybackMode.random);
+    expect(settings.wallpaperIntervalSeconds, 10);
+    expect(ProjectSettings.defaultsForNewProject(const []).wallpaperIds, isEmpty);
+  });
+
   test('Settings 一侧为空默认桩时不制造冲突', () {
     final local = const ProjectSettings(
       doneColumnName: '已完成',

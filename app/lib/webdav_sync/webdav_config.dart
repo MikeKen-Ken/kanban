@@ -254,14 +254,17 @@ class BoardRepository {
 
   Future<String> createProject(String title) async {
     final projectId = const Uuid().v4();
-    const settings = ProjectSettings();
+    final shared = await _storage.loadSharedContent();
+    final settings = ProjectSettings.defaultsForNewProject(
+      shared.wallpapers.map((item) => item.id).toList(growable: false),
+    );
     final board = KanbanBoard.empty(
       id: projectId,
       title: title,
       doneColumnTitle: settings.doneColumnName,
     );
     await _storage.saveBoard(projectId, board);
-    await _storage.saveProjectSettings(projectId, const ProjectSettings());
+    await _storage.saveProjectSettings(projectId, settings);
 
     final manifest = await _storage.loadManifest();
     final now = DateTime.now().millisecondsSinceEpoch;
