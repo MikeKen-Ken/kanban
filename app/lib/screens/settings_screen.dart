@@ -228,7 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SettingsNavigationTile(
                   icon: Icons.history_toggle_off,
                   title: '时间点备份',
-                  subtitle: '每 10 分钟自动备份 · 保留最近 7 天',
+                  subtitle: '每 10 分钟自动备份 · 可清理过期文件',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(

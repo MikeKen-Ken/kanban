@@ -81,6 +81,44 @@ void main() {
     expect(await coordinator.runScheduledBackup(), isNotNull);
     expect(archiveCount, 2);
   });
+
+  test('超过保留天数的本地备份会从当前目录清理，默认 14 天', () async {
+    final store = _MemoryBackupHistoryStore();
+    var now = DateTime.utc(2026, 8, 6, 12);
+    final coordinator = BackupCoordinator(
+      localStore: store,
+      createArchive: () async => Uint8List.fromList([1]),
+      now: () => now,
+    );
+
+    coordinator.markChanged();
+    final first = await coordinator.runScheduledBackup();
+    expect(first, isNotNull);
+
+    now = now.add(const Duration(days: 15));
+    coordinator.markChanged();
+    await coordinator.runScheduledBackup();
+
+    expect((await store.list()).map((item) => item.id), isNot(contains(first!.id)));
+  });
+
+  test('保留天数为 0 时不清理当前目录备份', () async {
+    final store = _MemoryBackupHistoryStore();
+    var now = DateTime.utc(2026, 8, 6, 12);
+    final coordinator = BackupCoordinator(
+      localStore: store,
+      createArchive: () async => Uint8List.fromList([1]),
+      now: () => now,
+      retention: Duration.zero,
+    );
+
+    coordinator.markChanged();
+    final first = await coordinator.runScheduledBackup();
+    now = now.add(const Duration(days: 30));
+    await coordinator.pruneExpired();
+
+    expect((await store.list()).map((item) => item.id), [first!.id]);
+  });
 }
 
 class _MemoryBackupHistoryStore implements BackupHistoryStore {

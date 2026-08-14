@@ -138,6 +138,9 @@ extension BoardControllerPersist on BoardController {
       await _backupHistoryStore.setDirectoryPath(
         appSettings.autoBackupDirectory,
       );
+      _backupCoordinator.retention = Duration(
+        days: appSettings.autoBackupRetentionDays,
+      );
       await _repository.ensureInitialized();
 
       manifest = await _repository.loadManifest();

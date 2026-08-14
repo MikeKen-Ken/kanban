@@ -25,6 +25,7 @@ class AppSettings {
     this.trashRetentionDays = 0,
     this.confirmBeforeDeleteCard = false,
     this.autoBackupDirectory,
+    this.autoBackupRetentionDays = 14,
   });
 
   /// 拖拽前按压时长（毫秒）。0 表示按下即拖。
@@ -69,6 +70,9 @@ class AppSettings {
   /// 自动时间点备份的自定义目录；为空时使用应用默认目录（仅本机）。
   final String? autoBackupDirectory;
 
+  /// 自动备份保留天数；超过后从当前备份目录清理。`0` 表示从不自动清理（仅本机）。
+  final int autoBackupRetentionDays;
+
   /// 0ms：按下并移动即拖
   bool get immediateDrag => dragLongPressMs <= 0;
 
@@ -89,6 +93,7 @@ class AppSettings {
     int? trashRetentionDays,
     bool? confirmBeforeDeleteCard,
     Object? autoBackupDirectory = _sentinel,
+    int? autoBackupRetentionDays,
   }) {
     return AppSettings(
       dragLongPressMs: dragLongPressMs ?? this.dragLongPressMs,
@@ -111,6 +116,8 @@ class AppSettings {
       autoBackupDirectory: autoBackupDirectory == _sentinel
           ? this.autoBackupDirectory
           : autoBackupDirectory as String?,
+      autoBackupRetentionDays:
+          autoBackupRetentionDays ?? this.autoBackupRetentionDays,
     );
   }
 
@@ -132,6 +139,7 @@ class AppSettings {
         'confirmBeforeDeleteCard': confirmBeforeDeleteCard,
         if (autoBackupDirectory != null)
           'autoBackupDirectory': autoBackupDirectory,
+        'autoBackupRetentionDays': autoBackupRetentionDays,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -146,6 +154,10 @@ class AppSettings {
     final trashDays = trashDaysRaw is int
         ? trashDaysRaw
         : (trashDaysRaw is num ? trashDaysRaw.toInt() : 0);
+    final backupDaysRaw = json['autoBackupRetentionDays'];
+    final backupDays = backupDaysRaw is int
+        ? backupDaysRaw
+        : (backupDaysRaw is num ? backupDaysRaw.toInt() : 14);
     return AppSettings(
       dragLongPressMs:
           json['dragLongPressMs'] as int? ?? defaults.dragLongPressMs,
@@ -177,6 +189,7 @@ class AppSettings {
       confirmBeforeDeleteCard:
           json['confirmBeforeDeleteCard'] as bool? ?? false,
       autoBackupDirectory: json['autoBackupDirectory'] as String?,
+      autoBackupRetentionDays: backupDays < 0 ? 0 : backupDays,
     );
   }
 

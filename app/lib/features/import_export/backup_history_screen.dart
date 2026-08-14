@@ -7,12 +7,15 @@ import '../../controllers/board_controller.dart';
 import 'backup_file_picker.dart';
 import 'backup_history_store.dart';
 import 'backup_restore_service.dart';
+import 'backup_retention.dart';
 
 class BackupHistoryScreen extends StatefulWidget {
   const BackupHistoryScreen({
     super.key,
     this.listLocalBackups,
     this.autoBackupDirectory,
+    this.autoBackupRetentionDays,
+    this.onRetentionDaysChanged,
     this.createBackup,
     this.restoreBackup,
   });
@@ -20,6 +23,8 @@ class BackupHistoryScreen extends StatefulWidget {
   /// 测试注入；默认走 [BoardController]。
   final Future<List<BackupSnapshotInfo>> Function()? listLocalBackups;
   final String? Function()? autoBackupDirectory;
+  final int Function()? autoBackupRetentionDays;
+  final Future<void> Function(int days)? onRetentionDaysChanged;
   final Future<void> Function()? createBackup;
   final Future<void> Function(String id, BackupRestoreMode mode)? restoreBackup;
 
@@ -101,6 +106,23 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
       if (!mounted) return;
       showAppSnackBar(context, message: '设置备份文件夹失败：$error');
     }
+  }
+
+  Future<void> _changeRetentionDays(int days) async {
+    final override = widget.onRetentionDaysChanged;
+    if (override != null) {
+      await override(days);
+      if (!mounted) return;
+      await _reload();
+      return;
+    }
+    await context.read<BoardController>().saveAppSettings(
+          context.read<BoardController>().appSettings.copyWith(
+                autoBackupRetentionDays: days,
+              ),
+        );
+    if (!mounted) return;
+    await _reload();
   }
 
   Future<void> _resetBackupDirectory() async {
@@ -229,6 +251,17 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     final selectedDirectory = directoryOverride != null
         ? directoryOverride()
         : context.watch<BoardController>().appSettings.autoBackupDirectory;
+    final retentionOverride = widget.autoBackupRetentionDays;
+    final retentionDays = retentionOverride != null
+        ? retentionOverride()
+        : context.watch<BoardController>().appSettings.autoBackupRetentionDays;
+    final retentionOptions = [
+      ...autoBackupRetentionDayOptions,
+      if (!autoBackupRetentionDayOptions.contains(retentionDays)) retentionDays,
+    ]..sort();
+    final retentionHint = retentionDays <= 0
+        ? '不会自动清理当前备份目录。'
+        : '超过 $retentionDays 天的备份会从当前选中目录清理。';
     return Scaffold(
       appBar: AppBar(
         title: const Text('时间点备份'),
@@ -282,8 +315,38 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
               children: [
                 Text(
                   selectedDirectory == null
-                      ? '数据有更新时每 10 分钟自动备份，仅保留最近 7 天。'
-                      : '自动备份文件夹：$selectedDirectory\n数据有更新时每 10 分钟自动备份，仅保留最近 7 天。',
+                      ? '数据有更新时每 10 分钟自动备份。$retentionHint'
+                      : '自动备份文件夹：$selectedDirectory\n数据有更新时每 10 分钟自动备份。$retentionHint',
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.auto_delete_outlined),
+                  title: const Text('自动清理过期备份'),
+                  subtitle: Text(
+                    retentionDays <= 0
+                        ? '关闭：保留当前目录中的全部备份'
+                        : '清理当前选中目录中超过 $retentionDays 天的备份',
+                  ),
+                  trailing: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      key: const ValueKey('backup-retention-days'),
+                      value: retentionDays,
+                      items: [
+                        for (final option in retentionOptions)
+                          DropdownMenuItem(
+                            value: option,
+                            child: Text(autoBackupRetentionDaysLabel(option)),
+                          ),
+                      ],
+                      onChanged: _working
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              _changeRetentionDays(value);
+                            },
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _section(

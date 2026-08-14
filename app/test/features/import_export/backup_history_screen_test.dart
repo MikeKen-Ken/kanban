@@ -10,6 +10,7 @@ void main() {
         home: BackupHistoryScreen(
           listLocalBackups: () async => const [],
           autoBackupDirectory: () => null,
+          autoBackupRetentionDays: () => 14,
         ),
       ),
     );
@@ -39,6 +40,7 @@ void main() {
         home: BackupHistoryScreen(
           listLocalBackups: () async => [snapshot],
           autoBackupDirectory: () => null,
+          autoBackupRetentionDays: () => 14,
         ),
       ),
     );
@@ -55,6 +57,7 @@ void main() {
         home: BackupHistoryScreen(
           listLocalBackups: () async => throw StateError('磁盘不可用'),
           autoBackupDirectory: () => null,
+          autoBackupRetentionDays: () => 14,
         ),
       ),
     );

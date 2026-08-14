@@ -22,13 +22,14 @@ class BackupCoordinator {
     RemoteBackupPruner? pruneRemote,
     DateTime Function()? now,
     this.interval = const Duration(minutes: 10),
-    this.retention = const Duration(days: 7),
+    Duration? retention,
   })  : _localStore = localStore,
         _createArchive = createArchive,
         _writeRemote = writeRemote,
         _listRemote = listRemote,
         _pruneRemote = pruneRemote,
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        retention = retention ?? const Duration(days: 14);
 
   final BackupHistoryStore _localStore;
   final BackupArchiveFactory _createArchive;
@@ -41,7 +42,7 @@ class BackupCoordinator {
   final Map<String, BackupSnapshotInfo> _pendingRemote = {};
 
   final Duration interval;
-  final Duration retention;
+  Duration retention;
 
   Timer? _timer;
   int _changeVersion = 0;
@@ -98,6 +99,14 @@ class BackupCoordinator {
 
   Future<T> runExclusive<T>(Future<T> Function() action) =>
       _mutex.guard(action);
+
+  Future<void> pruneExpired() {
+    return _mutex.guard(() async {
+      final now = _now();
+      await _pruneLocal(now);
+      _scheduleRemoteMaintenance(now);
+    });
+  }
 
   Future<List<BackupSnapshotInfo>> listLocalBackups() => _localStore.list();
 
@@ -179,6 +188,7 @@ class BackupCoordinator {
   }
 
   Future<void> _pruneLocal(DateTime now) async {
+    if (retention <= Duration.zero) return;
     final cutoff = now.subtract(retention);
     await _localStore.deleteOlderThan(cutoff);
     _pendingRemote.removeWhere(
@@ -214,6 +224,7 @@ class BackupCoordinator {
   }
 
   Future<void> _pruneRemoteBackups(DateTime now) async {
+    if (retention <= Duration.zero) return;
     final cutoff = now.subtract(retention);
     final pruneRemote = _pruneRemote;
     if (pruneRemote != null) {

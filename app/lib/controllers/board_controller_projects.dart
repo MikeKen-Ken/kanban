@@ -350,6 +350,8 @@ extension BoardControllerProjects on BoardController {
         settings.completedAutoClearDays != appSettings.completedAutoClearDays;
     final trashRetentionChanged =
         settings.trashRetentionDays != appSettings.trashRetentionDays;
+    final backupRetentionChanged = settings.autoBackupRetentionDays !=
+        appSettings.autoBackupRetentionDays;
     appSettings = settings;
     await _repository.saveAppSettings(settings);
     notifyListeners();
@@ -361,6 +363,12 @@ extension BoardControllerProjects on BoardController {
     }
     if (trashRetentionChanged && settings.trashRetentionDays > 0) {
       unawaited(purgeExpiredTrashItems(force: true));
+    }
+    if (backupRetentionChanged) {
+      _backupCoordinator.retention = Duration(
+        days: settings.autoBackupRetentionDays,
+      );
+      unawaited(_backupCoordinator.pruneExpired());
     }
   }
 
