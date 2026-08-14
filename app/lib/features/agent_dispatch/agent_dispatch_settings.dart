@@ -19,6 +19,7 @@ class AgentDispatchSettings {
     this.cardLimitMax = true,
     this.cardLimitCount = 1,
     this.afterQueue = const [],
+    this.runAfterQueueOnFailure = true,
     this.workerScriptPath,
     this.skillPath,
     this.repoPathByProject = const {},
@@ -46,8 +47,11 @@ class AgentDispatchSettings {
   final bool cardLimitMax;
   final int cardLimitCount;
 
-  /// 批次成功结束后按顺序执行的动作。
+  /// 批次结束后按顺序执行的动作。
   final List<AgentDispatchAfterStep> afterQueue;
+
+  /// 批次因配额、网络等失败时仍执行完成后队列；手动停止不会触发。默认勾选。
+  final bool runAfterQueueOnFailure;
 
   final String? workerScriptPath;
   final String? skillPath;
@@ -64,6 +68,7 @@ class AgentDispatchSettings {
     bool? cardLimitMax,
     int? cardLimitCount,
     List<AgentDispatchAfterStep>? afterQueue,
+    bool? runAfterQueueOnFailure,
     Object? workerScriptPath = _sentinel,
     Object? skillPath = _sentinel,
     Map<String, String>? repoPathByProject,
@@ -79,6 +84,8 @@ class AgentDispatchSettings {
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       afterQueue: afterQueue ?? this.afterQueue,
+      runAfterQueueOnFailure:
+          runAfterQueueOnFailure ?? this.runAfterQueueOnFailure,
       workerScriptPath: workerScriptPath == _sentinel
           ? this.workerScriptPath
           : workerScriptPath as String?,
@@ -136,6 +143,7 @@ class AgentDispatchSettings {
         'cardLimitCount': cardLimitCount,
         if (afterQueue.isNotEmpty)
           'afterQueue': afterQueue.map((step) => step.name).toList(),
+        'runAfterQueueOnFailure': runAfterQueueOnFailure,
         if (workerScriptPath != null) 'workerScriptPath': workerScriptPath,
         if (skillPath != null) 'skillPath': skillPath,
         if (repoPathByProject.isNotEmpty)
@@ -187,6 +195,7 @@ class AgentDispatchSettings {
           (json['maxCards'] as num?)?.toInt() ??
           1,
       afterQueue: parseAgentDispatchAfterQueue(json['afterQueue']),
+      runAfterQueueOnFailure: json['runAfterQueueOnFailure'] as bool? ?? true,
       workerScriptPath: json['workerScriptPath'] as String?,
       skillPath: json['skillPath'] as String?,
       repoPathByProject: mapRaw == null

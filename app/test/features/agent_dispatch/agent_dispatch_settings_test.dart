@@ -20,6 +20,7 @@ void main() {
       'reasoning_effort': 'medium',
     });
     expect(settings.cardLimitMax, isTrue);
+    expect(settings.runAfterQueueOnFailure, isTrue);
     expect(
       settings.toRunOptions(projectTitleOf: (_) => null).cardLimit,
       isA<AgentDispatchCardLimitMax>(),

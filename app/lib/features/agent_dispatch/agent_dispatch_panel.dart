@@ -543,6 +543,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
       afterQueue: next.afterQueue,
+      runAfterQueueOnFailure: next.runAfterQueueOnFailure,
       afterQueueHost: AgentDispatchAfterQueueHost(
         uploadAll: board.uploadNow,
         gitPush: () => gitPushWithRebase(repoPath: options.repoPath),
@@ -795,6 +796,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 enabled: !_running && !_busy,
                 onChanged: (steps) =>
                     _persist(_settings.copyWith(afterQueue: steps)),
+                runOnFailure: _settings.runAfterQueueOnFailure,
+                onRunOnFailureChanged: (value) => _persist(
+                  _settings.copyWith(runAfterQueueOnFailure: value),
+                ),
               ),
             ],
           ),

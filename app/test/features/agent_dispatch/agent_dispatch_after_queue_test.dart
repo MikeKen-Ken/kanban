@@ -140,9 +140,106 @@ void main() {
     expect(loaded.afterQueue, settings.afterQueue);
   });
 
-  test('缺少 afterQueue 的旧设置回退为空队列', () {
+  test('缺少 afterQueue 的旧设置回退为空队列，失败后仍执行默认勾选', () {
     final settings = AgentDispatchSettings.fromJson({});
     expect(settings.afterQueue, isEmpty);
+    expect(settings.runAfterQueueOnFailure, isTrue);
+  });
+
+  test('保存并加载失败后仍执行', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    const settings = AgentDispatchSettings(runAfterQueueOnFailure: false);
+
+    await prefs.saveAgentDispatchSettings(settings);
+    final loaded = prefs.loadAgentDispatchSettings();
+
+    expect(loaded.runAfterQueueOnFailure, isFalse);
+  });
+
+  test('失败后仍执行：批次成功始终触发', () {
+    expect(
+      shouldRunAgentDispatchAfterQueue(
+        batchOk: true,
+        cancelRequested: false,
+        drainRequested: false,
+        runOnFailure: false,
+        workerInvoked: true,
+        queueNonEmpty: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('失败后仍执行：配额或网络失败且已启动 Worker 时默认触发', () {
+    expect(
+      shouldRunAgentDispatchAfterQueue(
+        batchOk: false,
+        cancelRequested: false,
+        drainRequested: false,
+        runOnFailure: true,
+        workerInvoked: true,
+        queueNonEmpty: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('失败后仍执行：取消勾选后失败不触发', () {
+    expect(
+      shouldRunAgentDispatchAfterQueue(
+        batchOk: false,
+        cancelRequested: false,
+        drainRequested: false,
+        runOnFailure: false,
+        workerInvoked: true,
+        queueNonEmpty: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('失败后仍执行：手动停止不触发', () {
+    expect(
+      shouldRunAgentDispatchAfterQueue(
+        batchOk: false,
+        cancelRequested: true,
+        drainRequested: false,
+        runOnFailure: true,
+        workerInvoked: true,
+        queueNonEmpty: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('失败后仍执行：本轮结束后停止不触发', () {
+    expect(
+      shouldRunAgentDispatchAfterQueue(
+        batchOk: true,
+        cancelRequested: false,
+        drainRequested: true,
+        runOnFailure: true,
+        workerInvoked: true,
+        queueNonEmpty: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('失败后仍执行：Worker 未启动的预检失败不触发', () {
+    expect(
+      shouldRunAgentDispatchAfterQueue(
+        batchOk: false,
+        cancelRequested: false,
+        drainRequested: false,
+        runOnFailure: true,
+        workerInvoked: false,
+        queueNonEmpty: true,
+      ),
+      isFalse,
+    );
   });
 
   testWidgets('添加按钮只显示短文案', (tester) async {
@@ -162,8 +259,38 @@ void main() {
     expect(find.text('推送'), findsOneWidget);
     expect(find.text('休眠'), findsOneWidget);
     expect(find.text('关机'), findsOneWidget);
+    expect(find.text('失败后仍执行'), findsOneWidget);
     expect(find.text('添加上传'), findsNothing);
     expect(find.text('WebDAV 全量上传'), findsNothing);
+  });
+
+  testWidgets('失败后仍执行默认勾选并可取消', (tester) async {
+    var runOnFailure = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return AgentDispatchAfterQueueField(
+                steps: const [],
+                enabled: true,
+                onChanged: (_) {},
+                runOnFailure: runOnFailure,
+                onRunOnFailureChanged: (value) {
+                  setState(() => runOnFailure = value);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+    await tester.tap(find.text('失败后仍执行'));
+    await tester.pump();
+    expect(runOnFailure, isFalse);
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
   });
 
   test('工作区不干净时中止且不 fetch/rebase/push', () async {

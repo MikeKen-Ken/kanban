@@ -239,6 +239,7 @@ class AgentDispatchService {
     String? workerScriptPath,
     int queueSize = 0,
     List<AgentDispatchAfterStep> afterQueue = const [],
+    bool runAfterQueueOnFailure = true,
     AgentDispatchAfterQueueHost? afterQueueHost,
     void Function(AgentDispatchLogEntry entry)? onLog,
   }) async {
@@ -266,6 +267,7 @@ class AgentDispatchService {
       ),
     );
     _setRunning(true);
+    var workerInvoked = false;
     try {
       final result = await _runOnceImpl(
         options: options,
@@ -273,13 +275,23 @@ class AgentDispatchService {
         mcpEndpoint: mcpEndpoint,
         workerScriptPath: workerScriptPath,
         onLog: onLog,
+        onWorkerInvoked: () => workerInvoked = true,
       );
-      final shouldRunAfterQueue = result.ok &&
-          !_cancelRequested &&
-          !_drainAfterCurrentRequested &&
-          afterQueue.isNotEmpty &&
-          afterQueueHost != null;
-      if (shouldRunAfterQueue) {
+      final shouldRunAfterQueue = shouldRunAgentDispatchAfterQueue(
+        batchOk: result.ok,
+        cancelRequested: _cancelRequested,
+        drainRequested: _drainAfterCurrentRequested,
+        runOnFailure: runAfterQueueOnFailure,
+        workerInvoked: workerInvoked,
+        queueNonEmpty: afterQueue.isNotEmpty && afterQueueHost != null,
+      );
+      if (shouldRunAfterQueue && afterQueueHost != null) {
+        if (!result.ok) {
+          _emitLog(
+            '完成后队列：批次未成功，仍按「失败后仍执行」继续',
+            level: AgentDispatchLogLevel.warning,
+          );
+        }
         try {
           await runAgentDispatchAfterQueue(
             steps: afterQueue,
@@ -307,6 +319,7 @@ class AgentDispatchService {
     required String mcpEndpoint,
     String? workerScriptPath,
     void Function(AgentDispatchLogEntry entry)? onLog,
+    void Function()? onWorkerInvoked,
   }) async {
     final repo = options.repoPath.trim();
     if (repo.isEmpty) {
@@ -397,6 +410,7 @@ class AgentDispatchService {
         cursorApiKey: cursorApiKey,
         workerScriptPath: workerScriptPath,
         onProcessStarted: (worker) {
+          onWorkerInvoked?.call();
           _activeWorker = worker;
           if (_cancelRequested) unawaited(worker.stop());
         },

@@ -82,6 +82,24 @@ List<AgentDispatchAfterStep> reorderAfterQueueStep(
   return List<AgentDispatchAfterStep>.unmodifiable(next);
 }
 
+/// 是否应执行完成后队列。
+///
+/// 手动停止或「本轮结束后停止」不触发。批次成功始终触发。
+/// 已启动 Worker 后因配额、网络等失败时，由 [runOnFailure] 决定（默认勾选）。
+bool shouldRunAgentDispatchAfterQueue({
+  required bool batchOk,
+  required bool cancelRequested,
+  required bool drainRequested,
+  required bool runOnFailure,
+  required bool workerInvoked,
+  required bool queueNonEmpty,
+}) {
+  if (!queueNonEmpty) return false;
+  if (cancelRequested || drainRequested) return false;
+  if (batchOk) return true;
+  return runOnFailure && workerInvoked;
+}
+
 /// 按顺序执行完成后队列。任一步失败即停止，后续（含休眠/关机）不会执行。
 Future<void> runAgentDispatchAfterQueue({
   required List<AgentDispatchAfterStep> steps,

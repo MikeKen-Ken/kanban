@@ -7,12 +7,16 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
     required this.steps,
     required this.enabled,
     required this.onChanged,
+    this.runOnFailure = true,
+    this.onRunOnFailureChanged,
     super.key,
   });
 
   final List<AgentDispatchAfterStep> steps;
   final bool enabled;
   final ValueChanged<List<AgentDispatchAfterStep>> onChanged;
+  final bool runOnFailure;
+  final ValueChanged<bool>? onRunOnFailureChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +28,33 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           '全部卡片处理完后按顺序执行。上传和推送会等到真正结束后才进入下一步；推送前先 fetch，远端有更新且工作区干净时自动 rebase，冲突则 abort 且不 force push。休眠/关机只立即执行一次，不会在下次开机自动重复。',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: enabled && onRunOnFailureChanged != null
+              ? () => onRunOnFailureChanged!(!runOnFailure)
+              : null,
+          child: Row(
+            children: [
+              Checkbox(
+                value: runOnFailure,
+                onChanged: enabled && onRunOnFailureChanged != null
+                    ? (value) => onRunOnFailureChanged!(value ?? false)
+                    : null,
+                visualDensity: VisualDensity.compact,
+              ),
+              Expanded(
+                child: Text(
+                  '失败后仍执行',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          '配额用尽、网络失败或 Worker 异常退出时仍执行；手动停止或「本轮结束后停止」不会触发。',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
