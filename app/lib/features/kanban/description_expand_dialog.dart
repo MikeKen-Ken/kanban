@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'description_markdown_preview.dart';
 
@@ -35,11 +36,36 @@ class DescriptionExpandDialog extends StatefulWidget {
 
 class _DescriptionExpandDialogState extends State<DescriptionExpandDialog> {
   late bool _previewMarkdown;
+  late final FocusNode _descFocusNode;
 
   @override
   void initState() {
     super.initState();
     _previewMarkdown = widget.initialPreview;
+    _descFocusNode = FocusNode(onKeyEvent: _onDescKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    _descFocusNode.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _onDescKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.enter) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        return KeyEventResult.ignored;
+      }
+      final value = widget.controller.value;
+      if (value.composing.isValid) {
+        widget.controller.value =
+            value.copyWith(composing: TextRange.empty);
+      }
+      Navigator.pop(context);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -73,6 +99,7 @@ class _DescriptionExpandDialogState extends State<DescriptionExpandDialog> {
               : TextField(
                   key: const ValueKey('card-detail-desc-expanded'),
                   controller: widget.controller,
+                  focusNode: _descFocusNode,
                   autofocus: true,
                   maxLines: null,
                   expands: true,

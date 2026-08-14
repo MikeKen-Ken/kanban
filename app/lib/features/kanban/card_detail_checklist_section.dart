@@ -65,7 +65,9 @@ class CardDetailChecklistSection extends StatelessWidget {
     required this.checklist,
     required this.verificationFeedback,
     required this.checklistInput,
+    this.checklistFocusNode,
     required this.verificationFeedbackInput,
+    this.verificationFeedbackFocusNode,
     required this.onAddChecklistItem,
     required this.onToggleChecklistItem,
     required this.onRemoveChecklistItem,
@@ -79,7 +81,9 @@ class CardDetailChecklistSection extends StatelessWidget {
   final List<ChecklistItem> checklist;
   final List<ChecklistItem> verificationFeedback;
   final TextEditingController checklistInput;
+  final FocusNode? checklistFocusNode;
   final TextEditingController verificationFeedbackInput;
+  final FocusNode? verificationFeedbackFocusNode;
   final VoidCallback onAddChecklistItem;
   final ValueChanged<String> onToggleChecklistItem;
   final ValueChanged<String> onRemoveChecklistItem;
@@ -137,6 +141,7 @@ class CardDetailChecklistSection extends StatelessWidget {
               child: TextField(
                 key: const ValueKey('card-detail-checklist'),
                 controller: checklistInput,
+                focusNode: checklistFocusNode,
                 decoration: const InputDecoration(
                   hintText: '添加子任务…',
                   border: OutlineInputBorder(),
@@ -194,6 +199,7 @@ class CardDetailChecklistSection extends StatelessWidget {
               child: TextField(
                 key: const ValueKey('card-detail-verification-feedback'),
                 controller: verificationFeedbackInput,
+                focusNode: verificationFeedbackFocusNode,
                 decoration: const InputDecoration(
                   hintText: '添加验证反馈…',
                   border: OutlineInputBorder(),

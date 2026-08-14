@@ -85,7 +85,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late final TextEditingController _descController;
   late final TextEditingController _commitRefController;
   late final FocusNode _titleFocusNode;
-  final FocusNode _descFocusNode = FocusNode();
+  late final FocusNode _descFocusNode;
+  late final FocusNode _checklistFocusNode;
+  late final FocusNode _verificationFeedbackFocusNode;
   late BoardController _boardController;
   late bool _completed;
   DateTime? _dueDate;
@@ -127,6 +129,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   void initState() {
     super.initState();
     _titleFocusNode = FocusNode(onKeyEvent: _onTitleKeyEvent);
+    _descFocusNode = FocusNode(onKeyEvent: _onDescKeyEvent);
+    _checklistFocusNode = FocusNode(onKeyEvent: _onChecklistKeyEvent);
+    _verificationFeedbackFocusNode =
+        FocusNode(onKeyEvent: _onVerificationFeedbackKeyEvent);
     _titleController = TextEditingController(text: widget.card.title);
     _descController =
         TextEditingController(text: widget.card.description ?? '');
@@ -188,15 +194,63 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _descController.dispose();
     _commitRefController.dispose();
     _descFocusNode.dispose();
+    _checklistFocusNode.dispose();
+    _verificationFeedbackFocusNode.dispose();
     _checklistInput.dispose();
     _verificationFeedbackInput.dispose();
     super.dispose();
+  }
+
+  void _clearComposing(TextEditingController controller) {
+    final value = controller.value;
+    if (value.composing.isValid) {
+      controller.value = value.copyWith(composing: TextRange.empty);
+    }
   }
 
   /// 标题框 Tab：切到备注输入框（与回车行为一致）。
   KeyEventResult _onTitleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
       _focusDescriptionFromTitle();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// 备注框 Enter 保存；Shift+Enter 换行；Tab 切到子任务输入框。
+  KeyEventResult _onDescKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.enter) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        return KeyEventResult.ignored;
+      }
+      _clearComposing(_descController);
+      _save();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.tab) {
+      _checklistFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// 子任务输入框 Tab：切到验证反馈输入框。
+  KeyEventResult _onChecklistKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
+      _verificationFeedbackFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// 验证反馈输入框 Tab：切到标题输入框。
+  KeyEventResult _onVerificationFeedbackKeyEvent(
+    FocusNode node,
+    KeyEvent event,
+  ) {
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
+      _titleFocusNode.requestFocus();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -213,10 +267,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   /// 不再依赖帧回调的时序。
   void _focusDescriptionFromTitle() {
     if (!mounted || _descriptionExpanded) return;
-    final titleValue = _titleController.value;
-    if (titleValue.composing.isValid) {
-      _titleController.value = titleValue.copyWith(composing: TextRange.empty);
-    }
+    _clearComposing(_titleController);
     if (_previewMarkdown) {
       _safeSetState(() => _previewMarkdown = false);
     }
@@ -1048,7 +1099,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           checklist: _checklist,
                           verificationFeedback: _verificationFeedback,
                           checklistInput: _checklistInput,
+                          checklistFocusNode: _checklistFocusNode,
                           verificationFeedbackInput: _verificationFeedbackInput,
+                          verificationFeedbackFocusNode:
+                              _verificationFeedbackFocusNode,
                           onAddChecklistItem: _addChecklistItem,
                           onToggleChecklistItem: _toggleChecklistItem,
                           onRemoveChecklistItem: _removeChecklistItem,
