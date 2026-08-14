@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/board_controller.dart';
+import 'features/kanban/card_complete_motion.dart';
 import 'features/agent_dispatch/agent_dispatch_after_queue.dart';
 import 'features/agent_dispatch/agent_dispatch_registry.dart';
 import 'features/agent_dispatch/agent_dispatch_window.dart';
@@ -82,8 +83,11 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: widget.controller,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: widget.controller),
+        ChangeNotifierProvider(create: (_) => CardCompleteFlightController()),
+      ],
       // 仅主题/引导相关字段变化时重建 MaterialApp，避免每次改卡都重建整棵应用树
       //（详情弹层在冲突解决 notify 时曾因此出现“点了没反应”的体感）。
       child: Selector<BoardController,

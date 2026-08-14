@@ -6,6 +6,7 @@ import '../../controllers/board_controller.dart';
 import '../../common/app_snack_bar.dart';
 import '../../models/kanban_models.dart';
 import 'board_horizontal_scroll.dart';
+import 'card_complete_motion.dart';
 import 'column_card_preferences.dart';
 import 'kanban_card_tile.dart';
 
@@ -202,19 +203,25 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
                                     ),
                           ),
                         ),
-                      KeyedSubtree(
-                        key: _cardKeys[i],
-                        child: KanbanCardTile(
-                          columnId: widget.columnId,
-                          card: widget.cards[i],
-                          allColumns: widget.allColumns,
-                          searchQuery: widget.searchQuery,
-                          isPinned:
-                              widget.pinnedCardIds.contains(widget.cards[i].id),
-                          onDragStarted: () =>
-                              setState(() => _hoverInsertIndex = null),
-                        ),
-                      ),
+          KeyedSubtree(
+            key: _cardKeys[i],
+            child: CardLayoutAnchor.card(
+              cardId: widget.cards[i].id,
+              child: CardFlightHidden(
+                cardId: widget.cards[i].id,
+                child: KanbanCardTile(
+                  columnId: widget.columnId,
+                  card: widget.cards[i],
+                  allColumns: widget.allColumns,
+                  searchQuery: widget.searchQuery,
+                  isPinned:
+                      widget.pinnedCardIds.contains(widget.cards[i].id),
+                  onDragStarted: () =>
+                      setState(() => _hoverInsertIndex = null),
+                ),
+              ),
+            ),
+          ),
                     ],
                     if (showIndicator &&
                         _hoverInsertIndex == widget.cards.length)

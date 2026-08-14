@@ -12,6 +12,7 @@ import '../../utils/ime_guard.dart';
 import '../../features/project/project_theme.dart';
 import '../completed_auto_clear/completed_auto_clear.dart';
 import '../labels/label_editor_dialog.dart';
+import 'card_complete_motion.dart';
 import 'card_detail_actions_bar.dart';
 import 'card_detail_agent_model_section.dart';
 import 'card_detail_attachments_section.dart';
@@ -643,24 +644,34 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       return;
     }
 
-    try {
-      if (!live.completed) {
-        // 与卡片瓦片 / complete_card 一致：标记完成并移入已完成列。
-        final completionError = await _boardController.toggleCardCompleted(
-          columnId,
-          widget.card.id,
-        );
-        if (completionError != null) throw StateError(completionError);
-      } else {
-        // 详情勾选后已保存为完成但尚未挪列时，补一次移入已完成。
-        final board = _boardController.board;
-        if (board != null) {
-          final done = findDoneColumn(
+    final board = _boardController.board;
+    final done = board == null
+        ? null
+        : findDoneColumn(
             board,
             doneColumnName: _boardController.projectSettings.doneColumnName,
           );
+    final fromRect = CardLayoutRegistry.instance.rectForCard(widget.card.id);
+
+    if (!mounted) return;
+    try {
+      final completionError = await playCardCompleteFlight(
+        context: context,
+        cardId: widget.card.id,
+        fromRect: fromRect,
+        replica: _DetailCompleteFlightReplica(title: live.title),
+        doneColumnId: done?.id,
+        mutate: () async {
+          if (!live.completed) {
+            // 与卡片瓦片 / complete_card 一致：标记完成并移入已完成列。
+            return _boardController.toggleCardCompleted(
+              columnId,
+              widget.card.id,
+            );
+          }
+          // 详情勾选后已保存为完成但尚未挪列时，补一次移入已完成。
           if (done != null && done.id != columnId) {
-            final moveError = await _boardController.moveCard(
+            return _boardController.moveCard(
               cardId: widget.card.id,
               fromColumnId: columnId,
               toColumnId: done.id,
@@ -669,10 +680,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
               completedAt:
                   live.completedAt ?? DateTime.now().millisecondsSinceEpoch,
             );
-            if (moveError != null) throw StateError(moveError);
           }
-        }
-      }
+          return null;
+        },
+      );
+      if (completionError != null) throw StateError(completionError);
     } catch (error) {
       // 卡片状态和移列已先于提醒、重复任务、活动记录等附带处理完成时，
       // 不能因后续附带处理报错把已完成的详情页留在界面上。
@@ -1422,6 +1434,38 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailCompleteFlightReplica extends StatelessWidget {
+  const _DetailCompleteFlightReplica({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      elevation: 8,
+      shadowColor: Colors.black45,
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleSmall?.copyWith(
+              decoration: TextDecoration.lineThrough,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
         ),
       ),
     );

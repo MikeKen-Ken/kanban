@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/board_controller.dart';
+import '../features/kanban/card_complete_motion.dart';
 import '../features/kanban/card_detail_sheet.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_column_list.dart';
@@ -326,7 +327,9 @@ class KanbanColumnWidget extends StatelessWidget {
             (Theme.of(context).brightness == Brightness.dark
                 ? Colors.white.withValues(alpha: 0.20)
                 : Colors.white.withValues(alpha: 0.58)));
-    final columnBody = SizedBox(
+    final columnBody = CardLayoutAnchor.column(
+      columnId: column.id,
+      child: SizedBox(
       width: effectiveWidth,
       child: KanbanGlassSurface(
         borderRadius: columnRadius,
@@ -466,6 +469,7 @@ class KanbanColumnWidget extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
       ),
     );

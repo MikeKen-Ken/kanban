@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/board_controller.dart';
+import 'card_complete_motion.dart';
 import 'confirm_delete_card.dart';
 
 /// 卡片详情底栏：模板、转移、删除、完成、保存。
@@ -26,7 +28,7 @@ class CardDetailActionsBar extends StatelessWidget {
   final VoidCallback onSaveAsTemplate;
   final VoidCallback onTransfer;
   final VoidCallback onDeleted;
-  final VoidCallback onComplete;
+  final Future<void> Function() onComplete;
   final VoidCallback onSave;
 
   @override
@@ -89,12 +91,7 @@ class CardDetailActionsBar extends StatelessWidget {
           ),
           if (showComplete) ...[
             const SizedBox(width: 8),
-            FilledButton.icon(
-              key: const ValueKey('card-detail-complete'),
-              onPressed: onComplete,
-              icon: const Icon(Icons.check, size: 18),
-              label: const Text('完成'),
-            ),
+            CardDetailCompleteButton(onComplete: onComplete),
             const SizedBox(width: 8),
           ],
           FilledButton(
@@ -102,6 +99,96 @@ class CardDetailActionsBar extends StatelessWidget {
             child: const Text('保存'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 详情「完成」：先回弹并切到已完成态，再执行真正的完成逻辑。
+class CardDetailCompleteButton extends StatefulWidget {
+  const CardDetailCompleteButton({
+    super.key,
+    required this.onComplete,
+  });
+
+  final Future<void> Function() onComplete;
+
+  @override
+  State<CardDetailCompleteButton> createState() =>
+      _CardDetailCompleteButtonState();
+}
+
+class _CardDetailCompleteButtonState extends State<CardDetailCompleteButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  bool _busy = false;
+  bool _succeededVisual = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: CardCompleteMotion.button,
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1, end: 0.92)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.92, end: 1)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 60,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handlePress() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _succeededVisual = true;
+    });
+    HapticFeedback.selectionClick();
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      await _controller.forward(from: 0);
+    }
+    await widget.onComplete();
+    if (!mounted) return;
+    _controller.reset();
+    setState(() {
+      _busy = false;
+      _succeededVisual = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: FilledButton.icon(
+        key: const ValueKey('card-detail-complete'),
+        onPressed: _busy ? () {} : _handlePress,
+        icon: Icon(
+          _succeededVisual ? Icons.check_circle : Icons.check,
+          size: 18,
+        ),
+        label: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          child: Text(
+            _succeededVisual ? '已完成' : '完成',
+            key: ValueKey(_succeededVisual),
+          ),
+        ),
       ),
     );
   }

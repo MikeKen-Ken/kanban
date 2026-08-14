@@ -13,6 +13,9 @@ import '../../features/project/project_theme.dart';
 import '../../models/kanban_models.dart';
 import '../attachments/card_attachment_image.dart';
 import '../attachments/card_attachment_viewer.dart';
+import '../completed_auto_clear/completed_auto_clear.dart';
+import 'card_complete_checkbox.dart';
+import 'card_complete_motion.dart';
 import 'card_copy_text.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
@@ -176,6 +179,46 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     }
   }
 
+  Future<void> _onToggleCompleted() async {
+    final columnId = widget.columnId;
+    final card = widget.card;
+    final controller = context.read<BoardController>();
+    if (card.completed) {
+      final error = await controller.toggleCardCompleted(columnId, card.id);
+      if (error != null && mounted) {
+        showAppSnackBar(context, message: error);
+      }
+      return;
+    }
+
+    final box = context.findRenderObject() as RenderBox?;
+    final fromRect = (box != null && box.hasSize)
+        ? box.localToGlobal(Offset.zero) & box.size
+        : CardLayoutRegistry.instance.rectForCard(card.id);
+    final board = controller.board;
+    final doneColumnId = board == null
+        ? null
+        : findDoneColumn(
+            board,
+            doneColumnName: controller.projectSettings.doneColumnName,
+          )?.id;
+
+    final error = await playCardCompleteFlight(
+      context: context,
+      cardId: card.id,
+      fromRect: fromRect,
+      replica: KanbanCardFlightReplica(
+        card: card,
+        isPinned: widget.isPinned,
+      ),
+      doneColumnId: doneColumnId,
+      mutate: () => controller.toggleCardCompleted(columnId, card.id),
+    );
+    if (error != null && mounted) {
+      showAppSnackBar(context, message: error);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BoardController>();
@@ -222,6 +265,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           // 延迟拖拽时也避免「填充动画」误导成已可拖
           suppressInk: true,
           onOpenDetail: _openDetail,
+          onToggleCompleted: _onToggleCompleted,
           onContextMenu: _showCardContextMenu,
           // 默认延迟拖拽：长按启动拖拽，Android 靠「⋯」；即时拖拽才用长按开菜单
           enableLongPressContextMenu: shouldEnableLongPressCardContextMenu(
@@ -301,6 +345,7 @@ class _CardContent extends StatelessWidget {
     this.surfaceOpacity = ProjectSettings.defaultCardSurfaceOpacity,
     this.suppressInk = false,
     this.onOpenDetail,
+    this.onToggleCompleted,
     this.onContextMenu,
     this.enableLongPressContextMenu = false,
     this.showContextMenuButton = false,
@@ -316,6 +361,7 @@ class _CardContent extends StatelessWidget {
   final double surfaceOpacity;
   final bool suppressInk;
   final VoidCallback? onOpenDetail;
+  final Future<void> Function()? onToggleCompleted;
   final void Function(Offset globalPosition)? onContextMenu;
   final bool enableLongPressContextMenu;
 
@@ -479,15 +525,10 @@ class _CardContent extends StatelessWidget {
                     children: [
                       if (columnId != null)
                         CardDragInteractionBlocker(
-                          child: _CardCompleteCheckbox(
+                          child: CardCompleteCheckbox(
                             value: card.completed,
                             onChanged: (_) async {
-                              final error = await context
-                                  .read<BoardController>()
-                                  .toggleCardCompleted(columnId!, card.id);
-                              if (error != null && context.mounted) {
-                                showAppSnackBar(context, message: error);
-                              }
+                              await onToggleCompleted?.call();
                             },
                           ),
                         )
@@ -861,65 +902,27 @@ class _CardMetaIconBadge extends StatelessWidget {
   }
 }
 
-/// 卡片左侧完成勾选：点击缩放反馈；拖拽排除由 [CardDragInteractionBlocker] 处理。
-class _CardCompleteCheckbox extends StatefulWidget {
-  const _CardCompleteCheckbox({
-    required this.value,
-    required this.onChanged,
+/// 完成飞行 Overlay 使用的卡片副本：已完成态、无交互。
+class KanbanCardFlightReplica extends StatelessWidget {
+  const KanbanCardFlightReplica({
+    super.key,
+    required this.card,
+    this.isPinned = false,
   });
 
-  final bool value;
-  final ValueChanged<bool?> onChanged;
-
-  @override
-  State<_CardCompleteCheckbox> createState() => _CardCompleteCheckboxState();
-}
-
-class _CardCompleteCheckboxState extends State<_CardCompleteCheckbox>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _scaleController;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _scaleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 120),
-    );
-    _scale = Tween<double>(begin: 1, end: 0.84).animate(
-      CurvedAnimation(
-        parent: _scaleController,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.elasticOut,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _scaleController.dispose();
-    super.dispose();
-  }
-
-  void _handleChanged(bool? next) {
-    if (next == null) return;
-    _scaleController.forward(from: 0).then((_) {
-      if (mounted) _scaleController.reverse();
-    });
-    widget.onChanged(next);
-  }
+  final KanbanCard card;
+  final bool isPinned;
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: Checkbox(
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
-        value: widget.value,
-        onChanged: _handleChanged,
-      ),
+    final controller = context.watch<BoardController>();
+    return _CardContent(
+      card: card.copyWith(completed: true),
+      dragging: true,
+      isPinned: isPinned,
+      customLabels: controller.appSettings.customLabels,
+      themeId: controller.projectSettings.themeId,
+      surfaceOpacity: controller.projectSettings.cardSurfaceOpacity,
     );
   }
 }
