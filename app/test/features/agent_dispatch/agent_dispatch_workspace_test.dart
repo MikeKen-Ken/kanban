@@ -86,7 +86,8 @@ void main() {
     expect(find.textContaining('思考中'), findsNothing);
     expect(find.textContaining('工具：grep'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-source-mcp')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-log-source-mcp')));
     await tester.pump();
 
     expect(find.textContaining('系统就绪'), findsNothing);
@@ -122,10 +123,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final logScroll = find.byKey(const ValueKey('agent-dispatch-log-scroll'));
-    final position = tester
-        .widget<SingleChildScrollView>(logScroll)
-        .controller!
-        .position;
+    final position = tester.widget<ListView>(logScroll).controller!.position;
     await tester.drag(logScroll, const Offset(0, 180));
     await tester.pumpAndSettle();
     final before = position.pixels;

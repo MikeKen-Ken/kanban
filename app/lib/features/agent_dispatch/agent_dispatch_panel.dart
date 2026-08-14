@@ -17,6 +17,7 @@ import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
 import 'agent_dispatch_log_exporter.dart';
 import 'agent_dispatch_log.dart';
+import 'agent_dispatch_log_refresh_scheduler.dart';
 import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
 import 'agent_dispatch_repository_field.dart';
@@ -64,6 +65,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   bool _usageBusy = false;
   DateTime _lastLogAt = DateTime.now();
   Timer? _heartbeat;
+  final _logRefreshScheduler = AgentDispatchLogRefreshScheduler();
 
   @override
   void initState() {
@@ -95,7 +97,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   void _onServiceLog(AgentDispatchLogEntry entry) {
     if (!mounted) return;
-    setState(_syncLogFromService);
+    _logRefreshScheduler.schedule(() {
+      if (mounted) setState(_syncLogFromService);
+    });
   }
 
   void _onServiceRunningChanged() {
@@ -107,6 +111,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         _stopping = false;
         _drainPending = false;
         _skipping = false;
+        _syncLogFromService();
       }
     });
     if (running) {
@@ -570,6 +575,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   @override
   void dispose() {
+    _logRefreshScheduler.cancel();
     AgentDispatchWindow.visible.removeListener(_onWindowVisibilityChanged);
     _service.removeLogListener(_onServiceLog);
     _service.removeRunningListener(_onServiceRunningChanged);
@@ -693,8 +699,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 )
               else if (_models.isEmpty)
                 Text(
-                  _settings.modelId ??
-                      '尚未加载模型目录；请点击「从 API 刷新」手动拉取',
+                  _settings.modelId ?? '尚未加载模型目录；请点击「从 API 刷新」手动拉取',
                   style: Theme.of(context).textTheme.bodySmall,
                 )
               else
@@ -806,13 +811,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         ),
       ),
       actions: [
-        TextButton(
+        const TextButton(
           onPressed: AgentDispatchWindow.backToHub,
-          child: const Text('返回总览'),
+          child: Text('返回总览'),
         ),
-        TextButton(
+        const TextButton(
           onPressed: AgentDispatchWindow.hide,
-          child: const Text('关闭'),
+          child: Text('关闭'),
         ),
         if (_running) ...[
           TextButton(

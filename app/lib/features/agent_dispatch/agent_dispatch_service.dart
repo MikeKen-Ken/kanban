@@ -12,6 +12,7 @@ import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_log.dart';
+import 'agent_dispatch_log_buffer.dart';
 import 'agent_dispatch_token.dart';
 import 'agent_dispatch_token_store.dart';
 import 'agent_dispatch_log_store.dart';
@@ -43,13 +44,14 @@ class AgentDispatchService {
   final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
   final _runningListeners = <void Function()>{};
   final _progressListeners = <void Function()>{};
-  String _logText = '';
+  final AgentDispatchLogBuffer _logBuffer = AgentDispatchLogBuffer();
   bool _logHydrated = false;
   Future<void> _logSaveQueue = Future.value();
+  Timer? _logPersistTimer;
 
   bool get isRunning => _isRunning;
 
-  String get logText => _logText;
+  String get logText => _logBuffer.text;
 
   String? get activeRepoPath => _activeRepoPath;
 
@@ -100,14 +102,16 @@ class AgentDispatchService {
     _logHydrated = true;
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.loadAgentDispatchLog(projectId: projectId);
-    if (_logText.isEmpty && stored.isNotEmpty) {
-      _logText = stored;
+    if (_logBuffer.isEmpty && stored.isNotEmpty) {
+      _logBuffer.replaceWith(stored);
       _notifyLog(const AgentDispatchLogEntry(''));
     }
   }
 
   Future<void> clearLog() async {
-    _logText = '';
+    _logPersistTimer?.cancel();
+    _logPersistTimer = null;
+    _logBuffer.clear();
     _logHydrated = true;
     _notifyLog(const AgentDispatchLogEntry(''));
     _logSaveQueue = _logSaveQueue.then((_) async {
@@ -130,24 +134,45 @@ class AgentDispatchService {
               .format(now),
         )
         .join('\n');
-    _logText = _logText.isEmpty ? formatted : '$_logText\n$formatted';
+    _logBuffer.addLines(formatted.split('\n'));
     _logHydrated = true;
     _notifyLog(AgentDispatchLogEntry(message, level: level, source: source));
     if (_isRunning) {
       final next = applyWorkerProgressLog(_progress, message);
       if (next != _progress) _setProgress(next);
     }
+    _scheduleLogPersist();
+    final usage = AgentDispatchTokenRecord.tryParse(message, at: now);
+    if (usage != null) {
+      _logSaveQueue = _logSaveQueue.then((_) async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.appendAgentDispatchToken(usage, projectId: projectId);
+      });
+    }
+  }
+
+  void _scheduleLogPersist() {
+    if (_logPersistTimer != null) return;
+    _logPersistTimer = Timer(
+      const Duration(milliseconds: 500),
+      _enqueueLogPersist,
+    );
+  }
+
+  void _enqueueLogPersist() {
+    _logPersistTimer?.cancel();
+    _logPersistTimer = null;
+    final snapshot = _logBuffer.text;
     _logSaveQueue = _logSaveQueue.then((_) async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.saveAgentDispatchLog(_logText, projectId: projectId);
-      final usage = AgentDispatchTokenRecord.tryParse(message, at: now);
-      if (usage != null) {
-        await prefs.appendAgentDispatchToken(usage, projectId: projectId);
-      }
+      await prefs.saveAgentDispatchLog(snapshot, projectId: projectId);
     });
   }
 
-  Future<void> get pendingLogPersist => _logSaveQueue;
+  Future<void> get pendingLogPersist async {
+    if (_logPersistTimer != null) _enqueueLogPersist();
+    await _logSaveQueue;
+  }
 
   void _notifyLog(AgentDispatchLogEntry entry) {
     for (final listener in _logListeners.toList()) {
@@ -311,7 +336,8 @@ class AgentDispatchService {
       AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
       AgentDispatchLogSource source = AgentDispatchLogSource.system,
     }) {
-      final entry = AgentDispatchLogEntry(message, level: level, source: source);
+      final entry =
+          AgentDispatchLogEntry(message, level: level, source: source);
       _emitLog(message, level: level, source: source);
       onLog?.call(entry);
     }
@@ -426,7 +452,9 @@ class AgentDispatchService {
     _activeWorkerToken = null;
     _activeRepoPath = null;
     _progress = AgentDispatchProgress.idle;
-    _logText = '';
+    _logPersistTimer?.cancel();
+    _logPersistTimer = null;
+    _logBuffer.clear();
     _logHydrated = false;
     _logSaveQueue = Future.value();
     _logListeners.clear();

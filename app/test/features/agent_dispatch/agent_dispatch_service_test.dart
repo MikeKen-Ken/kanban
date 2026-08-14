@@ -3,7 +3,6 @@ import 'package:kanban/features/agent_dispatch/agent_dispatch_log.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_log_store.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_progress.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_registry.dart';
-import 'package:kanban/features/agent_dispatch/agent_dispatch_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -56,5 +55,26 @@ void main() {
       contains('窗口关闭后的新行'),
     );
     expect(prefs.loadAgentDispatchLog(projectId: 'p2'), isEmpty);
+  });
+
+  test('高频 Worker 输出不会让服务日志无限增长', () async {
+    final service = AgentDispatchRegistry.instance.forProject('bounded');
+
+    for (var index = 0; index < 5000; index++) {
+      service.appendLog('worker line $index');
+    }
+
+    final lines = service.logText.split('\n');
+    expect(lines, hasLength(3000));
+    expect(service.logText, isNot(contains('worker line 1999')));
+    expect(service.logText, contains('worker line 2000'));
+    expect(service.logText, contains('worker line 4999'));
+
+    await service.pendingLogPersist;
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.loadAgentDispatchLog(projectId: 'bounded').split('\n'),
+      hasLength(3000),
+    );
   });
 }

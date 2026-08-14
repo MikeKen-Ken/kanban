@@ -195,6 +195,9 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   final _scrollController = ScrollController();
   AgentDispatchLogSource? _sourceFilter;
   var _pinToBottom = true;
+  String? _cachedText;
+  AgentDispatchLogSource? _cachedSourceFilter;
+  List<String> _cachedLines = const [];
 
   static const _bottomThreshold = 48.0;
 
@@ -231,11 +234,18 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   }
 
   List<String> _visibleLines() {
-    return widget.controller.text.split('\n').where((line) {
+    final text = widget.controller.text;
+    if (_cachedText == text && _cachedSourceFilter == _sourceFilter) {
+      return _cachedLines;
+    }
+    _cachedText = text;
+    _cachedSourceFilter = _sourceFilter;
+    _cachedLines = text.split('\n').where((line) {
       if (AgentDispatchLogEntry.isLowValue(line)) return false;
       if (_sourceFilter == null) return true;
       return AgentDispatchLogEntry.sourceOf(line) == _sourceFilter;
     }).toList();
+    return _cachedLines;
   }
 
   @override
@@ -317,9 +327,8 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
                         : 0.35,
                   ),
                   fontWeight: _sourceFilter == source ? FontWeight.w700 : null,
-                  decoration: _sourceFilter == source
-                      ? TextDecoration.underline
-                      : null,
+                  decoration:
+                      _sourceFilter == source ? TextDecoration.underline : null,
                 ),
               ),
             ),
@@ -375,20 +384,16 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
                   _onUserScroll();
                   return false;
                 },
-                child: SingleChildScrollView(
+                child: ListView.builder(
                   key: const ValueKey('agent-dispatch-log-scroll'),
                   controller: _scrollController,
-                  child: SelectableText.rich(
-                    TextSpan(
-                      children: [
-                        for (var index = 0; index < lines.length; index++) ...[
-                          ..._lineSpans(context, lines[index]),
-                          if (index < lines.length - 1)
-                            const TextSpan(text: '\n'),
-                        ],
-                      ],
+                  itemCount: lines.length,
+                  itemBuilder: (context, index) => SelectableText.rich(
+                    TextSpan(children: _lineSpans(context, lines[index])),
+                    style: const TextStyle(
+                      fontFamily: 'Consolas',
+                      fontSize: 12,
                     ),
-                    style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
                   ),
                 ),
               ),
