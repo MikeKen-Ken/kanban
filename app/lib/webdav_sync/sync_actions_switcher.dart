@@ -78,7 +78,7 @@ class SyncActionsSwitcher extends StatelessWidget {
       longPressDelay: controller.appSettings.dragDelay,
       onCommit: (action) => runSyncManualAction(context, controller, action),
       child: PopupMenuButton<SyncManualAction>(
-        tooltip: '同步（短按菜单，长按滑动快速选择）',
+        tooltip: '同步（短按菜单，长按滑动快速选择；滑到「取消」松手可放弃）',
         constraints: const BoxConstraints(
           minWidth: _menuMinWidth,
           maxWidth: _menuMaxWidth,
@@ -180,7 +180,7 @@ class _SyncStatusTrigger extends StatelessWidget {
                 ? [
                     lastSuccess,
                     if (pendingDetail != null) pendingDetail,
-                    '短按菜单，长按滑动快速选择同步方式',
+                    '短按菜单，长按滑动快速选择；滑到「取消」松手可放弃',
                   ].join('\n')
                 : [
                     error!,

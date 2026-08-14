@@ -8,6 +8,8 @@ import '../features/project/project_quick_switch.dart';
 import 'sync_actions_sheet.dart';
 
 /// 右上角同步快速选择：按住稍候出现列表，上下滑动高亮，松手确认。
+///
+/// 列表第一项为「取消」：长按出现后手指落在该项上，不滑动直接松手即放弃。
 class SyncQuickSwitchGesture extends StatefulWidget {
   const SyncQuickSwitchGesture({
     super.key,
@@ -39,7 +41,12 @@ class _SyncQuickSwitchGestureState extends State<SyncQuickSwitchGesture> {
   bool _globalRouteAttached = false;
   bool _scrubPointerInterrupted = false;
 
-  static const _actions = SyncManualAction.values;
+  /// 第一项为取消（`null`），其后为五项同步操作。
+  static final List<SyncManualAction?> _items = [
+    null,
+    ...SyncManualAction.values,
+  ];
+  static const int _cancelIndex = 0;
 
   @override
   void dispose() {
@@ -94,7 +101,7 @@ class _SyncQuickSwitchGestureState extends State<SyncQuickSwitchGesture> {
     return projectQuickSwitchIndexAtY(
       localY: _localYForGlobal(globalPosition.dy),
       itemExtent: SyncQuickSwitchGesture.itemExtent,
-      length: _actions.length,
+      length: _items.length,
     );
   }
 
@@ -106,8 +113,9 @@ class _SyncQuickSwitchGestureState extends State<SyncQuickSwitchGesture> {
   }
 
   void _startSession(Offset globalPosition) {
-    _startIndex = _indexForGlobal(globalPosition);
-    _highlightedIndex = _startIndex;
+    // 面板对齐到「取消」，松手未滑动则放弃，不必硬选一项同步。
+    _startIndex = _cancelIndex;
+    _highlightedIndex = _cancelIndex;
     _startGlobal = globalPosition;
     _sessionActive = true;
     _scrubPointerInterrupted = false;
@@ -129,8 +137,8 @@ class _SyncQuickSwitchGestureState extends State<SyncQuickSwitchGesture> {
     if (!_sessionActive) return;
     final index = _highlightedIndex;
     final shouldCommit =
-        commit && index >= 0 && index < _actions.length;
-    final action = shouldCommit ? _actions[index] : null;
+        commit && index >= 0 && index < _items.length;
+    final action = shouldCommit ? _items[index] : null;
     _removeOverlay();
     if (action != null) {
       await widget.onCommit(action);
@@ -162,7 +170,7 @@ class _SyncQuickSwitchGestureState extends State<SyncQuickSwitchGesture> {
 
     final media = MediaQuery.of(context);
     final contentHeight = SyncQuickSwitchGesture.panelPaddingV * 2 +
-        _actions.length * SyncQuickSwitchGesture.itemExtent;
+        _items.length * SyncQuickSwitchGesture.itemExtent;
     final maxPanelHeight = media.size.height * 0.7;
     final panelHeight = contentHeight.clamp(0.0, maxPanelHeight);
     _panelTop = _computePanelTop(media: media, panelHeight: panelHeight);
@@ -218,9 +226,9 @@ class _SyncQuickSwitchGestureState extends State<SyncQuickSwitchGesture> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            for (var i = 0; i < _actions.length; i++)
+                            for (var i = 0; i < _items.length; i++)
                               _SyncQuickSwitchTile(
-                                action: _actions[i],
+                                action: _items[i],
                                 selected: i == _highlightedIndex,
                               ),
                           ],
@@ -288,18 +296,22 @@ class _SyncQuickSwitchTile extends StatelessWidget {
     required this.selected,
   });
 
-  final SyncManualAction action;
+  /// `null` 表示取消，松手不执行同步。
+  final SyncManualAction? action;
   final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isCancel = action == null;
     final bg = selected
         ? scheme.primaryContainer.withValues(alpha: 0.95)
         : Colors.transparent;
     final onTile =
         selected ? scheme.onPrimaryContainer : scheme.onSurface;
+    final label = action?.label ?? '取消';
+    final icon = action?.icon ?? Icons.close;
 
     return SizedBox(
       height: SyncQuickSwitchGesture.itemExtent,
@@ -318,16 +330,17 @@ class _SyncQuickSwitchTile extends StatelessWidget {
               color: selected ? scheme.primary : onTile.withValues(alpha: 0.55),
             ),
             const SizedBox(width: 10),
-            Icon(action.icon, size: 18, color: onTile),
+            Icon(icon, size: 18, color: onTile),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                action.label,
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: onTile,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  fontStyle: isCancel ? FontStyle.italic : FontStyle.normal,
                 ),
               ),
             ),
