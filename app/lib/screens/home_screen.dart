@@ -406,17 +406,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: _openSearch,
               ),
             if (!compact)
-              Selector<BoardController, int>(
-                selector: (_, c) => c.trashItemCount,
-                builder: (context, count, _) => IconButton(
-                  tooltip: '回收站',
-                  icon: Badge(
-                    isLabelVisible: count > 0,
-                    label: Text('$count'),
-                    child: const Icon(Icons.delete_outline),
-                  ),
-                  onPressed: _openTrash,
-                ),
+              IconButton(
+                tooltip: '回收站',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: _openTrash,
               ),
             Selector<BoardController,
                 (SyncStatus, String?, int, DateTime?, SyncProgress?, int)>(
@@ -511,15 +504,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: Text('新建列'),
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'trash',
                     child: ListTile(
-                      leading: Badge(
-                        isLabelVisible: controller.trashItemCount > 0,
-                        label: Text('${controller.trashItemCount}'),
-                        child: const Icon(Icons.delete_outline),
-                      ),
-                      title: const Text('回收站'),
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('回收站'),
                     ),
                   ),
                   const PopupMenuItem(
