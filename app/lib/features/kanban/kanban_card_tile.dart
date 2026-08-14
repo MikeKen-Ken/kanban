@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +11,7 @@ import '../../features/project/project_theme.dart';
 import '../../models/kanban_models.dart';
 import '../attachments/card_attachment_image.dart';
 import '../attachments/card_attachment_viewer.dart';
+import 'card_copy_text.dart';
 import 'card_detail_sheet.dart';
 import 'card_drag.dart';
 import 'card_tile_meta.dart';
@@ -100,6 +102,12 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
     final selected = await showMenu<String>(
       context: context,
+      popUpAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 80),
+        reverseDuration: Duration(milliseconds: 50),
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
       position: RelativeRect.fromLTRB(
         globalPosition.dx,
         globalPosition.dy,
@@ -146,13 +154,13 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
     }
   }
 
-  /// 在当前列复制 workItems（标题、备注、子任务）。
+  /// 把标题、备注、子任务、验证反馈和提交号复制为纯文本。
   Future<void> _copyCardWorkItems() async {
-    final copiedId = await context
-        .read<BoardController>()
-        .copyCardWorkItems(widget.columnId, widget.card.id);
-    if (copiedId == null && mounted) {
-      showAppSnackBar(context, message: '复制失败：卡片不存在');
+    await Clipboard.setData(
+      ClipboardData(text: formatCardCopyText(widget.card)),
+    );
+    if (mounted) {
+      showAppSnackBar(context, message: '已复制卡片文本');
     }
   }
 
