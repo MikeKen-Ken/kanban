@@ -1,4 +1,5 @@
 import { WorkerCancelledError, type WorkerCancellation } from "./cancellation.js";
+import { inspectGitWorkingTree } from "./git_working_tree.js";
 import { KanbanMcpClient } from "./mcp_client.js";
 import { runCodex } from "./run_codex.js";
 import { runCursor } from "./run_cursor.js";
@@ -56,6 +57,29 @@ export async function runBatch(
           processedCards,
         };
       }
+
+      const tree = inspectGitWorkingTree(job.cwd);
+      if (tree.kind === "dirty") {
+        workerLog(`Git 工作区不干净，未创建 Skill 会话`);
+        return {
+          ok: false,
+          error: `工作区不干净，未创建 Skill 会话：\n${tree.output}`,
+          processedCards,
+        };
+      }
+      if (tree.kind === "unknown") {
+        workerLog(`无法判断 Git 工作区：${tree.output}`);
+        return {
+          ok: false,
+          error: `无法判断 Git 工作区，未创建 Skill 会话：${tree.output}`,
+          processedCards,
+        };
+      }
+      workerLog(
+        tree.kind === "not_git"
+          ? "当前目录不由 Git 管理，跳过工作区检查"
+          : "Git 工作区干净",
+      );
 
       await mcp.callJson("dispatch_begin_agent_session", {
         workerToken: job.workerToken,

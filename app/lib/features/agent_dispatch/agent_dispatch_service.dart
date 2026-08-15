@@ -236,6 +236,7 @@ class AgentDispatchService {
     required AgentDispatchRunOptions options,
     required String skillPath,
     required String mcpEndpoint,
+    String? agentMcpEndpoint,
     String? workerScriptPath,
     int queueSize = 0,
     List<AgentDispatchAfterStep> afterQueue = const [],
@@ -273,6 +274,7 @@ class AgentDispatchService {
         options: options,
         skillPath: skillPath,
         mcpEndpoint: mcpEndpoint,
+        agentMcpEndpoint: agentMcpEndpoint,
         workerScriptPath: workerScriptPath,
         onLog: onLog,
         onWorkerInvoked: () => workerInvoked = true,
@@ -317,6 +319,7 @@ class AgentDispatchService {
     required AgentDispatchRunOptions options,
     required String skillPath,
     required String mcpEndpoint,
+    String? agentMcpEndpoint,
     String? workerScriptPath,
     void Function(AgentDispatchLogEntry entry)? onLog,
     void Function()? onWorkerInvoked,
@@ -399,6 +402,7 @@ class AgentDispatchService {
     McpDispatchCardGate.instance.beginBatch(
       workerToken,
       projectId: boundProjectId,
+      repoPath: repo,
     );
     try {
       result = await runAgentWorkerJob(
@@ -406,6 +410,7 @@ class AgentDispatchService {
         cwd: repo,
         prompt: prompt,
         mcpEndpoint: mcpEndpoint,
+        agentMcpEndpoint: agentMcpEndpoint,
         projectId: boundProjectId,
         cardLimit: cardLimit,
         workerToken: workerToken,

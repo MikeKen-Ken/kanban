@@ -71,9 +71,33 @@ void main() {
     );
     expect(text, contains('Skill 正文'));
     expect(text, contains('projectId:proj-1'));
+    expect(text, contains('禁止搜索'));
+    expect(text, contains('禁止任何 git 命令'));
+    expect(text, contains('commit_and_submit_card'));
     expect(text, isNot(contains('name:')));
     expect(text, isNot(contains('dispatchSessionId')));
     expect(text, isNot(contains('CARD_DONE')));
+  });
+
+  test('buildSkillDispatchPrompt 剥掉 YAML frontmatter', () {
+    final text = buildSkillDispatchPrompt(
+      skillMarkdown: '''
+---
+name: kanban-complete-tasks
+description: 由 Agent 调度工作台触发
+disable-model-invocation: true
+---
+
+# 看板：做最新一条
+
+取卡。
+''',
+      projectId: 'proj-1',
+    );
+    expect(text, contains('# 看板：做最新一条'));
+    expect(text, contains('取卡。'));
+    expect(text, isNot(contains('name: kanban-complete-tasks')));
+    expect(text, isNot(contains('disable-model-invocation')));
   });
 
   test('调用正文始终钉死项目 UUID，不再回退到界面当前项目', () {

@@ -27,6 +27,8 @@ void main() {
     expect(status?.pickClaimed, isTrue);
     expect(status?.deniedPickCount, 1);
     expect(status?.cardId, 'card-a');
+    expect(gate.authorizePickedCard('card-a'), isNull);
+    expect(gate.authorizePickedCard('other'), isNotNull);
 
     expect(gate.beginAgentSession('worker-a'), isTrue);
     expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
@@ -54,6 +56,26 @@ void main() {
     );
     expect(gate.openSessionCount, 2);
     expect(gate.singleOpenSessionProjectId, isNull);
+  });
+
+  test('批次可绑定仓库路径并记录待提交号', () {
+    gate.beginBatch(
+      'worker-a',
+      projectId: 'project-a',
+      repoPath: r'D:\repo',
+    );
+    expect(gate.beginAgentSession('worker-a'), isTrue);
+    expect(
+      gate.authorizePick('project-a'),
+      McpDispatchPickPermission.allowed,
+    );
+    expect(gate.authorizePickedCard('card-a'), isNotNull);
+    gate.recordPickedCard(projectId: 'project-a', cardId: 'card-a');
+    expect(gate.repoPathForPickedCard('card-a'), r'D:\repo');
+    gate.recordPendingCommitRef(cardId: 'card-a', commitRef: 'abc1234');
+    expect(gate.pendingCommitRefForCard('card-a'), 'abc1234');
+    expect(gate.authorizePickedCard('card-a'), isNull);
+    expect(gate.authorizePickedCard('missing'), isNotNull);
   });
 
   test('仅一轮会话开启时可以推断项目', () {

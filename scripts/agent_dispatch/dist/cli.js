@@ -374,22 +374,70 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // src/types.ts
+function isReasoningParamId(id) {
+  return id === "reasoning" || id === "reasoning_effort" || id === "model_reasoning_effort" || id === "effort" || id === "thinking";
+}
+function conservativeParamValue(id, values) {
+  const allowed = values.map((value) => value.trim()).filter(Boolean);
+  const middle = allowed[Math.floor((allowed.length - 1) / 2)];
+  if (isReasoningParamId(id)) {
+    if (allowed.includes("medium")) return "medium";
+    return allowed.length === 0 ? "medium" : middle;
+  }
+  if (id === "fast") {
+    if (allowed.includes("false")) return "false";
+    return allowed.length === 0 ? "false" : middle;
+  }
+  return allowed.length === 0 ? void 0 : middle;
+}
+function parseEngine(raw, fallback) {
+  const text = String(raw ?? "").trim();
+  return text === "cursor" || text === "codex" ? text : fallback;
+}
+function parseCardParams(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(raw).filter(([, value]) => typeof value === "string" && value.trim() !== "").map(([id, value]) => ({ id, value: String(value).trim() }));
+}
+function engineFallback(job, engine) {
+  const stored = job.engineDefaults?.[engine];
+  if (stored) return stored;
+  if (engine === job.engine) {
+    return { model: job.model, modelParams: job.modelParams };
+  }
+  return {};
+}
 function mergeJobWithCardOverrides(job, peek) {
-  const engineRaw = String(peek.agentEngine ?? "").trim();
-  const engine = engineRaw === "cursor" || engineRaw === "codex" ? engineRaw : job.engine;
-  const modelRaw = String(peek.agentModelId ?? "").trim();
-  const model = modelRaw || job.model;
-  const paramsRaw = peek.agentModelParamValues;
-  let modelParams = job.modelParams;
-  if (paramsRaw && typeof paramsRaw === "object" && !Array.isArray(paramsRaw)) {
-    const extras = Object.entries(paramsRaw).filter(([, value]) => typeof value === "string" && value.trim() !== "").map(([id, value]) => ({ id, value: String(value) }));
-    if (extras.length > 0) {
-      const byId = new Map((job.modelParams ?? []).map((item) => [item.id, item]));
-      for (const item of extras) byId.set(item.id, item);
-      modelParams = [...byId.values()];
+  const engine = parseEngine(peek.agentEngine, job.engine);
+  const defaults = engineFallback(job, engine);
+  const cardModel = String(peek.agentModelId ?? "").trim();
+  const model = cardModel || defaults.model || void 0;
+  const cardParams = parseCardParams(peek.agentModelParamValues);
+  const byId = new Map(
+    (defaults.modelParams ?? []).map((item) => [item.id, item])
+  );
+  for (const item of cardParams) byId.set(item.id, item);
+  const catalog = defaults.models?.find((item) => item.id === model);
+  const parameters = catalog?.parameters ?? [];
+  if (parameters.length > 0) {
+    const allowed = new Set(
+      parameters.map((item) => String(item.id ?? "").trim()).filter(Boolean)
+    );
+    for (const id of [...byId.keys()]) {
+      if (!allowed.has(id)) byId.delete(id);
+    }
+    for (const parameter of parameters) {
+      const id = String(parameter.id ?? "").trim();
+      if (!id || byId.has(id)) continue;
+      const value = conservativeParamValue(id, parameter.values ?? []);
+      if (value) byId.set(id, { id, value });
+    }
+  } else if (cardModel) {
+    const hasReasoning = [...byId.keys()].some(isReasoningParamId);
+    if (!hasReasoning) {
+      byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
     }
   }
-  return { ...job, engine, model, modelParams };
+  return { ...job, engine, model, modelParams: [...byId.values()] };
 }
 function resolveModelParams(job) {
   if (job.modelParams && job.modelParams.length > 0) {
@@ -539,6 +587,43 @@ async function runCodex(job, cancellation) {
   }
 }
 
+// src/git_working_tree.ts
+import { spawnSync } from "node:child_process";
+function combinedOutput(status) {
+  const stdout = String(status.stdout ?? "").trim();
+  const stderr = String(status.stderr ?? "").trim();
+  if (!stdout) return stderr;
+  if (!stderr) return stdout;
+  return `${stdout}
+${stderr}`;
+}
+function looksLikeNotGit(text) {
+  const lower = text.toLowerCase();
+  return lower.includes("not a git repository") || lower.includes("not a git repo");
+}
+function inspectGitWorkingTree(cwd) {
+  const root = cwd.trim();
+  if (!root) return { kind: "not_git" };
+  const status = spawnSync("git", ["-C", root, "status", "--short"], {
+    encoding: "utf8",
+    windowsHide: true
+  });
+  const output = combinedOutput(status);
+  if (status.error) {
+    const message = status.error.message || String(status.error);
+    if (looksLikeNotGit(message)) return { kind: "not_git" };
+    return { kind: "unknown", output: message };
+  }
+  if (status.status !== 0) {
+    if (looksLikeNotGit(output) || status.status === 128) {
+      return { kind: "not_git" };
+    }
+    return { kind: "unknown", output };
+  }
+  if (!output) return { kind: "clean" };
+  return { kind: "dirty", output };
+}
+
 // src/mcp_client.ts
 import {
   Client,
@@ -601,6 +686,47 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join as join2 } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
+
+// src/cursor_token_usage.ts
+function asCount(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(value));
+}
+function toDashboardTokenUsage(raw) {
+  const input = asCount(raw.inputTokens);
+  const output = asCount(raw.outputTokens);
+  const cacheRead = asCount(raw.cacheReadTokens);
+  const cacheWrite = asCount(raw.cacheWriteTokens);
+  const reportedTotal = asCount(raw.totalTokens);
+  const cache = cacheRead + cacheWrite;
+  const extra = reportedTotal - input - output;
+  const inferredCache = cache > 0 ? cache : Math.max(0, extra);
+  const inferredRead = cacheRead > 0 ? cacheRead : inferredCache;
+  const inferredWrite = cacheWrite;
+  const cacheSum = inferredRead + inferredWrite;
+  const inputLooksInclusive = cacheSum > 0 && input >= cacheSum && extra >= cacheSum;
+  if (inputLooksInclusive) {
+    const uncached = input - cacheSum;
+    return {
+      inputTokens: uncached,
+      outputTokens: output,
+      cacheReadTokens: inferredRead,
+      cacheWriteTokens: inferredWrite,
+      totalTokens: uncached + output + cacheSum
+    };
+  }
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    cacheReadTokens: inferredRead,
+    cacheWriteTokens: inferredWrite,
+    totalTokens: input + output + cacheSum
+  };
+}
+function formatSessionTokenLog(raw) {
+  const usage = toDashboardTokenUsage(raw);
+  return `\u672C\u4F1A\u8BDD token\uFF1Ainput=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}`;
+}
 
 // src/worker_log.ts
 import { writeSync } from "node:fs";
@@ -793,8 +919,9 @@ async function runCursor(job, cancellation) {
     const storeDir = join2(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF1B\u7F51\u7EDC\u4F20\u8F93\u4F7F\u7528 SDK \u9ED8\u8BA4\u914D\u7F6E\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F MCP\uFF08${job.mcpEndpoint}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF1B\u7F51\u7EDC\u4F20\u8F93\u4F7F\u7528 SDK \u9ED8\u8BA4\u914D\u7F6E\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F MCP\uFF08${job.agentMcpEndpoint?.trim() || job.mcpEndpoint}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP\uFF1BsettingSources \u4E3A\u7A7A\uFF08\u4E0D\u6CE8\u5165\u9879\u76EE\u89C4\u5219\u4E0E\u4E2A\u4EBA Skill\uFF09`
     );
+    const agentMcpUrl = job.agentMcpEndpoint?.trim() || job.mcpEndpoint;
     const agent = await Agent.create({
       apiKey,
       model: {
@@ -804,12 +931,14 @@ async function runCursor(job, cancellation) {
       mcpServers: {
         kanbanMCP: {
           type: "http",
-          url: job.mcpEndpoint
+          url: agentMcpUrl
         }
       },
       local: {
         cwd: job.cwd,
-        settingSources: ["project"],
+        // 流程已由注入的 Skill 正文给出。加载 project 会把仓库规则与个人 Skill
+        // 整包塞进会话（日志里常见 skillCount=21、ruleCount=32），cacheRead 可达上百万。
+        settingSources: [],
         store: new JsonlLocalAgentStore(storeDir),
         sandboxOptions: { enabled: false }
       }
@@ -851,9 +980,7 @@ async function runCursor(job, cancellation) {
         `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
       );
       if (result.usage) {
-        logLine(
-          `\u672C\u4F1A\u8BDD token\uFF1Ainput=${result.usage.inputTokens} output=${result.usage.outputTokens} total=${result.usage.totalTokens}`
-        );
+        logLine(formatSessionTokenLog(result.usage));
       }
       if (result.status === "error") {
         return {
@@ -920,14 +1047,35 @@ async function runBatch(job, cancellation) {
           processedCards
         };
       }
+      const tree = inspectGitWorkingTree(job.cwd);
+      if (tree.kind === "dirty") {
+        workerLog(`Git \u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u672A\u521B\u5EFA Skill \u4F1A\u8BDD`);
+        return {
+          ok: false,
+          error: `\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u672A\u521B\u5EFA Skill \u4F1A\u8BDD\uFF1A
+${tree.output}`,
+          processedCards
+        };
+      }
+      if (tree.kind === "unknown") {
+        workerLog(`\u65E0\u6CD5\u5224\u65AD Git \u5DE5\u4F5C\u533A\uFF1A${tree.output}`);
+        return {
+          ok: false,
+          error: `\u65E0\u6CD5\u5224\u65AD Git \u5DE5\u4F5C\u533A\uFF0C\u672A\u521B\u5EFA Skill \u4F1A\u8BDD\uFF1A${tree.output}`,
+          processedCards
+        };
+      }
+      workerLog(
+        tree.kind === "not_git" ? "\u5F53\u524D\u76EE\u5F55\u4E0D\u7531 Git \u7BA1\u7406\uFF0C\u8DF3\u8FC7\u5DE5\u4F5C\u533A\u68C0\u67E5" : "Git \u5DE5\u4F5C\u533A\u5E72\u51C0"
+      );
       await mcp.callJson("dispatch_begin_agent_session", {
         workerToken: job.workerToken
       });
       workerLog("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
       const roundJob = mergeJobWithCardOverrides(job, peek);
-      if (roundJob.engine !== job.engine || roundJob.model !== job.model) {
+      if (roundJob.engine !== job.engine || roundJob.model !== job.model || JSON.stringify(roundJob.modelParams ?? []) !== JSON.stringify(job.modelParams ?? [])) {
         workerLog(
-          `\u672C\u5361\u6A21\u578B\u8986\u76D6\uFF1Aengine=${roundJob.engine} model=${roundJob.model ?? "(\u5DE5\u4F5C\u53F0)"} cardId=${String(peek.cardId ?? "")}`
+          `\u672C\u5361\u8986\u76D6\uFF1Aengine=${roundJob.engine} model=${roundJob.model ?? "(\u5E73\u53F0\u9ED8\u8BA4)"} params=${JSON.stringify(roundJob.modelParams ?? [])} cardId=${String(peek.cardId ?? "")}`
         );
       }
       const result = roundJob.engine === "codex" ? await runCodex(roundJob, cancellation) : await runCursor(roundJob, cancellation);

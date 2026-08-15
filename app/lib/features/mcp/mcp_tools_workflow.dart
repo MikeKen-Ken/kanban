@@ -13,9 +13,8 @@ void registerKanbanMcpWorkflowTools(
 ) {
   server.registerTool(
     'prepare_card_submission',
-    description: '只读生成 suggestedCommitMessage 及其 Base64 形式；'
-        '不移动卡片、不勾选反馈。'
-        '本地验证通过后调用，git commit 后再用 submit_card_for_verify 并传 commitRef。',
+    description: '只读生成 suggestedCommitMessage 与 suggestedCommitMessageBase64；'
+        '不移动卡片。',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),

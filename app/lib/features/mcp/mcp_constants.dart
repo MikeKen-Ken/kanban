@@ -14,4 +14,8 @@ abstract final class McpConstants {
 
   static String endpointUrl([int port = defaultPort]) =>
       'http://$host:$port$path';
+
+  /// Skill 会话专用端点，只暴露取卡/咨询/提交/阻塞。
+  static String agentEndpointUrl(int port) =>
+      'http://$host:$port$path';
 }

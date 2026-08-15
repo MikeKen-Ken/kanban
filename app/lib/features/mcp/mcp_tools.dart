@@ -1,6 +1,7 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import 'mcp_tools_agent_session.dart';
 import 'mcp_tools_automations.dart';
 import 'mcp_tools_cards.dart';
 import 'mcp_tools_dispatch.dart';
@@ -14,7 +15,17 @@ import 'mcp_tools_structure.dart';
 import 'mcp_tools_workflow.dart';
 
 /// 向 [McpServer] 注册看板工具；所有写入经 [BoardController]。
-void registerKanbanMcpTools(McpServer server, BoardController controller) {
+enum KanbanMcpToolset { full, agentSession }
+
+void registerKanbanMcpTools(
+  McpServer server,
+  BoardController controller, {
+  KanbanMcpToolset toolset = KanbanMcpToolset.full,
+}) {
+  if (toolset == KanbanMcpToolset.agentSession) {
+    registerKanbanMcpAgentSessionTools(server, controller);
+    return;
+  }
   registerKanbanMcpStructureTools(server, controller);
   registerKanbanMcpCardTools(server, controller);
   registerKanbanMcpDispatchTools(server, controller);

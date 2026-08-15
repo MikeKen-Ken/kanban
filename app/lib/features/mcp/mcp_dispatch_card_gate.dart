@@ -29,7 +29,11 @@ class McpDispatchCardGate {
     return projectId;
   }
 
-  void beginBatch(String workerToken, {required String projectId}) {
+  void beginBatch(
+    String workerToken, {
+    required String projectId,
+    String? repoPath,
+  }) {
     final existingToken = _tokenByProject[projectId];
     if (existingToken != null) {
       _slotsByToken.remove(existingToken);
@@ -37,6 +41,7 @@ class McpDispatchCardGate {
     _slotsByToken[workerToken] = _McpDispatchSlot(
       workerToken: workerToken,
       projectId: projectId,
+      repoPath: repoPath?.trim().isEmpty == true ? null : repoPath?.trim(),
     );
     _tokenByProject[projectId] = workerToken;
   }
@@ -79,6 +84,43 @@ class McpDispatchCardGate {
     slot.pickedCardId = cardId;
   }
 
+  /// 非调度会话返回 null（允许测试直接调实现）；调度中则必须是本轮已领取的卡。
+  String? authorizePickedCard(String cardId) {
+    if (_slotsByToken.isEmpty) return null;
+    final id = cardId.trim();
+    for (final slot in _slotsByToken.values) {
+      if (!slot.sessionOpen) continue;
+      if (slot.pickedCardId == id) return null;
+    }
+    return '只能对本轮 pick_next_card 领取的卡片调用 commit_and_submit_card';
+  }
+
+  String? repoPathForPickedCard(String cardId) {
+    final slot = _slotForPickedCard(cardId);
+    return slot?.repoPath;
+  }
+
+  String? pendingCommitRefForCard(String cardId) {
+    return _slotForPickedCard(cardId)?.pendingCommitRef;
+  }
+
+  void recordPendingCommitRef({
+    required String cardId,
+    required String commitRef,
+  }) {
+    final slot = _slotForPickedCard(cardId);
+    if (slot == null) return;
+    slot.pendingCommitRef = commitRef.trim();
+  }
+
+  _McpDispatchSlot? _slotForPickedCard(String cardId) {
+    final id = cardId.trim();
+    for (final slot in _slotsByToken.values) {
+      if (slot.sessionOpen && slot.pickedCardId == id) return slot;
+    }
+    return null;
+  }
+
   McpDispatchSessionStatus? sessionStatus(String workerToken) {
     final slot = _slotsByToken[workerToken];
     if (slot == null) return null;
@@ -101,15 +143,18 @@ class _McpDispatchSlot {
   _McpDispatchSlot({
     required this.workerToken,
     required this.projectId,
+    this.repoPath,
   });
 
   final String workerToken;
   final String projectId;
+  final String? repoPath;
   bool sessionOpen = false;
   bool pickClaimed = false;
   int deniedPickCount = 0;
   String? pickedProjectId;
   String? pickedCardId;
+  String? pendingCommitRef;
 
   void resetSession({required bool open}) {
     sessionOpen = open;
@@ -117,6 +162,7 @@ class _McpDispatchSlot {
     deniedPickCount = 0;
     pickedProjectId = null;
     pickedCardId = null;
+    pendingCommitRef = null;
   }
 }
 

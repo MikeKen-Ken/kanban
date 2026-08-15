@@ -137,6 +137,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   required String cwd,
   required String prompt,
   required String mcpEndpoint,
+  String? agentMcpEndpoint,
   required int cardLimit,
   required String workerToken,
   String? projectId,
@@ -174,6 +175,8 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     'cwd': cwd,
     'prompt': prompt,
     'mcpEndpoint': mcpEndpoint,
+    if (agentMcpEndpoint != null && agentMcpEndpoint.trim().isNotEmpty)
+      'agentMcpEndpoint': agentMcpEndpoint.trim(),
     'cardLimit': cardLimit,
     'workerToken': workerToken,
     if (projectId != null && projectId.trim().isNotEmpty)

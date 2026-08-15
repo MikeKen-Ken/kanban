@@ -232,25 +232,29 @@ export async function runCursor(
     let toolCallCount = 0;
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
-    logLine(
-      `本地运行：JSONL 存储=${storeDir}；沙箱关闭；网络传输使用 SDK 默认配置；` +
-        `仅注入看板 MCP（${job.mcpEndpoint}），不加载用户级 MCP`,
-    );
-    const agent = await Agent.create({
-      apiKey,
-      model: {
-        id: modelId,
-        ...(params ? { params } : {}),
+  logLine(
+    `本地运行：JSONL 存储=${storeDir}；沙箱关闭；网络传输使用 SDK 默认配置；` +
+      `仅注入看板 MCP（${job.agentMcpEndpoint?.trim() || job.mcpEndpoint}），不加载用户级 MCP；` +
+      `settingSources 为空（不注入项目规则与个人 Skill）`,
+  );
+  const agentMcpUrl = job.agentMcpEndpoint?.trim() || job.mcpEndpoint;
+  const agent = await Agent.create({
+    apiKey,
+    model: {
+      id: modelId,
+      ...(params ? { params } : {}),
+    },
+    mcpServers: {
+      kanbanMCP: {
+        type: "http",
+        url: agentMcpUrl,
       },
-      mcpServers: {
-        kanbanMCP: {
-          type: "http",
-          url: job.mcpEndpoint,
-        },
-      },
+    },
       local: {
         cwd: job.cwd,
-        settingSources: ["project"],
+        // 流程已由注入的 Skill 正文给出。加载 project 会把仓库规则与个人 Skill
+        // 整包塞进会话（日志里常见 skillCount=21、ruleCount=32），cacheRead 可达上百万。
+        settingSources: [],
         store: new JsonlLocalAgentStore(storeDir),
         sandboxOptions: { enabled: false },
       },

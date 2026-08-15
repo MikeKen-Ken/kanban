@@ -17,6 +17,8 @@ export type DispatchJob = {
   modelParams?: ModelParam[];
   engineDefaults?: Partial<Record<"cursor" | "codex", EngineDefault>>;
   mcpEndpoint: string;
+  /** Skill 会话使用的精简 MCP；缺省则回退 mcpEndpoint。 */
+  agentMcpEndpoint?: string;
   projectId?: string;
   cardLimit: number;
   workerToken: string;

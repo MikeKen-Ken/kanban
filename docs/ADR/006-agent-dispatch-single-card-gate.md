@@ -14,9 +14,12 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续，�
 3. 有卡时，Worker 创建全新的 Cursor SDK Agent 或 `codex exec` 会话，只发送 Skill 全文和可选项目名。
 4. Skill 在会话内自行调用 `pick_next_card` 并完成单卡流程。
 5. 每轮开始前，Worker 通过私有 token 重置 MCP 单卡闸门；本轮第二次 `pick_next_card` 由 MCP 拒绝。token 不进入 AI 提示。
-6. Cursor 以 `run.wait()` 的 `finished/error`、Codex 以独立进程退出码判断会话是否结束，不解析 AI 最终文字。
-7. 会话结束后，Worker 根据闸门记录的 cardId 读取看板状态：进入待验证才继续；进入阻塞或仍在其他列则停止。
-8. Worker 再次只读检查队列；无卡或达到上限时结束批次。
+6. 每轮创建 Skill 会话前，Worker 在仓库目录执行 `git status --short`：工作区不干净则不创建会话并停止批次；非 Git 目录则跳过检查。
+7. Cursor 以 `run.wait()` 的 `finished/error`、Codex 以独立进程退出码判断会话是否结束，不解析 AI 最终文字。
+8. 会话结束后，Worker 根据闸门记录的 cardId 读取看板状态：进入待验证才继续；进入阻塞或仍在其他列则停止。
+9. Worker 再次只读检查队列；无卡或达到上限时结束批次。
+10. Skill 会话连接独立 MCP 端点，只暴露 `pick_next_card`、`submit_consultation`、`commit_and_submit_card`、`block_card`。Worker 与 IDE 仍使用完整工具目录。
+11. 实施卡收尾由 `commit_and_submit_card` 在看板进程内提交（如有 Git）并移入待验证；AI 不得自行 `git commit`。
 
 ## 结果
 

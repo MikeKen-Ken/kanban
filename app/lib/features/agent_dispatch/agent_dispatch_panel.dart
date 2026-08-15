@@ -551,6 +551,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       options: options,
       skillPath: next.resolveSkillPath(),
       mcpEndpoint: board.mcpHost.endpointUrl,
+      agentMcpEndpoint: board.mcpHost.agentEndpointUrl,
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
       afterQueue: next.afterQueue,

@@ -13,12 +13,9 @@ import 'mcp_tool_results.dart';
 void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'pick_next_card',
-    description: '取下一条可实施卡并自动移入「进行中」：优先「待返工」最新未完成卡，否则「待办」。'
-        '默认 includeWorkItems=true，一次返回 workItems；有图片/文件时直接内联内容'
-        '（图片为 ImageContent，文件为 contentBase64），无需再 list/read。'
-        '仅 peek 时可传 includeWorkItems=false。'
-        '完成后用 submit_card_for_verify；失败用 block_card（传 reason）。'
-        '无需指定列；projectId 可传项目 id 或项目名，省略则用界面当前项目。',
+    description: '取下一条可实施卡并移入「进行中」：优先「待返工」最新未完成卡，否则「待办」。'
+        '默认返回 workItems；有图片/文件时内联内容，无需再 list/read。'
+        'projectId 传项目 UUID。',
     inputSchema: JsonSchema.object(
       properties: {
         'projectId': JsonSchema.string(

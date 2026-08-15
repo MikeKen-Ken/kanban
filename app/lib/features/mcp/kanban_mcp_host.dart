@@ -14,13 +14,21 @@ class KanbanMcpHost extends ChangeNotifier {
 
   final BoardController _controller;
   StreamableMcpServer? _server;
+  StreamableMcpServer? _agentServer;
   KanbanMcpStatus status = KanbanMcpStatus.stopped;
   String? lastError;
   int boundPort = McpConstants.defaultPort;
+  int agentBoundPort = McpConstants.defaultPort;
 
   bool get isSupported => McpPaths.isWindowsSupported;
 
   String get endpointUrl => McpConstants.endpointUrl(boundPort);
+
+  /// Skill 会话只连这个地址，避免把完整工具目录灌进上下文。
+  String get agentEndpointUrl =>
+      _agentServer == null
+          ? endpointUrl
+          : McpConstants.agentEndpointUrl(agentBoundPort);
 
   bool get isRunning => status == KanbanMcpStatus.running;
 
@@ -70,8 +78,12 @@ class KanbanMcpHost extends ChangeNotifier {
       await server.start();
       _server = server;
       boundPort = server.boundPort;
+      await _startAgentServer();
       status = KanbanMcpStatus.running;
       debugPrint('看板 MCP 已监听 $endpointUrl');
+      if (_agentServer != null) {
+        debugPrint('调度 Skill MCP 已监听 $agentEndpointUrl');
+      }
     } catch (error) {
       _server = null;
       status = KanbanMcpStatus.error;
@@ -82,6 +94,15 @@ class KanbanMcpHost extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    final agentServer = _agentServer;
+    _agentServer = null;
+    if (agentServer != null) {
+      try {
+        await agentServer.stop();
+      } catch (error) {
+        debugPrint('调度 Skill MCP 停止失败：$error');
+      }
+    }
     final server = _server;
     _server = null;
     if (server != null) {
@@ -93,10 +114,6 @@ class KanbanMcpHost extends ChangeNotifier {
     }
     if (status != KanbanMcpStatus.stopped || lastError != null) {
       status = KanbanMcpStatus.stopped;
-      // 保留 lastError 供「曾失败」查看；主动 stop 时清空
-      if (lastError != null && !isSupported) {
-        // no-op
-      }
       notifyListeners();
     }
   }
@@ -118,9 +135,53 @@ class KanbanMcpHost extends ChangeNotifier {
     return server;
   }
 
+  Future<void> _startAgentServer() async {
+    try {
+      final server = StreamableMcpServer(
+        serverFactory: (_) => _buildAgentServer(),
+        host: McpConstants.host,
+        port: 0,
+        path: McpConstants.path,
+        eventStore: InMemoryEventStore(),
+        enableDnsRebindingProtection: true,
+        allowedHosts: const {'127.0.0.1', 'localhost'},
+        enableJsonResponse: true,
+      );
+      await server.start();
+      _agentServer = server;
+      agentBoundPort = server.boundPort;
+    } catch (error) {
+      _agentServer = null;
+      debugPrint('调度 Skill MCP 启动失败，Skill 将回退完整工具目录：$error');
+    }
+  }
+
+  McpServer _buildAgentServer() {
+    final server = McpServer(
+      const Implementation(
+        name: McpConstants.implementationName,
+        version: McpConstants.implementationVersion,
+      ),
+      options: const McpServerOptions(
+        protocol: McpProtocol.stable,
+        capabilities: ServerCapabilities(
+          tools: ServerCapabilitiesTools(),
+        ),
+      ),
+    );
+    registerKanbanMcpTools(
+      server,
+      _controller,
+      toolset: KanbanMcpToolset.agentSession,
+    );
+    return server;
+  }
+
   @override
   void dispose() {
-    // 异步 stop；dispose 路径尽力关闭
+    final agentServer = _agentServer;
+    _agentServer = null;
+    agentServer?.stop();
     final server = _server;
     _server = null;
     server?.stop();

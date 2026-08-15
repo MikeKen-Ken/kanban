@@ -33,6 +33,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   required String cwd,
   required String prompt,
   required String mcpEndpoint,
+  String? agentMcpEndpoint,
   required int cardLimit,
   required String workerToken,
   String? projectId,

@@ -412,14 +412,8 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'submit_card_for_verify',
-    description: '将卡片移入「待验证」（实施成功收尾）。只需 cardId 即可：有未完成验证反馈时默认全部勾完成再移列。'
-        '实施卡完成全部子任务后可传 completeAllIncompleteChecklist=true，一次勾完未完成子任务。'
-        '可选 completeAllIncompleteFeedback / completedFeedbackIds / verificationFeedback（三选一）。'
-        '成功时返回 suggestedCommitMessage（直接用作 git commit 信息）。'
-        'git commit 后请调用 set_card_commit_ref 写入提交号，'
-        '或再次 submit 并传 commitRef。'
-        '实施失败请改用 block_card。'
-        '省略 projectId 时按 cardId 定位所属项目',
+    description: '将卡片移入「待验证」。实施卡传 completeAllIncompleteChecklist=true；'
+        'Git 仓库同时传 commitRef。',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(description: '卡片 id'),
