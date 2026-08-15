@@ -709,17 +709,100 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               ],
               Row(
                 children: [
-                  Text('模型', style: Theme.of(context).textTheme.labelLarge),
-                  const Spacer(),
+                  Expanded(
+                    flex: 2,
+                    child: _models.isEmpty
+                        ? InputDecorator(
+                            decoration: agentDispatchCompactDropdownDecoration(
+                              '模型',
+                            ),
+                            child: Text(
+                              '尚未加载',
+                              style: agentDispatchCompactDropdownStyle(context),
+                            ),
+                          )
+                        : DropdownButtonFormField<String>(
+                            key: ValueKey('model-${_settings.modelId}'),
+                            initialValue:
+                                _models.any((m) => m.id == _settings.modelId)
+                                    ? _settings.modelId
+                                    : _models.first.id,
+                            isDense: true,
+                            isExpanded: true,
+                            style: agentDispatchCompactDropdownStyle(context),
+                            decoration:
+                                agentDispatchCompactDropdownDecoration('模型'),
+                            items: [
+                              for (final m in _models)
+                                DropdownMenuItem(
+                                  value: m.id,
+                                  child: Text(
+                                    m.label,
+                                    style: agentDispatchCompactDropdownStyle(
+                                      context,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                            onChanged: _running || _busy
+                                ? null
+                                : (id) {
+                                    AgentDispatchModelInfo? selected;
+                                    for (final model in _models) {
+                                      if (model.id == id) {
+                                        selected = model;
+                                        break;
+                                      }
+                                    }
+                                    _persist(_settings.copyWith(
+                                      modelId: id,
+                                      modelParamValues:
+                                          preferredAgentDispatchModelParamValues(
+                                        selected?.parameters ?? const [],
+                                      ),
+                                    ));
+                                  },
+                          ),
+                  ),
+                  if (modelParameters.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Expanded(
+                      flex: 3,
+                      child: AgentDispatchModelParameters(
+                        parameters: modelParameters,
+                        defaultVariant: _selectedModel?.defaultVariant,
+                        values: _settings.modelParamValues,
+                        enabled: !_running && !_busy,
+                        onChanged: (id, value) {
+                          final values = Map<String, String>.from(
+                            _settings.modelParamValues,
+                          );
+                          if (value == 'default') {
+                            values.remove(id);
+                          } else {
+                            values[id] = value;
+                          }
+                          _persist(
+                            _settings.copyWith(modelParamValues: values),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                   TextButton(
                     onPressed: _running || _busy ? null : _loadModels,
-                    child: Text(_busy ? '刷新中…' : '从 API 刷新'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    child: Text(_busy ? '刷新中…' : '刷新'),
                   ),
                 ],
               ),
               if (_modelCatalogMessage != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
                   child: Text(
                     _modelCatalogMessage!,
                     style: TextStyle(
@@ -729,60 +812,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   ),
                 ),
               if (_models.isEmpty)
-                Text(
-                  '尚未加载模型目录；请点击「从 API 刷新」手动拉取',
-                  style: Theme.of(context).textTheme.bodySmall,
-                )
-              else
-                DropdownButtonFormField<String>(
-                  key: ValueKey('model-${_settings.modelId}'),
-                  initialValue: _models.any((m) => m.id == _settings.modelId)
-                      ? _settings.modelId
-                      : _models.first.id,
-                  decoration: const InputDecoration(labelText: '模型 id'),
-                  items: [
-                    for (final m in _models)
-                      DropdownMenuItem(
-                        value: m.id,
-                        child: Text(m.label),
-                      ),
-                  ],
-                  onChanged: _running || _busy
-                      ? null
-                      : (id) {
-                          AgentDispatchModelInfo? selected;
-                          for (final model in _models) {
-                            if (model.id == id) {
-                              selected = model;
-                              break;
-                            }
-                          }
-                          _persist(_settings.copyWith(
-                            modelId: id,
-                            modelParamValues:
-                                preferredAgentDispatchModelParamValues(
-                              selected?.parameters ?? const [],
-                            ),
-                          ));
-                        },
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '尚未加载模型目录；请点击「刷新」手动拉取',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
-              AgentDispatchModelParameters(
-                parameters: modelParameters,
-                defaultVariant: _selectedModel?.defaultVariant,
-                values: _settings.modelParamValues,
-                enabled: !_running && !_busy,
-                onChanged: (id, value) {
-                  final values = Map<String, String>.from(
-                    _settings.modelParamValues,
-                  );
-                  if (value == 'default') {
-                    values.remove(id);
-                  } else {
-                    values[id] = value;
-                  }
-                  _persist(_settings.copyWith(modelParamValues: values));
-                },
-              ),
               if (_selectedModel != null && modelParameters.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

@@ -2,6 +2,17 @@ import 'package:flutter/material.dart';
 
 import 'agent_dispatch_config.dart';
 
+InputDecoration agentDispatchCompactDropdownDecoration(String label) =>
+    InputDecoration(
+      labelText: label,
+      isDense: true,
+      labelStyle: const TextStyle(fontSize: 11),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+    );
+
+TextStyle? agentDispatchCompactDropdownStyle(BuildContext context) =>
+    Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11);
+
 class AgentDispatchModelParameters extends StatelessWidget {
   const AgentDispatchModelParameters({
     super.key,
@@ -20,34 +31,48 @@ class AgentDispatchModelParameters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final style = agentDispatchCompactDropdownStyle(context);
+    return Row(
       children: [
-        for (final parameter in parameters) ...[
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            key: ValueKey(
-              'model-param-${parameter.id}-${values[parameter.id]}',
-            ),
-            initialValue: _currentValue(parameter),
-            decoration: InputDecoration(
-              labelText: _parameterLabel(parameter),
-            ),
-            items: [
-              DropdownMenuItem(
-                value: 'default',
-                child: Text(_defaultLabel(parameter)),
+        for (var i = 0; i < parameters.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              key: ValueKey(
+                'model-param-${parameters[i].id}-${values[parameters[i].id]}',
               ),
-              for (final option in parameter.options)
+              initialValue: _currentValue(parameters[i]),
+              isDense: true,
+              isExpanded: true,
+              style: style,
+              decoration: agentDispatchCompactDropdownDecoration(
+                _parameterLabel(parameters[i]),
+              ),
+              items: [
                 DropdownMenuItem(
-                  value: option.value,
-                  child: Text(option.displayName ?? option.value),
+                  value: 'default',
+                  child: Text(
+                    _defaultLabel(parameters[i]),
+                    style: style,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-            ],
-            onChanged: enabled
-                ? (value) {
-                    if (value != null) onChanged(parameter.id, value);
-                  }
-                : null,
+                for (final option in parameters[i].options)
+                  DropdownMenuItem(
+                    value: option.value,
+                    child: Text(
+                      option.displayName ?? option.value,
+                      style: style,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: enabled
+                  ? (value) {
+                      if (value != null) onChanged(parameters[i].id, value);
+                    }
+                  : null,
+            ),
           ),
         ],
       ],
@@ -78,9 +103,9 @@ String _parameterLabel(AgentDispatchModelParameter parameter) =>
       'model_reasoning_effort' ||
       'effort' ||
       'thinking' =>
-        '思考程度（${parameter.displayName ?? parameter.id}）',
-      'fast' => '快速模式（${parameter.displayName ?? parameter.id}）',
-      _ => parameter.displayName ?? '模型参数（${parameter.id}）',
+        '思考程度',
+      'fast' => '快速模式',
+      _ => parameter.displayName ?? parameter.id,
     };
 
 bool isAgentDispatchReasoningParam(String id) => switch (id) {

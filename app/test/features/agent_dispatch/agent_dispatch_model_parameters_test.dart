@@ -47,8 +47,8 @@ void main() {
       ),
     );
 
-    expect(find.text('快速模式（Fast）'), findsOneWidget);
-    expect(find.text('思考程度（Reasoning effort）'), findsOneWidget);
+    expect(find.text('快速模式'), findsOneWidget);
+    expect(find.text('思考程度'), findsOneWidget);
     expect(find.text('API 默认（On）'), findsOneWidget);
   });
 
