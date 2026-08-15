@@ -24,11 +24,13 @@ class KanbanMcpHost extends ChangeNotifier {
 
   String get endpointUrl => McpConstants.endpointUrl(boundPort);
 
-  /// Skill 会话只连这个地址，避免把完整工具目录灌进上下文。
-  String get agentEndpointUrl =>
+  /// Skill 会话专用端点（与完整目录同 path、不同端口）。未启动时为 null，禁止回退。
+  String? get agentEndpointUrl =>
       _agentServer == null
-          ? endpointUrl
+          ? null
           : McpConstants.agentEndpointUrl(agentBoundPort);
+
+  bool get hasAgentSessionServer => _agentServer != null;
 
   bool get isRunning => status == KanbanMcpStatus.running;
 
@@ -81,19 +83,25 @@ class KanbanMcpHost extends ChangeNotifier {
       await _startAgentServer();
       status = KanbanMcpStatus.running;
       debugPrint('看板 MCP 已监听 $endpointUrl');
-      if (_agentServer != null) {
-        debugPrint('调度 Skill MCP 已监听 $agentEndpointUrl');
-      }
+      debugPrint('调度 Skill MCP 已监听 $agentEndpointUrl');
     } catch (error) {
-      _server = null;
+      await _closeServers();
       status = KanbanMcpStatus.error;
-      lastError = error.toString();
-      debugPrint('看板 MCP 启动失败：$error');
+      lastError ??= error.toString();
+      debugPrint('看板 MCP 启动失败：$lastError');
     }
     notifyListeners();
   }
 
   Future<void> stop() async {
+    await _closeServers();
+    if (status != KanbanMcpStatus.stopped || lastError != null) {
+      status = KanbanMcpStatus.stopped;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _closeServers() async {
     final agentServer = _agentServer;
     _agentServer = null;
     if (agentServer != null) {
@@ -111,10 +119,6 @@ class KanbanMcpHost extends ChangeNotifier {
       } catch (error) {
         debugPrint('看板 MCP 停止失败：$error');
       }
-    }
-    if (status != KanbanMcpStatus.stopped || lastError != null) {
-      status = KanbanMcpStatus.stopped;
-      notifyListeners();
     }
   }
 
@@ -152,7 +156,9 @@ class KanbanMcpHost extends ChangeNotifier {
       agentBoundPort = server.boundPort;
     } catch (error) {
       _agentServer = null;
-      debugPrint('调度 Skill MCP 启动失败，Skill 将回退完整工具目录：$error');
+      lastError = '调度 Skill MCP 启动失败：$error';
+      debugPrint(lastError);
+      rethrow;
     }
   }
 

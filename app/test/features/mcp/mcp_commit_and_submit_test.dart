@@ -6,7 +6,9 @@ import 'package:kanban/controllers/board_controller.dart';
 import 'package:kanban/features/kanban/verify_column.dart';
 import 'package:kanban/features/mcp/mcp_commit_and_submit_card.dart';
 import 'package:kanban/features/mcp/mcp_dispatch_card_gate.dart';
+import 'package:kanban/features/mcp/mcp_git_commit.dart';
 import 'package:kanban/features/mcp/mcp_pick_next_card.dart';
+import 'package:kanban/models/kanban_models.dart';
 import 'package:kanban/storage/board_storage.dart';
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:path/path.dart' as p;
@@ -102,5 +104,135 @@ void main() {
           .any((card) => card.id == cardId),
       isTrue,
     );
+  });
+
+  test('未领取的卡片不能 commit_and_submit', () async {
+    final todo = controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '未领取'))!;
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: tempDir.path,
+    );
+    expect(gate.beginAgentSession('worker-a'), isTrue);
+    final result = await mcpCommitAndSubmitCard(controller, cardId: cardId);
+    expect(result.isError, isTrue);
+  });
+
+  test('干净工作区且无未完成项时用 HEAD 送验', () async {
+    final repo = Directory(p.join(tempDir.path, 'clean_repo'));
+    await repo.create();
+    await _git(repo.path, ['init']);
+    await _git(repo.path, ['config', 'user.email', 'test@example.com']);
+    await _git(repo.path, ['config', 'user.name', 'Test']);
+    File(p.join(repo.path, 'app.txt')).writeAsStringSync('ok\n');
+    await _git(repo.path, ['add', '-A']);
+    await _git(repo.path, ['commit', '-m', 'init']);
+    final head = await mcpGitShortHead(repo.path);
+
+    final todo = controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '无改动'))!;
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: repo.path,
+    );
+    expect(gate.beginAgentSession('worker-a'), isTrue);
+    gate.recordBaselineCommitRef('worker-a', head);
+    final pick = await mcpPickNextCard(
+      controller,
+      projectId: controller.activeProjectId,
+    );
+    expect(pick.isError, isNot(true));
+
+    final result = await mcpCommitAndSubmitCard(controller, cardId: cardId);
+    expect(
+      result.isError,
+      isNot(true),
+      reason: result.content.whereType<TextContent>().map((e) => e.text).join(),
+    );
+    expect(_jsonOf(result)['commitRef'], head);
+    expect(
+      findVerifyColumn(controller.board!.columns)!
+          .cards
+          .any((card) => card.id == cardId),
+      isTrue,
+    );
+  });
+
+  test('干净工作区仍有未完成子任务时拒绝送验', () async {
+    final repo = Directory(p.join(tempDir.path, 'todo_repo'));
+    await repo.create();
+    await _git(repo.path, ['init']);
+    await _git(repo.path, ['config', 'user.email', 'test@example.com']);
+    await _git(repo.path, ['config', 'user.name', 'Test']);
+    File(p.join(repo.path, 'app.txt')).writeAsStringSync('ok\n');
+    await _git(repo.path, ['add', '-A']);
+    await _git(repo.path, ['commit', '-m', 'init']);
+    final head = await mcpGitShortHead(repo.path);
+
+    final todo = controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '未做完'))!;
+    await controller.updateCardFull(
+      todo.id,
+      cardId,
+      checklist: [ChecklistItem(id: 'a', text: '待办')],
+    );
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: repo.path,
+    );
+    expect(gate.beginAgentSession('worker-a'), isTrue);
+    gate.recordBaselineCommitRef('worker-a', head);
+    final pick = await mcpPickNextCard(
+      controller,
+      projectId: controller.activeProjectId,
+    );
+    expect(pick.isError, isNot(true));
+
+    final result = await mcpCommitAndSubmitCard(controller, cardId: cardId);
+    expect(result.isError, isTrue);
+  });
+
+  test('会话中途自行提交后可用新 HEAD 送验', () async {
+    final repo = Directory(p.join(tempDir.path, 'self_commit_repo'));
+    await repo.create();
+    await _git(repo.path, ['init']);
+    await _git(repo.path, ['config', 'user.email', 'test@example.com']);
+    await _git(repo.path, ['config', 'user.name', 'Test']);
+    File(p.join(repo.path, 'app.txt')).writeAsStringSync('old\n');
+    await _git(repo.path, ['add', '-A']);
+    await _git(repo.path, ['commit', '-m', 'init']);
+    final baseline = await mcpGitShortHead(repo.path);
+
+    final todo = controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '已自提交'))!;
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: repo.path,
+    );
+    expect(gate.beginAgentSession('worker-a'), isTrue);
+    gate.recordBaselineCommitRef('worker-a', baseline);
+    final pick = await mcpPickNextCard(
+      controller,
+      projectId: controller.activeProjectId,
+    );
+    expect(pick.isError, isNot(true));
+
+    File(p.join(repo.path, 'app.txt')).writeAsStringSync('new\n');
+    await _git(repo.path, ['add', '-A']);
+    await _git(repo.path, ['commit', '-m', 'agent']);
+    final head = await mcpGitShortHead(repo.path);
+    expect(head, isNot(baseline));
+
+    final result = await mcpCommitAndSubmitCard(controller, cardId: cardId);
+    expect(
+      result.isError,
+      isNot(true),
+      reason: result.content.whereType<TextContent>().map((e) => e.text).join(),
+    );
+    expect(_jsonOf(result)['commitRef'], head);
   });
 }

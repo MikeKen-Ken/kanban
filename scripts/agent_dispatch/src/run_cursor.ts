@@ -223,6 +223,11 @@ export async function runCursor(
   const params = resolveModelParams(job);
   logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
 
+  const agentMcpUrl = job.agentMcpEndpoint?.trim();
+  if (!agentMcpUrl) {
+    return { ok: false, error: "缺少 Skill 会话 MCP 端点 agentMcpEndpoint" };
+  }
+
   try {
     // Cursor SDK 的内置 Shell 会从 Worker 进程继承工作目录；在创建 Agent 前
     // 再次固定到目标仓库，避免 Shell 落到发布包的 agent_worker 目录。
@@ -232,24 +237,23 @@ export async function runCursor(
     let toolCallCount = 0;
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
-  logLine(
-    `本地运行：JSONL 存储=${storeDir}；沙箱关闭；网络传输使用 SDK 默认配置；` +
-      `仅注入看板 MCP（${job.agentMcpEndpoint?.trim() || job.mcpEndpoint}），不加载用户级 MCP；` +
-      `settingSources 为空（不注入项目规则与个人 Skill）`,
-  );
-  const agentMcpUrl = job.agentMcpEndpoint?.trim() || job.mcpEndpoint;
-  const agent = await Agent.create({
-    apiKey,
-    model: {
-      id: modelId,
-      ...(params ? { params } : {}),
-    },
-    mcpServers: {
-      kanbanMCP: {
-        type: "http",
-        url: agentMcpUrl,
+    logLine(
+      `本地运行：JSONL 存储=${storeDir}；沙箱关闭；` +
+        `仅注入看板精简 MCP（${agentMcpUrl}），不加载用户级 MCP；` +
+        `settingSources 为空（不注入项目规则与个人 Skill）`,
+    );
+    const agent = await Agent.create({
+      apiKey,
+      model: {
+        id: modelId,
+        ...(params ? { params } : {}),
       },
-    },
+      mcpServers: {
+        kanbanMCP: {
+          type: "http",
+          url: agentMcpUrl,
+        },
+      },
       local: {
         cwd: job.cwd,
         // 流程已由注入的 Skill 正文给出。加载 project 会把仓库规则与个人 Skill

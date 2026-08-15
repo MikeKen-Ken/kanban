@@ -21,7 +21,8 @@ function looksLikeNotGit(text: string): boolean {
   const lower = text.toLowerCase();
   return (
     lower.includes("not a git repository") ||
-    lower.includes("not a git repo")
+    lower.includes("not a git repo") ||
+    lower.includes("不是 git 仓库")
   );
 }
 

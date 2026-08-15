@@ -532,6 +532,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       );
       return;
     }
+    final agentMcpEndpoint = board.mcpHost.agentEndpointUrl;
+    if (agentMcpEndpoint == null || agentMcpEndpoint.isEmpty) {
+      _appendLog(
+        board.mcpHost.lastError ??
+            '调度 Skill MCP 未启动，无法创建精简工具会话',
+        level: AgentDispatchLogLevel.warning,
+      );
+      return;
+    }
 
     var queueSize = 0;
     await board.runOnProject(projectId, () async {
@@ -551,7 +560,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       options: options,
       skillPath: next.resolveSkillPath(),
       mcpEndpoint: board.mcpHost.endpointUrl,
-      agentMcpEndpoint: board.mcpHost.agentEndpointUrl,
+      agentMcpEndpoint: agentMcpEndpoint,
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
       afterQueue: next.afterQueue,

@@ -3,6 +3,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 import '../../controllers/board_controller.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_dispatch_card_gate.dart';
+import 'mcp_git_commit.dart';
 import 'mcp_pick_next_card.dart';
 import 'mcp_tool_results.dart';
 
@@ -42,9 +43,13 @@ void registerKanbanMcpDispatchTools(
     ),
     callback: (args, extra) async {
       final token = mcpTrimmedString(args['workerToken']);
-      if (token == null ||
-          !McpDispatchCardGate.instance.beginAgentSession(token)) {
+      final gate = McpDispatchCardGate.instance;
+      if (token == null || !gate.beginAgentSession(token)) {
         return mcpErrorResult('Worker token 无效，无法开启单卡会话');
+      }
+      final repo = gate.repoPathForToken(token);
+      if (repo != null) {
+        gate.recordBaselineCommitRef(token, await mcpGitShortHead(repo));
       }
       return mcpJsonResult({'ok': true});
     },

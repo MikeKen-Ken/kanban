@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WorkerCancellation } from "./cancellation.js";
+import { createCodexAgentHome, resolveUserCodexHome } from "./codex_mcp.js";
 import {
   effortToCodexConfigArgs,
   type DispatchJob,
@@ -49,29 +50,42 @@ export async function runCodex(
   cancellation?: WorkerCancellation,
 ): Promise<DispatchResult> {
   const startedAt = Date.now();
+  const mcpUrl = job.agentMcpEndpoint?.trim();
+  if (!mcpUrl) {
+    return { ok: false, error: "缺少 Skill 会话 MCP 端点 agentMcpEndpoint" };
+  }
+
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
   const promptFile = join(temp, "prompt.txt");
   const lastMessageFile = join(temp, "last.txt");
-  writeFileSync(promptFile, job.prompt, "utf8");
-
-  const args = [
-    "exec",
-    "--full-auto",
-    "--skip-git-repo-check",
-    "--cd",
-    job.cwd,
-    "-o",
-    lastMessageFile,
-    ...effortToCodexConfigArgs(job),
-  ];
-  if (job.model?.trim()) {
-    args.push("-m", job.model.trim());
-  }
-  args.push("-");
-
-  console.log(`Codex args=${args.join(" ")}`);
-
   try {
+    writeFileSync(promptFile, job.prompt, "utf8");
+    const agentHome = createCodexAgentHome({
+      mcpUrl,
+      userCodexHome: resolveUserCodexHome(),
+      tempRoot: temp,
+    });
+    console.log(
+      `Codex 使用隔离 CODEX_HOME，仅注入精简看板 MCP（${mcpUrl}）`,
+    );
+
+    const args = [
+      "exec",
+      "--full-auto",
+      "--skip-git-repo-check",
+      "--cd",
+      job.cwd,
+      "-o",
+      lastMessageFile,
+      ...effortToCodexConfigArgs(job),
+    ];
+    if (job.model?.trim()) {
+      args.push("-m", job.model.trim());
+    }
+    args.push("-");
+
+    console.log(`Codex args=${args.join(" ")}`);
+
     const code = await new Promise<number>((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
       let child: ChildProcess | undefined;
@@ -96,7 +110,7 @@ export async function runCodex(
       }
       child = spawn(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
-        env: process.env,
+        env: { ...process.env, CODEX_HOME: agentHome.home },
         stdio: ["pipe", "pipe", "pipe"],
         shell: codex.shell,
       });

@@ -4,9 +4,25 @@ import '../../controllers/board_controller.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_block_card.dart';
 import 'mcp_commit_and_submit_card.dart';
+import 'mcp_dispatch_card_gate.dart';
 import 'mcp_pick_next_card.dart';
 import 'mcp_submit_consultation.dart';
 import 'mcp_tool_results.dart';
+
+/// Skill 会话可见的看板工具名；须与 [registerKanbanMcpAgentSessionTools] 一致。
+const kanbanMcpAgentSessionToolNames = [
+  'pick_next_card',
+  'submit_consultation',
+  'commit_and_submit_card',
+  'block_card',
+];
+
+/// 调度中拒绝操作非本轮领取的卡片。
+CallToolResult? mcpRejectForeignDispatchCard(String cardId) {
+  final auth = McpDispatchCardGate.instance.authorizePickedCard(cardId);
+  if (auth == null) return null;
+  return mcpErrorResult(auth);
+}
 
 /// Skill 会话可见的看板工具：取卡、咨询、提交送验、阻塞。
 void registerKanbanMcpAgentSessionTools(
@@ -57,6 +73,8 @@ void registerKanbanMcpAgentSessionTools(
       if (responseMarkdown == null) {
         return mcpErrorResult('responseMarkdown 不能为空');
       }
+      final rejected = mcpRejectForeignDispatchCard(cardId);
+      if (rejected != null) return rejected;
       return mcpSubmitConsultation(
         controller,
         cardId: cardId,
@@ -104,6 +122,8 @@ void registerKanbanMcpAgentSessionTools(
     callback: (args, extra) async {
       final cardId = mcpTrimmedString(args['cardId']);
       if (cardId == null) return mcpErrorResult('cardId 不能为空');
+      final rejected = mcpRejectForeignDispatchCard(cardId);
+      if (rejected != null) return rejected;
       return mcpBlockCard(
         controller,
         cardId: cardId,

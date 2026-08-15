@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import '../../models/kanban_models.dart';
 import 'mcp_dispatch_card_gate.dart';
 import 'mcp_git_commit.dart';
 import 'mcp_prepare_card_submission.dart';
@@ -25,6 +26,7 @@ Future<CallToolResult> mcpCommitAndSubmitCard(
 
   final repoPath = dispatchGate.repoPathForPickedCard(id);
   String? commitRef = dispatchGate.pendingCommitRefForCard(id);
+  var completeIncompleteWork = repoPath == null || repoPath.trim().isEmpty;
 
   if (repoPath != null && repoPath.trim().isNotEmpty) {
     final tree = await inspectMcpGitTree(repoPath, runner: gitRunner);
@@ -49,10 +51,33 @@ Future<CallToolResult> mcpCommitAndSubmitCard(
       }
       commitRef = committed.commitRef;
       dispatchGate.recordPendingCommitRef(cardId: id, commitRef: commitRef!);
+      completeIncompleteWork = true;
     } else if (tree.kind == McpGitTreeKind.clean) {
-      if (commitRef == null || commitRef.isEmpty) {
-        return mcpErrorResult('工作区无变更，无法提交');
+      final head = await mcpGitShortHead(repoPath, runner: gitRunner);
+      final baseline = dispatchGate.baselineCommitRefForCard(id);
+      if (commitRef != null && commitRef.isNotEmpty) {
+        completeIncompleteWork = true;
+      } else if (head != null &&
+          baseline != null &&
+          head != baseline) {
+        commitRef = head;
+        dispatchGate.recordPendingCommitRef(cardId: id, commitRef: head);
+        completeIncompleteWork = true;
+      } else {
+        commitRef = head;
+        completeIncompleteWork = false;
       }
+    } else {
+      completeIncompleteWork = true;
+    }
+  }
+
+  if (!completeIncompleteWork) {
+    final card = controller.findCardById(id);
+    if (card != null && _cardHasIncompleteWork(card)) {
+      return mcpErrorResult(
+        '工作区无新的代码提交，且仍有未完成子任务或验证反馈，无法送验',
+      );
     }
   }
 
@@ -60,9 +85,16 @@ Future<CallToolResult> mcpCommitAndSubmitCard(
     controller,
     cardId: id,
     projectId: projectId,
-    completeAllIncompleteChecklist: true,
+    completeAllIncompleteChecklist: completeIncompleteWork,
+    completeAllIncompleteFeedback:
+        completeIncompleteWork ? null : false,
     commitRef: commitRef,
   );
+}
+
+bool _cardHasIncompleteWork(KanbanCard card) {
+  return card.checklist.any((item) => !item.completed) ||
+      card.verificationFeedback.any((item) => !item.completed);
 }
 
 String? _suggestedCommitMessage(CallToolResult prepared) {

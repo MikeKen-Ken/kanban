@@ -1,4 +1,4 @@
-# ADR-006：Worker 驱动的单卡 Skill 会话
+# ADR-006: Worker 驱动的单卡 Skill 会话
 
 - Status: accepted
 - Date: 2026-08-13
@@ -20,6 +20,14 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续，�
 9. Worker 再次只读检查队列；无卡或达到上限时结束批次。
 10. Skill 会话连接独立 MCP 端点，只暴露 `pick_next_card`、`submit_consultation`、`commit_and_submit_card`、`block_card`。Worker 与 IDE 仍使用完整工具目录。
 11. 实施卡收尾由 `commit_and_submit_card` 在看板进程内提交（如有 Git）并移入待验证；AI 不得自行 `git commit`。
+
+## 实现约束
+
+- Skill MCP 与完整目录共用 `/mcp` 路径，靠独立端口区分。Skill 端口启动失败时不得回退完整工具目录。
+- Cursor 会话只注入该精简端点。Codex 使用临时 `CODEX_HOME`（复制用户 `auth.json`、只写精简 `kanbanMCP`），避免加载用户全局 MCP。
+- 调度中 `block_card` / `submit_consultation` / `commit_and_submit_card` 只能操作本轮领取的卡片。
+- `pick_next_card` 仅在真正领到卡之后占用本轮名额；失败可重试。
+- 工作区干净且 HEAD 相对会话开始未变化时，不伪造提交；若仍有未完成子任务或验证反馈则拒绝送验。
 
 ## 结果
 

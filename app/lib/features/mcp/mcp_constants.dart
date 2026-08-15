@@ -15,7 +15,7 @@ abstract final class McpConstants {
   static String endpointUrl([int port = defaultPort]) =>
       'http://$host:$port$path';
 
-  /// Skill 会话专用端点，只暴露取卡/咨询/提交/阻塞。
+  /// Skill 会话与完整目录共用 `/mcp` 路径，靠 [port] 区分（完整目录固定端口，Skill 用系统分配端口）。
   static String agentEndpointUrl(int port) =>
       'http://$host:$port$path';
 }

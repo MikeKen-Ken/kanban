@@ -52,8 +52,10 @@ void main() {
     );
     expect(
       gate.sessionStatus('worker-b')?.pickClaimed,
-      isTrue,
+      isFalse,
     );
+    gate.recordPickedCard(projectId: 'project-b', cardId: 'card-b');
+    expect(gate.sessionStatus('worker-b')?.pickClaimed, isTrue);
     expect(gate.openSessionCount, 2);
     expect(gate.singleOpenSessionProjectId, isNull);
   });
@@ -83,5 +85,18 @@ void main() {
     expect(gate.beginAgentSession('worker-a'), isTrue);
     expect(gate.singleOpenSessionProjectId, 'project-a');
     expect(gate.openSessionCount, 1);
+  });
+
+  test('领卡失败后可以在同一会话重试', () {
+    gate.beginBatch('worker-a', projectId: 'project-a');
+    expect(gate.beginAgentSession('worker-a'), isTrue);
+    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
+    gate.releasePickAttempt('project-a');
+    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
+    gate.recordPickedCard(projectId: 'project-a', cardId: 'card-a');
+    expect(
+      gate.authorizePick('project-a'),
+      McpDispatchPickPermission.alreadyClaimed,
+    );
   });
 }

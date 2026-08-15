@@ -172,6 +172,14 @@ async function runJob(jobPath: string): Promise<void> {
     process.exitCode = 2;
     return;
   }
+  if (!job.agentMcpEndpoint?.trim()) {
+    writeResult(job.outPath, {
+      ok: false,
+      error: "agentMcpEndpoint 不能为空",
+    });
+    process.exitCode = 2;
+    return;
+  }
   if (!job.workerToken?.trim()) {
     writeResult(job.outPath, { ok: false, error: "workerToken 不能为空" });
     process.exitCode = 2;

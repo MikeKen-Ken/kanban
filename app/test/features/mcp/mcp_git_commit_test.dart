@@ -72,4 +72,36 @@ void main() {
     );
     expect(await mcpGitShortHead(temp.path), result.commitRef);
   });
+
+  test('commitMcpWorkingTree 不把 .env 纳入提交', () async {
+    final temp = await Directory.systemTemp.createTemp('kanban_git_secret_');
+    addTearDown(() async {
+      if (await temp.exists()) await temp.delete(recursive: true);
+    });
+    await _git(temp.path, ['init']);
+    await _git(temp.path, ['config', 'user.email', 'test@example.com']);
+    await _git(temp.path, ['config', 'user.name', 'Test']);
+    File(p.join(temp.path, 'a.txt')).writeAsStringSync('one\n');
+    await _git(temp.path, ['add', '-A']);
+    await _git(temp.path, ['commit', '-m', 'init']);
+    File(p.join(temp.path, 'a.txt')).writeAsStringSync('two\n');
+    File(p.join(temp.path, '.env')).writeAsStringSync('SECRET=1\n');
+
+    final result = await commitMcpWorkingTree(
+      repoPath: temp.path,
+      message: '更新 a.txt',
+    );
+    expect(result.ok, isTrue, reason: result.error);
+    final tracked = await Process.run(
+      'git',
+      ['ls-files', '.env'],
+      workingDirectory: temp.path,
+      environment: mcpGitEnvironment(),
+    );
+    expect('${tracked.stdout}'.trim(), isEmpty);
+    expect(
+      (await inspectMcpGitTree(temp.path)).kind,
+      McpGitTreeKind.dirty,
+    );
+  });
 }

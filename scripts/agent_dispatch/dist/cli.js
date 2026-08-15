@@ -1,5 +1,5 @@
 // src/cli.ts
-import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { readFileSync as readFileSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
@@ -363,15 +363,61 @@ var AppServerClient = class {
 // src/run_codex.ts
 import { spawn as spawn2 } from "node:child_process";
 import {
-  existsSync as existsSync2,
-  mkdtempSync,
+  existsSync as existsSync3,
+  mkdtempSync as mkdtempSync2,
   readFileSync,
   rmSync,
+  writeFileSync as writeFileSync2
+} from "node:fs";
+import { tmpdir as tmpdir2 } from "node:os";
+import { dirname, join as join2 } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// src/codex_mcp.ts
+import {
+  copyFileSync,
+  existsSync as existsSync2,
+  mkdirSync,
+  mkdtempSync,
   writeFileSync
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
+var AUTH_FILES = ["auth.json"];
+function buildCodexAgentConfigToml(mcpUrl) {
+  const url = mcpUrl.trim();
+  return `[features]
+rmcp_client = true
+
+[mcp_servers.kanbanMCP]
+url = "${url}"
+`;
+}
+function resolveUserCodexHome(env = process.env) {
+  const override = env.CODEX_HOME?.trim();
+  if (override) return override;
+  return join(homedir(), ".codex");
+}
+function createCodexAgentHome(options) {
+  const prefix = join(
+    options.tempRoot ?? tmpdir(),
+    "kanban-codex-home-"
+  );
+  const home = mkdtempSync(prefix);
+  mkdirSync(home, { recursive: true });
+  writeFileSync(
+    join(home, "config.toml"),
+    buildCodexAgentConfigToml(options.mcpUrl),
+    "utf8"
+  );
+  for (const name of AUTH_FILES) {
+    const from = join(options.userCodexHome, name);
+    if (existsSync2(from)) {
+      copyFileSync(from, join(home, name));
+    }
+  }
+  return { home };
+}
 
 // src/types.ts
 function isReasoningParamId(id) {
@@ -472,8 +518,8 @@ function effortToCodexConfigArgs(job) {
 
 // src/run_codex.ts
 function resolveCodexCommand() {
-  const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-  const bundledCli = join(
+  const packageRoot = join2(dirname(fileURLToPath(import.meta.url)), "..");
+  const bundledCli = join2(
     packageRoot,
     "node_modules",
     "@openai",
@@ -481,7 +527,7 @@ function resolveCodexCommand() {
     "bin",
     "codex.js"
   );
-  if (existsSync2(bundledCli)) {
+  if (existsSync3(bundledCli)) {
     return {
       command: process.execPath,
       prefixArgs: [bundledCli],
@@ -496,26 +542,38 @@ function resolveCodexCommand() {
 }
 async function runCodex(job, cancellation) {
   const startedAt = Date.now();
-  const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
-  const promptFile = join(temp, "prompt.txt");
-  const lastMessageFile = join(temp, "last.txt");
-  writeFileSync(promptFile, job.prompt, "utf8");
-  const args = [
-    "exec",
-    "--full-auto",
-    "--skip-git-repo-check",
-    "--cd",
-    job.cwd,
-    "-o",
-    lastMessageFile,
-    ...effortToCodexConfigArgs(job)
-  ];
-  if (job.model?.trim()) {
-    args.push("-m", job.model.trim());
+  const mcpUrl = job.agentMcpEndpoint?.trim();
+  if (!mcpUrl) {
+    return { ok: false, error: "\u7F3A\u5C11 Skill \u4F1A\u8BDD MCP \u7AEF\u70B9 agentMcpEndpoint" };
   }
-  args.push("-");
-  console.log(`Codex args=${args.join(" ")}`);
+  const temp = mkdtempSync2(join2(tmpdir2(), "kanban-codex-"));
+  const promptFile = join2(temp, "prompt.txt");
+  const lastMessageFile = join2(temp, "last.txt");
   try {
+    writeFileSync2(promptFile, job.prompt, "utf8");
+    const agentHome = createCodexAgentHome({
+      mcpUrl,
+      userCodexHome: resolveUserCodexHome(),
+      tempRoot: temp
+    });
+    console.log(
+      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u4EC5\u6CE8\u5165\u7CBE\u7B80\u770B\u677F MCP\uFF08${mcpUrl}\uFF09`
+    );
+    const args = [
+      "exec",
+      "--full-auto",
+      "--skip-git-repo-check",
+      "--cd",
+      job.cwd,
+      "-o",
+      lastMessageFile,
+      ...effortToCodexConfigArgs(job)
+    ];
+    if (job.model?.trim()) {
+      args.push("-m", job.model.trim());
+    }
+    args.push("-");
+    console.log(`Codex args=${args.join(" ")}`);
     const code = await new Promise((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
       let child;
@@ -539,7 +597,7 @@ async function runCodex(job, cancellation) {
       }
       child = spawn2(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
-        env: process.env,
+        env: { ...process.env, CODEX_HOME: agentHome.home },
         stdio: ["pipe", "pipe", "pipe"],
         shell: codex.shell
       });
@@ -599,7 +657,7 @@ ${stderr}`;
 }
 function looksLikeNotGit(text) {
   const lower = text.toLowerCase();
-  return lower.includes("not a git repository") || lower.includes("not a git repo");
+  return lower.includes("not a git repository") || lower.includes("not a git repo") || lower.includes("\u4E0D\u662F git \u4ED3\u5E93");
 }
 function inspectGitWorkingTree(cwd) {
   const root = cwd.trim();
@@ -682,9 +740,9 @@ var KanbanMcpClient = class {
 };
 
 // src/run_cursor.ts
-import { mkdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join as join2 } from "node:path";
+import { mkdirSync as mkdirSync2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join3 } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 
 // src/cursor_token_usage.ts
@@ -911,17 +969,20 @@ async function runCursor(job, cancellation) {
   const modelId = job.model?.trim() || "composer-2.5";
   const params = resolveModelParams(job);
   logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
+  const agentMcpUrl = job.agentMcpEndpoint?.trim();
+  if (!agentMcpUrl) {
+    return { ok: false, error: "\u7F3A\u5C11 Skill \u4F1A\u8BDD MCP \u7AEF\u70B9 agentMcpEndpoint" };
+  }
   try {
     process.chdir(job.cwd);
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
-    const storeDir = join2(homedir(), ".cursor", "kanban-agent-jsonl-store");
-    mkdirSync(storeDir, { recursive: true });
+    const storeDir = join3(homedir2(), ".cursor", "kanban-agent-jsonl-store");
+    mkdirSync2(storeDir, { recursive: true });
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF1B\u7F51\u7EDC\u4F20\u8F93\u4F7F\u7528 SDK \u9ED8\u8BA4\u914D\u7F6E\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F MCP\uFF08${job.agentMcpEndpoint?.trim() || job.mcpEndpoint}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP\uFF1BsettingSources \u4E3A\u7A7A\uFF08\u4E0D\u6CE8\u5165\u9879\u76EE\u89C4\u5219\u4E0E\u4E2A\u4EBA Skill\uFF09`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F\u7CBE\u7B80 MCP\uFF08${agentMcpUrl}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP\uFF1BsettingSources \u4E3A\u7A7A\uFF08\u4E0D\u6CE8\u5165\u9879\u76EE\u89C4\u5219\u4E0E\u4E2A\u4EBA Skill\uFF09`
     );
-    const agentMcpUrl = job.agentMcpEndpoint?.trim() || job.mcpEndpoint;
     const agent = await Agent.create({
       apiKey,
       model: {
@@ -1229,7 +1290,7 @@ async function withRetry(operation, fn, options) {
   throw lastError;
 }
 function writeResult(outPath, result) {
-  writeFileSync2(outPath, JSON.stringify(result, null, 2), "utf8");
+  writeFileSync3(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 function normalizeModelParameterValues(input) {
   if (!Array.isArray(input)) return [];
@@ -1313,6 +1374,14 @@ async function runJob(jobPath) {
   }
   if (!job.mcpEndpoint?.trim()) {
     writeResult(job.outPath, { ok: false, error: "mcpEndpoint \u4E0D\u80FD\u4E3A\u7A7A" });
+    process.exitCode = 2;
+    return;
+  }
+  if (!job.agentMcpEndpoint?.trim()) {
+    writeResult(job.outPath, {
+      ok: false,
+      error: "agentMcpEndpoint \u4E0D\u80FD\u4E3A\u7A7A"
+    });
     process.exitCode = 2;
     return;
   }

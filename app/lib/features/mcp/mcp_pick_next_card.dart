@@ -51,8 +51,8 @@ Future<CallToolResult> mcpPickNextCard(
   final boundProjectId =
       requested ?? McpDispatchCardGate.instance.singleOpenSessionProjectId;
   return runMcpForProject(controller, boundProjectId, (resolvedProjectId) async {
-    final permission =
-        McpDispatchCardGate.instance.authorizePick(resolvedProjectId);
+    final gate = McpDispatchCardGate.instance;
+    final permission = gate.authorizePick(resolvedProjectId);
     switch (permission) {
       case McpDispatchPickPermission.allowed:
         break;
@@ -66,10 +66,14 @@ Future<CallToolResult> mcpPickNextCard(
         );
     }
     final board = controller.board;
-    if (board == null) return mcpErrorResult('看板未就绪');
+    if (board == null) {
+      gate.releasePickAttempt(resolvedProjectId);
+      return mcpErrorResult('看板未就绪');
+    }
 
     final picked = pickNextWorkCard(board);
     if (picked == null) {
+      gate.releasePickAttempt(resolvedProjectId);
       return mcpJsonResult({
         'found': false,
         'projectId': resolvedProjectId,
@@ -81,6 +85,7 @@ Future<CallToolResult> mcpPickNextCard(
     final fromColumnId = picked.column.id;
     final doingColumn = findDoingColumn(board.columns);
     if (doingColumn == null) {
+      gate.releasePickAttempt(resolvedProjectId);
       return mcpErrorResult('未找到「进行中」列');
     }
 
@@ -96,11 +101,18 @@ Future<CallToolResult> mcpPickNextCard(
         toColumnId: doingColumn.id,
         toDisplayIndex: doingColumn.cards.length,
       );
-      if (moveError != null) return mcpErrorResult(moveError);
+      if (moveError != null) {
+        gate.releasePickAttempt(resolvedProjectId);
+        return mcpErrorResult(moveError);
+      }
       columnId = doingColumn.id;
       columnTitle = doingColumn.title;
     }
 
+    gate.recordPickedCard(
+      projectId: resolvedProjectId,
+      cardId: card.id,
+    );
     final rework = isReworkWorkMode(card);
     await (submissionSnapshotStore ?? McpSubmissionSnapshotStore()).write(
       McpSubmissionSnapshot(
@@ -115,10 +127,6 @@ Future<CallToolResult> mcpPickNextCard(
         ],
         capturedAt: DateTime.now().millisecondsSinceEpoch,
       ),
-    );
-    McpDispatchCardGate.instance.recordPickedCard(
-      projectId: resolvedProjectId,
-      cardId: card.id,
     );
     final payload = <String, dynamic>{
       'found': true,

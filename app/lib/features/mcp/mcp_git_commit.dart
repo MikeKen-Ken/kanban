@@ -49,6 +49,20 @@ const _gitEnv = {
   'GIT_COMMITTER_EMAIL': 'kanban-agent@local',
 };
 
+/// `git add -A` 时排除凭据类未跟踪文件，避免写入提交。
+const mcpGitAddPathspecs = [
+  '.',
+  ':(exclude).env',
+  ':(exclude).env.*',
+  ':(exclude)**/.env',
+  ':(exclude)**/.env.*',
+  ':(exclude)**/credentials.json',
+  ':(exclude)**/*.pem',
+  ':(exclude)**/*.key',
+  ':(exclude)**/id_rsa',
+  ':(exclude)**/id_rsa.pub',
+];
+
 Map<String, String> mcpGitEnvironment() => {
       ...Platform.environment,
       ..._gitEnv,
@@ -149,7 +163,7 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
     await messageFile.writeAsBytes(utf8.encode(text), flush: true);
     final add = await run(
       'git',
-      ['add', '-A'],
+      ['add', '-A', '--', ...mcpGitAddPathspecs],
       workingDirectory: repo,
       environment: mcpGitEnvironment(),
     );

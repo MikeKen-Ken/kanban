@@ -324,6 +324,9 @@ class AgentDispatchService {
     void Function(AgentDispatchLogEntry entry)? onLog,
     void Function()? onWorkerInvoked,
   }) async {
+    if (agentMcpEndpoint == null || agentMcpEndpoint.trim().isEmpty) {
+      return const AgentWorkerResult(ok: false, error: '缺少调度 Skill MCP 端点');
+    }
     final repo = options.repoPath.trim();
     if (repo.isEmpty) {
       return const AgentWorkerResult(ok: false, error: '请填写代码仓库路径');

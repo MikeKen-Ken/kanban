@@ -67,19 +67,31 @@ class McpDispatchCardGate {
     final slot = _slotsByToken[token];
     if (slot == null) return McpDispatchPickPermission.allowed;
     if (!slot.sessionOpen) return McpDispatchPickPermission.sessionNotOpen;
-    if (slot.pickClaimed) {
+    if (slot.pickClaimed || slot.pickInFlight) {
       slot.deniedPickCount += 1;
       return McpDispatchPickPermission.alreadyClaimed;
     }
-    slot.pickClaimed = true;
+    slot.pickInFlight = true;
     return McpDispatchPickPermission.allowed;
+  }
+
+  /// 领卡失败时释放 in-flight，允许本轮重试；已成功领取则不改。
+  void releasePickAttempt(String projectId) {
+    final token = _tokenByProject[projectId];
+    if (token == null) return;
+    final slot = _slotsByToken[token];
+    if (slot == null || slot.pickClaimed) return;
+    slot.pickInFlight = false;
   }
 
   void recordPickedCard({required String projectId, required String cardId}) {
     final token = _tokenByProject[projectId];
     if (token == null) return;
     final slot = _slotsByToken[token];
-    if (slot == null || !slot.sessionOpen || !slot.pickClaimed) return;
+    if (slot == null || !slot.sessionOpen) return;
+    if (!slot.pickInFlight && !slot.pickClaimed) return;
+    slot.pickInFlight = false;
+    slot.pickClaimed = true;
     slot.pickedProjectId = projectId;
     slot.pickedCardId = cardId;
   }
@@ -92,8 +104,21 @@ class McpDispatchCardGate {
       if (!slot.sessionOpen) continue;
       if (slot.pickedCardId == id) return null;
     }
-    return '只能对本轮 pick_next_card 领取的卡片调用 commit_and_submit_card';
+    return '只能对本轮 pick_next_card 领取的卡片调用该工具';
   }
+
+  String? repoPathForToken(String workerToken) =>
+      _slotsByToken[workerToken]?.repoPath;
+
+  void recordBaselineCommitRef(String workerToken, String? commitRef) {
+    final slot = _slotsByToken[workerToken];
+    if (slot == null) return;
+    final value = commitRef?.trim();
+    slot.baselineCommitRef = (value == null || value.isEmpty) ? null : value;
+  }
+
+  String? baselineCommitRefForCard(String cardId) =>
+      _slotForPickedCard(cardId)?.baselineCommitRef;
 
   String? repoPathForPickedCard(String cardId) {
     final slot = _slotForPickedCard(cardId);
@@ -150,19 +175,23 @@ class _McpDispatchSlot {
   final String projectId;
   final String? repoPath;
   bool sessionOpen = false;
+  bool pickInFlight = false;
   bool pickClaimed = false;
   int deniedPickCount = 0;
   String? pickedProjectId;
   String? pickedCardId;
   String? pendingCommitRef;
+  String? baselineCommitRef;
 
   void resetSession({required bool open}) {
     sessionOpen = open;
+    pickInFlight = false;
     pickClaimed = false;
     deniedPickCount = 0;
     pickedProjectId = null;
     pickedCardId = null;
     pendingCommitRef = null;
+    baselineCommitRef = null;
   }
 }
 
