@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/kanban_models.dart';
+import '../kanban/card_drag.dart';
 import 'card_attachment_image.dart';
 
 /// 长按触发排序的延迟（短于 Flutter 默认 500ms）。
@@ -83,7 +84,7 @@ class _DraggableAttachmentTile extends StatelessWidget {
       onAcceptWithDetails: (details) => onReorder(details.data, index),
       builder: (context, candidate, rejected) {
         final hovering = candidate.isNotEmpty;
-        return LongPressDraggable<int>(
+        return CardLongPressDraggable<int>(
           data: index,
           delay: kAttachmentReorderLongPressDelay,
           hapticFeedbackOnStart: true,
@@ -200,24 +201,26 @@ class _AttachmentTileState extends State<_AttachmentTile> {
                   Positioned(
                     right: 0,
                     top: 0,
-                    child: Material(
-                      color: Colors.black45,
-                      borderRadius: const BorderRadius.only(
-                        topRight: Radius.circular(8),
-                        bottomLeft: Radius.circular(6),
-                      ),
-                      child: InkWell(
-                        onTap: widget.onMenu,
+                    child: CardDragInteractionBlocker(
+                      child: Material(
+                        color: Colors.black45,
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(8),
                           bottomLeft: Radius.circular(6),
                         ),
-                        child: const Padding(
-                          padding: EdgeInsets.all(2),
-                          child: Icon(
-                            Icons.more_vert,
-                            size: 16,
-                            color: Colors.white,
+                        child: InkWell(
+                          onTap: widget.onMenu,
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(8),
+                            bottomLeft: Radius.circular(6),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.all(2),
+                            child: Icon(
+                              Icons.more_vert,
+                              size: 16,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),

@@ -238,6 +238,43 @@ void main() {
       );
       expect(dragStarted, isFalse);
     });
+
+    testWidgets('长按延迟内移动指针仍启动拖拽', (tester) async {
+      var dragStarted = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 280,
+                height: 120,
+                child: CardLongPressDraggable<int>(
+                  data: 1,
+                  delay: const Duration(milliseconds: 200),
+                  onDragStarted: () => dragStarted = true,
+                  feedback: const SizedBox(width: 280, height: 120),
+                  child: const SizedBox(
+                    key: Key('drag-move'),
+                    width: 280,
+                    height: 120,
+                    child: ColoredBox(color: Colors.blue),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final center = tester.getCenter(find.byKey(const Key('drag-move')));
+      final gesture = await tester.startGesture(center);
+      await tester.pump(const Duration(milliseconds: 80));
+      await gesture.moveBy(const Offset(12, 8));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(dragStarted, isTrue);
+      await gesture.up();
+      await tester.pump();
+    });
   });
 
   group('卡片上下文菜单触控入口', () {
