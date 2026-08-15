@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/kanban_models.dart';
 
 /// 看板列宽、卡片进出的统一节奏。
-const kKanbanColumnWidthDuration = Duration(milliseconds: 280);
 const kKanbanListMotionDuration = Duration(milliseconds: 240);
+const kKanbanColumnWidthDuration = kKanbanListMotionDuration;
 const kKanbanMotionCurve = Curves.easeOutCubic;
 
 /// 单次增删超过该数量时不再播放进出动画（同步全量刷新等）。
@@ -40,6 +40,7 @@ List<TrackedKanbanCard> reconcileTrackedKanbanCards({
   final insertedCount =
       next.where((card) => !previousActiveIds.contains(card.id)).length;
   final animate = previous.isNotEmpty &&
+      next.isNotEmpty &&
       removedCount + insertedCount <= animateThreshold;
 
   if (!animate) {

@@ -36,6 +36,15 @@ void main() {
     expect(result[2].leaving, isFalse);
   });
 
+  test('最后一张卡移出时直接清空，避免与列收窄动画冲突', () {
+    final previous = [TrackedKanbanCard(card: _card('a'))];
+    final result = reconcileTrackedKanbanCards(
+      previous: previous,
+      next: const [],
+    );
+    expect(result, isEmpty);
+  });
+
   test('单张移入时标记进入动画', () {
     final previous = [
       TrackedKanbanCard(card: _card('a')),
