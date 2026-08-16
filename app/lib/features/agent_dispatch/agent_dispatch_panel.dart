@@ -178,6 +178,17 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     await prefs.saveAgentDispatchSettings(synced);
   }
 
+  Future<void> _persistAfterQueue(AgentDispatchSettings next) async {
+    final saving = _persist(next);
+    if (_service.isRunning) {
+      _service.updateAfterQueue(
+        steps: next.afterQueue,
+        runOnFailure: next.runAfterQueueOnFailure,
+      );
+    }
+    await saving;
+  }
+
   void _appendLog(
     String line, {
     AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
@@ -860,13 +871,18 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               const SizedBox(height: 12),
               AgentDispatchAfterQueueField(
                 steps: _settings.afterQueue,
-                enabled: !_running && !_busy,
-                onChanged: (steps) =>
-                    _persist(_settings.copyWith(afterQueue: steps)),
+                enabled: !_busy,
+                onChanged: (steps) async {
+                  await _persistAfterQueue(
+                    _settings.copyWith(afterQueue: steps),
+                  );
+                },
                 runOnFailure: _settings.runAfterQueueOnFailure,
-                onRunOnFailureChanged: (value) => _persist(
-                  _settings.copyWith(runAfterQueueOnFailure: value),
-                ),
+                onRunOnFailureChanged: (value) async {
+                  await _persistAfterQueue(
+                    _settings.copyWith(runAfterQueueOnFailure: value),
+                  );
+                },
               ),
             ],
           ),

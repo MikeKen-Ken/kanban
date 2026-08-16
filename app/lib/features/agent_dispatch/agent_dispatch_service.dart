@@ -40,6 +40,9 @@ class AgentDispatchService {
   AgentWorkerProcess? _activeWorker;
   String? _activeWorkerToken;
   String? _activeRepoPath;
+  List<AgentDispatchAfterStep> _afterQueue = const [];
+  bool _runAfterQueueOnFailure = true;
+  AgentDispatchAfterQueueHost? _afterQueueHost;
   AgentDispatchProgress _progress = AgentDispatchProgress.idle;
   final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
   final _runningListeners = <void Function()>{};
@@ -54,6 +57,18 @@ class AgentDispatchService {
   String get logText => _logBuffer.text;
 
   String? get activeRepoPath => _activeRepoPath;
+
+  /// 在批次运行期间更新结束后要执行的动作。
+  ///
+  /// 这些设置由工作台持久化；服务保留本次运行的最新快照，避免
+  /// Worker 正在执行时新增的动作被启动时的旧快照忽略。
+  void updateAfterQueue({
+    required List<AgentDispatchAfterStep> steps,
+    required bool runOnFailure,
+  }) {
+    _afterQueue = List<AgentDispatchAfterStep>.unmodifiable(steps);
+    _runAfterQueueOnFailure = runOnFailure;
+  }
 
   AgentDispatchProgress get progress => _progress;
 
@@ -250,6 +265,9 @@ class AgentDispatchService {
     _cancelRequested = false;
     _drainAfterCurrentRequested = false;
     _activeRepoPath = options.repoPath.trim();
+    _afterQueue = List<AgentDispatchAfterStep>.unmodifiable(afterQueue);
+    _runAfterQueueOnFailure = runAfterQueueOnFailure;
+    _afterQueueHost = afterQueueHost;
     final cardLimitMax = options.cardLimit is AgentDispatchCardLimitMax;
     final cardLimitCount = switch (options.cardLimit) {
       AgentDispatchCardLimitMax() => 0,
@@ -283,11 +301,11 @@ class AgentDispatchService {
         batchOk: result.ok,
         cancelRequested: _cancelRequested,
         drainRequested: _drainAfterCurrentRequested,
-        runOnFailure: runAfterQueueOnFailure,
+        runOnFailure: _runAfterQueueOnFailure,
         workerInvoked: workerInvoked,
-        queueNonEmpty: afterQueue.isNotEmpty && afterQueueHost != null,
+        queueNonEmpty: _afterQueue.isNotEmpty && _afterQueueHost != null,
       );
-      if (shouldRunAfterQueue && afterQueueHost != null) {
+      if (shouldRunAfterQueue && _afterQueueHost != null) {
         if (!result.ok) {
           _emitLog(
             '完成后队列：批次未成功，仍按「失败后仍执行」继续',
@@ -296,8 +314,8 @@ class AgentDispatchService {
         }
         try {
           await runAgentDispatchAfterQueue(
-            steps: afterQueue,
-            host: afterQueueHost,
+            steps: _afterQueue,
+            host: _afterQueueHost!,
             onLog: _emitLog,
           );
         } catch (error) {
@@ -310,6 +328,8 @@ class AgentDispatchService {
       return result;
     } finally {
       _activeRepoPath = null;
+      _afterQueue = const [];
+      _afterQueueHost = null;
       _setProgress(_progress.copyWith(running: false));
       _setRunning(false);
     }
