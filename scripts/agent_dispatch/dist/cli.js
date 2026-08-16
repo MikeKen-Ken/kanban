@@ -590,6 +590,25 @@ function resolveCodexCommand() {
     shell: process.platform === "win32"
   };
 }
+function buildCodexExecArgs(options) {
+  const args = [
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--approve-for-me",
+    "--skip-git-repo-check",
+    "--cd",
+    options.cwd,
+    "-o",
+    options.lastMessageFile,
+    ...options.extraConfigArgs ?? []
+  ];
+  if (options.model?.trim()) {
+    args.push("-m", options.model.trim());
+  }
+  args.push("-");
+  return args;
+}
 async function runCodex(job, cancellation) {
   const startedAt = Date.now();
   const mcpUrl = job.round.agentEndpointUrl.trim();
@@ -609,20 +628,12 @@ async function runCodex(job, cancellation) {
     console.log(
       `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u4EC5\u6CE8\u5165\u7CBE\u7B80\u770B\u677F MCP\uFF08${mcpUrl}\uFF09`
     );
-    const args = [
-      "exec",
-      "--full-auto",
-      "--skip-git-repo-check",
-      "--cd",
-      job.cwd,
-      "-o",
+    const args = buildCodexExecArgs({
+      cwd: job.cwd,
       lastMessageFile,
-      ...effortToCodexConfigArgs(job)
-    ];
-    if (job.model?.trim()) {
-      args.push("-m", job.model.trim());
-    }
-    args.push("-");
+      extraConfigArgs: effortToCodexConfigArgs(job),
+      model: job.model
+    });
     console.log(`Codex args=${args.join(" ")}`);
     const code = await new Promise((resolvePromise, reject) => {
       const codex = resolveCodexCommand();

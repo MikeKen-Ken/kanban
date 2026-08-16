@@ -45,6 +45,32 @@ export function resolveCodexCommand(): {
   };
 }
 
+/** Codex 0.147 已移除 `--full-auto`；无人值守等价为 workspace-write + 自动审批。 */
+export function buildCodexExecArgs(options: {
+  cwd: string;
+  lastMessageFile: string;
+  extraConfigArgs?: string[];
+  model?: string;
+}): string[] {
+  const args = [
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--approve-for-me",
+    "--skip-git-repo-check",
+    "--cd",
+    options.cwd,
+    "-o",
+    options.lastMessageFile,
+    ...(options.extraConfigArgs ?? []),
+  ];
+  if (options.model?.trim()) {
+    args.push("-m", options.model.trim());
+  }
+  args.push("-");
+  return args;
+}
+
 export async function runCodex(
   job: RoundDispatchJob,
   cancellation?: WorkerCancellation,
@@ -69,20 +95,12 @@ export async function runCodex(
       `Codex 使用隔离 CODEX_HOME，仅注入精简看板 MCP（${mcpUrl}）`,
     );
 
-    const args = [
-      "exec",
-      "--full-auto",
-      "--skip-git-repo-check",
-      "--cd",
-      job.cwd,
-      "-o",
+    const args = buildCodexExecArgs({
+      cwd: job.cwd,
       lastMessageFile,
-      ...effortToCodexConfigArgs(job),
-    ];
-    if (job.model?.trim()) {
-      args.push("-m", job.model.trim());
-    }
-    args.push("-");
+      extraConfigArgs: effortToCodexConfigArgs(job),
+      model: job.model,
+    });
 
     console.log(`Codex args=${args.join(" ")}`);
 
