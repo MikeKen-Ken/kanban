@@ -20,7 +20,7 @@ export type DispatchJob = {
   projectId?: string;
   cardLimit: number;
   workerToken: string;
-  /** 显式允许无人值守会话使用 high/超大推理；默认 false。 */
+  /** 为 true 时沿用卡片/面板指定的 high 等推理档位；默认 false 会压到更省的档位。 */
   allowHighReasoning?: boolean;
   /** @deprecated 旧字段，兼容 */
   effort?: string;

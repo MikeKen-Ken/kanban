@@ -107,7 +107,7 @@ class AgentDispatchRunOptions {
   /// 各平台工作台默认；卡片指定其它平台时回退到对应项，而不是当前平台。
   final Map<String, AgentDispatchEngineRunDefaults> engineDefaults;
 
-  /// 显式允许无人值守会话保留 high/超大推理参数。
+  /// 为 true 时沿用卡片/面板指定的 high 等推理档位；默认仍压到更省的档位。
   final bool allowHighReasoning;
 
   final AgentDispatchCardLimit cardLimit;

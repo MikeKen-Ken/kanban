@@ -812,7 +812,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                title: const Text('允许无人值守高推理（成本更高）'),
+                title: const Text('沿用卡片指定的高推理档位'),
+                subtitle: const Text(
+                  '关闭时忽略卡片或上方所选的 high 等档位，统一压到更省的 medium，并把过大上下文限制在 64k。开启后按卡片/面板参数执行，费用更高。',
+                ),
                 value: _settings.allowHighReasoning,
                 onChanged: _running || _busy
                     ? null
