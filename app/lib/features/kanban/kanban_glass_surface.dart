@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-/// 接近 iOS 液态玻璃的磨砂层：背景模糊、浅色渐变与高光描边。
+/// 接近 iOS 液态玻璃的磨砂层：背景模糊、低密度着色与高光描边。
 class KanbanGlassSurface extends StatelessWidget {
   const KanbanGlassSurface({
     super.key,
@@ -11,7 +11,7 @@ class KanbanGlassSurface extends StatelessWidget {
     this.tint,
     this.borderColor,
     this.borderWidth = 1,
-    this.blurSigma = 22,
+    this.blurSigma = 24,
   });
 
   final Widget child;
@@ -26,14 +26,11 @@ class KanbanGlassSurface extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = tint ?? colorScheme.surface;
-    final highlight = isDark
-        ? Colors.white.withValues(alpha: 0.22)
-        : Colors.white.withValues(alpha: 0.55);
-    final fillTop = Color.alphaBlend(
-      highlight.withValues(alpha: isDark ? 0.10 : 0.28),
-      base.withValues(alpha: isDark ? 0.22 : 0.32),
-    );
-    final fillBottom = base.withValues(alpha: isDark ? 0.18 : 0.22);
+    // 不预先 alphaBlend 高光与底色：预混会累积两层 alpha，让浅色主题
+    // 看起来接近实色。直接使用低密度渐变，让壁纸细节交给模糊层呈现。
+    final fillTop = base.withValues(alpha: isDark ? 0.24 : 0.30);
+    final fillMiddle = base.withValues(alpha: isDark ? 0.17 : 0.20);
+    final fillBottom = base.withValues(alpha: isDark ? 0.12 : 0.14);
     final edge = borderColor ??
         (isDark
             ? Colors.white.withValues(alpha: 0.18)
@@ -49,7 +46,8 @@ class KanbanGlassSurface extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [fillTop, fillBottom],
+              colors: [fillTop, fillMiddle, fillBottom],
+              stops: const [0, 0.42, 1],
             ),
             border: Border.all(color: edge, width: borderWidth),
           ),

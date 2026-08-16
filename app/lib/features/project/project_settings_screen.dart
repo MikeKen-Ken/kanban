@@ -281,45 +281,45 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: settings.hasBackgroundImage
-                              ? Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    if (settings.wallpaperIds.isNotEmpty)
-                                      WallpaperImage(
-                                        wallpaperId:
-                                            settings.wallpaperIds.first,
-                                        thumb: true,
-                                      )
-                                    else
-                                      CardAttachmentImage(
-                                        attachmentId:
-                                            settings.backgroundAttachmentId,
-                                        thumb: true,
-                                        fit: BoxFit.cover,
-                                        showMissingLabel: true,
-                                      ),
-                                    if (overlayValue > 0)
-                                      ColoredBox(
-                                        color: Colors.black.withValues(
-                                          alpha: overlayValue,
+                                  ? Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        if (settings.wallpaperIds.isNotEmpty)
+                                          WallpaperImage(
+                                            wallpaperId:
+                                                settings.wallpaperIds.first,
+                                            thumb: true,
+                                          )
+                                        else
+                                          CardAttachmentImage(
+                                            attachmentId:
+                                                settings.backgroundAttachmentId,
+                                            thumb: true,
+                                            fit: BoxFit.cover,
+                                            showMissingLabel: true,
+                                          ),
+                                        if (overlayValue > 0)
+                                          ColoredBox(
+                                            color: Colors.black.withValues(
+                                              alpha: overlayValue,
+                                            ),
+                                          ),
+                                      ],
+                                    )
+                                  : ColoredBox(
+                                      color: theme
+                                          .colorScheme.surfaceContainerHighest,
+                                      child: Center(
+                                        child: Text(
+                                          '未设置背景图，使用主题底色',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
+                                          ),
                                         ),
                                       ),
-                                  ],
-                                )
-                              : ColoredBox(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                  child: Center(
-                                    child: Text(
-                                      '未设置背景图，使用主题底色',
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
                                     ),
-                                  ),
-                                ),
                             ),
                           ),
                         ),
@@ -417,7 +417,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                         },
                       ),
                       Text(
-                        '降低后整张卡片底色半透明，可透过卡片看到壁纸；标题与文字仍保持清晰',
+                        '100% 会保持实色；降低后卡片底色半透明，可透过磨砂层看到壁纸，标题与文字仍保持清晰',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
