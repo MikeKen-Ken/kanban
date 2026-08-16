@@ -43,7 +43,8 @@ class AgentDispatchSettings {
     this.modelId = defaultModelId,
     this.modelParamValues = defaultModelParamValues,
     this.engineProfiles = const {},
-    this.allowHighReasoning = false,
+    this.ignoreCardParams = false,
+    this.allowDirtyWorkspace = false,
     this.cardLimitMax = true,
     this.cardLimitCount = 1,
     this.afterQueue = const [],
@@ -76,7 +77,10 @@ class AgentDispatchSettings {
   /// 各平台上次配置；切换下拉框时恢复，不互相覆盖。
   final Map<String, AgentDispatchEngineProfile> engineProfiles;
 
-  final bool allowHighReasoning;
+  final bool ignoreCardParams;
+
+  /// 工作台默认：关闭时脏工作区停止批次。
+  final bool allowDirtyWorkspace;
 
   final bool cardLimitMax;
   final int cardLimitCount;
@@ -100,7 +104,8 @@ class AgentDispatchSettings {
     Object? modelId = _sentinel,
     Map<String, String>? modelParamValues,
     Map<String, AgentDispatchEngineProfile>? engineProfiles,
-    bool? allowHighReasoning,
+    bool? ignoreCardParams,
+    bool? allowDirtyWorkspace,
     bool? cardLimitMax,
     int? cardLimitCount,
     List<AgentDispatchAfterStep>? afterQueue,
@@ -118,7 +123,8 @@ class AgentDispatchSettings {
       modelId: modelId == _sentinel ? this.modelId : modelId as String?,
       modelParamValues: modelParamValues ?? this.modelParamValues,
       engineProfiles: engineProfiles ?? this.engineProfiles,
-      allowHighReasoning: allowHighReasoning ?? this.allowHighReasoning,
+      ignoreCardParams: ignoreCardParams ?? this.ignoreCardParams,
+      allowDirtyWorkspace: allowDirtyWorkspace ?? this.allowDirtyWorkspace,
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       afterQueue: afterQueue ?? this.afterQueue,
@@ -216,7 +222,8 @@ class AgentDispatchSettings {
       modelId: modelId,
       modelParams: params,
       engineDefaults: engineDefaults,
-      allowHighReasoning: allowHighReasoning,
+      ignoreCardParams: ignoreCardParams,
+      allowDirtyWorkspace: allowDirtyWorkspace,
       cardLimit: cardLimitMax
           ? AgentDispatchCardLimit.max
           : AgentDispatchCardLimit.count(cardLimitCount),
@@ -235,7 +242,8 @@ class AgentDispatchSettings {
             for (final entry in engineProfiles.entries)
               entry.key: entry.value.toJson(),
           },
-        'allowHighReasoning': allowHighReasoning,
+        'ignoreCardParams': ignoreCardParams,
+        'allowDirtyWorkspace': allowDirtyWorkspace,
         'cardLimitMax': cardLimitMax,
         'cardLimitCount': cardLimitCount,
         if (afterQueue.isNotEmpty)
@@ -304,7 +312,8 @@ class AgentDispatchSettings {
       modelId: modelId,
       modelParamValues: modelParamValues,
       engineProfiles: engineProfiles,
-      allowHighReasoning: json['allowHighReasoning'] as bool? ?? false,
+      ignoreCardParams: json['ignoreCardParams'] as bool? ?? false,
+      allowDirtyWorkspace: json['allowDirtyWorkspace'] as bool? ?? false,
       cardLimitMax: json['cardLimitMax'] as bool? ?? true,
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
           (json['maxCards'] as num?)?.toInt() ??

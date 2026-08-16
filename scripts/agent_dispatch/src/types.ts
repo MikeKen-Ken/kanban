@@ -20,8 +20,10 @@ export type DispatchJob = {
   projectId?: string;
   cardLimit: number;
   workerToken: string;
-  /** 工作台默认：为 true 时不改卡片/面板的推理、Fast、上下文；卡片可再覆盖。 */
-  allowHighReasoning?: boolean;
+  /** 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区开关，只用工作台默认。 */
+  ignoreCardParams?: boolean;
+  /** 为 true 时工作区有未提交改动仍可领取；默认 false。 */
+  allowDirtyWorkspace?: boolean;
   /** @deprecated 旧字段，兼容 */
   effort?: string;
   /** Dart 侧 touch 此文件以请求立即停止 */
@@ -134,6 +136,8 @@ export function mergeJobWithCardOverrides(
   job: DispatchJob,
   claim: Record<string, unknown>,
 ): DispatchJob {
+  if (job.ignoreCardParams === true) return job;
+
   const engine = parseEngine(claim.agentEngine, job.engine);
   const defaults = engineFallback(job, engine);
   const cardModel = String(claim.agentModelId ?? "").trim();
@@ -143,7 +147,6 @@ export function mergeJobWithCardOverrides(
     (defaults.modelParams ?? []).map((item) => [item.id, item]),
   );
   for (const item of cardParams) byId.set(item.id, item);
-  const allowHighReasoning = resolveAllowHighReasoning(job, claim);
 
   const catalog = defaults.models?.find((item) => item.id === model);
   const rawParameters = catalog?.parameters ?? [];
@@ -168,71 +171,25 @@ export function mergeJobWithCardOverrides(
     }
   }
 
-  const modelParams = [...byId.values()].map((item) => ({
-    ...item,
-    value: clampUnattendedParam(item, allowHighReasoning),
-  }));
-  return { ...job, engine, model, modelParams, allowHighReasoning };
+  return {
+    ...job,
+    engine,
+    model,
+    modelParams: [...byId.values()],
+    allowDirtyWorkspace: job.allowDirtyWorkspace === true ||
+      isTrueFlag(claim.agentAllowDirtyWorkspace),
+  };
 }
 
-export function resolveAllowHighReasoning(
-  job: DispatchJob,
-  claim: Record<string, unknown>,
-): boolean {
-  const card = parseOptionalBool(claim.agentAllowHighReasoning);
-  if (card != null) return card;
-  return job.allowHighReasoning === true;
-}
-
-function parseOptionalBool(raw: unknown): boolean | undefined {
-  if (raw === true || raw === false) return raw;
-  if (typeof raw !== "string") return undefined;
-  const text = raw.trim().toLowerCase();
-  if (text === "true") return true;
-  if (text === "false") return false;
-  return undefined;
-}
-
-export function clampUnattendedParam(
-  param: ModelParam,
-  allowHighReasoning: boolean,
-): string {
-  if (allowHighReasoning) return param.value;
-  const id = param.id.toLowerCase();
-  const value = param.value.toLowerCase();
-  if (isContextParamId(id)) {
-    const tokens = parseTokenBudget(value);
-    if (tokens != null && tokens > MAX_UNATTENDED_CONTEXT_TOKENS) {
-      return "64k";
-    }
-  }
-  const expensive = new Set([
-    "high",
-    "xhigh",
-    "extra_high",
-    "very_high",
-    "max",
-    "maximum",
-    "large",
-    "xlarge",
-    "huge",
-  ]);
-  if (
-    expensive.has(value) &&
-    (isReasoningParamId(id) ||
-      isContextParamId(id) ||
-      id.includes("thinking"))
-  ) {
-    return "medium";
-  }
-  return param.value;
+function isTrueFlag(raw: unknown): boolean {
+  if (raw === true) return true;
+  if (typeof raw !== "string") return false;
+  return raw.trim().toLowerCase() === "true";
 }
 
 export function isContextParamId(id: string): boolean {
   return id.toLowerCase().includes("context");
 }
-
-export const MAX_UNATTENDED_CONTEXT_TOKENS = 64_000;
 
 export const DEFAULT_CONTEXT_VALUES = ["64k", "272k"] as const;
 
@@ -288,10 +245,7 @@ export function resolveModelParams(
   job: DispatchJob,
 ): Array<{ id: string; value: string }> | undefined {
   if (job.modelParams && job.modelParams.length > 0) {
-    return job.modelParams.map((item) => ({
-      ...item,
-      value: clampUnattendedParam(item, job.allowHighReasoning === true),
-    }));
+    return job.modelParams;
   }
   switch (job.effort) {
     case "fast":
@@ -301,10 +255,7 @@ export function resolveModelParams(
     case "medium":
       return [{ id: "reasoning_effort", value: "medium" }];
     case "high":
-      return [{
-        id: "reasoning_effort",
-        value: job.allowHighReasoning === true ? "high" : "medium",
-      }];
+      return [{ id: "reasoning_effort", value: "high" }];
     default:
       return undefined;
   }

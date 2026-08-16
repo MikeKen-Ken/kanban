@@ -20,8 +20,10 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
 4. Worker 使用 claim 结果创建全新的 Cursor SDK Agent 或 `codex exec` 会话，并注入
    已冻结的卡片上下文；Agent 不再调用 `pick_next_card`。
 5. token 不进入 AI 提示。每个临时端点只绑定本轮 cardId，并只暴露 scoped Agent 工具。
-6. 每轮 claim 前，Worker 在仓库目录执行 `git status --short`：工作区不干净则不领取并
-   停止批次；非 Git 目录则跳过检查。
+6. 每轮 claim 前，Worker 先 peek 下一张卡并合并覆盖，再在仓库目录执行
+   `git status --short`。默认工作区不干净则不领取并停止批次；非 Git 目录则跳过检查。
+   工作台或本卡可打开「允许脏工作区」（例如代码审查）；打开后脏工作区仍可领取。
+   工作台「禁止使用卡片参数」时忽略本卡该开关。
 7. Cursor 以 `run.wait()` 的 `finished/error`、Codex 以独立进程退出码判断会话是否结束，不解析 AI 最终文字。
 8. 会话结束后，Worker 读取 pending 状态并执行私有校验、提交与 finalize；进入待验证才
    继续，进入阻塞或失败则按确定性状态处理。

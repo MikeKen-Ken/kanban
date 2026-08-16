@@ -121,7 +121,7 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       a.agentEngine == b.agentEngine &&
       a.agentModelId == b.agentModelId &&
       _stringMapEq(a.agentModelParamValues, b.agentModelParamValues) &&
-      a.agentAllowHighReasoning == b.agentAllowHighReasoning;
+      a.agentAllowDirtyWorkspace == b.agentAllowDirtyWorkspace;
 }
 
 KanbanCard stripConflict(KanbanCard card) {
@@ -256,7 +256,7 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
         local.agentModelParamValues,
         remote.agentModelParamValues,
       ) ||
-      local.agentAllowHighReasoning != remote.agentAllowHighReasoning;
+      local.agentAllowDirtyWorkspace != remote.agentAllowDirtyWorkspace;
 }
 
 KanbanCard _mergeFieldsAuto(KanbanCard local, KanbanCard remote) {
@@ -474,10 +474,10 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.agentModelParamValues,
     eq: _stringMapEq,
   );
-  final agentAllowHighReasoningConflict = _fieldConflict(
-    base: base.card.agentAllowHighReasoning,
-    local: loc.card.agentAllowHighReasoning,
-    remote: rem.card.agentAllowHighReasoning,
+  final agentAllowDirtyWorkspaceConflict = _fieldConflict(
+    base: base.card.agentAllowDirtyWorkspace,
+    local: loc.card.agentAllowDirtyWorkspace,
+    remote: rem.card.agentAllowDirtyWorkspace,
     eq: (a, b) => a == b,
   );
   final columnConflict = _fieldConflict(
@@ -510,7 +510,7 @@ CardMergeResult mergeCardThreeWay({
       agentEngineConflict ||
       agentModelIdConflict ||
       agentModelParamConflict ||
-      agentAllowHighReasoningConflict ||
+      agentAllowDirtyWorkspaceConflict ||
       columnConflict;
 
   if (anyConflict) {
@@ -655,10 +655,10 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.agentModelParamValues,
     eq: _stringMapEq,
   );
-  final mergedAgentAllowHighReasoning = _threeWayValue(
-    base: base.card.agentAllowHighReasoning,
-    local: loc.card.agentAllowHighReasoning,
-    remote: rem.card.agentAllowHighReasoning,
+  final mergedAgentAllowDirtyWorkspace = _threeWayValue(
+    base: base.card.agentAllowDirtyWorkspace,
+    local: loc.card.agentAllowDirtyWorkspace,
+    remote: rem.card.agentAllowDirtyWorkspace,
   );
   final columnId = _threeWayValue(
     base: base.columnId,
@@ -700,7 +700,7 @@ CardMergeResult mergeCardThreeWay({
     agentEngine: mergedAgentEngine,
     agentModelId: mergedAgentModelId,
     agentModelParamValues: mergedAgentModelParamValues,
-    agentAllowHighReasoning: mergedAgentAllowHighReasoning,
+    agentAllowDirtyWorkspace: mergedAgentAllowDirtyWorkspace,
     colorValue: mergedColor,
   );
 

@@ -173,6 +173,7 @@ void main() {
     expect(unset.toJson().containsKey('agentEngine'), isFalse);
     expect(unset.toJson().containsKey('agentModelId'), isFalse);
     expect(unset.toJson().containsKey('agentModelParamValues'), isFalse);
+    expect(unset.toJson().containsKey('agentAllowDirtyWorkspace'), isFalse);
     expect(unset.toJson().containsKey('agentAllowHighReasoning'), isFalse);
 
     final card = KanbanCard(
@@ -182,7 +183,7 @@ void main() {
       createdAt: 1,
       agentEngine: 'cursor',
       agentModelId: 'composer-2.5',
-      agentAllowHighReasoning: true,
+      agentAllowDirtyWorkspace: true,
       agentModelParamValues: const {
         'fast': 'true',
         'reasoning_effort': 'high',
@@ -192,7 +193,7 @@ void main() {
     final restored = KanbanCard.fromJson(card.toJson());
     expect(restored.agentEngine, 'cursor');
     expect(restored.agentModelId, 'composer-2.5');
-    expect(restored.agentAllowHighReasoning, isTrue);
+    expect(restored.agentAllowDirtyWorkspace, isTrue);
     expect(restored.agentModelParamValues, {
       'fast': 'true',
       'reasoning_effort': 'high',
@@ -200,9 +201,19 @@ void main() {
     });
     expect(restored.copyWith(agentEngine: null).agentEngine, isNull);
     expect(
-      restored.copyWith(agentAllowHighReasoning: null).agentAllowHighReasoning,
+      restored.copyWith(agentAllowDirtyWorkspace: null).agentAllowDirtyWorkspace,
       isNull,
     );
+
+    final legacy = KanbanCard.fromJson({
+      'id': 'card-3',
+      'title': '旧字段',
+      'order': 0,
+      'createdAt': 1,
+      'agentAllowHighReasoning': true,
+    });
+    expect(legacy.agentAllowDirtyWorkspace, isNull);
+    expect(legacy.toJson().containsKey('agentAllowHighReasoning'), isFalse);
   });
 
   test('KanbanCard conflictSide serializes without nesting', () {

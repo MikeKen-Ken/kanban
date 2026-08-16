@@ -86,7 +86,7 @@ void main() {
     );
     final local = PlacedCard(
       card: _card(id: 'c1', title: '原', updatedAt: 100).copyWith(
-        agentAllowHighReasoning: true,
+        agentAllowDirtyWorkspace: true,
         agentModelParamValues: const {'context': '272k'},
       ),
       columnId: 'todo',
@@ -98,7 +98,7 @@ void main() {
       columnId: 'todo',
     );
     final result = mergeCardThreeWay(base: base, local: local, remote: remote);
-    expect(result.placed?.card.agentAllowHighReasoning, isTrue);
+    expect(result.placed?.card.agentAllowDirtyWorkspace, isTrue);
     expect(result.placed?.card.agentModelParamValues, {'context': '272k'});
     expect(result.placed?.card.agentEngine, 'codex');
   });

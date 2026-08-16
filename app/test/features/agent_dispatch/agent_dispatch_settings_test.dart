@@ -22,7 +22,8 @@ void main() {
     });
     expect(settings.cardLimitMax, isTrue);
     expect(settings.runAfterQueueOnFailure, isTrue);
-    expect(settings.allowHighReasoning, isFalse);
+    expect(settings.ignoreCardParams, isFalse);
+    expect(settings.allowDirtyWorkspace, isFalse);
     expect(
       settings.toRunOptions(projectTitleOf: (_) => null).cardLimit,
       isA<AgentDispatchCardLimitMax>(),
@@ -39,6 +40,7 @@ void main() {
       'context': '64k',
     });
     expect(settings.cardLimitMax, isTrue);
+    expect(settings.allowDirtyWorkspace, isFalse);
   });
 
   test('加载设置时记住是否勾选全部以及张数', () {
@@ -128,7 +130,8 @@ disable-model-invocation: true
         'fast': 'true',
         'reasoning_effort': 'high',
       },
-      allowHighReasoning: true,
+      ignoreCardParams: true,
+      allowDirtyWorkspace: true,
     );
     final opts = settings.toRunOptions(
       projectTitleOf: (id) => id == 'p1' ? '项目甲' : null,
@@ -141,7 +144,8 @@ disable-model-invocation: true
       (id: 'reasoning_effort', value: 'high'),
     ]);
     expect(opts.cardLimit, isA<AgentDispatchCardLimitMax>());
-    expect(opts.allowHighReasoning, isTrue);
+    expect(opts.ignoreCardParams, isTrue);
+    expect(opts.allowDirtyWorkspace, isTrue);
     expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
     expect(opts.engineDefaults['codex']?.modelId, isNull);
   });
@@ -193,13 +197,15 @@ disable-model-invocation: true
       repoPathByProject: {'a': '/tmp/a'},
       repoPaths: ['/tmp/x', '/tmp/a'],
       modelParamValues: {'fast': 'false', 'effort': 'high'},
+      allowDirtyWorkspace: true,
     );
     final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
     expect(roundTrip.repoPath, '/tmp/x');
     expect(roundTrip.repoPathByProject['a'], '/tmp/a');
     expect(roundTrip.repoPaths, ['/tmp/x', '/tmp/a']);
     expect(roundTrip.modelParamValues, {'fast': 'false', 'effort': 'high'});
-    expect(roundTrip.allowHighReasoning, isFalse);
+    expect(roundTrip.ignoreCardParams, isFalse);
+    expect(roundTrip.allowDirtyWorkspace, isTrue);
     expect(original.toJson(), isNot(contains('cursorApiKey')));
   });
 

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../agent_dispatch/agent_dispatch_clamped_hint.dart';
 import '../agent_dispatch/agent_dispatch_config.dart';
 import '../agent_dispatch/agent_dispatch_model_catalog_store.dart';
 import '../agent_dispatch/agent_dispatch_model_parameters.dart';
-import '../agent_dispatch/agent_dispatch_settings.dart';
 
 /// 卡片详情中的紧凑 Agent 覆盖选择：默认全部不选，运行时沿用工作台。
 class CardDetailAgentModelSection extends StatefulWidget {
@@ -14,19 +12,19 @@ class CardDetailAgentModelSection extends StatefulWidget {
     required this.agentEngine,
     required this.agentModelId,
     required this.agentModelParamValues,
-    required this.agentAllowHighReasoning,
+    required this.agentAllowDirtyWorkspace,
     required this.onChanged,
   });
 
   final String? agentEngine;
   final String? agentModelId;
   final Map<String, String> agentModelParamValues;
-  final bool? agentAllowHighReasoning;
+  final bool? agentAllowDirtyWorkspace;
   final void Function({
     String? agentEngine,
     String? agentModelId,
     Map<String, String> agentModelParamValues,
-    bool? agentAllowHighReasoning,
+    bool? agentAllowDirtyWorkspace,
   }) onChanged;
 
   @override
@@ -40,7 +38,6 @@ class _CardDetailAgentModelSectionState
   static const _omit = Object();
 
   List<AgentDispatchModelInfo> _models = const [];
-  bool _workspaceAllowHighReasoning = false;
 
   @override
   void initState() {
@@ -60,8 +57,6 @@ class _CardDetailAgentModelSectionState
     if (!mounted) return;
     setState(() {
       _models = prefs.loadAgentDispatchModelCatalog(engine: engine);
-      _workspaceAllowHighReasoning =
-          prefs.loadAgentDispatchSettings().allowHighReasoning;
     });
   }
 
@@ -143,7 +138,7 @@ class _CardDetailAgentModelSectionState
     Object? agentEngine = _omit,
     Object? agentModelId = _omit,
     Map<String, String>? agentModelParamValues,
-    Object? agentAllowHighReasoning = _omit,
+    Object? agentAllowDirtyWorkspace = _omit,
   }) {
     widget.onChanged(
       agentEngine: identical(agentEngine, _omit)
@@ -154,9 +149,9 @@ class _CardDetailAgentModelSectionState
           : agentModelId as String?,
       agentModelParamValues:
           agentModelParamValues ?? widget.agentModelParamValues,
-      agentAllowHighReasoning: identical(agentAllowHighReasoning, _omit)
-          ? widget.agentAllowHighReasoning
-          : agentAllowHighReasoning as bool?,
+      agentAllowDirtyWorkspace: identical(agentAllowDirtyWorkspace, _omit)
+          ? widget.agentAllowDirtyWorkspace
+          : agentAllowDirtyWorkspace as bool?,
     );
   }
 
@@ -217,8 +212,6 @@ class _CardDetailAgentModelSectionState
     final reasoning = _param(isAgentDispatchReasoningParam);
     final contextParam =
         _param(isAgentDispatchContextParam) ?? agentDispatchContextParameter;
-    final override = widget.agentAllowHighReasoning;
-    final effectiveAllow = override ?? _workspaceAllowHighReasoning;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -308,27 +301,17 @@ class _CardDetailAgentModelSectionState
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
-            title: const Text('允许高费用档位'),
+            title: const Text('允许脏工作区'),
             subtitle: Text(
-              override == null
-                  ? '沿用工作台（当前${_workspaceAllowHighReasoning ? '开' : '关'}）。打开后本卡不压 Fast / 推理 / 上下文。'
-                  : '已覆盖工作台。关闭后本卡强制省档，打开后按本卡选择执行。',
+              widget.agentAllowDirtyWorkspace == true
+                  ? '已覆盖工作台。本卡在未提交改动的工作区也能领取。'
+                  : '关闭则沿用工作台（默认未提交改动会失败）。打开后仅本卡允许脏工作区。',
             ),
-            value: effectiveAllow,
-            onChanged: (value) => _emit(agentAllowHighReasoning: value),
-          ),
-          AgentDispatchClampedParamHint(
-            allowHighReasoning: effectiveAllow,
-            values: widget.agentModelParamValues,
-          ),
-          if (override != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => _emit(agentAllowHighReasoning: null),
-                child: const Text('沿用工作台'),
-              ),
+            value: widget.agentAllowDirtyWorkspace == true,
+            onChanged: (value) => _emit(
+              agentAllowDirtyWorkspace: value ? true : null,
             ),
+          ),
         ],
       ),
     );

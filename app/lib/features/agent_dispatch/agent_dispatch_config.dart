@@ -85,7 +85,8 @@ class AgentDispatchRunOptions {
     this.modelId,
     this.modelParams = const [],
     this.engineDefaults = const {},
-    this.allowHighReasoning = false,
+    this.ignoreCardParams = false,
+    this.allowDirtyWorkspace = false,
   });
 
   final AgentDispatchEngine engine;
@@ -107,8 +108,11 @@ class AgentDispatchRunOptions {
   /// 各平台工作台默认；卡片指定其它平台时回退到对应项，而不是当前平台。
   final Map<String, AgentDispatchEngineRunDefaults> engineDefaults;
 
-  /// 工作台默认：为 true 时不改推理 / Fast / 上下文；卡片可再覆盖。
-  final bool allowHighReasoning;
+  /// 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区开关，只用工作台默认。
+  final bool ignoreCardParams;
+
+  /// 为 true 时工作区有未提交改动仍可领取；默认 false。
+  final bool allowDirtyWorkspace;
 
   final AgentDispatchCardLimit cardLimit;
 

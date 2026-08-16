@@ -436,7 +436,8 @@ class AgentDispatchService {
         model: options.modelId,
         modelParams: options.modelParams,
         engineDefaults: options.engineDefaultsJobJson(),
-        allowHighReasoning: options.allowHighReasoning,
+        ignoreCardParams: options.ignoreCardParams,
+        allowDirtyWorkspace: options.allowDirtyWorkspace,
         cursorApiKey: cursorApiKey,
         workerScriptPath: workerScriptPath,
         onProcessStarted: (worker) {

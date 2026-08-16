@@ -276,6 +276,7 @@ function engineFallback(job, engine) {
   return {};
 }
 function mergeJobWithCardOverrides(job, claim) {
+  if (job.ignoreCardParams === true) return job;
   const engine = parseEngine(claim.agentEngine, job.engine);
   const defaults = engineFallback(job, engine);
   const cardModel = String(claim.agentModelId ?? "").trim();
@@ -285,7 +286,6 @@ function mergeJobWithCardOverrides(job, claim) {
     (defaults.modelParams ?? []).map((item) => [item.id, item])
   );
   for (const item of cardParams) byId.set(item.id, item);
-  const allowHighReasoning = resolveAllowHighReasoning(job, claim);
   const catalog = defaults.models?.find((item) => item.id === model);
   const rawParameters = catalog?.parameters ?? [];
   const parameters = ensureContextParameter(rawParameters);
@@ -308,55 +308,22 @@ function mergeJobWithCardOverrides(job, claim) {
       byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
     }
   }
-  const modelParams = [...byId.values()].map((item) => ({
-    ...item,
-    value: clampUnattendedParam(item, allowHighReasoning)
-  }));
-  return { ...job, engine, model, modelParams, allowHighReasoning };
+  return {
+    ...job,
+    engine,
+    model,
+    modelParams: [...byId.values()],
+    allowDirtyWorkspace: job.allowDirtyWorkspace === true || isTrueFlag(claim.agentAllowDirtyWorkspace)
+  };
 }
-function resolveAllowHighReasoning(job, claim) {
-  const card = parseOptionalBool(claim.agentAllowHighReasoning);
-  if (card != null) return card;
-  return job.allowHighReasoning === true;
-}
-function parseOptionalBool(raw) {
-  if (raw === true || raw === false) return raw;
-  if (typeof raw !== "string") return void 0;
-  const text = raw.trim().toLowerCase();
-  if (text === "true") return true;
-  if (text === "false") return false;
-  return void 0;
-}
-function clampUnattendedParam(param, allowHighReasoning) {
-  if (allowHighReasoning) return param.value;
-  const id = param.id.toLowerCase();
-  const value = param.value.toLowerCase();
-  if (isContextParamId(id)) {
-    const tokens = parseTokenBudget(value);
-    if (tokens != null && tokens > MAX_UNATTENDED_CONTEXT_TOKENS) {
-      return "64k";
-    }
-  }
-  const expensive = /* @__PURE__ */ new Set([
-    "high",
-    "xhigh",
-    "extra_high",
-    "very_high",
-    "max",
-    "maximum",
-    "large",
-    "xlarge",
-    "huge"
-  ]);
-  if (expensive.has(value) && (isReasoningParamId(id) || isContextParamId(id) || id.includes("thinking"))) {
-    return "medium";
-  }
-  return param.value;
+function isTrueFlag(raw) {
+  if (raw === true) return true;
+  if (typeof raw !== "string") return false;
+  return raw.trim().toLowerCase() === "true";
 }
 function isContextParamId(id) {
   return id.toLowerCase().includes("context");
 }
-var MAX_UNATTENDED_CONTEXT_TOKENS = 64e3;
 var DEFAULT_CONTEXT_VALUES = ["64k", "272k"];
 function contextCatalogParameter() {
   return {
@@ -393,10 +360,7 @@ function parseTokenBudget(value) {
 }
 function resolveModelParams(job) {
   if (job.modelParams && job.modelParams.length > 0) {
-    return job.modelParams.map((item) => ({
-      ...item,
-      value: clampUnattendedParam(item, job.allowHighReasoning === true)
-    }));
+    return job.modelParams;
   }
   switch (job.effort) {
     case "fast":
@@ -406,10 +370,7 @@ function resolveModelParams(job) {
     case "medium":
       return [{ id: "reasoning_effort", value: "medium" }];
     case "high":
-      return [{
-        id: "reasoning_effort",
-        value: job.allowHighReasoning === true ? "high" : "medium"
-      }];
+      return [{ id: "reasoning_effort", value: "high" }];
     default:
       return void 0;
   }
@@ -2092,9 +2053,16 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
       if (peek.found !== true) {
         return completedResult(processedCards, "\u5F53\u524D\u65E0\u66F4\u591A\u5361\u7247");
       }
-      const treeError = gitPreflightError(dependencies.inspectGit(job.cwd));
-      if (treeError) {
-        return { ok: false, error: treeError, processedCards };
+      const preview = mergeJobWithCardOverrides(job, peek);
+      const tree = dependencies.inspectGit(job.cwd);
+      if (tree.kind === "dirty" && preview.allowDirtyWorkspace === true) {
+        workerLog(`\u5DF2\u5141\u8BB8\u810F\u5DE5\u4F5C\u533A\uFF0C\u7EE7\u7EED\u9886\u53D6\uFF1A
+${tree.output}`);
+      } else {
+        const treeError = gitPreflightError(tree);
+        if (treeError) {
+          return { ok: false, error: treeError, processedCards };
+        }
       }
       const expectedCardId = String(peek.cardId ?? "").trim();
       const claim = parseClaimResult(
@@ -2115,6 +2083,7 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
       let scoped;
       let context;
       let terminalRecorded = false;
+      let allowDirtyWorkspace = preview.allowDirtyWorkspace === true;
       try {
         scoped = await dependencies.connectMcp(agentEndpointUrl);
         const tools = await scoped.listTools();
@@ -2129,6 +2098,7 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
           claim
         });
         const overridden = mergeJobWithCardOverrides(job, claim.payload);
+        allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob = {
           ...overridden,
           prompt: context.prompt,
@@ -2151,20 +2121,22 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
           });
           terminalRecorded = true;
           const afterSkip = dependencies.inspectGit(job.cwd);
-          if (afterSkip.kind === "dirty") {
-            return {
-              ok: false,
-              error: `\u8DF3\u8FC7\u540E\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
+          if (!allowDirtyWorkspace) {
+            if (afterSkip.kind === "dirty") {
+              return {
+                ok: false,
+                error: `\u8DF3\u8FC7\u540E\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
 ${afterSkip.output}`,
-              processedCards
-            };
-          }
-          if (afterSkip.kind === "unknown") {
-            return {
-              ok: false,
-              error: `\u8DF3\u8FC7\u540E\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF1A${afterSkip.output}`,
-              processedCards
-            };
+                processedCards
+              };
+            }
+            if (afterSkip.kind === "unknown") {
+              return {
+                ok: false,
+                error: `\u8DF3\u8FC7\u540E\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF1A${afterSkip.output}`,
+                processedCards
+              };
+            }
           }
           continue;
         }
@@ -2266,11 +2238,11 @@ ${afterSkip.output}`,
             error instanceof WorkerCancelledError
           );
         }
-        const tree = dependencies.inspectGit(job.cwd);
-        const dirtySuffix = tree.kind === "dirty" ? `
+        const tree2 = dependencies.inspectGit(job.cwd);
+        const dirtySuffix = allowDirtyWorkspace ? "" : tree2.kind === "dirty" ? `
 \u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
-${tree.output}` : tree.kind === "unknown" ? `
-\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A${tree.output}` : "";
+${tree2.output}` : tree2.kind === "unknown" ? `
+\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A${tree2.output}` : "";
         return error instanceof WorkerCancelledError ? cancelledResult() : { ok: false, error: `${reason}${dirtySuffix}`, processedCards };
       } finally {
         context?.cleanup();

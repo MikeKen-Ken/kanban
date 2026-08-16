@@ -479,7 +479,7 @@ class KanbanCard {
     this.agentEngine,
     this.agentModelId,
     this.agentModelParamValues,
-    this.agentAllowHighReasoning,
+    this.agentAllowDirtyWorkspace,
     this.colorValue,
     this.conflictSide,
     this.conflictColumnId,
@@ -534,8 +534,8 @@ class KanbanCard {
   /// 已显式选择的模型参数（如 fast / reasoning_effort / context）；空或 null 表示沿用工作台。
   final Map<String, String>? agentModelParamValues;
 
-  /// 本卡是否允许高费用档位；null 表示沿用工作台开关。
-  final bool? agentAllowHighReasoning;
+  /// 本卡是否允许在未提交改动的工作区领取；null 表示沿用工作台（默认失败）。
+  final bool? agentAllowDirtyWorkspace;
 
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
@@ -621,7 +621,7 @@ class KanbanCard {
     Object? agentEngine = _sentinel,
     Object? agentModelId = _sentinel,
     Object? agentModelParamValues = _sentinel,
-    Object? agentAllowHighReasoning = _sentinel,
+    Object? agentAllowDirtyWorkspace = _sentinel,
     Object? colorValue = _sentinel,
     Object? conflictSide = _sentinel,
     Object? conflictColumnId = _sentinel,
@@ -668,9 +668,9 @@ class KanbanCard {
       agentModelParamValues: agentModelParamValues == _sentinel
           ? this.agentModelParamValues
           : agentModelParamValues as Map<String, String>?,
-      agentAllowHighReasoning: agentAllowHighReasoning == _sentinel
-          ? this.agentAllowHighReasoning
-          : agentAllowHighReasoning as bool?,
+      agentAllowDirtyWorkspace: agentAllowDirtyWorkspace == _sentinel
+          ? this.agentAllowDirtyWorkspace
+          : agentAllowDirtyWorkspace as bool?,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
       conflictSide: clearConflict
@@ -729,8 +729,8 @@ class KanbanCard {
         'agentModelId': agentModelId,
       if (agentModelParamValues != null && agentModelParamValues!.isNotEmpty)
         'agentModelParamValues': agentModelParamValues,
-      if (agentAllowHighReasoning != null)
-        'agentAllowHighReasoning': agentAllowHighReasoning,
+      if (agentAllowDirtyWorkspace != null)
+        'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
       if (colorValue != null) 'color': colorValue,
     };
     if (includeConflict) {
@@ -793,7 +793,7 @@ class KanbanCard {
       agentEngine: json['agentEngine'] as String?,
       agentModelId: json['agentModelId'] as String?,
       agentModelParamValues: _stringMap(json['agentModelParamValues']),
-      agentAllowHighReasoning: json['agentAllowHighReasoning'] as bool?,
+      agentAllowDirtyWorkspace: json['agentAllowDirtyWorkspace'] as bool?,
       colorValue: json['color'] as int?,
       conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
       conflictColumnId: json['conflictColumnId'] as String?,
@@ -842,8 +842,8 @@ class KanbanCard {
           'agentModelId': agentModelId!.trim(),
         if (agentModelParamValues != null && agentModelParamValues!.isNotEmpty)
           'agentModelParamValues': agentModelParamValues,
-        if (agentAllowHighReasoning != null)
-          'agentAllowHighReasoning': agentAllowHighReasoning,
+        if (agentAllowDirtyWorkspace != null)
+          'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
       };
 }
 

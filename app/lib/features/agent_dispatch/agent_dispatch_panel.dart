@@ -11,7 +11,6 @@ import '../../features/import_export/backup_file_picker.dart';
 import '../kanban/next_work_card.dart';
 import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_after_queue_field.dart';
-import 'agent_dispatch_clamped_hint.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
@@ -23,6 +22,7 @@ import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
 import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_registry.dart';
+import 'agent_dispatch_run_toggles.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_token_stats_dialog.dart';
@@ -812,23 +812,16 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   ),
                 ],
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('允许高费用档位'),
-                subtitle: const Text(
-                  '工作台默认。关闭时把 high 压到 medium、过大上下文压到 64k；卡片选「默认」的参数沿用上方选择。开启后不改 Fast / 推理 / 上下文，按卡片自己的选择执行。卡片开关可覆盖本项。',
+              AgentDispatchRunToggles(
+                ignoreCardParams: _settings.ignoreCardParams,
+                allowDirtyWorkspace: _settings.allowDirtyWorkspace,
+                enabled: !_running && !_busy,
+                onIgnoreCardParamsChanged: (value) => _persist(
+                  _settings.copyWith(ignoreCardParams: value),
                 ),
-                value: _settings.allowHighReasoning,
-                onChanged: _running || _busy
-                    ? null
-                    : (value) => _persist(
-                          _settings.copyWith(allowHighReasoning: value),
-                        ),
-              ),
-              AgentDispatchClampedParamHint(
-                allowHighReasoning: _settings.allowHighReasoning,
-                values: _settings.modelParamValues,
+                onAllowDirtyWorkspaceChanged: (value) => _persist(
+                  _settings.copyWith(allowDirtyWorkspace: value),
+                ),
               ),
               if (_modelCatalogMessage != null)
                 Padding(

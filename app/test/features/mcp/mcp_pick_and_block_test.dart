@@ -103,7 +103,7 @@ void main() {
       cardId!,
       agentEngine: 'cursor',
       agentModelId: 'composer-2.5',
-      agentAllowHighReasoning: true,
+      agentAllowDirtyWorkspace: true,
       agentModelParamValues: const {'fast': 'true'},
     );
 
@@ -114,7 +114,7 @@ void main() {
     expect(payload['agentEngine'], 'cursor');
     expect(payload['agentModelId'], 'composer-2.5');
     expect(payload['agentModelParamValues'], {'fast': 'true'});
-    expect(payload['agentAllowHighReasoning'], isTrue);
+    expect(payload['agentAllowDirtyWorkspace'], isTrue);
   });
 
   test('pick_next_card includeWorkItems=false 时不含 workItems', () async {

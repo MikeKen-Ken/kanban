@@ -87,6 +87,7 @@ function createHappyDependencies(options?: {
   manualReason?: string;
   claimError?: string;
   finalizeResult?: Record<string, unknown>;
+  peekFields?: Record<string, unknown>;
   runAgent?: (round: RoundDispatchJob) => Promise<{ ok: boolean; error?: string }>;
 }): {
   dependencies: RunBatchDependencies;
@@ -101,7 +102,7 @@ function createHappyDependencies(options?: {
       case "peek_next_card":
         if (peeked) return { found: false };
         peeked = true;
-        return { found: true, cardId: "card-a" };
+        return { found: true, cardId: "card-a", ...options?.peekFields };
       case "dispatch_claim_next_card":
         if (options?.claimError) {
           throw new Error(options.claimError);
@@ -113,6 +114,7 @@ function createHappyDependencies(options?: {
           sessionId: "session-a",
           agentEndpointUrl: "http://scoped/mcp",
           agentModelParamValues: { reasoning_effort: "high" },
+          ...options?.peekFields,
           workItems: [{ id: "work-a", text: "完成 A" }],
         };
       case "dispatch_agent_session_status":
@@ -175,7 +177,7 @@ function createHappyDependencies(options?: {
       assert.equal(round.round.images.length, 1);
       assert.equal(
         round.modelParams?.find((item) => item.id === "reasoning_effort")?.value,
-        options?.expectedReasoning ?? "medium",
+        options?.expectedReasoning ?? "high",
       );
       return options?.runAgent
         ? options.runAgent(round)
@@ -283,18 +285,86 @@ describe("run_batch", () => {
     );
   });
 
-  it("显式允许时保留 high 推理参数", async () => {
+  it("禁止使用卡片参数时沿用工作台默认", async () => {
     const { dependencies } = createHappyDependencies({
-      expectedReasoning: "high",
+      expectedReasoning: "medium",
     });
 
     const result = await runBatch(
-      { ...job, allowHighReasoning: true },
+      {
+        ...job,
+        ignoreCardParams: true,
+        modelParams: [{ id: "reasoning_effort", value: "medium" }],
+      },
       undefined,
       dependencies,
     );
 
     assert.equal(result.ok, true);
+  });
+
+  it("默认脏工作区在领取前停止批次", async () => {
+    const { dependencies, full } = createHappyDependencies();
+    dependencies.inspectGit = () => ({ kind: "dirty", output: " M src/file.ts" });
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /工作区不干净，未领取卡片/);
+    assert.equal(
+      full.calls.some((item) => item.name === "dispatch_claim_next_card"),
+      false,
+    );
+  });
+
+  it("工作台允许脏工作区时可以领取", async () => {
+    const { dependencies, full } = createHappyDependencies();
+    dependencies.inspectGit = () => ({ kind: "dirty", output: " M src/file.ts" });
+
+    const result = await runBatch(
+      { ...job, allowDirtyWorkspace: true },
+      undefined,
+      dependencies,
+    );
+
+    assert.equal(result.ok, true);
+    assert.ok(
+      full.calls.some((item) => item.name === "dispatch_claim_next_card"),
+    );
+  });
+
+  it("卡片允许脏工作区时可以领取", async () => {
+    const { dependencies, full } = createHappyDependencies({
+      peekFields: { agentAllowDirtyWorkspace: true },
+    });
+    dependencies.inspectGit = () => ({ kind: "dirty", output: " M src/file.ts" });
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, true);
+    assert.ok(
+      full.calls.some((item) => item.name === "dispatch_claim_next_card"),
+    );
+  });
+
+  it("禁止卡片参数时忽略卡片脏工作区开关", async () => {
+    const { dependencies, full } = createHappyDependencies({
+      peekFields: { agentAllowDirtyWorkspace: true },
+    });
+    dependencies.inspectGit = () => ({ kind: "dirty", output: " M src/file.ts" });
+
+    const result = await runBatch(
+      { ...job, ignoreCardParams: true },
+      undefined,
+      dependencies,
+    );
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /工作区不干净，未领取卡片/);
+    assert.equal(
+      full.calls.some((item) => item.name === "dispatch_claim_next_card"),
+      false,
+    );
   });
 
   it("scoped 工具不精确匹配时拒绝启动 Agent", async () => {

@@ -117,9 +117,15 @@ export async function runBatch(
         return completedResult(processedCards, "当前无更多卡片");
       }
 
-      const treeError = gitPreflightError(dependencies.inspectGit(job.cwd));
-      if (treeError) {
-        return { ok: false, error: treeError, processedCards };
+      const preview = mergeJobWithCardOverrides(job, peek);
+      const tree = dependencies.inspectGit(job.cwd);
+      if (tree.kind === "dirty" && preview.allowDirtyWorkspace === true) {
+        workerLog(`已允许脏工作区，继续领取：\n${tree.output}`);
+      } else {
+        const treeError = gitPreflightError(tree);
+        if (treeError) {
+          return { ok: false, error: treeError, processedCards };
+        }
       }
 
       const expectedCardId = String(peek.cardId ?? "").trim();
@@ -142,6 +148,7 @@ export async function runBatch(
       let scoped: KanbanMcpConnection | undefined;
       let context: SessionContext | undefined;
       let terminalRecorded = false;
+      let allowDirtyWorkspace = preview.allowDirtyWorkspace === true;
       try {
         scoped = await dependencies.connectMcp(agentEndpointUrl);
         const tools = await scoped.listTools();
@@ -157,6 +164,7 @@ export async function runBatch(
           claim,
         });
         const overridden = mergeJobWithCardOverrides(job, claim.payload);
+        allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob: RoundDispatchJob = {
           ...overridden,
           prompt: context.prompt,
@@ -180,19 +188,21 @@ export async function runBatch(
           });
           terminalRecorded = true;
           const afterSkip = dependencies.inspectGit(job.cwd);
-          if (afterSkip.kind === "dirty") {
-            return {
-              ok: false,
-              error: `跳过后工作区不干净，停止批次：\n${afterSkip.output}`,
-              processedCards,
-            };
-          }
-          if (afterSkip.kind === "unknown") {
-            return {
-              ok: false,
-              error: `跳过后无法判断工作区状态：${afterSkip.output}`,
-              processedCards,
-            };
+          if (!allowDirtyWorkspace) {
+            if (afterSkip.kind === "dirty") {
+              return {
+                ok: false,
+                error: `跳过后工作区不干净，停止批次：\n${afterSkip.output}`,
+                processedCards,
+              };
+            }
+            if (afterSkip.kind === "unknown") {
+              return {
+                ok: false,
+                error: `跳过后无法判断工作区状态：${afterSkip.output}`,
+                processedCards,
+              };
+            }
           }
           continue;
         }
@@ -300,7 +310,9 @@ export async function runBatch(
           );
         }
         const tree = dependencies.inspectGit(job.cwd);
-        const dirtySuffix = tree.kind === "dirty"
+        const dirtySuffix = allowDirtyWorkspace
+          ? ""
+          : tree.kind === "dirty"
           ? `\n工作区不干净，停止批次：\n${tree.output}`
           : tree.kind === "unknown"
           ? `\n无法判断工作区状态，停止批次：${tree.output}`
