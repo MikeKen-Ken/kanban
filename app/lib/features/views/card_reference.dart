@@ -28,6 +28,7 @@ class CardReference {
     this.agentEngine,
     this.agentModelId,
     this.agentModelParamValues,
+    this.agentAllowHighReasoning,
     this.source,
   });
 
@@ -55,6 +56,7 @@ class CardReference {
   final String? agentEngine;
   final String? agentModelId;
   final Map<String, String>? agentModelParamValues;
+  final bool? agentAllowHighReasoning;
 
   /// 外链摘要：`{id, url, title?}`
   final List<Map<String, dynamic>> links;
@@ -90,6 +92,8 @@ class CardReference {
           'agentModelId': agentModelId,
         if (agentModelParamValues != null && agentModelParamValues!.isNotEmpty)
           'agentModelParamValues': agentModelParamValues,
+        if (agentAllowHighReasoning != null)
+          'agentAllowHighReasoning': agentAllowHighReasoning,
         if (links.isNotEmpty) 'links': links,
       };
 
@@ -125,6 +129,9 @@ class CardReference {
       agentModelId:
           json['agentModelId'] is String ? json['agentModelId'] as String : null,
       agentModelParamValues: _stringMap(json['agentModelParamValues']),
+      agentAllowHighReasoning: json['agentAllowHighReasoning'] is bool
+          ? json['agentAllowHighReasoning'] as bool
+          : null,
       links: _linkMaps(json['links']),
     );
   }

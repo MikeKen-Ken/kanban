@@ -107,7 +107,7 @@ class AgentDispatchRunOptions {
   /// 各平台工作台默认；卡片指定其它平台时回退到对应项，而不是当前平台。
   final Map<String, AgentDispatchEngineRunDefaults> engineDefaults;
 
-  /// 为 true 时沿用卡片/面板指定的 high 等推理档位；默认仍压到更省的档位。
+  /// 工作台默认：为 true 时不改推理 / Fast / 上下文；卡片可再覆盖。
   final bool allowHighReasoning;
 
   final AgentDispatchCardLimit cardLimit;
@@ -154,11 +154,13 @@ class AgentDispatchModelInfo {
       id: json['id'] as String? ?? '',
       displayName: json['displayName'] as String?,
       description: json['description'] as String?,
-      parameters: raw
-          .whereType<Map<String, dynamic>>()
-          .map(AgentDispatchModelParameter.fromJson)
-          .where((p) => p.id.isNotEmpty)
-          .toList(),
+      parameters: withAgentDispatchContextParameter(
+        raw
+            .whereType<Map<String, dynamic>>()
+            .map(AgentDispatchModelParameter.fromJson)
+            .where((p) => p.id.isNotEmpty)
+            .toList(),
+      ),
       variants: (json['variants'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(AgentDispatchModelVariant.fromJson)
@@ -285,4 +287,25 @@ class AgentDispatchModelVariant {
             {'id': entry.key, 'value': entry.value},
         ],
       };
+}
+
+const agentDispatchContextParameter = AgentDispatchModelParameter(
+  id: 'context',
+  displayName: '上下文',
+  options: [
+    AgentDispatchModelParameterOption(value: '64k', displayName: '64k'),
+    AgentDispatchModelParameterOption(value: '272k', displayName: '272k'),
+  ],
+);
+
+bool isAgentDispatchContextParam(String id) =>
+    id.toLowerCase().contains('context');
+
+List<AgentDispatchModelParameter> withAgentDispatchContextParameter(
+  List<AgentDispatchModelParameter> parameters,
+) {
+  if (parameters.any((item) => isAgentDispatchContextParam(item.id))) {
+    return parameters;
+  }
+  return [...parameters, agentDispatchContextParameter];
 }

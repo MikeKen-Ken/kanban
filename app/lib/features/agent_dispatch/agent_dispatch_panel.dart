@@ -11,6 +11,7 @@ import '../../features/import_export/backup_file_picker.dart';
 import '../kanban/next_work_card.dart';
 import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_after_queue_field.dart';
+import 'agent_dispatch_clamped_hint.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
@@ -814,9 +815,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                title: const Text('沿用卡片指定的高推理档位'),
+                title: const Text('允许高费用档位'),
                 subtitle: const Text(
-                  '关闭时忽略卡片或上方所选的 high 等档位，统一压到更省的 medium，并把过大上下文限制在 64k。开启后按卡片/面板参数执行，费用更高。',
+                  '工作台默认。关闭时把 high 压到 medium、过大上下文压到 64k；卡片选「默认」的参数沿用上方选择。开启后不改 Fast / 推理 / 上下文，按卡片自己的选择执行。卡片开关可覆盖本项。',
                 ),
                 value: _settings.allowHighReasoning,
                 onChanged: _running || _busy
@@ -824,6 +825,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     : (value) => _persist(
                           _settings.copyWith(allowHighReasoning: value),
                         ),
+              ),
+              AgentDispatchClampedParamHint(
+                allowHighReasoning: _settings.allowHighReasoning,
+                values: _settings.modelParamValues,
               ),
               if (_modelCatalogMessage != null)
                 Padding(

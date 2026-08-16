@@ -105,7 +105,9 @@ String _parameterLabel(AgentDispatchModelParameter parameter) =>
       'thinking' =>
         '思考程度',
       'fast' => '快速模式',
-      _ => parameter.displayName ?? parameter.id,
+      _ => isAgentDispatchContextParam(parameter.id)
+          ? '上下文'
+          : (parameter.displayName ?? parameter.id),
     };
 
 bool isAgentDispatchReasoningParam(String id) => switch (id) {
@@ -136,6 +138,10 @@ Map<String, String> preferredAgentDispatchModelParamValues(
         parameter.values.contains('medium')) {
       values[parameter.id] = 'medium';
     }
+    if (isAgentDispatchContextParam(parameter.id) &&
+        parameter.values.contains('64k')) {
+      values[parameter.id] = '64k';
+    }
   }
   return values;
 }
@@ -145,5 +151,6 @@ class AgentDispatchSettingsDefaults {
   static const modelParamValues = {
     'fast': 'false',
     'reasoning_effort': 'medium',
+    'context': '64k',
   };
 }

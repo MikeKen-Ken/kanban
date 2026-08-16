@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../agent_dispatch/agent_dispatch_clamped_hint.dart';
 import '../agent_dispatch/agent_dispatch_config.dart';
 import '../agent_dispatch/agent_dispatch_model_catalog_store.dart';
 import '../agent_dispatch/agent_dispatch_model_parameters.dart';
+import '../agent_dispatch/agent_dispatch_settings.dart';
 
 /// 卡片详情中的紧凑 Agent 覆盖选择：默认全部不选，运行时沿用工作台。
 class CardDetailAgentModelSection extends StatefulWidget {
@@ -12,16 +14,19 @@ class CardDetailAgentModelSection extends StatefulWidget {
     required this.agentEngine,
     required this.agentModelId,
     required this.agentModelParamValues,
+    required this.agentAllowHighReasoning,
     required this.onChanged,
   });
 
   final String? agentEngine;
   final String? agentModelId;
   final Map<String, String> agentModelParamValues;
+  final bool? agentAllowHighReasoning;
   final void Function({
     String? agentEngine,
     String? agentModelId,
     Map<String, String> agentModelParamValues,
+    bool? agentAllowHighReasoning,
   }) onChanged;
 
   @override
@@ -35,6 +40,7 @@ class _CardDetailAgentModelSectionState
   static const _omit = Object();
 
   List<AgentDispatchModelInfo> _models = const [];
+  bool _workspaceAllowHighReasoning = false;
 
   @override
   void initState() {
@@ -54,6 +60,8 @@ class _CardDetailAgentModelSectionState
     if (!mounted) return;
     setState(() {
       _models = prefs.loadAgentDispatchModelCatalog(engine: engine);
+      _workspaceAllowHighReasoning =
+          prefs.loadAgentDispatchSettings().allowHighReasoning;
     });
   }
 
@@ -135,6 +143,7 @@ class _CardDetailAgentModelSectionState
     Object? agentEngine = _omit,
     Object? agentModelId = _omit,
     Map<String, String>? agentModelParamValues,
+    Object? agentAllowHighReasoning = _omit,
   }) {
     widget.onChanged(
       agentEngine: identical(agentEngine, _omit)
@@ -145,6 +154,9 @@ class _CardDetailAgentModelSectionState
           : agentModelId as String?,
       agentModelParamValues:
           agentModelParamValues ?? widget.agentModelParamValues,
+      agentAllowHighReasoning: identical(agentAllowHighReasoning, _omit)
+          ? widget.agentAllowHighReasoning
+          : agentAllowHighReasoning as bool?,
     );
   }
 
@@ -177,7 +189,10 @@ class _CardDetailAgentModelSectionState
       }
     }
     final allowed = {
-      for (final parameter in selected?.parameters ?? const []) parameter.id,
+      for (final parameter in withAgentDispatchContextParameter(
+        selected?.parameters ?? const [],
+      ))
+        parameter.id,
     };
     final nextParams = <String, String>{
       for (final entry in widget.agentModelParamValues.entries)
@@ -200,67 +215,120 @@ class _CardDetailAgentModelSectionState
   Widget build(BuildContext context) {
     final fast = _isCodex ? null : _param((id) => id == 'fast');
     final reasoning = _param(isAgentDispatchReasoningParam);
+    final contextParam =
+        _param(isAgentDispatchContextParam) ?? agentDispatchContextParameter;
+    final override = widget.agentAllowHighReasoning;
+    final effectiveAllow = override ?? _workspaceAllowHighReasoning;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
+      child: Column(
         children: [
-          _dropdown(
-            label: 'AI 平台',
-            value: widget.agentEngine ?? _inherit,
-            items: _items(
-              options: [
-                for (final engine in AgentDispatchEngine.values)
-                  (value: engine.name, label: engine.label),
-              ],
-            ),
-            onChanged: _onEngine,
-          ),
-          const SizedBox(width: 6),
-          _dropdown(
-            label: '模型',
-            value: widget.agentModelId ?? _inherit,
-            items: _items(
-              options: [
-                for (final model in _models)
-                  (value: model.id, label: model.label),
-              ],
-            ),
-            onChanged: _onModel,
-          ),
-          if (fast != null) ...[
-            const SizedBox(width: 6),
-            _dropdown(
-              label: 'Fast',
-              value: widget.agentModelParamValues[fast.id] ?? _inherit,
-              items: _items(
-                options: [
-                  for (final option in fast.options)
-                    (
-                      value: option.value,
-                      label: option.displayName ?? option.value,
-                    ),
-                ],
+          Row(
+            children: [
+              _dropdown(
+                label: 'AI 平台',
+                value: widget.agentEngine ?? _inherit,
+                items: _items(
+                  options: [
+                    for (final engine in AgentDispatchEngine.values)
+                      (value: engine.name, label: engine.label),
+                  ],
+                ),
+                onChanged: _onEngine,
               ),
-              onChanged: (value) => _onParam(fast.id, value),
-            ),
-          ],
-          if (reasoning != null) ...[
-            const SizedBox(width: 6),
-            _dropdown(
-              label: '推理程度',
-              value: widget.agentModelParamValues[reasoning.id] ?? _inherit,
-              items: _items(
-                options: [
-                  for (final option in reasoning.options)
-                    (
-                      value: option.value,
-                      label: option.displayName ?? option.value,
-                    ),
-                ],
+              const SizedBox(width: 6),
+              _dropdown(
+                label: '模型',
+                value: widget.agentModelId ?? _inherit,
+                items: _items(
+                  options: [
+                    for (final model in _models)
+                      (value: model.id, label: model.label),
+                  ],
+                ),
+                onChanged: _onModel,
               ),
-              onChanged: (value) => _onParam(reasoning.id, value),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (fast != null) ...[
+                _dropdown(
+                  label: 'Fast',
+                  value: widget.agentModelParamValues[fast.id] ?? _inherit,
+                  items: _items(
+                    options: [
+                      for (final option in fast.options)
+                        (
+                          value: option.value,
+                          label: option.displayName ?? option.value,
+                        ),
+                    ],
+                  ),
+                  onChanged: (value) => _onParam(fast.id, value),
+                ),
+                const SizedBox(width: 6),
+              ],
+              if (reasoning != null) ...[
+                _dropdown(
+                  label: '推理程度',
+                  value:
+                      widget.agentModelParamValues[reasoning.id] ?? _inherit,
+                  items: _items(
+                    options: [
+                      for (final option in reasoning.options)
+                        (
+                          value: option.value,
+                          label: option.displayName ?? option.value,
+                        ),
+                    ],
+                  ),
+                  onChanged: (value) => _onParam(reasoning.id, value),
+                ),
+                const SizedBox(width: 6),
+              ],
+              _dropdown(
+                label: '上下文',
+                value:
+                    widget.agentModelParamValues[contextParam.id] ?? _inherit,
+                items: _items(
+                  options: [
+                    for (final option in contextParam.options)
+                      (
+                        value: option.value,
+                        label: option.displayName ?? option.value,
+                      ),
+                  ],
+                ),
+                onChanged: (value) => _onParam(contextParam.id, value),
+              ),
+            ],
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('允许高费用档位'),
+            subtitle: Text(
+              override == null
+                  ? '沿用工作台（当前${_workspaceAllowHighReasoning ? '开' : '关'}）。打开后本卡不压 Fast / 推理 / 上下文。'
+                  : '已覆盖工作台。关闭后本卡强制省档，打开后按本卡选择执行。',
             ),
-          ],
+            value: effectiveAllow,
+            onChanged: (value) => _emit(agentAllowHighReasoning: value),
+          ),
+          AgentDispatchClampedParamHint(
+            allowHighReasoning: effectiveAllow,
+            values: widget.agentModelParamValues,
+          ),
+          if (override != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _emit(agentAllowHighReasoning: null),
+                child: const Text('沿用工作台'),
+              ),
+            ),
         ],
       ),
     );

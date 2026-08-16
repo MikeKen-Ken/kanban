@@ -61,6 +61,7 @@ class AgentDispatchSettings {
   static const defaultModelParamValues = {
     'fast': 'false',
     'reasoning_effort': 'medium',
+    'context': '64k',
   };
 
   final AgentDispatchEngine engine;

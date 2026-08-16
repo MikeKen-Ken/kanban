@@ -108,6 +108,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   String? _agentEngine;
   String? _agentModelId;
   late Map<String, String> _agentModelParamValues;
+  bool? _agentAllowHighReasoning;
   int? _colorValue;
   final _checklistInput = TextEditingController();
   final _verificationFeedbackInput = TextEditingController();
@@ -166,6 +167,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     _agentModelParamValues = {
       ...?widget.card.agentModelParamValues,
     };
+    _agentAllowHighReasoning = widget.card.agentAllowHighReasoning;
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
@@ -349,6 +351,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     )) {
       return true;
     }
+    if (_agentAllowHighReasoning != widget.card.agentAllowHighReasoning) {
+      return true;
+    }
     return false;
   }
 
@@ -442,7 +447,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_commitRefController.text.trim().isNotEmpty) return true;
     if (_agentEngine != null ||
         _agentModelId != null ||
-        _agentModelParamValues.isNotEmpty) {
+        _agentModelParamValues.isNotEmpty ||
+        _agentAllowHighReasoning != null) {
       return true;
     }
     return false;
@@ -509,6 +515,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final agentModelParamValues = Map<String, String>.from(
       _agentModelParamValues,
     );
+    final agentAllowHighReasoning = _agentAllowHighReasoning;
     final colorValue = _colorValue;
     final clearColor = _colorValue == null;
 
@@ -547,6 +554,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         clearAgentModelId: agentModelId == null,
         agentModelParamValues: agentModelParamValues,
         clearAgentModelParamValues: agentModelParamValues.isEmpty,
+        agentAllowHighReasoning: agentAllowHighReasoning,
+        clearAgentAllowHighReasoning: agentAllowHighReasoning == null,
         colorValue: colorValue,
         clearColor: clearColor,
       );
@@ -1089,15 +1098,19 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           agentEngine: _agentEngine,
                           agentModelId: _agentModelId,
                           agentModelParamValues: _agentModelParamValues,
+                          agentAllowHighReasoning: _agentAllowHighReasoning,
                           onChanged: ({
                             agentEngine,
                             agentModelId,
                             agentModelParamValues = const {},
+                            agentAllowHighReasoning,
                           }) {
                             _safeSetState(() {
                               _agentEngine = agentEngine;
                               _agentModelId = agentModelId;
                               _agentModelParamValues = agentModelParamValues;
+                              _agentAllowHighReasoning =
+                                  agentAllowHighReasoning;
                             });
                           },
                         ),

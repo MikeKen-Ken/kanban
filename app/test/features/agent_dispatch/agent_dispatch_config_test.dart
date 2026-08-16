@@ -83,4 +83,22 @@ void main() {
       'composer-2.5',
     );
   });
+
+  test('模型目录缺上下文参数时补上 64k/272k', () {
+    final model = AgentDispatchModelInfo.fromJson({
+      'id': 'gpt-5.5',
+      'parameters': [
+        {
+          'id': 'model_reasoning_effort',
+          'values': ['low', 'medium', 'high'],
+        },
+      ],
+    });
+    expect(model.parameters.last.id, 'context');
+    expect(model.parameters.last.values, ['64k', '272k']);
+    expect(
+      withAgentDispatchContextParameter(model.parameters).length,
+      model.parameters.length,
+    );
+  });
 }

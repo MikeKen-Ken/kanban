@@ -18,6 +18,7 @@ void main() {
     expect(settings.modelParamValues, {
       'fast': 'false',
       'reasoning_effort': 'medium',
+      'context': '64k',
     });
     expect(settings.cardLimitMax, isTrue);
     expect(settings.runAfterQueueOnFailure, isTrue);
@@ -35,6 +36,7 @@ void main() {
     expect(settings.modelParamValues, {
       'fast': 'false',
       'reasoning_effort': 'medium',
+      'context': '64k',
     });
     expect(settings.cardLimitMax, isTrue);
   });

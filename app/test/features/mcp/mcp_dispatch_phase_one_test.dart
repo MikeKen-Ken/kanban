@@ -92,6 +92,7 @@ void main() {
       cardId,
       agentEngine: 'cursor',
       agentModelId: 'composer-2.5',
+      agentAllowHighReasoning: true,
       agentModelParamValues: const {'fast': 'true'},
     );
     final projectId = controller.activeProjectId!;
@@ -113,6 +114,7 @@ void main() {
     expect(payload['cardId'], cardId);
     expect(payload['agentModelId'], 'composer-2.5');
     expect(payload['agentModelParamValues'], {'fast': 'true'});
+    expect(payload['agentAllowHighReasoning'], isTrue);
     expect(payload['agentEndpointUrl'], 'http://127.0.0.1:19000/mcp');
     expect(payload['sessionId'], isNotEmpty);
   });

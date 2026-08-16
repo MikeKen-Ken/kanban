@@ -226,6 +226,216 @@ async function printCursorUsage() {
 // src/codex_models.ts
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+
+// src/types.ts
+function isReasoningParamId(id) {
+  return id === "reasoning" || id === "reasoning_effort" || id === "model_reasoning_effort" || id === "effort" || id === "thinking";
+}
+function conservativeParamValue(id, values) {
+  const allowed = values.map((value) => value.trim()).filter(Boolean);
+  const middle = allowed[Math.floor((allowed.length - 1) / 2)];
+  if (isReasoningParamId(id)) {
+    if (allowed.includes("medium")) return "medium";
+    return allowed.length === 0 ? "medium" : middle;
+  }
+  if (id === "fast") {
+    if (allowed.includes("false")) return "false";
+    return allowed.length === 0 ? "false" : middle;
+  }
+  if (isContextParamId(id)) {
+    if (allowed.includes("64k")) return "64k";
+    return allowed.length === 0 ? "64k" : middle;
+  }
+  return allowed.length === 0 ? void 0 : middle;
+}
+function parseEngine(raw, fallback) {
+  const text = String(raw ?? "").trim();
+  return text === "cursor" || text === "codex" ? text : fallback;
+}
+function parseCardParams(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(raw).filter(([, value]) => typeof value === "string" && value.trim() !== "").map(([id, value]) => ({ id, value: String(value).trim() }));
+}
+function parameterValueList(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (typeof item === "string" && item.trim()) return [item.trim()];
+    if (item && typeof item === "object" && "value" in item) {
+      const text = String(item.value ?? "").trim();
+      return text ? [text] : [];
+    }
+    return [];
+  });
+}
+function engineFallback(job, engine) {
+  const stored = job.engineDefaults?.[engine];
+  if (stored) return stored;
+  if (engine === job.engine) {
+    return { model: job.model, modelParams: job.modelParams };
+  }
+  return {};
+}
+function mergeJobWithCardOverrides(job, claim) {
+  const engine = parseEngine(claim.agentEngine, job.engine);
+  const defaults = engineFallback(job, engine);
+  const cardModel = String(claim.agentModelId ?? "").trim();
+  const model = cardModel || defaults.model || void 0;
+  const cardParams = parseCardParams(claim.agentModelParamValues);
+  const byId = new Map(
+    (defaults.modelParams ?? []).map((item) => [item.id, item])
+  );
+  for (const item of cardParams) byId.set(item.id, item);
+  const allowHighReasoning = resolveAllowHighReasoning(job, claim);
+  const catalog = defaults.models?.find((item) => item.id === model);
+  const rawParameters = catalog?.parameters ?? [];
+  const parameters = ensureContextParameter(rawParameters);
+  if (rawParameters.length > 0) {
+    const allowed = new Set(
+      parameters.map((item) => String(item.id ?? "").trim()).filter(Boolean)
+    );
+    for (const id of [...byId.keys()]) {
+      if (!allowed.has(id)) byId.delete(id);
+    }
+    for (const parameter of parameters) {
+      const id = String(parameter.id ?? "").trim();
+      if (!id || byId.has(id)) continue;
+      const value = conservativeParamValue(id, parameterValueList(parameter.values));
+      if (value) byId.set(id, { id, value });
+    }
+  } else if (cardModel) {
+    const hasReasoning = [...byId.keys()].some(isReasoningParamId);
+    if (!hasReasoning) {
+      byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
+    }
+  }
+  const modelParams = [...byId.values()].map((item) => ({
+    ...item,
+    value: clampUnattendedParam(item, allowHighReasoning)
+  }));
+  return { ...job, engine, model, modelParams, allowHighReasoning };
+}
+function resolveAllowHighReasoning(job, claim) {
+  const card = parseOptionalBool(claim.agentAllowHighReasoning);
+  if (card != null) return card;
+  return job.allowHighReasoning === true;
+}
+function parseOptionalBool(raw) {
+  if (raw === true || raw === false) return raw;
+  if (typeof raw !== "string") return void 0;
+  const text = raw.trim().toLowerCase();
+  if (text === "true") return true;
+  if (text === "false") return false;
+  return void 0;
+}
+function clampUnattendedParam(param, allowHighReasoning) {
+  if (allowHighReasoning) return param.value;
+  const id = param.id.toLowerCase();
+  const value = param.value.toLowerCase();
+  if (isContextParamId(id)) {
+    const tokens = parseTokenBudget(value);
+    if (tokens != null && tokens > MAX_UNATTENDED_CONTEXT_TOKENS) {
+      return "64k";
+    }
+  }
+  const expensive = /* @__PURE__ */ new Set([
+    "high",
+    "xhigh",
+    "extra_high",
+    "very_high",
+    "max",
+    "maximum",
+    "large",
+    "xlarge",
+    "huge"
+  ]);
+  if (expensive.has(value) && (isReasoningParamId(id) || isContextParamId(id) || id.includes("thinking"))) {
+    return "medium";
+  }
+  return param.value;
+}
+function isContextParamId(id) {
+  return id.toLowerCase().includes("context");
+}
+var MAX_UNATTENDED_CONTEXT_TOKENS = 64e3;
+var DEFAULT_CONTEXT_VALUES = ["64k", "272k"];
+function contextCatalogParameter() {
+  return {
+    id: "context",
+    displayName: "\u4E0A\u4E0B\u6587",
+    values: DEFAULT_CONTEXT_VALUES.map((value) => ({
+      value,
+      displayName: value
+    }))
+  };
+}
+function ensureContextParameter(parameters) {
+  if (parameters.some((item) => isContextParamId(String(item.id ?? "")))) {
+    return parameters;
+  }
+  return [
+    ...parameters,
+    {
+      id: "context",
+      displayName: "\u4E0A\u4E0B\u6587",
+      values: [...DEFAULT_CONTEXT_VALUES]
+    }
+  ];
+}
+function parseTokenBudget(value) {
+  const match = /^(\d+(?:\.\d+)?)\s*(k|m|kb|mb)?$/i.exec(value.trim());
+  if (!match) return void 0;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return void 0;
+  const unit = (match[2] ?? "").toLowerCase();
+  if (unit === "m" || unit === "mb") return amount * 1e6;
+  if (unit === "k" || unit === "kb") return amount * 1e3;
+  return amount;
+}
+function resolveModelParams(job) {
+  if (job.modelParams && job.modelParams.length > 0) {
+    return job.modelParams.map((item) => ({
+      ...item,
+      value: clampUnattendedParam(item, job.allowHighReasoning === true)
+    }));
+  }
+  switch (job.effort) {
+    case "fast":
+      return [{ id: "fast", value: "true" }];
+    case "low":
+      return [{ id: "reasoning_effort", value: "low" }];
+    case "medium":
+      return [{ id: "reasoning_effort", value: "medium" }];
+    case "high":
+      return [{
+        id: "reasoning_effort",
+        value: job.allowHighReasoning === true ? "high" : "medium"
+      }];
+    default:
+      return void 0;
+  }
+}
+function effortToCodexConfigArgs(job) {
+  const params = resolveModelParams(job) ?? [];
+  const args = [];
+  const effort = params.find(
+    (p) => p.id === "reasoning_effort" || p.id === "model_reasoning_effort"
+  );
+  if (effort) {
+    args.push("-c", `model_reasoning_effort=${effort.value}`);
+  } else if (params.some((p) => p.id === "fast" && p.value === "true")) {
+    args.push("-c", "model_reasoning_effort=low");
+  }
+  const context = params.find((item) => isContextParamId(item.id));
+  if (context) {
+    const tokens = parseTokenBudget(context.value);
+    if (tokens != null) {
+      args.push("-c", `model_context_window=${tokens}`);
+    }
+  }
+  return args;
+}
+
+// src/codex_models.ts
 async function listCodexModels(codex) {
   const child = spawn(
     codex.command,
@@ -267,15 +477,19 @@ function toCatalogItem(model) {
     displayName: effortLabel(option.reasoningEffort ?? "")
   })).filter((option) => option.value.length > 0);
   const defaultEffort = model.defaultReasoningEffort?.trim();
+  const effortParameter = efforts.length === 0 ? [] : [{
+    id: "model_reasoning_effort",
+    displayName: "\u63A8\u7406\u7A0B\u5EA6",
+    values: efforts
+  }];
   return {
     id,
     displayName: model.displayName,
     description: model.description,
-    parameters: efforts.length === 0 ? [] : [{
-      id: "model_reasoning_effort",
-      displayName: "\u63A8\u7406\u7A0B\u5EA6",
-      values: efforts
-    }],
+    parameters: [
+      ...effortParameter,
+      ...effortParameter.some((item) => isContextParamId(item.id)) ? [] : [contextCatalogParameter()]
+    ],
     variants: defaultEffort ? [{
       displayName: `\u9ED8\u8BA4\uFF08${effortLabel(defaultEffort)}\uFF09`,
       isDefault: true,
@@ -844,153 +1058,6 @@ function createCodexAgentHome(options) {
     }
   }
   return { home };
-}
-
-// src/types.ts
-function isReasoningParamId(id) {
-  return id === "reasoning" || id === "reasoning_effort" || id === "model_reasoning_effort" || id === "effort" || id === "thinking";
-}
-function conservativeParamValue(id, values) {
-  const allowed = values.map((value) => value.trim()).filter(Boolean);
-  const middle = allowed[Math.floor((allowed.length - 1) / 2)];
-  if (isReasoningParamId(id)) {
-    if (allowed.includes("medium")) return "medium";
-    return allowed.length === 0 ? "medium" : middle;
-  }
-  if (id === "fast") {
-    if (allowed.includes("false")) return "false";
-    return allowed.length === 0 ? "false" : middle;
-  }
-  return allowed.length === 0 ? void 0 : middle;
-}
-function parseEngine(raw, fallback) {
-  const text = String(raw ?? "").trim();
-  return text === "cursor" || text === "codex" ? text : fallback;
-}
-function parseCardParams(raw) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
-  return Object.entries(raw).filter(([, value]) => typeof value === "string" && value.trim() !== "").map(([id, value]) => ({ id, value: String(value).trim() }));
-}
-function engineFallback(job, engine) {
-  const stored = job.engineDefaults?.[engine];
-  if (stored) return stored;
-  if (engine === job.engine) {
-    return { model: job.model, modelParams: job.modelParams };
-  }
-  return {};
-}
-function mergeJobWithCardOverrides(job, claim) {
-  const engine = parseEngine(claim.agentEngine, job.engine);
-  const defaults = engineFallback(job, engine);
-  const cardModel = String(claim.agentModelId ?? "").trim();
-  const model = cardModel || defaults.model || void 0;
-  const cardParams = parseCardParams(claim.agentModelParamValues);
-  const byId = new Map(
-    (defaults.modelParams ?? []).map((item) => [item.id, item])
-  );
-  for (const item of cardParams) byId.set(item.id, item);
-  const catalog = defaults.models?.find((item) => item.id === model);
-  const parameters = catalog?.parameters ?? [];
-  if (parameters.length > 0) {
-    const allowed = new Set(
-      parameters.map((item) => String(item.id ?? "").trim()).filter(Boolean)
-    );
-    for (const id of [...byId.keys()]) {
-      if (!allowed.has(id)) byId.delete(id);
-    }
-    for (const parameter of parameters) {
-      const id = String(parameter.id ?? "").trim();
-      if (!id || byId.has(id)) continue;
-      const value = conservativeParamValue(id, parameter.values ?? []);
-      if (value) byId.set(id, { id, value });
-    }
-  } else if (cardModel) {
-    const hasReasoning = [...byId.keys()].some(isReasoningParamId);
-    if (!hasReasoning) {
-      byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
-    }
-  }
-  const modelParams = [...byId.values()].map((item) => ({
-    ...item,
-    value: clampUnattendedParam(item, job.allowHighReasoning === true)
-  }));
-  return { ...job, engine, model, modelParams };
-}
-function clampUnattendedParam(param, allowHighReasoning) {
-  const id = param.id.toLowerCase();
-  const value = param.value.toLowerCase();
-  if (isContextParamId(id)) {
-    const tokens = parseTokenBudget(value);
-    if (tokens != null && tokens > MAX_UNATTENDED_CONTEXT_TOKENS) {
-      return "64k";
-    }
-  }
-  if (allowHighReasoning) return param.value;
-  const expensive = /* @__PURE__ */ new Set([
-    "high",
-    "xhigh",
-    "extra_high",
-    "very_high",
-    "max",
-    "maximum",
-    "large",
-    "xlarge",
-    "huge"
-  ]);
-  if (expensive.has(value) && (isReasoningParamId(id) || isContextParamId(id) || id.includes("thinking"))) {
-    return "medium";
-  }
-  return param.value;
-}
-function isContextParamId(id) {
-  return id.toLowerCase().includes("context");
-}
-var MAX_UNATTENDED_CONTEXT_TOKENS = 64e3;
-function parseTokenBudget(value) {
-  const match = /^(\d+(?:\.\d+)?)\s*(k|m|kb|mb)?$/i.exec(value.trim());
-  if (!match) return void 0;
-  const amount = Number(match[1]);
-  if (!Number.isFinite(amount)) return void 0;
-  const unit = (match[2] ?? "").toLowerCase();
-  if (unit === "m" || unit === "mb") return amount * 1e6;
-  if (unit === "k" || unit === "kb") return amount * 1e3;
-  return amount;
-}
-function resolveModelParams(job) {
-  if (job.modelParams && job.modelParams.length > 0) {
-    return job.modelParams.map((item) => ({
-      ...item,
-      value: clampUnattendedParam(item, job.allowHighReasoning === true)
-    }));
-  }
-  switch (job.effort) {
-    case "fast":
-      return [{ id: "fast", value: "true" }];
-    case "low":
-      return [{ id: "reasoning_effort", value: "low" }];
-    case "medium":
-      return [{ id: "reasoning_effort", value: "medium" }];
-    case "high":
-      return [{
-        id: "reasoning_effort",
-        value: job.allowHighReasoning === true ? "high" : "medium"
-      }];
-    default:
-      return void 0;
-  }
-}
-function effortToCodexConfigArgs(job) {
-  const params = resolveModelParams(job) ?? [];
-  const effort = params.find(
-    (p) => p.id === "reasoning_effort" || p.id === "model_reasoning_effort"
-  );
-  if (effort) {
-    return ["-c", `model_reasoning_effort=${effort.value}`];
-  }
-  if (params.some((p) => p.id === "fast" && p.value === "true")) {
-    return ["-c", "model_reasoning_effort=low"];
-  }
-  return [];
 }
 
 // src/worker_log.ts
@@ -2448,6 +2515,10 @@ async function withRetry(operation, fn, options) {
 function writeResult(outPath, result) {
   writeFileSync4(outPath, JSON.stringify(result, null, 2), "utf8");
 }
+function withContextParameter(parameters) {
+  if (parameters.some((item) => isContextParamId(item.id))) return parameters;
+  return [...parameters, contextCatalogParameter()];
+}
 function normalizeModelParameterValues(input) {
   if (!Array.isArray(input)) return [];
   return input.map((item) => {
@@ -2495,13 +2566,15 @@ async function listModels(engine) {
       id: m.id,
       displayName: m.displayName,
       description: m.description,
-      parameters: (m.parameters ?? []).map((p) => ({
-        id: p.id,
-        displayName: p.displayName,
-        values: normalizeModelParameterValues(
-          p.values ?? p.enum
-        )
-      })),
+      parameters: withContextParameter(
+        (m.parameters ?? []).map((p) => ({
+          id: p.id,
+          displayName: p.displayName,
+          values: normalizeModelParameterValues(
+            p.values ?? p.enum
+          )
+        }))
+      ),
       variants: (m.variants ?? []).map((variant) => ({
         displayName: variant.displayName,
         description: variant.description,

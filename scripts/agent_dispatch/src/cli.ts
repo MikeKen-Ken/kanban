@@ -9,7 +9,12 @@ import { printCursorUsage } from "./cursor_usage.ts";
 import { listCodexModels } from "./codex_models.ts";
 import { resolveCodexCommand } from "./run_codex.ts";
 import { runBatch } from "./run_batch.ts";
-import type { DispatchJob, DispatchResult } from "./types.ts";
+import {
+  contextCatalogParameter,
+  isContextParamId,
+  type DispatchJob,
+  type DispatchResult,
+} from "./types.ts";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -77,6 +82,13 @@ function writeResult(outPath: string, result: DispatchResult): void {
   writeFileSync(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 
+function withContextParameter<
+  T extends { id: string; displayName?: string; values: unknown },
+>(parameters: T[]): T[] {
+  if (parameters.some((item) => isContextParamId(item.id))) return parameters;
+  return [...parameters, contextCatalogParameter() as T];
+}
+
 function normalizeModelParameterValues(
   input: unknown,
 ): Array<{ value: string; displayName?: string }> {
@@ -133,14 +145,16 @@ async function listModels(engine: "cursor" | "codex"): Promise<void> {
       id: m.id,
       displayName: m.displayName,
       description: m.description,
-      parameters: (m.parameters ?? []).map((p) => ({
-        id: p.id,
-        displayName: p.displayName,
-        values: normalizeModelParameterValues(
-          (p as { values?: unknown }).values ??
-            (p as { enum?: unknown }).enum,
-        ),
-      })),
+      parameters: withContextParameter(
+        (m.parameters ?? []).map((p) => ({
+          id: p.id,
+          displayName: p.displayName,
+          values: normalizeModelParameterValues(
+            (p as { values?: unknown }).values ??
+              (p as { enum?: unknown }).enum,
+          ),
+        })),
+      ),
       variants: (m.variants ?? []).map((variant) => ({
         displayName: variant.displayName,
         description: variant.description,

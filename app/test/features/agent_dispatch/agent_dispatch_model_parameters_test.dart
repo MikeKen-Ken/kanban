@@ -69,10 +69,17 @@ void main() {
           AgentDispatchModelParameterOption(value: 'high'),
         ],
       ),
+      AgentDispatchModelParameter(
+        id: 'context',
+        options: [
+          AgentDispatchModelParameterOption(value: '64k'),
+          AgentDispatchModelParameterOption(value: '272k'),
+        ],
+      ),
     ];
     expect(
       preferredAgentDispatchModelParamValues(parameters),
-      {'fast': 'false', 'reasoning_effort': 'medium'},
+      {'fast': 'false', 'reasoning_effort': 'medium', 'context': '64k'},
     );
   });
 }

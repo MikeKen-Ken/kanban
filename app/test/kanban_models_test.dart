@@ -173,6 +173,7 @@ void main() {
     expect(unset.toJson().containsKey('agentEngine'), isFalse);
     expect(unset.toJson().containsKey('agentModelId'), isFalse);
     expect(unset.toJson().containsKey('agentModelParamValues'), isFalse);
+    expect(unset.toJson().containsKey('agentAllowHighReasoning'), isFalse);
 
     final card = KanbanCard(
       id: 'card-2',
@@ -181,19 +182,27 @@ void main() {
       createdAt: 1,
       agentEngine: 'cursor',
       agentModelId: 'composer-2.5',
+      agentAllowHighReasoning: true,
       agentModelParamValues: const {
         'fast': 'true',
         'reasoning_effort': 'high',
+        'context': '272k',
       },
     );
     final restored = KanbanCard.fromJson(card.toJson());
     expect(restored.agentEngine, 'cursor');
     expect(restored.agentModelId, 'composer-2.5');
+    expect(restored.agentAllowHighReasoning, isTrue);
     expect(restored.agentModelParamValues, {
       'fast': 'true',
       'reasoning_effort': 'high',
+      'context': '272k',
     });
     expect(restored.copyWith(agentEngine: null).agentEngine, isNull);
+    expect(
+      restored.copyWith(agentAllowHighReasoning: null).agentAllowHighReasoning,
+      isNull,
+    );
   });
 
   test('KanbanCard conflictSide serializes without nesting', () {

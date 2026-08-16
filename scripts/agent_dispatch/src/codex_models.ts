@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import { contextCatalogParameter, isContextParamId } from "./types.ts";
 
 type JsonRpcResponse = {
   id?: number;
@@ -95,17 +96,23 @@ function toCatalogItem(model: CodexModel): CodexModelCatalogItem {
     }))
     .filter((option) => option.value.length > 0);
   const defaultEffort = model.defaultReasoningEffort?.trim();
+  const effortParameter = efforts.length === 0
+    ? []
+    : [{
+        id: "model_reasoning_effort",
+        displayName: "推理程度",
+        values: efforts,
+      }];
   return {
     id,
     displayName: model.displayName,
     description: model.description,
-    parameters: efforts.length === 0
-      ? []
-      : [{
-          id: "model_reasoning_effort",
-          displayName: "推理程度",
-          values: efforts,
-        }],
+    parameters: [
+      ...effortParameter,
+      ...(effortParameter.some((item) => isContextParamId(item.id))
+        ? []
+        : [contextCatalogParameter()]),
+    ],
     variants: defaultEffort
       ? [{
           displayName: `默认（${effortLabel(defaultEffort)}）`,

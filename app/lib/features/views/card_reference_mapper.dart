@@ -53,6 +53,7 @@ List<CardReference> buildCardReferences({
             agentEngine: card.agentEngine,
             agentModelId: card.agentModelId,
             agentModelParamValues: card.agentModelParamValues,
+            agentAllowHighReasoning: card.agentAllowHighReasoning,
             links: [
               for (final link in card.sortedLinks)
                 {

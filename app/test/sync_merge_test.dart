@@ -79,6 +79,30 @@ void main() {
     expect(result.placed?.card.description, '远端备注');
   });
 
+  test('三路合并保留卡片 Agent 覆盖字段', () {
+    final base = PlacedCard(
+      card: _card(id: 'c1', title: '原', updatedAt: 40),
+      columnId: 'todo',
+    );
+    final local = PlacedCard(
+      card: _card(id: 'c1', title: '原', updatedAt: 100).copyWith(
+        agentAllowHighReasoning: true,
+        agentModelParamValues: const {'context': '272k'},
+      ),
+      columnId: 'todo',
+    );
+    final remote = PlacedCard(
+      card: _card(id: 'c1', title: '原', updatedAt: 90).copyWith(
+        agentEngine: 'codex',
+      ),
+      columnId: 'todo',
+    );
+    final result = mergeCardThreeWay(base: base, local: local, remote: remote);
+    expect(result.placed?.card.agentAllowHighReasoning, isTrue);
+    expect(result.placed?.card.agentModelParamValues, {'context': '272k'});
+    expect(result.placed?.card.agentEngine, 'codex');
+  });
+
   test('仅一侧新增列不丢', () {
     final local =
         KanbanBoard.empty(id: '1').copyWith(revision: 5, updatedAt: 100);

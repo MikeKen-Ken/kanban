@@ -20,7 +20,7 @@ export type DispatchJob = {
   projectId?: string;
   cardLimit: number;
   workerToken: string;
-  /** 为 true 时沿用卡片/面板指定的 high 等推理档位；默认 false 会压到更省的档位。 */
+  /** 工作台默认：为 true 时不改卡片/面板的推理、Fast、上下文；卡片可再覆盖。 */
   allowHighReasoning?: boolean;
   /** @deprecated 旧字段，兼容 */
   effort?: string;
@@ -84,6 +84,10 @@ export function conservativeParamValue(
     if (allowed.includes("false")) return "false";
     return allowed.length === 0 ? "false" : middle;
   }
+  if (isContextParamId(id)) {
+    if (allowed.includes("64k")) return "64k";
+    return allowed.length === 0 ? "64k" : middle;
+  }
   return allowed.length === 0 ? undefined : middle;
 }
 
@@ -100,6 +104,18 @@ function parseCardParams(raw: unknown): ModelParam[] {
   return Object.entries(raw as Record<string, unknown>)
     .filter(([, value]) => typeof value === "string" && value.trim() !== "")
     .map(([id, value]) => ({ id, value: String(value).trim() }));
+}
+
+function parameterValueList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (typeof item === "string" && item.trim()) return [item.trim()];
+    if (item && typeof item === "object" && "value" in item) {
+      const text = String((item as { value?: unknown }).value ?? "").trim();
+      return text ? [text] : [];
+    }
+    return [];
+  });
 }
 
 function engineFallback(
@@ -127,10 +143,12 @@ export function mergeJobWithCardOverrides(
     (defaults.modelParams ?? []).map((item) => [item.id, item]),
   );
   for (const item of cardParams) byId.set(item.id, item);
+  const allowHighReasoning = resolveAllowHighReasoning(job, claim);
 
   const catalog = defaults.models?.find((item) => item.id === model);
-  const parameters = catalog?.parameters ?? [];
-  if (parameters.length > 0) {
+  const rawParameters = catalog?.parameters ?? [];
+  const parameters = ensureContextParameter(rawParameters);
+  if (rawParameters.length > 0) {
     const allowed = new Set(
       parameters.map((item) => String(item.id ?? "").trim()).filter(Boolean),
     );
@@ -140,7 +158,7 @@ export function mergeJobWithCardOverrides(
     for (const parameter of parameters) {
       const id = String(parameter.id ?? "").trim();
       if (!id || byId.has(id)) continue;
-      const value = conservativeParamValue(id, parameter.values ?? []);
+      const value = conservativeParamValue(id, parameterValueList(parameter.values));
       if (value) byId.set(id, { id, value });
     }
   } else if (cardModel) {
@@ -152,15 +170,34 @@ export function mergeJobWithCardOverrides(
 
   const modelParams = [...byId.values()].map((item) => ({
     ...item,
-    value: clampUnattendedParam(item, job.allowHighReasoning === true),
+    value: clampUnattendedParam(item, allowHighReasoning),
   }));
-  return { ...job, engine, model, modelParams };
+  return { ...job, engine, model, modelParams, allowHighReasoning };
+}
+
+export function resolveAllowHighReasoning(
+  job: DispatchJob,
+  claim: Record<string, unknown>,
+): boolean {
+  const card = parseOptionalBool(claim.agentAllowHighReasoning);
+  if (card != null) return card;
+  return job.allowHighReasoning === true;
+}
+
+function parseOptionalBool(raw: unknown): boolean | undefined {
+  if (raw === true || raw === false) return raw;
+  if (typeof raw !== "string") return undefined;
+  const text = raw.trim().toLowerCase();
+  if (text === "true") return true;
+  if (text === "false") return false;
+  return undefined;
 }
 
 export function clampUnattendedParam(
   param: ModelParam,
   allowHighReasoning: boolean,
 ): string {
+  if (allowHighReasoning) return param.value;
   const id = param.id.toLowerCase();
   const value = param.value.toLowerCase();
   if (isContextParamId(id)) {
@@ -169,7 +206,6 @@ export function clampUnattendedParam(
       return "64k";
     }
   }
-  if (allowHighReasoning) return param.value;
   const expensive = new Set([
     "high",
     "xhigh",
@@ -197,6 +233,45 @@ export function isContextParamId(id: string): boolean {
 }
 
 export const MAX_UNATTENDED_CONTEXT_TOKENS = 64_000;
+
+export const DEFAULT_CONTEXT_VALUES = ["64k", "272k"] as const;
+
+type CatalogParameter = {
+  id: string;
+  displayName?: string;
+  values?: string[];
+};
+
+export function contextCatalogParameter(): {
+  id: string;
+  displayName: string;
+  values: Array<{ value: string; displayName: string }>;
+} {
+  return {
+    id: "context",
+    displayName: "上下文",
+    values: DEFAULT_CONTEXT_VALUES.map((value) => ({
+      value,
+      displayName: value,
+    })),
+  };
+}
+
+export function ensureContextParameter<T extends CatalogParameter>(
+  parameters: T[],
+): T[] {
+  if (parameters.some((item) => isContextParamId(String(item.id ?? "")))) {
+    return parameters;
+  }
+  return [
+    ...parameters,
+    {
+      id: "context",
+      displayName: "上下文",
+      values: [...DEFAULT_CONTEXT_VALUES],
+    } as T,
+  ];
+}
 
 export function parseTokenBudget(value: string): number | undefined {
   const match = /^(\d+(?:\.\d+)?)\s*(k|m|kb|mb)?$/i.exec(value.trim());
@@ -237,14 +312,21 @@ export function resolveModelParams(
 
 export function effortToCodexConfigArgs(job: DispatchJob): string[] {
   const params = resolveModelParams(job) ?? [];
+  const args: string[] = [];
   const effort = params.find(
     (p) => p.id === "reasoning_effort" || p.id === "model_reasoning_effort",
   );
   if (effort) {
-    return ["-c", `model_reasoning_effort=${effort.value}`];
+    args.push("-c", `model_reasoning_effort=${effort.value}`);
+  } else if (params.some((p) => p.id === "fast" && p.value === "true")) {
+    args.push("-c", "model_reasoning_effort=low");
   }
-  if (params.some((p) => p.id === "fast" && p.value === "true")) {
-    return ["-c", "model_reasoning_effort=low"];
+  const context = params.find((item) => isContextParamId(item.id));
+  if (context) {
+    const tokens = parseTokenBudget(context.value);
+    if (tokens != null) {
+      args.push("-c", `model_context_window=${tokens}`);
+    }
   }
-  return [];
+  return args;
 }

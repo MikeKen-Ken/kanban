@@ -22,6 +22,16 @@ class CardMergeResult {
   final bool deleted;
 }
 
+bool _stringMapEq(Map<String, String>? a, Map<String, String>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null) return a == b;
+  if (a.length != b.length) return false;
+  for (final entry in a.entries) {
+    if (b[entry.key] != entry.value) return false;
+  }
+  return true;
+}
+
 bool _listEq<T>(List<T> a, List<T> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
@@ -107,7 +117,11 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       _linksEq(a.links, b.links) &&
       _listEq(a.blockedByIds, b.blockedByIds) &&
       _listEq(a.relatedIds, b.relatedIds) &&
-      a.commitRef == b.commitRef;
+      a.commitRef == b.commitRef &&
+      a.agentEngine == b.agentEngine &&
+      a.agentModelId == b.agentModelId &&
+      _stringMapEq(a.agentModelParamValues, b.agentModelParamValues) &&
+      a.agentAllowHighReasoning == b.agentAllowHighReasoning;
 }
 
 KanbanCard stripConflict(KanbanCard card) {
@@ -235,7 +249,14 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
       !_linksEq(local.links, remote.links) ||
       !_listEq(local.blockedByIds, remote.blockedByIds) ||
       !_listEq(local.relatedIds, remote.relatedIds) ||
-      local.commitRef != remote.commitRef;
+      local.commitRef != remote.commitRef ||
+      local.agentEngine != remote.agentEngine ||
+      local.agentModelId != remote.agentModelId ||
+      !_stringMapEq(
+        local.agentModelParamValues,
+        remote.agentModelParamValues,
+      ) ||
+      local.agentAllowHighReasoning != remote.agentAllowHighReasoning;
 }
 
 KanbanCard _mergeFieldsAuto(KanbanCard local, KanbanCard remote) {
@@ -435,6 +456,30 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.commitRef,
     eq: (a, b) => a == b,
   );
+  final agentEngineConflict = _fieldConflict(
+    base: base.card.agentEngine,
+    local: loc.card.agentEngine,
+    remote: rem.card.agentEngine,
+    eq: (a, b) => a == b,
+  );
+  final agentModelIdConflict = _fieldConflict(
+    base: base.card.agentModelId,
+    local: loc.card.agentModelId,
+    remote: rem.card.agentModelId,
+    eq: (a, b) => a == b,
+  );
+  final agentModelParamConflict = _fieldConflict(
+    base: base.card.agentModelParamValues,
+    local: loc.card.agentModelParamValues,
+    remote: rem.card.agentModelParamValues,
+    eq: _stringMapEq,
+  );
+  final agentAllowHighReasoningConflict = _fieldConflict(
+    base: base.card.agentAllowHighReasoning,
+    local: loc.card.agentAllowHighReasoning,
+    remote: rem.card.agentAllowHighReasoning,
+    eq: (a, b) => a == b,
+  );
   final columnConflict = _fieldConflict(
     base: base.columnId,
     local: loc.columnId,
@@ -462,6 +507,10 @@ CardMergeResult mergeCardThreeWay({
       blockedByConflict ||
       relatedConflict ||
       commitRefConflict ||
+      agentEngineConflict ||
+      agentModelIdConflict ||
+      agentModelParamConflict ||
+      agentAllowHighReasoningConflict ||
       columnConflict;
 
   if (anyConflict) {
@@ -590,6 +639,27 @@ CardMergeResult mergeCardThreeWay({
     local: loc.card.commitRef,
     remote: rem.card.commitRef,
   );
+  final mergedAgentEngine = _threeWayValue(
+    base: base.card.agentEngine,
+    local: loc.card.agentEngine,
+    remote: rem.card.agentEngine,
+  );
+  final mergedAgentModelId = _threeWayValue(
+    base: base.card.agentModelId,
+    local: loc.card.agentModelId,
+    remote: rem.card.agentModelId,
+  );
+  final mergedAgentModelParamValues = _threeWayValue(
+    base: base.card.agentModelParamValues,
+    local: loc.card.agentModelParamValues,
+    remote: rem.card.agentModelParamValues,
+    eq: _stringMapEq,
+  );
+  final mergedAgentAllowHighReasoning = _threeWayValue(
+    base: base.card.agentAllowHighReasoning,
+    local: loc.card.agentAllowHighReasoning,
+    remote: rem.card.agentAllowHighReasoning,
+  );
   final columnId = _threeWayValue(
     base: base.columnId,
     local: loc.columnId,
@@ -627,6 +697,10 @@ CardMergeResult mergeCardThreeWay({
     blockedByIds: mergedBlockedBy,
     relatedIds: mergedRelated,
     commitRef: mergedCommitRef,
+    agentEngine: mergedAgentEngine,
+    agentModelId: mergedAgentModelId,
+    agentModelParamValues: mergedAgentModelParamValues,
+    agentAllowHighReasoning: mergedAgentAllowHighReasoning,
     colorValue: mergedColor,
   );
 

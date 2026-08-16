@@ -234,6 +234,8 @@ extension BoardControllerCards on BoardController {
     bool clearAgentModelId = false,
     Map<String, String>? agentModelParamValues,
     bool clearAgentModelParamValues = false,
+    bool? agentAllowHighReasoning,
+    bool clearAgentAllowHighReasoning = false,
     int? colorValue,
     bool clearColor = false,
   }) async {
@@ -293,6 +295,9 @@ extension BoardControllerCards on BoardController {
             agentModelParamValues: clearAgentModelParamValues
                 ? null
                 : (agentModelParamValues ?? card.agentModelParamValues),
+            agentAllowHighReasoning: clearAgentAllowHighReasoning
+                ? null
+                : (agentAllowHighReasoning ?? card.agentAllowHighReasoning),
             colorValue: clearColor ? null : (colorValue ?? card.colorValue),
             updatedAt: now,
           );
@@ -337,6 +342,9 @@ extension BoardControllerCards on BoardController {
         final restoredAgentModelParamValues = clearAgentModelParamValues
             ? null
             : (agentModelParamValues ?? original.agentModelParamValues);
+        final restoredAgentAllowHighReasoning = clearAgentAllowHighReasoning
+            ? null
+            : (agentAllowHighReasoning ?? original.agentAllowHighReasoning);
         final restoredColor =
             clearColor ? null : (colorValue ?? original.colorValue);
         _pushUndo(
@@ -372,6 +380,9 @@ extension BoardControllerCards on BoardController {
               clearAgentModelId: original.agentModelId == null,
               agentModelParamValues: original.agentModelParamValues,
               clearAgentModelParamValues: original.agentModelParamValues == null,
+              agentAllowHighReasoning: original.agentAllowHighReasoning,
+              clearAgentAllowHighReasoning:
+                  original.agentAllowHighReasoning == null,
               colorValue: original.colorValue,
               clearColor: original.colorValue == null,
             );
@@ -408,6 +419,9 @@ extension BoardControllerCards on BoardController {
               clearAgentModelId: restoredAgentModelId == null,
               agentModelParamValues: restoredAgentModelParamValues,
               clearAgentModelParamValues: restoredAgentModelParamValues == null,
+              agentAllowHighReasoning: restoredAgentAllowHighReasoning,
+              clearAgentAllowHighReasoning:
+                  restoredAgentAllowHighReasoning == null,
               colorValue: restoredColor,
               clearColor: restoredColor == null,
             );
