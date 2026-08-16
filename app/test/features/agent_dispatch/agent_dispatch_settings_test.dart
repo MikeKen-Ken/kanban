@@ -75,6 +75,7 @@ void main() {
     expect(text, contains('禁止搜索'));
     expect(text, contains('ready_to_submit'));
     expect(text, contains('禁止调用 pick_next_card'));
+    expect(text, contains('禁止在会话内预跑即将交给 ready_to_submit 的 verificationCommands'));
     expect(text, isNot(contains('commit_and_submit_card')));
     expect(text, isNot(contains('name:')));
     expect(text, isNot(contains('dispatchSessionId')));

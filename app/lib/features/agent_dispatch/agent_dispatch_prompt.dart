@@ -24,6 +24,7 @@ Worker 会在卡片上下文后附上已缓存的 Architecture.md；禁止重复
 看板 MCP 已由 Worker 注入本卡专用工具集，不得确认、探测或列出 MCP。
 本轮卡片已由 Worker 原子领取；禁止调用 pick_next_card，也不要处理其它卡片。
 完成实施后必须以 ready_to_submit 收尾，显式列出本轮完成的 checklist/feedback id。
+禁止在会话内预跑即将交给 ready_to_submit 的 verificationCommands；由 Worker 收尾执行。
 
 # Skill 正文
 
