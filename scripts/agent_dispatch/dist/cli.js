@@ -593,8 +593,6 @@ function resolveCodexCommand() {
 function buildCodexExecArgs(options) {
   const args = [
     "exec",
-    "--sandbox",
-    "workspace-write",
     "--approve-for-me",
     "--skip-git-repo-check",
     "--cd",

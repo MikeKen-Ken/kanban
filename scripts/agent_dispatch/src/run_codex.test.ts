@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { buildCodexExecArgs } from "./run_codex.ts";
 
 describe("buildCodexExecArgs", () => {
-  it("使用 sandbox workspace-write 与 approve-for-me，不再传 --full-auto", () => {
+  it("使用 --approve-for-me 作为无人值守等价，不再叠加 --sandbox", () => {
     const args = buildCodexExecArgs({
       cwd: "C:\\repo",
       lastMessageFile: "last.txt",
@@ -11,17 +11,14 @@ describe("buildCodexExecArgs", () => {
       model: "gpt-5.6-sol",
     });
     assert.equal(args.includes("--full-auto"), false);
-    assert.deepEqual(args.slice(0, 5), [
+    assert.equal(args.includes("--sandbox"), false);
+    assert.deepEqual(args.slice(0, 3), [
       "exec",
-      "--sandbox",
-      "workspace-write",
       "--approve-for-me",
       "--skip-git-repo-check",
     ]);
     assert.deepEqual(args, [
       "exec",
-      "--sandbox",
-      "workspace-write",
       "--approve-for-me",
       "--skip-git-repo-check",
       "--cd",

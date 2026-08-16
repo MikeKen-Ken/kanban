@@ -45,7 +45,10 @@ export function resolveCodexCommand(): {
   };
 }
 
-/** Codex 0.147 已移除 `--full-auto`；无人值守等价为 workspace-write + 自动审批。 */
+/**
+ * Codex 0.147 已移除 `exec --full-auto`。
+ * `--approve-for-me` 会走 workspace-write 沙箱并自动审批，不能再叠加 `--sandbox`。
+ */
 export function buildCodexExecArgs(options: {
   cwd: string;
   lastMessageFile: string;
@@ -54,8 +57,6 @@ export function buildCodexExecArgs(options: {
 }): string[] {
   const args = [
     "exec",
-    "--sandbox",
-    "workspace-write",
     "--approve-for-me",
     "--skip-git-repo-check",
     "--cd",
