@@ -8,22 +8,40 @@ void main() {
   setUp(gate.debugReset);
   tearDown(gate.debugReset);
 
-  test('Skill 会话只暴露四个工具', () {
+  test('Agent 会话只暴露三个 scoped 工具', () {
     expect(kanbanMcpAgentSessionToolNames, [
-      'pick_next_card',
+      'ready_to_submit',
       'submit_consultation',
-      'commit_and_submit_card',
       'block_card',
     ]);
   });
 
-  test('调度中拒绝操作非本轮领取的卡片', () {
+  test('scoped 会话按 workerToken 与 cardId 双重绑定', () {
     gate.beginBatch('worker-a', projectId: 'project-a');
-    expect(gate.beginAgentSession('worker-a'), isTrue);
-    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
-    gate.recordPickedCard(projectId: 'project-a', cardId: 'card-a');
+    expect(
+      gate.beginAgentSession('worker-a', sessionId: 'session-a'),
+      isTrue,
+    );
+    expect(
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
+      McpDispatchPickPermission.allowed,
+    );
+    gate.recordPickedCard(
+      projectId: 'project-a',
+      cardId: 'card-a',
+      workerToken: 'worker-a',
+    );
 
-    expect(mcpRejectForeignDispatchCard('card-a'), isNull);
-    expect(mcpRejectForeignDispatchCard('other')?.isError, isTrue);
+    expect(
+      gate.authorizeScopedCard(
+        workerToken: 'worker-a',
+        cardId: 'card-a',
+      ),
+      isNull,
+    );
+    expect(
+      gate.authorizeScopedCard(workerToken: 'worker-a', cardId: 'other'),
+      isNotNull,
+    );
   });
 }

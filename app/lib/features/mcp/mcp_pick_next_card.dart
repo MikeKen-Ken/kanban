@@ -39,41 +39,56 @@ Future<CallToolResult> mcpPickNextCard(
   BoardController controller, {
   String? projectId,
   bool includeWorkItems = true,
+  String? expectedCardId,
+  String? dispatchWorkerToken,
   McpSubmissionSnapshotStore? submissionSnapshotStore,
 }) {
   final requested = mcpTrimmedString(projectId);
-  if (requested == null &&
-      McpDispatchCardGate.instance.openSessionCount > 1) {
+  if (requested == null && McpDispatchCardGate.instance.openSessionCount > 1) {
     return Future.value(mcpErrorResult(
       '多个 Agent 调度批次并行时，pick_next_card 必须传入 projectId',
     ));
   }
   final boundProjectId =
       requested ?? McpDispatchCardGate.instance.singleOpenSessionProjectId;
-  return runMcpForProject(controller, boundProjectId, (resolvedProjectId) async {
+  return runMcpForProject(controller, boundProjectId,
+      (resolvedProjectId) async {
     final gate = McpDispatchCardGate.instance;
-    final permission = gate.authorizePick(resolvedProjectId);
+    final permission = gate.authorizePick(
+      resolvedProjectId,
+      workerToken: dispatchWorkerToken,
+    );
     switch (permission) {
       case McpDispatchPickPermission.allowed:
         break;
+      case McpDispatchPickPermission.dispatchLocked:
+        return mcpErrorResult(
+          '该项目正由 Agent 调度锁定，完整 MCP 不得调用 pick_next_card',
+        );
       case McpDispatchPickPermission.sessionNotOpen:
         return mcpErrorResult(
-          'Agent 调度批次尚未由 Worker 开启本轮会话，禁止领取卡片',
+          'Agent 调度批次尚未开启本轮 claim，禁止领取卡片',
         );
       case McpDispatchPickPermission.alreadyClaimed:
         return mcpErrorResult(
-          '本轮 Agent 会话已经调用过 pick_next_card；请完成当前卡片并结束会话',
+          '本轮 Worker claim 已领取卡片；请完成当前卡片并结束会话',
         );
     }
     final board = controller.board;
     if (board == null) {
-      gate.releasePickAttempt(resolvedProjectId);
+      gate.releasePickAttempt(
+        resolvedProjectId,
+        workerToken: dispatchWorkerToken,
+      );
       return mcpErrorResult('看板未就绪');
     }
 
     final picked = pickNextWorkCard(board);
     if (picked == null) {
-      gate.releasePickAttempt(resolvedProjectId);
+      gate.releasePickAttempt(
+        resolvedProjectId,
+        workerToken: dispatchWorkerToken,
+      );
       return mcpJsonResult({
         'found': false,
         'projectId': resolvedProjectId,
@@ -82,10 +97,23 @@ Future<CallToolResult> mcpPickNextCard(
     }
 
     final card = picked.card;
+    final expected = mcpTrimmedString(expectedCardId);
+    if (expected != null && card.id != expected) {
+      gate.releasePickAttempt(
+        resolvedProjectId,
+        workerToken: dispatchWorkerToken,
+      );
+      return mcpErrorResult(
+        '下一张卡片已漂移：expectedCardId=$expected，actualCardId=${card.id}',
+      );
+    }
     final fromColumnId = picked.column.id;
     final doingColumn = findDoingColumn(board.columns);
     if (doingColumn == null) {
-      gate.releasePickAttempt(resolvedProjectId);
+      gate.releasePickAttempt(
+        resolvedProjectId,
+        workerToken: dispatchWorkerToken,
+      );
       return mcpErrorResult('未找到「进行中」列');
     }
 
@@ -102,7 +130,10 @@ Future<CallToolResult> mcpPickNextCard(
         toDisplayIndex: doingColumn.cards.length,
       );
       if (moveError != null) {
-        gate.releasePickAttempt(resolvedProjectId);
+        gate.releasePickAttempt(
+          resolvedProjectId,
+          workerToken: dispatchWorkerToken,
+        );
         return mcpErrorResult(moveError);
       }
       columnId = doingColumn.id;
@@ -112,6 +143,7 @@ Future<CallToolResult> mcpPickNextCard(
     gate.recordPickedCard(
       projectId: resolvedProjectId,
       cardId: card.id,
+      workerToken: dispatchWorkerToken,
     );
     final rework = isReworkWorkMode(card);
     await (submissionSnapshotStore ?? McpSubmissionSnapshotStore()).write(
@@ -120,10 +152,13 @@ Future<CallToolResult> mcpPickNextCard(
         cardId: card.id,
         workMode: rework ? 'rework' : 'normal',
         suggestedCommitMessage: buildCardCommitMessage(card),
+        incompleteChecklistIds: [
+          for (final item in card.checklist)
+            if (!item.completed) item.id,
+        ],
         incompleteFeedbackIds: [
-          if (rework)
-            for (final item in card.verificationFeedback)
-              if (!item.completed) item.id,
+          for (final item in card.verificationFeedback)
+            if (!item.completed) item.id,
         ],
         capturedAt: DateTime.now().millisecondsSinceEpoch,
       ),
@@ -138,6 +173,7 @@ Future<CallToolResult> mcpPickNextCard(
       'columnTitle': columnTitle,
       'movedToDoing': !alreadyInDoing && !isReworkSource,
       'workMode': rework ? 'rework' : 'normal',
+      ...card.agentDispatchOverridePayload(),
       if (card.commitRef != null && card.commitRef!.isNotEmpty)
         'commitRef': card.commitRef,
     };

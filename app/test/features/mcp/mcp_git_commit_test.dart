@@ -63,6 +63,10 @@ void main() {
     final result = await commitMcpWorkingTree(
       repoPath: temp.path,
       message: '更新 a.txt',
+      trailers: const [
+        'Kanban-Session: session-a',
+        'Kanban-Card: card-a',
+      ],
     );
     expect(result.ok, isTrue, reason: result.error);
     expect(result.commitRef, isNotEmpty);
@@ -71,6 +75,14 @@ void main() {
       McpGitTreeKind.clean,
     );
     expect(await mcpGitShortHead(temp.path), result.commitRef);
+    expect(
+      await findMcpCommitByDispatchTrailers(
+        repoPath: temp.path,
+        sessionId: 'session-a',
+        cardId: 'card-a',
+      ),
+      result.commitRef,
+    );
   });
 
   test('commitMcpWorkingTree 不把 .env 纳入提交', () async {
@@ -103,5 +115,13 @@ void main() {
       (await inspectMcpGitTree(temp.path)).kind,
       McpGitTreeKind.dirty,
     );
+  });
+
+  test('isMcpSensitiveGitPath 识别凭据与私钥路径', () {
+    expect(isMcpSensitiveGitPath('.env'), isTrue);
+    expect(isMcpSensitiveGitPath('app/.env.local'), isTrue);
+    expect(isMcpSensitiveGitPath('secrets/token.txt'), isTrue);
+    expect(isMcpSensitiveGitPath('id_rsa'), isTrue);
+    expect(isMcpSensitiveGitPath('lib/main.dart'), isFalse);
   });
 }

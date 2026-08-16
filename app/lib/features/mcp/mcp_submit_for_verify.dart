@@ -24,6 +24,7 @@ Future<CallToolResult> mcpSubmitCardForVerify(
   List<ChecklistItem>? verificationFeedback,
   List<String>? completedFeedbackIds,
   bool? completeAllIncompleteFeedback,
+  List<String>? completedChecklistIds,
   bool completeAllIncompleteChecklist = false,
   String? commitRef,
   McpSubmissionSnapshotStore? submissionSnapshotStore,
@@ -68,9 +69,31 @@ Future<CallToolResult> mcpSubmitCardForVerify(
     final commitMessage = submissionSnapshot?.suggestedCommitMessage ??
         buildCardCommitMessage(card);
 
+    if (completedChecklistIds != null && completeAllIncompleteChecklist) {
+      return mcpErrorResult(
+        'completedChecklistIds 与 completeAllIncompleteChecklist 只能选其一',
+      );
+    }
+
     List<ChecklistItem>? checklistToApply;
     var completedChecklistCount = 0;
-    if (completeAllIncompleteChecklist) {
+    if (completedChecklistIds != null) {
+      final idSet = completedChecklistIds.toSet();
+      final unknown = idSet.difference({
+        for (final item in card.checklist) item.id,
+      });
+      if (unknown.isNotEmpty) {
+        return mcpErrorResult('子任务 id 不存在：${unknown.join(', ')}');
+      }
+      completedChecklistCount =
+          card.checklist.where((item) => idSet.contains(item.id)).length;
+      checklistToApply = [
+        for (final item in card.checklist)
+          item.completed || idSet.contains(item.id)
+              ? item.copyWith(completed: true)
+              : item,
+      ];
+    } else if (completeAllIncompleteChecklist) {
       final incompleteCount =
           card.checklist.where((item) => !item.completed).length;
       if (incompleteCount > 0) {
@@ -84,10 +107,8 @@ Future<CallToolResult> mcpSubmitCardForVerify(
 
     List<ChecklistItem>? feedbackToApply = verificationFeedback;
     if (completedFeedbackIds != null) {
-      if (completedFeedbackIds.isEmpty) {
-        return mcpErrorResult('completedFeedbackIds 不能为空');
-      }
-      if (card.verificationFeedback.isEmpty) {
+      if (completedFeedbackIds.isNotEmpty &&
+          card.verificationFeedback.isEmpty) {
         return mcpErrorResult('卡片没有验证反馈可勾选');
       }
       final idSet = completedFeedbackIds.toSet();
@@ -168,7 +189,7 @@ Future<CallToolResult> mcpSubmitCardForVerify(
       'toColumnId': verifyColumn.id,
       'alreadyInVerifyColumn': wasAlreadyInVerifyColumn,
       'suggestedCommitMessage': commitMessage,
-      if (completeAllIncompleteChecklist)
+      if (completedChecklistIds != null || completeAllIncompleteChecklist)
         'completedChecklistCount': completedChecklistCount,
       if (writtenCommitRef != null) 'commitRef': writtenCommitRef,
       if (writtenCommitRef == null &&

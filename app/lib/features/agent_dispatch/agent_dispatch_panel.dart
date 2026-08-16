@@ -532,16 +532,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       );
       return;
     }
-    final agentMcpEndpoint = board.mcpHost.agentEndpointUrl;
-    if (agentMcpEndpoint == null || agentMcpEndpoint.isEmpty) {
-      _appendLog(
-        board.mcpHost.lastError ??
-            '调度 Skill MCP 未启动，无法创建精简工具会话',
-        level: AgentDispatchLogLevel.warning,
-      );
-      return;
-    }
-
     var queueSize = 0;
     await board.runOnProject(projectId, () async {
       final current = board.board;
@@ -560,7 +550,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       options: options,
       skillPath: next.resolveSkillPath(),
       mcpEndpoint: board.mcpHost.endpointUrl,
-      agentMcpEndpoint: agentMcpEndpoint,
+      closeScopedEndpoint: board.mcpHost.closeScopedEndpoint,
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
       afterQueue: next.afterQueue,
@@ -799,6 +789,17 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     child: Text(_busy ? '刷新中…' : '刷新'),
                   ),
                 ],
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('允许无人值守高推理（成本更高）'),
+                value: _settings.allowHighReasoning,
+                onChanged: _running || _busy
+                    ? null
+                    : (value) => _persist(
+                          _settings.copyWith(allowHighReasoning: value),
+                        ),
               ),
               if (_modelCatalogMessage != null)
                 Padding(

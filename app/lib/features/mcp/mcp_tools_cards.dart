@@ -4,6 +4,7 @@ import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../kanban/move_to_rework_on_new_feedback.dart';
 import '../views/card_reference.dart';
+import 'dispatch/dispatch_full_mcp_guard.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_block_card.dart';
 import 'mcp_card_payloads.dart';
@@ -263,6 +264,14 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
       if (cardId.isEmpty || columnId.isEmpty) {
         return mcpErrorResult('cardId 与 columnId 均不能为空');
       }
+      if (args.containsKey('checklist') ||
+          args.containsKey('verificationFeedback')) {
+        final rejected = rejectLockedCardFromFullMcp(
+          cardId,
+          operation: 'update_card(checklist/verificationFeedback)',
+        );
+        if (rejected != null) return rejected;
+      }
       final located = await resolveMcpProjectIdForCard(
         controller,
         cardId: cardId,
@@ -455,6 +464,11 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
     callback: (args, extra) async {
       final cardId = mcpTrimmedString(args['cardId']) ?? '';
       if (cardId.isEmpty) return mcpErrorResult('cardId 不能为空');
+      final rejected = rejectLockedCardFromFullMcp(
+        cardId,
+        operation: 'submit_card_for_verify',
+      );
+      if (rejected != null) return rejected;
       final verificationFeedback = args.containsKey('verificationFeedback')
           ? parseMcpChecklist(args['verificationFeedback'])
           : null;
@@ -514,6 +528,11 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
     callback: (args, extra) async {
       final cardId = mcpTrimmedString(args['cardId']) ?? '';
       if (cardId.isEmpty) return mcpErrorResult('cardId 不能为空');
+      final rejected = rejectLockedCardFromFullMcp(
+        cardId,
+        operation: 'block_card',
+      );
+      if (rejected != null) return rejected;
       return mcpBlockCard(
         controller,
         cardId: cardId,

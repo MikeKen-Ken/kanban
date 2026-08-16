@@ -2,11 +2,15 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
-import { settleWithin } from "./async_limit.js";
-import type { WorkerCancellation } from "./cancellation.js";
-import { formatSessionTokenLog } from "./cursor_token_usage.js";
-import { resolveModelParams, type DispatchJob, type DispatchResult } from "./types.js";
-import { type WorkerLogSource, workerLog } from "./worker_log.js";
+import { settleWithin } from "./async_limit.ts";
+import type { WorkerCancellation } from "./cancellation.ts";
+import { formatSessionTokenLog } from "./cursor_token_usage.ts";
+import {
+  resolveModelParams,
+  type DispatchResult,
+  type RoundDispatchJob,
+} from "./types.ts";
+import { type WorkerLogSource, workerLog } from "./worker_log.ts";
 
 function logLine(line: string, source: WorkerLogSource = "worker"): void {
   workerLog(line, source);
@@ -208,7 +212,7 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
 }
 
 export async function runCursor(
-  job: DispatchJob,
+  job: RoundDispatchJob,
   cancellation?: WorkerCancellation,
 ): Promise<DispatchResult> {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
@@ -223,9 +227,9 @@ export async function runCursor(
   const params = resolveModelParams(job);
   logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
 
-  const agentMcpUrl = job.agentMcpEndpoint?.trim();
+  const agentMcpUrl = job.round.agentEndpointUrl.trim();
   if (!agentMcpUrl) {
-    return { ok: false, error: "缺少 Skill 会话 MCP 端点 agentMcpEndpoint" };
+    return { ok: false, error: "本轮 claim 缺少 scoped MCP 端点" };
   }
 
   try {
@@ -260,12 +264,16 @@ export async function runCursor(
         // 整包塞进会话（日志里常见 skillCount=21、ruleCount=32），cacheRead 可达上百万。
         settingSources: [],
         store: new JsonlLocalAgentStore(storeDir),
+        autoReview: true,
         sandboxOptions: { enabled: false },
       },
     });
     try {
       logLine("本地会话已创建，开始执行…");
-      const run = await agent.send(job.prompt, {
+      const run = await agent.send({
+        text: job.prompt,
+        images: job.round.images,
+      }, {
         onStep: ({ step }) => {
           try {
             stepCount += 1;

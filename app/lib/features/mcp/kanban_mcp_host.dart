@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import 'mcp_tools_agent_session.dart';
 import 'mcp_constants.dart';
 import 'mcp_paths.dart';
 import 'mcp_tools.dart';
@@ -14,25 +15,25 @@ class KanbanMcpHost extends ChangeNotifier {
 
   final BoardController _controller;
   StreamableMcpServer? _server;
-  StreamableMcpServer? _agentServer;
+  final _scopedServersByToken = <String, StreamableMcpServer>{};
   KanbanMcpStatus status = KanbanMcpStatus.stopped;
   String? lastError;
   int boundPort = McpConstants.defaultPort;
-  int agentBoundPort = McpConstants.defaultPort;
 
   bool get isSupported => McpPaths.isWindowsSupported;
 
   String get endpointUrl => McpConstants.endpointUrl(boundPort);
 
-  /// Skill 会话专用端点（与完整目录同 path、不同端口）。未启动时为 null，禁止回退。
-  String? get agentEndpointUrl =>
-      _agentServer == null
-          ? null
-          : McpConstants.agentEndpointUrl(agentBoundPort);
+  /// 兼容旧 UI；Agent 端点现由每次 claim 的结果返回。
+  String? get agentEndpointUrl => null;
 
-  bool get hasAgentSessionServer => _agentServer != null;
+  bool get hasAgentSessionServer => _scopedServersByToken.isNotEmpty;
 
   bool get isRunning => status == KanbanMcpStatus.running;
+
+  /// App 调度 finally 使用；即使 Worker 未能调用私有 close，也会按 token 回收端点。
+  Future<void> closeScopedEndpoint(String workerToken) =>
+      _closeScopedAgentServer(workerToken);
 
   /// 按本机偏好启停服务。
   Future<void> syncWithSettings({
@@ -80,10 +81,8 @@ class KanbanMcpHost extends ChangeNotifier {
       await server.start();
       _server = server;
       boundPort = server.boundPort;
-      await _startAgentServer();
       status = KanbanMcpStatus.running;
       debugPrint('看板 MCP 已监听 $endpointUrl');
-      debugPrint('调度 Skill MCP 已监听 $agentEndpointUrl');
     } catch (error) {
       await _closeServers();
       status = KanbanMcpStatus.error;
@@ -102,13 +101,13 @@ class KanbanMcpHost extends ChangeNotifier {
   }
 
   Future<void> _closeServers() async {
-    final agentServer = _agentServer;
-    _agentServer = null;
-    if (agentServer != null) {
+    final scopedServers = _scopedServersByToken.values.toList();
+    _scopedServersByToken.clear();
+    for (final scopedServer in scopedServers) {
       try {
-        await agentServer.stop();
+        await scopedServer.stop();
       } catch (error) {
-        debugPrint('调度 Skill MCP 停止失败：$error');
+        debugPrint('调度 scoped MCP 停止失败：$error');
       }
     }
     final server = _server;
@@ -135,14 +134,26 @@ class KanbanMcpHost extends ChangeNotifier {
         ),
       ),
     );
-    registerKanbanMcpTools(server, _controller);
+    registerKanbanMcpTools(
+      server,
+      _controller,
+      startScopedEndpoint: _startScopedAgentServer,
+      closeScopedEndpoint: _closeScopedAgentServer,
+    );
     return server;
   }
 
-  Future<void> _startAgentServer() async {
+  Future<String> _startScopedAgentServer({
+    required String workerToken,
+    required String cardId,
+  }) async {
+    await _closeScopedAgentServer(workerToken);
     try {
       final server = StreamableMcpServer(
-        serverFactory: (_) => _buildAgentServer(),
+        serverFactory: (_) => _buildAgentServer(
+          workerToken: workerToken,
+          cardId: cardId,
+        ),
         host: McpConstants.host,
         port: 0,
         path: McpConstants.path,
@@ -152,17 +163,31 @@ class KanbanMcpHost extends ChangeNotifier {
         enableJsonResponse: true,
       );
       await server.start();
-      _agentServer = server;
-      agentBoundPort = server.boundPort;
+      _scopedServersByToken[workerToken] = server;
+      final endpoint = McpConstants.agentEndpointUrl(server.boundPort);
+      debugPrint('调度 scoped MCP 已监听 $endpoint');
+      return endpoint;
     } catch (error) {
-      _agentServer = null;
-      lastError = '调度 Skill MCP 启动失败：$error';
-      debugPrint(lastError);
+      lastError = '调度 scoped MCP 启动失败：$error';
+      debugPrint(lastError!);
       rethrow;
     }
   }
 
-  McpServer _buildAgentServer() {
+  Future<void> _closeScopedAgentServer(String workerToken) async {
+    final server = _scopedServersByToken.remove(workerToken);
+    if (server == null) return;
+    try {
+      await server.stop();
+    } catch (error) {
+      debugPrint('调度 scoped MCP 停止失败：$error');
+    }
+  }
+
+  McpServer _buildAgentServer({
+    required String workerToken,
+    required String cardId,
+  }) {
     final server = McpServer(
       const Implementation(
         name: McpConstants.implementationName,
@@ -175,19 +200,21 @@ class KanbanMcpHost extends ChangeNotifier {
         ),
       ),
     );
-    registerKanbanMcpTools(
+    registerKanbanMcpAgentSessionTools(
       server,
       _controller,
-      toolset: KanbanMcpToolset.agentSession,
+      workerToken: workerToken,
+      cardId: cardId,
     );
     return server;
   }
 
   @override
   void dispose() {
-    final agentServer = _agentServer;
-    _agentServer = null;
-    agentServer?.stop();
+    for (final server in _scopedServersByToken.values) {
+      server.stop();
+    }
+    _scopedServersByToken.clear();
     final server = _server;
     _server = null;
     server?.stop();

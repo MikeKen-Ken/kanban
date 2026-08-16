@@ -1,6 +1,7 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
+import 'dispatch/dispatch_full_mcp_guard.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_prepare_card_submission.dart';
 import 'mcp_submit_consultation.dart';
@@ -70,6 +71,11 @@ void registerKanbanMcpWorkflowTools(
       if (responseMarkdown == null) {
         return mcpErrorResult('responseMarkdown 不能为空');
       }
+      final rejected = rejectLockedCardFromFullMcp(
+        cardId,
+        operation: 'submit_consultation',
+      );
+      if (rejected != null) return rejected;
       return mcpSubmitConsultation(
         controller,
         cardId: cardId,

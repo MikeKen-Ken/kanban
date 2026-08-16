@@ -57,7 +57,8 @@ class AgentDispatchEngineRunDefaults {
           'model': modelId!.trim(),
         if (modelParams.isNotEmpty)
           'modelParams': [
-            for (final item in modelParams) {'id': item.id, 'value': item.value},
+            for (final item in modelParams)
+              {'id': item.id, 'value': item.value},
           ],
         if (models.isNotEmpty)
           'models': [
@@ -84,6 +85,7 @@ class AgentDispatchRunOptions {
     this.modelId,
     this.modelParams = const [],
     this.engineDefaults = const {},
+    this.allowHighReasoning = false,
   });
 
   final AgentDispatchEngine engine;
@@ -104,6 +106,9 @@ class AgentDispatchRunOptions {
 
   /// 各平台工作台默认；卡片指定其它平台时回退到对应项，而不是当前平台。
   final Map<String, AgentDispatchEngineRunDefaults> engineDefaults;
+
+  /// 显式允许无人值守会话保留 high/超大推理参数。
+  final bool allowHighReasoning;
 
   final AgentDispatchCardLimit cardLimit;
 

@@ -50,7 +50,8 @@
 - 当前项目
 - 明暗模式、拖拽延迟、引导状态等界面偏好
 - Windows 内嵌 MCP 开关与端口
-- Agent 调度偏好（引擎、仓库路径、模型、思考程度等）
+- Agent 调度偏好（引擎、仓库路径、模型、思考程度、是否允许高推理等）
+- Agent 调度 pending 收尾事务与提交范围快照（仅本机 SharedPreferences，不进入工作区 JSON / WebDAV）
 - MCP 代理运行上下文（按项目与卡片保存的 sub-agent / Git 恢复信息）
 - 撤销栈
 - 系统通知调度记录

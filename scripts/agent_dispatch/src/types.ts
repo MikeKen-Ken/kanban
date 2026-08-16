@@ -17,11 +17,11 @@ export type DispatchJob = {
   modelParams?: ModelParam[];
   engineDefaults?: Partial<Record<"cursor" | "codex", EngineDefault>>;
   mcpEndpoint: string;
-  /** Skill 会话使用的精简 MCP；缺省则回退 mcpEndpoint。 */
-  agentMcpEndpoint?: string;
   projectId?: string;
   cardLimit: number;
   workerToken: string;
+  /** 显式允许无人值守会话使用 high/超大推理；默认 false。 */
+  allowHighReasoning?: boolean;
   /** @deprecated 旧字段，兼容 */
   effort?: string;
   /** Dart 侧 touch 此文件以请求立即停止 */
@@ -31,6 +31,24 @@ export type DispatchJob = {
   /** Dart 侧 touch 此文件以跳过当前卡片并继续下一张 */
   skipFile?: string;
   outPath: string;
+};
+
+export type RoundImage = {
+  data: string;
+  mimeType: string;
+};
+
+export type RoundContext = {
+  cardId: string;
+  sessionId: string;
+  agentEndpointUrl: string;
+  images: RoundImage[];
+  attachmentPaths: string[];
+};
+
+export type RoundDispatchJob = DispatchJob & {
+  prompt: string;
+  round: RoundContext;
 };
 
 export type DispatchResult = {
@@ -96,13 +114,13 @@ function engineFallback(
 
 export function mergeJobWithCardOverrides(
   job: DispatchJob,
-  peek: Record<string, unknown>,
+  claim: Record<string, unknown>,
 ): DispatchJob {
-  const engine = parseEngine(peek.agentEngine, job.engine);
+  const engine = parseEngine(claim.agentEngine, job.engine);
   const defaults = engineFallback(job, engine);
-  const cardModel = String(peek.agentModelId ?? "").trim();
+  const cardModel = String(claim.agentModelId ?? "").trim();
   const model = cardModel || defaults.model || undefined;
-  const cardParams = parseCardParams(peek.agentModelParamValues);
+  const cardParams = parseCardParams(claim.agentModelParamValues);
   const byId = new Map(
     (defaults.modelParams ?? []).map((item) => [item.id, item]),
   );
@@ -130,14 +148,50 @@ export function mergeJobWithCardOverrides(
     }
   }
 
-  return { ...job, engine, model, modelParams: [...byId.values()] };
+  const modelParams = [...byId.values()].map((item) => ({
+    ...item,
+    value: clampUnattendedParam(item, job.allowHighReasoning === true),
+  }));
+  return { ...job, engine, model, modelParams };
+}
+
+function clampUnattendedParam(
+  param: ModelParam,
+  allowHighReasoning: boolean,
+): string {
+  if (allowHighReasoning) return param.value;
+  const id = param.id.toLowerCase();
+  const value = param.value.toLowerCase();
+  const expensive = new Set([
+    "high",
+    "xhigh",
+    "extra_high",
+    "very_high",
+    "max",
+    "maximum",
+    "large",
+    "xlarge",
+    "huge",
+  ]);
+  if (
+    expensive.has(value) &&
+    (isReasoningParamId(id) ||
+      id.includes("context") ||
+      id.includes("thinking"))
+  ) {
+    return "medium";
+  }
+  return param.value;
 }
 
 export function resolveModelParams(
   job: DispatchJob,
 ): Array<{ id: string; value: string }> | undefined {
   if (job.modelParams && job.modelParams.length > 0) {
-    return job.modelParams;
+    return job.modelParams.map((item) => ({
+      ...item,
+      value: clampUnattendedParam(item, job.allowHighReasoning === true),
+    }));
   }
   switch (job.effort) {
     case "fast":
@@ -147,7 +201,10 @@ export function resolveModelParams(
     case "medium":
       return [{ id: "reasoning_effort", value: "medium" }];
     case "high":
-      return [{ id: "reasoning_effort", value: "high" }];
+      return [{
+        id: "reasoning_effort",
+        value: job.allowHighReasoning === true ? "high" : "medium",
+      }];
     default:
       return undefined;
   }

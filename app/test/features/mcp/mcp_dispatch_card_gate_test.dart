@@ -7,18 +7,21 @@ void main() {
   setUp(gate.debugReset);
   tearDown(gate.debugReset);
 
-  test('Worker 每次开启新会话后只允许 Skill 取一张卡', () {
+  test('Worker 每次开启新会话后只允许私有 claim 取一张卡', () {
     gate.beginBatch('worker-a', projectId: 'project-a');
 
     expect(
       gate.authorizePick('project-a'),
-      McpDispatchPickPermission.sessionNotOpen,
+      McpDispatchPickPermission.dispatchLocked,
     );
     expect(gate.beginAgentSession('worker-b'), isFalse);
     expect(gate.beginAgentSession('worker-a'), isTrue);
-    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
     expect(
-      gate.authorizePick('project-a'),
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
+      McpDispatchPickPermission.allowed,
+    );
+    expect(
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
       McpDispatchPickPermission.alreadyClaimed,
     );
 
@@ -31,7 +34,10 @@ void main() {
     expect(gate.authorizePickedCard('other'), isNotNull);
 
     expect(gate.beginAgentSession('worker-a'), isTrue);
-    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
+    expect(
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
+      McpDispatchPickPermission.allowed,
+    );
   });
 
   test('没有 Worker 批次时不影响普通 MCP 取卡', () {
@@ -44,10 +50,16 @@ void main() {
     expect(gate.beginAgentSession('worker-a'), isTrue);
     expect(gate.beginAgentSession('worker-b'), isTrue);
 
-    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
-    expect(gate.authorizePick('project-b'), McpDispatchPickPermission.allowed);
     expect(
-      gate.authorizePick('project-a'),
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
+      McpDispatchPickPermission.allowed,
+    );
+    expect(
+      gate.authorizePick('project-b', workerToken: 'worker-b'),
+      McpDispatchPickPermission.allowed,
+    );
+    expect(
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
       McpDispatchPickPermission.alreadyClaimed,
     );
     expect(
@@ -68,7 +80,7 @@ void main() {
     );
     expect(gate.beginAgentSession('worker-a'), isTrue);
     expect(
-      gate.authorizePick('project-a'),
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
       McpDispatchPickPermission.allowed,
     );
     expect(gate.authorizePickedCard('card-a'), isNotNull);
@@ -90,13 +102,42 @@ void main() {
   test('领卡失败后可以在同一会话重试', () {
     gate.beginBatch('worker-a', projectId: 'project-a');
     expect(gate.beginAgentSession('worker-a'), isTrue);
-    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
+    expect(
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
+      McpDispatchPickPermission.allowed,
+    );
     gate.releasePickAttempt('project-a');
-    expect(gate.authorizePick('project-a'), McpDispatchPickPermission.allowed);
+    expect(
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
+      McpDispatchPickPermission.allowed,
+    );
     gate.recordPickedCard(projectId: 'project-a', cardId: 'card-a');
     expect(
-      gate.authorizePick('project-a'),
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
       McpDispatchPickPermission.alreadyClaimed,
+    );
+  });
+
+  test('完整 MCP 不能修改 dispatch 锁定卡', () {
+    gate.beginBatch('worker-a', projectId: 'project-a');
+    gate.beginAgentSession('worker-a', sessionId: 'session-a');
+    expect(
+      gate.authorizePick('project-a', workerToken: 'worker-a'),
+      McpDispatchPickPermission.allowed,
+    );
+    gate.recordPickedCard(
+      projectId: 'project-a',
+      cardId: 'card-a',
+      workerToken: 'worker-a',
+    );
+
+    expect(
+      gate.rejectFullMcpMutation('card-a', operation: 'block_card'),
+      isNotNull,
+    );
+    expect(
+      gate.rejectFullMcpMutation('other', operation: 'block_card'),
+      isNull,
     );
   });
 }

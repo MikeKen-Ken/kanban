@@ -4,12 +4,12 @@ import { Cursor } from "@cursor/sdk";
 import {
   WorkerCancelledError,
   WorkerCancellation,
-} from "./cancellation.js";
-import { printCursorUsage } from "./cursor_usage.js";
-import { listCodexModels } from "./codex_models.js";
-import { resolveCodexCommand } from "./run_codex.js";
-import { runBatch } from "./run_batch.js";
-import type { DispatchJob, DispatchResult } from "./types.js";
+} from "./cancellation.ts";
+import { printCursorUsage } from "./cursor_usage.ts";
+import { listCodexModels } from "./codex_models.ts";
+import { resolveCodexCommand } from "./run_codex.ts";
+import { runBatch } from "./run_batch.ts";
+import type { DispatchJob, DispatchResult } from "./types.ts";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -169,14 +169,6 @@ async function runJob(jobPath: string): Promise<void> {
   }
   if (!job.mcpEndpoint?.trim()) {
     writeResult(job.outPath, { ok: false, error: "mcpEndpoint 不能为空" });
-    process.exitCode = 2;
-    return;
-  }
-  if (!job.agentMcpEndpoint?.trim()) {
-    writeResult(job.outPath, {
-      ok: false,
-      error: "agentMcpEndpoint 不能为空",
-    });
     process.exitCode = 2;
     return;
   }

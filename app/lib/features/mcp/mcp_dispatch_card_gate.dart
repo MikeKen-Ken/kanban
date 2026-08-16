@@ -1,8 +1,11 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
 /// Agent 调度批次的一轮一卡程序闸门。
 ///
 /// 按项目各持有一条 Worker 批次。Worker 持有批次 token，并在每次启动全新
-/// Agent 会话前重置该项目的闸门。AI 不接触 token；它仍按 Skill 正常调用
-/// `pick_next_card`，但每个项目的会话最多成功一次。
+/// Worker 使用私有 token 原子领卡；Agent 只接触绑定 cardId 的临时端点。
 class McpDispatchCardGate {
   McpDispatchCardGate._();
 
@@ -54,18 +57,24 @@ class McpDispatchCardGate {
     }
   }
 
-  bool beginAgentSession(String workerToken) {
+  bool beginAgentSession(String workerToken, {String? sessionId}) {
     final slot = _slotsByToken[workerToken];
     if (slot == null) return false;
-    slot.resetSession(open: true);
+    slot.resetSession(open: true, sessionId: sessionId);
     return true;
   }
 
-  McpDispatchPickPermission authorizePick(String projectId) {
+  McpDispatchPickPermission authorizePick(
+    String projectId, {
+    String? workerToken,
+  }) {
     final token = _tokenByProject[projectId];
     if (token == null) return McpDispatchPickPermission.allowed;
     final slot = _slotsByToken[token];
     if (slot == null) return McpDispatchPickPermission.allowed;
+    if (workerToken == null || workerToken != token) {
+      return McpDispatchPickPermission.dispatchLocked;
+    }
     if (!slot.sessionOpen) return McpDispatchPickPermission.sessionNotOpen;
     if (slot.pickClaimed || slot.pickInFlight) {
       slot.deniedPickCount += 1;
@@ -76,17 +85,23 @@ class McpDispatchCardGate {
   }
 
   /// 领卡失败时释放 in-flight，允许本轮重试；已成功领取则不改。
-  void releasePickAttempt(String projectId) {
+  void releasePickAttempt(String projectId, {String? workerToken}) {
     final token = _tokenByProject[projectId];
     if (token == null) return;
+    if (workerToken != null && token != workerToken) return;
     final slot = _slotsByToken[token];
     if (slot == null || slot.pickClaimed) return;
     slot.pickInFlight = false;
   }
 
-  void recordPickedCard({required String projectId, required String cardId}) {
+  void recordPickedCard({
+    required String projectId,
+    required String cardId,
+    String? workerToken,
+  }) {
     final token = _tokenByProject[projectId];
     if (token == null) return;
+    if (workerToken != null && token != workerToken) return;
     final slot = _slotsByToken[token];
     if (slot == null || !slot.sessionOpen) return;
     if (!slot.pickInFlight && !slot.pickClaimed) return;
@@ -104,11 +119,49 @@ class McpDispatchCardGate {
       if (!slot.sessionOpen) continue;
       if (slot.pickedCardId == id) return null;
     }
-    return '只能对本轮 pick_next_card 领取的卡片调用该工具';
+    return '只能对本轮 Worker claim 领取的卡片调用该工具';
   }
+
+  /// scoped 端点必须同时匹配 token 与 cardId。
+  String? authorizeScopedCard({
+    required String workerToken,
+    required String cardId,
+  }) {
+    final slot = _slotsByToken[workerToken];
+    if (slot == null || !slot.sessionOpen) return '调度会话不存在或已关闭';
+    if (slot.pickedCardId != cardId.trim()) return '该工具只能操作本会话绑定的卡片';
+    return null;
+  }
+
+  /// 完整 MCP 不得修改当前被 dispatch 锁定的卡片。
+  String? rejectFullMcpMutation(String cardId, {required String operation}) {
+    final slot = _slotForPickedCard(cardId);
+    if (slot == null) return null;
+    return '卡片正由 Agent 调度锁定，完整 MCP 不得调用 $operation；请使用本会话 scoped 工具';
+  }
+
+  String? projectIdForToken(String workerToken) =>
+      _slotsByToken[workerToken]?.projectId;
+
+  String? sessionIdForToken(String workerToken) =>
+      _slotsByToken[workerToken]?.sessionId;
+
+  String? cardIdForToken(String workerToken) =>
+      _slotsByToken[workerToken]?.pickedCardId;
 
   String? repoPathForToken(String workerToken) =>
       _slotsByToken[workerToken]?.repoPath;
+
+  /// pending 不持久化 token；私有工具按当前活跃批次的 project/repo 绑定鉴权。
+  bool authorizesPending({
+    required String workerToken,
+    required String projectId,
+    required String? repoPath,
+  }) {
+    final slot = _slotsByToken[workerToken.trim()];
+    if (slot == null || slot.projectId != projectId) return false;
+    return _normalizeRepo(slot.repoPath) == _normalizeRepo(repoPath);
+  }
 
   void recordBaselineCommitRef(String workerToken, String? commitRef) {
     final slot = _slotsByToken[workerToken];
@@ -138,6 +191,13 @@ class McpDispatchCardGate {
     slot.pendingCommitRef = commitRef.trim();
   }
 
+  void closeAgentSession(String workerToken) {
+    final slot = _slotsByToken[workerToken];
+    if (slot == null) return;
+    slot.sessionOpen = false;
+    slot.pickInFlight = false;
+  }
+
   _McpDispatchSlot? _slotForPickedCard(String cardId) {
     final id = cardId.trim();
     for (final slot in _slotsByToken.values) {
@@ -153,8 +213,10 @@ class McpDispatchCardGate {
       sessionOpen: slot.sessionOpen,
       pickClaimed: slot.pickClaimed,
       deniedPickCount: slot.deniedPickCount,
-      projectId: slot.pickedProjectId,
+      projectId: slot.pickedProjectId ?? slot.projectId,
       cardId: slot.pickedCardId,
+      sessionId: slot.sessionId,
+      baselineCommitRef: slot.baselineCommitRef,
     );
   }
 
@@ -162,6 +224,13 @@ class McpDispatchCardGate {
     _slotsByToken.clear();
     _tokenByProject.clear();
   }
+}
+
+String? _normalizeRepo(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  final normalized = p.normalize(p.absolute(trimmed));
+  return Platform.isWindows ? normalized.toLowerCase() : normalized;
 }
 
 class _McpDispatchSlot {
@@ -182,9 +251,11 @@ class _McpDispatchSlot {
   String? pickedCardId;
   String? pendingCommitRef;
   String? baselineCommitRef;
+  String? sessionId;
 
-  void resetSession({required bool open}) {
+  void resetSession({required bool open, String? sessionId}) {
     sessionOpen = open;
+    this.sessionId = sessionId;
     pickInFlight = false;
     pickClaimed = false;
     deniedPickCount = 0;
@@ -195,7 +266,12 @@ class _McpDispatchSlot {
   }
 }
 
-enum McpDispatchPickPermission { allowed, sessionNotOpen, alreadyClaimed }
+enum McpDispatchPickPermission {
+  allowed,
+  dispatchLocked,
+  sessionNotOpen,
+  alreadyClaimed,
+}
 
 class McpDispatchSessionStatus {
   const McpDispatchSessionStatus({
@@ -204,6 +280,8 @@ class McpDispatchSessionStatus {
     required this.deniedPickCount,
     this.projectId,
     this.cardId,
+    this.sessionId,
+    this.baselineCommitRef,
   });
 
   final bool sessionOpen;
@@ -211,6 +289,8 @@ class McpDispatchSessionStatus {
   final int deniedPickCount;
   final String? projectId;
   final String? cardId;
+  final String? sessionId;
+  final String? baselineCommitRef;
 
   Map<String, dynamic> toJson() => {
         'sessionOpen': sessionOpen,
@@ -218,5 +298,7 @@ class McpDispatchSessionStatus {
         'deniedPickCount': deniedPickCount,
         if (projectId != null) 'projectId': projectId,
         if (cardId != null) 'cardId': cardId,
+        if (sessionId != null) 'sessionId': sessionId,
+        if (baselineCommitRef != null) 'baselineCommitRef': baselineCommitRef,
       };
 }

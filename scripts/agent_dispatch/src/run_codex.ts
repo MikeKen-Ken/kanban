@@ -9,13 +9,13 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { WorkerCancellation } from "./cancellation.js";
-import { createCodexAgentHome, resolveUserCodexHome } from "./codex_mcp.js";
+import type { WorkerCancellation } from "./cancellation.ts";
+import { createCodexAgentHome, resolveUserCodexHome } from "./codex_mcp.ts";
 import {
   effortToCodexConfigArgs,
-  type DispatchJob,
   type DispatchResult,
-} from "./types.js";
+  type RoundDispatchJob,
+} from "./types.ts";
 
 export function resolveCodexCommand(): {
   command: string;
@@ -46,13 +46,13 @@ export function resolveCodexCommand(): {
 }
 
 export async function runCodex(
-  job: DispatchJob,
+  job: RoundDispatchJob,
   cancellation?: WorkerCancellation,
 ): Promise<DispatchResult> {
   const startedAt = Date.now();
-  const mcpUrl = job.agentMcpEndpoint?.trim();
+  const mcpUrl = job.round.agentEndpointUrl.trim();
   if (!mcpUrl) {
-    return { ok: false, error: "缺少 Skill 会话 MCP 端点 agentMcpEndpoint" };
+    return { ok: false, error: "本轮 claim 缺少 scoped MCP 端点" };
   }
 
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
@@ -100,7 +100,7 @@ export async function runCodex(
             child.kill("SIGTERM");
           }
         } catch {
-          // ignore
+          // 子进程可能已在取消边界退出。
         }
       };
       cancellation?.onCancel(killChild);
@@ -114,13 +114,17 @@ export async function runCodex(
         stdio: ["pipe", "pipe", "pipe"],
         shell: codex.shell,
       });
-      child.stdout.on("data", (buf: Buffer) => {
+      child.stdout?.on("data", (buf: Buffer) => {
         process.stdout.write(buf);
       });
-      child.stderr.on("data", (buf: Buffer) => {
+      child.stderr?.on("data", (buf: Buffer) => {
         process.stderr.write(buf);
       });
       child.on("error", reject);
+      if (!child.stdin) {
+        reject(new Error("Codex stdin 不可用"));
+        return;
+      }
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
@@ -157,7 +161,7 @@ export async function runCodex(
     try {
       rmSync(temp, { recursive: true, force: true });
     } catch {
-      // ignore
+      // 临时目录可能已由进程清理。
     }
   }
 }

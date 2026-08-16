@@ -303,6 +303,29 @@ extension BoardControllerPersist on BoardController {
     );
   }
 
+  /// 供跨模块编排写入一条显式来源的活动；内部仍沿用项目作用域与统一持久化。
+  Future<void> recordActivity({
+    required String projectId,
+    required String entityId,
+    required String entityTitle,
+    required ActivityAction action,
+    String entityType = 'card',
+    Map<String, String> details = const {},
+    ActivitySource source = ActivitySource.user,
+  }) {
+    return runOnProject(
+      projectId,
+      () => _recordActivity(
+        entityId: entityId,
+        entityTitle: entityTitle,
+        action: action,
+        entityType: entityType,
+        details: details,
+        source: source,
+      ),
+    );
+  }
+
   Future<void> _mirrorSharedLabelsToLocalPreferences() async {
     if (sharedContent.isUninitialized) return;
     final labels = [

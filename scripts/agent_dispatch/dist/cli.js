@@ -1,6 +1,6 @@
 // src/cli.ts
-import { readFileSync as readFileSync2, writeFileSync as writeFileSync3 } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { resolve as resolve2 } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
 // src/cancellation.ts
@@ -311,7 +311,7 @@ var AppServerClient = class {
   pending = /* @__PURE__ */ new Map();
   request(method, params) {
     const id = this.nextId++;
-    const promise = new Promise((resolve2, reject) => {
+    const promise = new Promise((resolve3, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`${method} \u8BF7\u6C42\u8D85\u65F6`));
@@ -319,7 +319,7 @@ var AppServerClient = class {
       this.pending.set(id, {
         resolve: (value) => {
           clearTimeout(timeout);
-          resolve2(value);
+          resolve3(value);
         },
         reject: (error) => {
           clearTimeout(timeout);
@@ -452,12 +452,12 @@ function engineFallback(job, engine) {
   }
   return {};
 }
-function mergeJobWithCardOverrides(job, peek) {
-  const engine = parseEngine(peek.agentEngine, job.engine);
+function mergeJobWithCardOverrides(job, claim) {
+  const engine = parseEngine(claim.agentEngine, job.engine);
   const defaults = engineFallback(job, engine);
-  const cardModel = String(peek.agentModelId ?? "").trim();
+  const cardModel = String(claim.agentModelId ?? "").trim();
   const model = cardModel || defaults.model || void 0;
-  const cardParams = parseCardParams(peek.agentModelParamValues);
+  const cardParams = parseCardParams(claim.agentModelParamValues);
   const byId = new Map(
     (defaults.modelParams ?? []).map((item) => [item.id, item])
   );
@@ -483,11 +483,38 @@ function mergeJobWithCardOverrides(job, peek) {
       byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
     }
   }
-  return { ...job, engine, model, modelParams: [...byId.values()] };
+  const modelParams = [...byId.values()].map((item) => ({
+    ...item,
+    value: clampUnattendedParam(item, job.allowHighReasoning === true)
+  }));
+  return { ...job, engine, model, modelParams };
+}
+function clampUnattendedParam(param, allowHighReasoning) {
+  if (allowHighReasoning) return param.value;
+  const id = param.id.toLowerCase();
+  const value = param.value.toLowerCase();
+  const expensive = /* @__PURE__ */ new Set([
+    "high",
+    "xhigh",
+    "extra_high",
+    "very_high",
+    "max",
+    "maximum",
+    "large",
+    "xlarge",
+    "huge"
+  ]);
+  if (expensive.has(value) && (isReasoningParamId(id) || id.includes("context") || id.includes("thinking"))) {
+    return "medium";
+  }
+  return param.value;
 }
 function resolveModelParams(job) {
   if (job.modelParams && job.modelParams.length > 0) {
-    return job.modelParams;
+    return job.modelParams.map((item) => ({
+      ...item,
+      value: clampUnattendedParam(item, job.allowHighReasoning === true)
+    }));
   }
   switch (job.effort) {
     case "fast":
@@ -497,7 +524,10 @@ function resolveModelParams(job) {
     case "medium":
       return [{ id: "reasoning_effort", value: "medium" }];
     case "high":
-      return [{ id: "reasoning_effort", value: "high" }];
+      return [{
+        id: "reasoning_effort",
+        value: job.allowHighReasoning === true ? "high" : "medium"
+      }];
     default:
       return void 0;
   }
@@ -542,9 +572,9 @@ function resolveCodexCommand() {
 }
 async function runCodex(job, cancellation) {
   const startedAt = Date.now();
-  const mcpUrl = job.agentMcpEndpoint?.trim();
+  const mcpUrl = job.round.agentEndpointUrl.trim();
   if (!mcpUrl) {
-    return { ok: false, error: "\u7F3A\u5C11 Skill \u4F1A\u8BDD MCP \u7AEF\u70B9 agentMcpEndpoint" };
+    return { ok: false, error: "\u672C\u8F6E claim \u7F3A\u5C11 scoped MCP \u7AEF\u70B9" };
   }
   const temp = mkdtempSync2(join2(tmpdir2(), "kanban-codex-"));
   const promptFile = join2(temp, "prompt.txt");
@@ -601,13 +631,17 @@ async function runCodex(job, cancellation) {
         stdio: ["pipe", "pipe", "pipe"],
         shell: codex.shell
       });
-      child.stdout.on("data", (buf) => {
+      child.stdout?.on("data", (buf) => {
         process.stdout.write(buf);
       });
-      child.stderr.on("data", (buf) => {
+      child.stderr?.on("data", (buf) => {
         process.stderr.write(buf);
       });
       child.on("error", reject);
+      if (!child.stdin) {
+        reject(new Error("Codex stdin \u4E0D\u53EF\u7528"));
+        return;
+      }
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
@@ -690,39 +724,66 @@ import {
 
 // src/async_limit.ts
 function settleWithin(ms, work) {
-  return new Promise((resolve2) => {
-    const timer = setTimeout(resolve2, ms);
+  return new Promise((resolve3) => {
+    const timer = setTimeout(resolve3, ms);
     timer.unref?.();
     work.then(
       () => {
         clearTimeout(timer);
-        resolve2();
+        resolve3();
       },
       () => {
         clearTimeout(timer);
-        resolve2();
+        resolve3();
       }
     );
   });
 }
 
 // src/mcp_client.ts
+var DEFAULT_MCP_TIMEOUT_MS = 3e4;
 var KanbanMcpClient = class {
   client = new Client({
     name: "kanban-agent-worker",
     version: "1.0.0"
   });
+  connected = false;
+  timeoutMs;
+  constructor(timeoutMs = DEFAULT_MCP_TIMEOUT_MS) {
+    this.timeoutMs = timeoutMs;
+  }
   async connect(endpoint) {
-    await this.client.connect(
-      new StreamableHTTPClientTransport(new URL(endpoint))
+    await withTimeout(
+      "\u8FDE\u63A5 MCP",
+      this.timeoutMs,
+      this.client.connect(
+        new StreamableHTTPClientTransport(new URL(endpoint))
+      )
     );
+    this.connected = true;
+  }
+  async listTools() {
+    const result = await withTimeout(
+      "\u5217\u51FA MCP \u5DE5\u5177",
+      this.timeoutMs,
+      this.client.listTools()
+    );
+    return result.tools.map((tool) => tool.name).sort();
+  }
+  async callRaw(name, args) {
+    const result = await withTimeout(
+      `\u8C03\u7528 ${name}`,
+      this.timeoutMs,
+      this.client.callTool({ name, arguments: args })
+    );
+    if (result.isError) {
+      throw new Error(`${name} \u5931\u8D25\uFF1A${resultText(result)}`);
+    }
+    return result;
   }
   async callJson(name, args) {
-    const result = await this.client.callTool({ name, arguments: args });
-    if (result.isError) {
-      throw new Error(`${name} \u5931\u8D25\uFF1A${this.resultText(result)}`);
-    }
-    const text = this.resultText(result);
+    const result = await this.callRaw(name, args);
+    const text = resultText(result);
     try {
       return JSON.parse(text);
     } catch {
@@ -730,14 +791,52 @@ var KanbanMcpClient = class {
     }
   }
   async close() {
+    if (!this.connected) return;
+    this.connected = false;
     await settleWithin(2e3, this.client.close());
   }
-  resultText(result) {
-    return result.content.filter(
-      (item) => item.type === "text"
-    ).map((item) => item.text).join("\n").trim();
-  }
 };
+function parseClaimResult(result) {
+  const text = resultText(result);
+  let payload;
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("JSON \u9876\u5C42\u4E0D\u662F\u5BF9\u8C61");
+    }
+    payload = parsed;
+  } catch (error) {
+    throw new Error(
+      `dispatch_claim_next_card \u8FD4\u56DE\u4E86\u65E0\u6548 JSON\uFF1A${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  const images = result.content.filter(
+    (item) => item.type === "image"
+  ).map((item) => ({ data: item.data, mimeType: item.mimeType }));
+  return { payload, images, raw: result };
+}
+function resultText(result) {
+  return result.content.filter(
+    (item) => item.type === "text"
+  ).map((item) => item.text).join("\n").trim();
+}
+async function withTimeout(operation, timeoutMs, work) {
+  let timer;
+  try {
+    return await Promise.race([
+      work,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${operation} \u8D85\u65F6\uFF08${timeoutMs}ms\uFF09`)),
+          timeoutMs
+        );
+        timer.unref?.();
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 // src/run_cursor.ts
 import { mkdirSync as mkdirSync2 } from "node:fs";
@@ -969,9 +1068,9 @@ async function runCursor(job, cancellation) {
   const modelId = job.model?.trim() || "composer-2.5";
   const params = resolveModelParams(job);
   logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
-  const agentMcpUrl = job.agentMcpEndpoint?.trim();
+  const agentMcpUrl = job.round.agentEndpointUrl.trim();
   if (!agentMcpUrl) {
-    return { ok: false, error: "\u7F3A\u5C11 Skill \u4F1A\u8BDD MCP \u7AEF\u70B9 agentMcpEndpoint" };
+    return { ok: false, error: "\u672C\u8F6E claim \u7F3A\u5C11 scoped MCP \u7AEF\u70B9" };
   }
   try {
     process.chdir(job.cwd);
@@ -1001,12 +1100,16 @@ async function runCursor(job, cancellation) {
         // 整包塞进会话（日志里常见 skillCount=21、ruleCount=32），cacheRead 可达上百万。
         settingSources: [],
         store: new JsonlLocalAgentStore(storeDir),
+        autoReview: true,
         sandboxOptions: { enabled: false }
       }
     });
     try {
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
-      const run = await agent.send(job.prompt, {
+      const run = await agent.send({
+        text: job.prompt,
+        images: job.round.images
+      }, {
         onStep: ({ step }) => {
           try {
             stepCount += 1;
@@ -1066,17 +1169,274 @@ async function runCursor(job, cancellation) {
   }
 }
 
-// src/run_batch.ts
-function cardState(card) {
-  const columnId = String(card.columnId ?? "");
-  const columnName = String(card.columnName ?? "");
-  if (columnId === "verify" || columnName === "\u5F85\u9A8C\u8BC1") return "verify";
-  if (columnId === "blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
-  return "active";
+// src/session_context.ts
+import {
+  existsSync as existsSync4,
+  mkdtempSync as mkdtempSync3,
+  readFileSync as readFileSync2,
+  rmSync as rmSync2,
+  writeFileSync as writeFileSync3
+} from "node:fs";
+import { tmpdir as tmpdir3 } from "node:os";
+import { isAbsolute, join as join4 } from "node:path";
+function readBatchArchitecture(cwd) {
+  const path = join4(cwd, "docs", "Architecture.md");
+  if (!existsSync4(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
+  return readFileSync2(path, "utf8");
 }
-async function runBatch(job, cancellation) {
-  const mcp = new KanbanMcpClient();
+function createSessionContext(options) {
+  const tempDir = mkdtempSync3(
+    join4(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
+  );
+  const attachmentPaths = [];
+  const payload = structuredClone(options.claim.payload);
+  const fileAttachments = Array.isArray(payload.fileAttachments) ? payload.fileAttachments : [];
+  for (let index = 0; index < fileAttachments.length; index += 1) {
+    const raw = fileAttachments[index];
+    if (!isRecord(raw)) continue;
+    const content = typeof raw.contentBase64 === "string" ? raw.contentBase64 : "";
+    delete raw.contentBase64;
+    if (!content || raw.included === false) continue;
+    const fileName = safeFileName(
+      typeof raw.fileName === "string" ? raw.fileName : `attachment-${index}.bin`,
+      `attachment-${index}.bin`
+    );
+    const path = uniquePath(tempDir, `${index + 1}-${fileName}`);
+    writeFileSync3(path, Buffer.from(content, "base64"));
+    raw.absolutePath = path;
+    attachmentPaths.push(path);
+  }
+  const imagePaths = [];
+  for (let index = 0; index < options.claim.images.length; index += 1) {
+    const image = options.claim.images[index];
+    const path = join4(
+      tempDir,
+      `image-${index + 1}.${extensionForMime(image.mimeType)}`
+    );
+    writeFileSync3(path, Buffer.from(image.data, "base64"));
+    imagePaths.push(path);
+  }
+  const prompt = [
+    options.basePrompt.trim(),
+    "",
+    "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
+    "",
+    "\u672C\u8F6E\u5361\u7247\u5DF2\u9886\u53D6\u3002\u4EE5\u4E0B\u4E0A\u4E0B\u6587\u662F\u552F\u4E00\u4EFB\u52A1\u8303\u56F4\uFF1B\u4E0D\u8981\u518D\u6B21\u8BFB\u53D6 Skill \u6216\u9886\u53D6\u5176\u4ED6\u5361\u7247\u3002",
+    "",
+    "## \u5361\u7247\u4E0A\u4E0B\u6587\uFF08JSON\uFF09",
+    "",
+    "```json",
+    JSON.stringify(payload, null, 2),
+    "```",
+    "",
+    "## \u4E34\u65F6\u9644\u4EF6\u7EDD\u5BF9\u8DEF\u5F84",
+    "",
+    ...attachmentPaths.length === 0 ? ["- \u65E0\u6587\u4EF6\u9644\u4EF6"] : attachmentPaths.map((path) => `- \u6587\u4EF6\uFF1A${path}`),
+    ...imagePaths.length === 0 ? ["- \u65E0\u56FE\u7247\u4E34\u65F6\u8DEF\u5F84"] : imagePaths.map((path) => `- \u56FE\u7247\uFF1A${path}`),
+    "",
+    "\u8FD9\u4E9B\u8DEF\u5F84\u4F4D\u4E8E\u7CFB\u7EDF\u4E34\u65F6\u4F1A\u8BDD\u76EE\u5F55\uFF0C\u53EA\u5728\u672C\u8F6E\u6709\u6548\uFF1B\u4E0D\u8981\u590D\u5236\u5230\u4ED3\u5E93\u3002",
+    "",
+    "## \u5DF2\u7F13\u5B58\u7684 docs/Architecture.md",
+    "",
+    options.architecture.trim(),
+    "",
+    "Worker \u5DF2\u5728\u6279\u6B21\u5F00\u59CB\u65F6\u8BFB\u53D6\u4EE5\u4E0A\u67B6\u6784\u6587\u6863\uFF0C\u672C\u8F6E\u4E0D\u8981\u91CD\u590D\u8BFB\u53D6\u3002"
+  ].join("\n");
+  return {
+    prompt,
+    images: options.claim.images,
+    attachmentPaths: [...attachmentPaths, ...imagePaths],
+    tempDir,
+    cleanup: () => {
+      rmSync2(tempDir, { recursive: true, force: true });
+    }
+  };
+}
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function safeFileName(value, fallback) {
+  const normalized = value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/g, "").trim();
+  return normalized || fallback;
+}
+function uniquePath(root, fileName) {
+  const path = join4(root, fileName);
+  if (!isAbsolute(path)) throw new Error("\u4E34\u65F6\u9644\u4EF6\u8DEF\u5F84\u4E0D\u662F\u7EDD\u5BF9\u8DEF\u5F84");
+  return path;
+}
+function extensionForMime(mimeType) {
+  switch (mimeType.toLowerCase()) {
+    case "image/png":
+      return "png";
+    case "image/gif":
+      return "gif";
+    case "image/webp":
+      return "webp";
+    default:
+      return "jpg";
+  }
+}
+
+// src/verification_runner.ts
+import { spawn as spawn3 } from "node:child_process";
+import { isAbsolute as isAbsolute2, relative, resolve, sep } from "node:path";
+var DEFAULT_VERIFICATION_TIMEOUT_MS = 10 * 6e4;
+var MAX_VERIFICATION_TIMEOUT_MS = 15 * 6e4;
+var MAX_OUTPUT_CHARS = 16e3;
+async function runVerificationCommand(item, repoRoot) {
+  const startedAt = Date.now();
+  const timeoutMs = clampTimeout(item.timeoutMs);
+  const expectedExitCode = Number.isInteger(item.expectedExitCode) ? item.expectedExitCode : 0;
+  const commandCwd = item.cwd?.trim() || ".";
+  const commandSummary = summarizeCommand(item.executable, item.args);
+  let resolvedCwd;
+  try {
+    resolvedCwd = resolveCommandCwd(repoRoot, commandCwd);
+  } catch (error) {
+    return {
+      commandSummary,
+      executable: item.executable,
+      args: [...item.args],
+      cwd: commandCwd,
+      exitCode: -1,
+      durationMs: Date.now() - startedAt,
+      output: error instanceof Error ? error.message : String(error),
+      timedOut: false,
+      passed: false
+    };
+  }
+  return new Promise((resolve3) => {
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let settled = false;
+    const child = spawn3(item.executable, item.args, {
+      cwd: resolvedCwd,
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    child.stdout?.on("data", (chunk) => {
+      stdout = appendTruncated(stdout, String(chunk));
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr = appendTruncated(stderr, String(chunk));
+    });
+    const finish = (exitCode) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(killGrace);
+      const output = combineOutput(stdout, stderr);
+      resolve3({
+        commandSummary,
+        executable: item.executable,
+        args: [...item.args],
+        cwd: commandCwd,
+        exitCode,
+        durationMs: Date.now() - startedAt,
+        output,
+        timedOut,
+        passed: !timedOut && exitCode === expectedExitCode
+      });
+    };
+    child.on("error", (error) => {
+      stderr = appendTruncated(stderr, error.message);
+      finish(-1);
+    });
+    child.on("close", (code) => finish(timedOut ? 124 : code ?? -1));
+    let killGrace;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      terminateProcessTree(child.pid);
+      killGrace = setTimeout(() => finish(124), 3e3);
+      killGrace.unref?.();
+    }, timeoutMs);
+    timer.unref?.();
+  });
+}
+async function runVerificationCommands(commands, cwd) {
+  const results = [];
+  for (const command of commands) {
+    const result = await runVerificationCommand(command, cwd);
+    results.push(result);
+    if (!result.passed) break;
+  }
+  return results;
+}
+function clampTimeout(value) {
+  if (!Number.isFinite(value)) return DEFAULT_VERIFICATION_TIMEOUT_MS;
+  return Math.max(100, Math.min(MAX_VERIFICATION_TIMEOUT_MS, Math.trunc(value)));
+}
+function appendTruncated(current, next) {
+  const combined = current + next;
+  if (combined.length <= MAX_OUTPUT_CHARS) return combined;
+  return `\u2026\uFF08\u524D\u6587\u5DF2\u622A\u65AD\uFF09${combined.slice(-MAX_OUTPUT_CHARS)}`;
+}
+function combineOutput(stdout, stderr) {
+  const out = stdout.trim();
+  const err = stderr.trim();
+  if (!out) return err;
+  if (!err) return out;
+  return `stdout:
+${out}
+
+stderr:
+${err}`;
+}
+function terminateProcessTree(pid) {
+  if (!pid) return;
+  try {
+    if (process.platform === "win32") {
+      const killer = spawn3("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore"
+      });
+      killer.unref();
+    } else {
+      process.kill(pid, "SIGTERM");
+    }
+  } catch {
+  }
+}
+function resolveCommandCwd(repoRoot, cwd) {
+  const root = resolve(repoRoot);
+  if (isAbsolute2(cwd)) {
+    throw new Error(`\u9A8C\u8BC1 cwd \u5FC5\u987B\u662F\u4ED3\u5E93\u5185\u76F8\u5BF9\u8DEF\u5F84\uFF1A${cwd}`);
+  }
+  const target = resolve(root, cwd);
+  const relation = relative(root, target);
+  if (relation === ".." || relation.startsWith(`..${sep}`) || isAbsolute2(relation)) {
+    throw new Error(`\u9A8C\u8BC1 cwd \u9003\u51FA\u4ED3\u5E93\uFF1A${cwd}`);
+  }
+  return target;
+}
+function summarizeCommand(executable, args) {
+  return [executable, ...args].map((part) => /\s|"/.test(part) ? JSON.stringify(part) : part).join(" ");
+}
+
+// src/run_batch.ts
+var SCOPED_TOOL_NAMES = [
+  "block_card",
+  "ready_to_submit",
+  "submit_consultation"
+];
+var defaultDependencies = {
+  connectMcp: async (endpoint) => {
+    const client = new KanbanMcpClient();
+    await client.connect(endpoint);
+    return client;
+  },
+  inspectGit: inspectGitWorkingTree,
+  readArchitecture: readBatchArchitecture,
+  createContext: createSessionContext,
+  runAgent: (roundJob, cancellation) => roundJob.engine === "codex" ? runCodex(roundJob, cancellation) : runCursor(roundJob, cancellation),
+  runVerification: runVerificationCommands
+};
+async function runBatch(job, cancellation, dependencies = defaultDependencies) {
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
+  const architecture = dependencies.readArchitecture(job.cwd);
+  const mcp = await dependencies.connectMcp(job.mcpEndpoint);
   let processedCards = 0;
   workerLog(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
   const cancelledResult = () => ({
@@ -1090,8 +1450,16 @@ async function runBatch(job, cancellation) {
     processedCards
   });
   try {
-    await mcp.connect(job.mcpEndpoint);
-    workerLog("Worker \u5DF2\u8FDE\u63A5\u770B\u677F MCP\uFF1BWorker \u53EA\u8BFB\u68C0\u67E5\u961F\u5217\uFF0CSkill \u81EA\u5DF1\u9886\u53D6\u5361\u7247");
+    workerLog("Worker \u5DF2\u8FDE\u63A5\u5B8C\u6574\u770B\u677F MCP\uFF0C\u6B63\u5728\u6062\u590D\u672A\u5B8C\u6210\u6536\u5C3E");
+    const recovery = await recoverPendingSessions(
+      mcp,
+      job,
+      dependencies
+    );
+    if (!recovery.ok) {
+      return { ...recovery, processedCards };
+    }
+    processedCards += recovery.processedCards ?? 0;
     for (let index = 1; index <= limit; index += 1) {
       if (cancellation?.shouldStopAfterCurrentSession) {
         return cancellation.isCancelled ? cancelledResult() : drainedResult();
@@ -1101,149 +1469,371 @@ async function runBatch(job, cancellation) {
         ...job.projectId ? { projectId: job.projectId } : {}
       });
       if (peek.found !== true) {
-        workerLog(`[success] Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u65E0\u66F4\u591A\u5361\u7247\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`);
-        return {
-          ok: true,
-          summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u5904\u7406 ${processedCards} \u5F20\uFF0C\u5F53\u524D\u65E0\u66F4\u591A\u5361\u7247`,
-          processedCards
-        };
+        return completedResult(processedCards, "\u5F53\u524D\u65E0\u66F4\u591A\u5361\u7247");
       }
-      const tree = inspectGitWorkingTree(job.cwd);
-      if (tree.kind === "dirty") {
-        workerLog(`Git \u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u672A\u521B\u5EFA Skill \u4F1A\u8BDD`);
-        return {
-          ok: false,
-          error: `\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u672A\u521B\u5EFA Skill \u4F1A\u8BDD\uFF1A
-${tree.output}`,
-          processedCards
-        };
+      const treeError = gitPreflightError(dependencies.inspectGit(job.cwd));
+      if (treeError) {
+        return { ok: false, error: treeError, processedCards };
       }
-      if (tree.kind === "unknown") {
-        workerLog(`\u65E0\u6CD5\u5224\u65AD Git \u5DE5\u4F5C\u533A\uFF1A${tree.output}`);
-        return {
-          ok: false,
-          error: `\u65E0\u6CD5\u5224\u65AD Git \u5DE5\u4F5C\u533A\uFF0C\u672A\u521B\u5EFA Skill \u4F1A\u8BDD\uFF1A${tree.output}`,
-          processedCards
-        };
-      }
-      workerLog(
-        tree.kind === "not_git" ? "\u5F53\u524D\u76EE\u5F55\u4E0D\u7531 Git \u7BA1\u7406\uFF0C\u8DF3\u8FC7\u5DE5\u4F5C\u533A\u68C0\u67E5" : "Git \u5DE5\u4F5C\u533A\u5E72\u51C0"
+      const expectedCardId = String(peek.cardId ?? "").trim();
+      const claim = parseClaimResult(
+        await mcp.callRaw("dispatch_claim_next_card", {
+          workerToken: job.workerToken,
+          ...expectedCardId ? { expectedCardId } : {}
+        })
       );
-      await mcp.callJson("dispatch_begin_agent_session", {
-        workerToken: job.workerToken
-      });
-      workerLog("Worker \u68C0\u67E5\u7ED3\u679C\uFF1A\u8FD8\u6709\u5361\u7247\uFF1B\u6B63\u5728\u521B\u5EFA\u5168\u65B0\u7684 Skill \u4F1A\u8BDD");
-      const roundJob = mergeJobWithCardOverrides(job, peek);
-      if (roundJob.engine !== job.engine || roundJob.model !== job.model || JSON.stringify(roundJob.modelParams ?? []) !== JSON.stringify(job.modelParams ?? [])) {
-        workerLog(
-          `\u672C\u5361\u8986\u76D6\uFF1Aengine=${roundJob.engine} model=${roundJob.model ?? "(\u5E73\u53F0\u9ED8\u8BA4)"} params=${JSON.stringify(roundJob.modelParams ?? [])} cardId=${String(peek.cardId ?? "")}`
-        );
+      if (claim.payload.found !== true) {
+        return completedResult(processedCards, "claim \u65F6\u961F\u5217\u5DF2\u4E3A\u7A7A");
       }
-      const result = roundJob.engine === "codex" ? await runCodex(roundJob, cancellation) : await runCursor(roundJob, cancellation);
-      if (cancellation?.isSkipRequested) {
-        cancellation.clearSkipRequest();
-        workerLog(
-          "[warn] \u7528\u6237\u8BF7\u6C42\u8DF3\u8FC7\u5F53\u524D\u5361\u7247\uFF0C\u7EC8\u6B62\u672C\u8F6E\u4F1A\u8BDD\u5E76\u7EE7\u7EED\u4E0B\u4E00\u5F20"
-        );
-        continue;
-      }
-      if (cancellation?.isCancelled) {
-        return cancelledResult();
-      }
-      if (!result.ok) {
-        if (result.error === "\u5DF2\u53D6\u6D88") return cancelledResult();
-        if (result.error === "\u5DF2\u8DF3\u8FC7") {
-          cancellation?.clearSkipRequest();
-          workerLog(
-            "[warn] \u7528\u6237\u8BF7\u6C42\u8DF3\u8FC7\u5F53\u524D\u5361\u7247\uFF0C\u7EC8\u6B62\u672C\u8F6E\u4F1A\u8BDD\u5E76\u7EE7\u7EED\u4E0B\u4E00\u5F20"
+      const cardId = requiredString(claim.payload, "cardId");
+      const sessionId = requiredString(claim.payload, "sessionId");
+      const agentEndpointUrl = requiredString(
+        claim.payload,
+        "agentEndpointUrl"
+      );
+      let scoped;
+      let context;
+      let terminalRecorded = false;
+      try {
+        scoped = await dependencies.connectMcp(agentEndpointUrl);
+        const tools = await scoped.listTools();
+        if (JSON.stringify(tools) !== JSON.stringify(SCOPED_TOOL_NAMES)) {
+          throw new Error(
+            `scoped MCP \u5DE5\u5177\u95E8\u7981\u5931\u8D25\uFF1A\u5B9E\u9645=${tools.join(",")}\uFF0C\u671F\u671B=${SCOPED_TOOL_NAMES.join(",")}`
           );
+        }
+        context = dependencies.createContext({
+          basePrompt: job.prompt,
+          architecture,
+          claim
+        });
+        const overridden = mergeJobWithCardOverrides(job, claim.payload);
+        const roundJob = {
+          ...overridden,
+          prompt: context.prompt,
+          round: {
+            cardId,
+            sessionId,
+            agentEndpointUrl,
+            images: context.images,
+            attachmentPaths: context.attachmentPaths
+          }
+        };
+        logModelOverride(job, roundJob, cardId);
+        const agentResult = await dependencies.runAgent(roundJob, cancellation);
+        if (cancellation?.isSkipRequested || agentResult.error === "\u5DF2\u8DF3\u8FC7") {
+          cancellation?.clearSkipRequest();
+          await mcp.callJson("dispatch_skip_agent_session", {
+            workerToken: job.workerToken,
+            sessionId,
+            reason: "\u7528\u6237\u8BF7\u6C42\u8DF3\u8FC7\u5F53\u524D\u5361\u7247"
+          });
+          terminalRecorded = true;
+          const afterSkip = dependencies.inspectGit(job.cwd);
+          if (afterSkip.kind === "dirty") {
+            return {
+              ok: false,
+              error: `\u8DF3\u8FC7\u540E\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
+${afterSkip.output}`,
+              processedCards
+            };
+          }
+          if (afterSkip.kind === "unknown") {
+            return {
+              ok: false,
+              error: `\u8DF3\u8FC7\u540E\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF1A${afterSkip.output}`,
+              processedCards
+            };
+          }
           continue;
         }
-        return {
-          ok: false,
-          error: result.error ?? `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u5931\u8D25`,
-          processedCards
-        };
-      }
-      workerLog("Worker \u5DF2\u786E\u8BA4 Agent \u4F1A\u8BDD\u7ED3\u675F\uFF0C\u6B63\u5728\u8BFB\u53D6\u672C\u8F6E\u5361\u7247\u72B6\u6001");
-      const session = await mcp.callJson("dispatch_agent_session_status", {
-        workerToken: job.workerToken
-      });
-      const cardId = String(session.cardId ?? "").trim();
-      const projectId = String(session.projectId ?? job.projectId ?? "").trim();
-      const deniedPickCount = Number(session.deniedPickCount ?? 0);
-      if (deniedPickCount > 0) {
-        return {
-          ok: false,
-          error: `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u91CD\u590D\u8C03\u7528\u4E86 pick_next_card\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
-          processedCards
-        };
-      }
-      if (session.pickClaimed !== true || !cardId) {
-        return {
-          ok: false,
-          error: `\u7B2C ${index} \u6B21 Skill \u4F1A\u8BDD\u6CA1\u6709\u6210\u529F\u9886\u53D6\u4E00\u5F20\u5361\u7247\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
-          processedCards
-        };
-      }
-      let latest;
-      try {
-        latest = await mcp.callJson("get_card", {
+        if (cancellation?.isCancelled || agentResult.error === "\u5DF2\u53D6\u6D88") {
+          await recordRoundFailure(
+            mcp,
+            job,
+            sessionId,
+            "\u7528\u6237\u53D6\u6D88\u5F53\u524D Agent \u4F1A\u8BDD",
+            true
+          );
+          terminalRecorded = true;
+          return cancelledResult();
+        }
+        if (!agentResult.ok) {
+          await mcp.callJson("dispatch_fail_agent_session", {
+            workerToken: job.workerToken,
+            sessionId,
+            reason: agentResult.error ?? "Agent \u4F1A\u8BDD\u5931\u8D25"
+          });
+          terminalRecorded = true;
+          return {
+            ok: false,
+            error: agentResult.error ?? `\u7B2C ${index} \u6B21 Agent \u4F1A\u8BDD\u5931\u8D25`,
+            processedCards
+          };
+        }
+        const status = await mcp.callJson("dispatch_agent_session_status", {
+          workerToken: job.workerToken
+        });
+        assertSessionMatches(status, sessionId, cardId);
+        const projectId = String(
+          status.projectId ?? claim.payload.projectId ?? job.projectId ?? ""
+        ).trim();
+        const latest = await mcp.callJson("get_card", {
           cardId,
           ...projectId ? { projectId } : {}
         });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        workerLog(
-          `[warn] Worker \u65E0\u6CD5\u8BFB\u53D6\u672C\u8F6E\u5361\u7247\u72B6\u6001\uFF08${message}\uFF09\uFF1B\u53EF\u80FD\u5361\u7247\u5DF2\u88AB\u5220\u9664\uFF0C\u8DF3\u8FC7\u672C\u8F6E\u5E76\u7EE7\u7EED\u4E0B\u4E00\u5F20`
+        const state = cardState(latest);
+        const pending = asRecord3(status.pending);
+        if (state === "blocked") {
+          return {
+            ok: false,
+            error: `\u5361\u7247 ${cardId} \u5DF2\u8FDB\u5165\u963B\u585E\u4E2D\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
+            processedCards
+          };
+        }
+        if (state === "verify" && pending == null) {
+          processedCards += 1;
+          workerLog(`[success] \u54A8\u8BE2\u5361 ${cardId} \u5DF2\u9001\u4EA4\u9A8C\u8BC1`);
+          continue;
+        }
+        if (!pending || pending.status !== "declared") {
+          await recordRoundFailure(
+            mcp,
+            job,
+            sessionId,
+            `\u5B9E\u65BD\u5361 ${cardId} \u672A\u58F0\u660E ready_to_submit`
+          );
+          terminalRecorded = true;
+          return {
+            ok: false,
+            error: `\u5B9E\u65BD\u5361 ${cardId} \u672A\u58F0\u660E ready_to_submit`,
+            processedCards
+          };
+        }
+        const finalized = await validateAndFinalize(
+          mcp,
+          job,
+          pending,
+          dependencies
         );
-        continue;
-      }
-      const state = cardState(latest);
-      workerLog(
-        `Worker \u72B6\u6001\u68C0\u67E5\uFF1AcardId=${cardId} column=${String(latest.columnName ?? latest.columnId ?? "\u672A\u77E5")}`
-      );
-      if (state === "blocked") {
-        return {
-          ok: false,
-          error: `\u5361\u7247 ${cardId} \u5DF2\u8FDB\u5165\u963B\u585E\u4E2D\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
-          processedCards
-        };
-      }
-      if (state !== "verify") {
-        return {
-          ok: false,
-          error: `\u5361\u7247 ${cardId} \u672A\u8FDB\u5165\u5F85\u9A8C\u8BC1\uFF0CWorker \u5224\u5B9A\u672C\u8F6E\u672A\u5B8C\u6210\u5E76\u505C\u6B62\u6279\u6B21`,
-          processedCards
-        };
-      }
-      processedCards += 1;
-      workerLog(`[success] Worker \u786E\u8BA4\u7B2C ${index} \u6B21 Skill \u53EA\u5904\u7406\u4E00\u5F20\u4E14\u5DF2\u9001\u9A8C\uFF1B\u4F1A\u8BDD\u5DF2\u91CA\u653E`);
-      if (cancellation?.shouldStopAfterCurrentSession) {
-        return cancellation.isCancelled ? cancelledResult() : drainedResult();
+        if (!finalized.ok) {
+          if (!terminalRecorded) {
+            await recordRoundFailure(
+              mcp,
+              job,
+              sessionId,
+              finalized.error ?? "Worker \u6536\u5C3E\u5931\u8D25"
+            );
+            terminalRecorded = true;
+          }
+          return { ...finalized, processedCards };
+        }
+        terminalRecorded = true;
+        processedCards += 1;
+        workerLog(`[success] \u5361\u7247 ${cardId} \u5DF2\u9A8C\u8BC1\u3001\u63D0\u4EA4\u5E76\u9001\u4EA4\u4EBA\u5DE5\u9A8C\u8BC1`);
+        if (cancellation?.shouldStopAfterCurrentSession) {
+          return cancellation.isCancelled ? cancelledResult() : drainedResult();
+        }
+      } catch (error) {
+        const reason = error instanceof WorkerCancelledError ? "\u7528\u6237\u53D6\u6D88\u5F53\u524D Agent \u4F1A\u8BDD" : `Agent \u4F1A\u8BDD\u5F02\u5E38\uFF1A${error instanceof Error ? error.message : String(error)}`;
+        if (!terminalRecorded) {
+          await recordRoundFailure(
+            mcp,
+            job,
+            sessionId,
+            reason,
+            error instanceof WorkerCancelledError
+          );
+        }
+        const tree = dependencies.inspectGit(job.cwd);
+        const dirtySuffix = tree.kind === "dirty" ? `
+\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
+${tree.output}` : tree.kind === "unknown" ? `
+\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A${tree.output}` : "";
+        return error instanceof WorkerCancelledError ? cancelledResult() : { ok: false, error: `${reason}${dirtySuffix}`, processedCards };
+      } finally {
+        context?.cleanup();
+        await scoped?.close().catch(() => void 0);
+        await mcp.callJson("dispatch_close_agent_session", {
+          workerToken: job.workerToken
+        }).catch(() => void 0);
       }
     }
-    workerLog(`[success] Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u8FBE\u5230\u4E0A\u9650\u5E76\u5904\u7406 ${processedCards} \u5F20`);
-    return {
-      ok: true,
-      summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A\u5DF2\u8FBE\u5230\u4E0A\u9650\u5E76\u5904\u7406 ${processedCards} \u5F20`,
-      processedCards
-    };
-  } catch (err) {
-    if (err instanceof WorkerCancelledError) {
-      return cancelledResult();
-    }
-    throw err;
+    return completedResult(processedCards, "\u5DF2\u8FBE\u5230\u6279\u6B21\u4E0A\u9650");
+  } catch (error) {
+    if (error instanceof WorkerCancelledError) return cancelledResult();
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message, processedCards };
   } finally {
-    workerLog("Worker \u6B63\u5728\u5173\u95ED\u770B\u677F MCP \u8FDE\u63A5\u2026");
     await mcp.close().catch(() => void 0);
-    workerLog("Worker \u5DF2\u5173\u95ED\u770B\u677F MCP \u8FDE\u63A5");
+    workerLog("Worker \u5DF2\u5173\u95ED\u5B8C\u6574\u770B\u677F MCP \u8FDE\u63A5");
   }
+}
+async function recoverPendingSessions(mcp, job, dependencies) {
+  const listed = await mcp.callJson("dispatch_list_pending", {
+    workerToken: job.workerToken
+  });
+  const pending = Array.isArray(listed.pending) ? listed.pending : [];
+  let processedCards = 0;
+  for (const raw of pending) {
+    const record = asRecord3(raw);
+    if (!record) continue;
+    const sessionId = requiredString(record, "sessionId");
+    const recovered = await mcp.callJson("dispatch_recover", {
+      workerToken: job.workerToken,
+      sessionId
+    });
+    const result = await validateAndFinalize(
+      mcp,
+      job,
+      recovered,
+      dependencies
+    );
+    if (!result.ok) return { ...result, processedCards };
+    processedCards += 1;
+    workerLog(`[success] \u5DF2\u6062\u590D pending \u4F1A\u8BDD ${sessionId}`);
+  }
+  return { ok: true, processedCards };
+}
+async function validateAndFinalize(mcp, job, pending, dependencies) {
+  const sessionId = requiredString(pending, "sessionId");
+  const cardId = requiredString(pending, "cardId");
+  let status = String(pending.status ?? "");
+  if (status === "declared") {
+    const manualReason = String(pending.manualVerificationReason ?? "").trim();
+    const commands = parseVerificationCommands(pending.verificationCommands);
+    const results = manualReason ? [] : await dependencies.runVerification(commands, job.cwd);
+    const failed = results.find((item) => !item.passed);
+    const recorded = await mcp.callJson("dispatch_record_validation_results", {
+      workerToken: job.workerToken,
+      sessionId,
+      results: results.map(({
+        commandSummary,
+        executable,
+        args,
+        cwd,
+        exitCode,
+        durationMs,
+        timedOut,
+        output
+      }) => ({
+        commandSummary,
+        executable,
+        args,
+        cwd,
+        exitCode,
+        durationMs,
+        timedOut,
+        output
+      }))
+    });
+    status = String(recorded.status ?? "");
+    if (failed) {
+      const reason = failed.timedOut ? `\u9A8C\u8BC1\u547D\u4EE4\u8D85\u65F6\uFF1A${failed.commandSummary}` : `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${failed.exitCode}\uFF09\uFF1A${failed.commandSummary}`;
+      await mcp.callJson("dispatch_block_agent_session", {
+        workerToken: job.workerToken,
+        sessionId,
+        reason
+      });
+      return { ok: false, error: reason };
+    }
+  }
+  if (!["validated", "committing", "committed", "finalized"].includes(status)) {
+    return { ok: false, error: `pending \u72B6\u6001\u65E0\u6CD5\u6062\u590D\uFF1A${status || "\u672A\u77E5"}` };
+  }
+  const finalized = await mcp.callJson("dispatch_finalize", {
+    workerToken: job.workerToken,
+    sessionId
+  });
+  if (finalized.status !== "finalized" || String(finalized.sessionId ?? "") !== sessionId || String(finalized.cardId ?? "") !== cardId) {
+    return { ok: false, error: `dispatch_finalize \u8FD4\u56DE\u72B6\u6001\u4E0D\u4E00\u81F4\uFF1A${sessionId}` };
+  }
+  return { ok: true };
+}
+function parseVerificationCommands(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const record = asRecord3(item);
+    if (!record) throw new Error("verificationCommands \u683C\u5F0F\u65E0\u6548");
+    return {
+      executable: requiredString(record, "executable"),
+      args: parseStringArray(record.args, "verificationCommands.args"),
+      cwd: String(record.cwd ?? ".").trim() || ".",
+      expectedExitCode: Number(record.expectedExitCode ?? 0),
+      ...Number.isFinite(record.timeoutMs) ? { timeoutMs: Number(record.timeoutMs) } : {}
+    };
+  });
+}
+function parseStringArray(raw, field) {
+  if (!Array.isArray(raw) || raw.some((item) => typeof item !== "string")) {
+    throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${field} \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6570\u7EC4`);
+  }
+  return [...raw];
+}
+async function recordRoundFailure(mcp, job, sessionId, reason, block = false) {
+  await mcp.callJson(
+    block ? "dispatch_block_agent_session" : "dispatch_fail_agent_session",
+    {
+      workerToken: job.workerToken,
+      sessionId,
+      reason
+    }
+  ).catch((error) => {
+    workerLog(
+      `[warning] \u8BB0\u5F55\u4F1A\u8BDD\u5931\u8D25\u72B6\u6001\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`
+    );
+  });
+}
+function assertSessionMatches(status, sessionId, cardId) {
+  if (status.sessionOpen !== true || status.pickClaimed !== true || String(status.sessionId ?? "") !== sessionId || String(status.cardId ?? "") !== cardId) {
+    throw new Error(`Agent \u4F1A\u8BDD\u72B6\u6001\u4E0E claim \u4E0D\u4E00\u81F4\uFF1A${sessionId}/${cardId}`);
+  }
+}
+function cardState(card) {
+  const columnId = String(card.columnId ?? "");
+  const columnName = String(card.columnName ?? "");
+  if (columnId === "verify" || columnName === "\u5F85\u9A8C\u8BC1") return "verify";
+  if (columnId === "blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
+  return "active";
+}
+function gitPreflightError(tree) {
+  if (tree.kind === "dirty") {
+    return `\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u672A\u9886\u53D6\u5361\u7247\uFF1A
+${tree.output}`;
+  }
+  if (tree.kind === "unknown") {
+    return `\u65E0\u6CD5\u5224\u65AD Git \u5DE5\u4F5C\u533A\uFF0C\u672A\u9886\u53D6\u5361\u7247\uFF1A${tree.output}`;
+  }
+  return void 0;
+}
+function requiredString(record, key) {
+  const value = String(record[key] ?? "").trim();
+  if (!value) throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${key} \u4E0D\u80FD\u4E3A\u7A7A`);
+  return value;
+}
+function asRecord3(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function completedResult(processedCards, reason) {
+  workerLog(`[success] Worker \u6279\u6B21\u5B8C\u6210\uFF1A${reason}\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`);
+  return {
+    ok: true,
+    summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A${reason}\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`,
+    processedCards
+  };
+}
+function logModelOverride(original, round, cardId) {
+  if (round.engine === original.engine && round.model === original.model && JSON.stringify(round.modelParams ?? []) === JSON.stringify(original.modelParams ?? [])) {
+    return;
+  }
+  workerLog(
+    `\u672C\u5361\u8986\u76D6\uFF1Aengine=${round.engine} model=${round.model ?? "(\u5E73\u53F0\u9ED8\u8BA4)"} params=${JSON.stringify(round.modelParams ?? [])} cardId=${cardId}`
+  );
 }
 
 // src/cli.ts
 function sleep(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, ms));
+  return new Promise((resolve3) => setTimeout(resolve3, ms));
 }
 function isRetryableError(err) {
   if (err && typeof err === "object") {
@@ -1290,7 +1880,7 @@ async function withRetry(operation, fn, options) {
   throw lastError;
 }
 function writeResult(outPath, result) {
-  writeFileSync3(outPath, JSON.stringify(result, null, 2), "utf8");
+  writeFileSync4(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 function normalizeModelParameterValues(input) {
   if (!Array.isArray(input)) return [];
@@ -1358,7 +1948,7 @@ async function listModels(engine) {
 `);
 }
 async function runJob(jobPath) {
-  const job = JSON.parse(readFileSync2(jobPath, "utf8"));
+  const job = JSON.parse(readFileSync3(jobPath, "utf8"));
   if (!job.outPath) {
     throw new Error("job.outPath \u5FC5\u586B");
   }
@@ -1374,14 +1964,6 @@ async function runJob(jobPath) {
   }
   if (!job.mcpEndpoint?.trim()) {
     writeResult(job.outPath, { ok: false, error: "mcpEndpoint \u4E0D\u80FD\u4E3A\u7A7A" });
-    process.exitCode = 2;
-    return;
-  }
-  if (!job.agentMcpEndpoint?.trim()) {
-    writeResult(job.outPath, {
-      ok: false,
-      error: "agentMcpEndpoint \u4E0D\u80FD\u4E3A\u7A7A"
-    });
     process.exitCode = 2;
     return;
   }
@@ -1442,7 +2024,7 @@ async function main() {
       "\u7528\u6CD5: node cli.js --job <job.json> | --list-models | --usage"
     );
   }
-  await runJob(resolve(argv[idx + 1]));
+  await runJob(resolve2(argv[idx + 1]));
 }
 main().catch((err) => {
   console.error(err);

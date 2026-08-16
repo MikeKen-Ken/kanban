@@ -63,8 +63,13 @@ extension BoardControllerLifecycle on BoardController {
   }
 
   Future<void> _rescheduleReminders() async {
-    final workspace = await _loadWorkspaceSnapshot();
-    await _reminderScheduler.rescheduleAll(workspace.boards);
+    try {
+      final workspace = await _loadWorkspaceSnapshot();
+      await _reminderScheduler.rescheduleAll(workspace.boards);
+    } catch (error) {
+      // 启动时未等待；测试销毁临时目录或控制器已释放时不应变成未捕获异常。
+      debugPrint('调度提醒时工作区不可用：$error');
+    }
   }
 
   /// 调度前若通知未开，再申请一次（用户正在设置提醒时）。

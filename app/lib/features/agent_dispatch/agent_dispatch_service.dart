@@ -21,7 +21,7 @@ import 'agent_dispatch_prompt.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
-/// 启动一次 Worker 批次；Worker 只调度，每轮 Agent 按 Skill 自己取一张卡。
+/// 启动一次 Worker 批次；每轮由 Worker 原子 claim 后创建 scoped Agent 会话。
 ///
 /// 每个看板项目一份实例，由 [AgentDispatchRegistry] 持有。
 /// 关闭工作台只隐藏窗口，不会终止批次；日志与运行状态由本服务持有。
@@ -236,7 +236,7 @@ class AgentDispatchService {
     required AgentDispatchRunOptions options,
     required String skillPath,
     required String mcpEndpoint,
-    String? agentMcpEndpoint,
+    required Future<void> Function(String workerToken) closeScopedEndpoint,
     String? workerScriptPath,
     int queueSize = 0,
     List<AgentDispatchAfterStep> afterQueue = const [],
@@ -274,7 +274,7 @@ class AgentDispatchService {
         options: options,
         skillPath: skillPath,
         mcpEndpoint: mcpEndpoint,
-        agentMcpEndpoint: agentMcpEndpoint,
+        closeScopedEndpoint: closeScopedEndpoint,
         workerScriptPath: workerScriptPath,
         onLog: onLog,
         onWorkerInvoked: () => workerInvoked = true,
@@ -319,14 +319,11 @@ class AgentDispatchService {
     required AgentDispatchRunOptions options,
     required String skillPath,
     required String mcpEndpoint,
-    String? agentMcpEndpoint,
+    required Future<void> Function(String workerToken) closeScopedEndpoint,
     String? workerScriptPath,
     void Function(AgentDispatchLogEntry entry)? onLog,
     void Function()? onWorkerInvoked,
   }) async {
-    if (agentMcpEndpoint == null || agentMcpEndpoint.trim().isEmpty) {
-      return const AgentWorkerResult(ok: false, error: '缺少调度 Skill MCP 端点');
-    }
     final repo = options.repoPath.trim();
     if (repo.isEmpty) {
       return const AgentWorkerResult(ok: false, error: '请填写代码仓库路径');
@@ -363,7 +360,7 @@ class AgentDispatchService {
 
     log('项目：${options.projectTitle ?? boundProjectId}');
     log('仓库：$repo');
-    log('策略：每张卡片创建一次独立 Agent 调用；上限 ${options.cardLimit.label}');
+    log('策略：Worker 原子领卡，每张卡片创建一次独立 Agent 调用；上限 ${options.cardLimit.label}');
 
     String? cursorApiKey;
     try {
@@ -399,7 +396,7 @@ class AgentDispatchService {
       projectId: boundProjectId,
     );
     log('批次 id：$runId');
-    log('Worker 只读检查队列；每轮由全新 Skill 会话自己领取并处理一张卡');
+    log('Worker 每轮先原子领取卡片，再启动绑定卡片的 scoped Agent 会话');
     final stopwatch = Stopwatch()..start();
     late AgentWorkerResult result;
     McpDispatchCardGate.instance.beginBatch(
@@ -413,13 +410,13 @@ class AgentDispatchService {
         cwd: repo,
         prompt: prompt,
         mcpEndpoint: mcpEndpoint,
-        agentMcpEndpoint: agentMcpEndpoint,
         projectId: boundProjectId,
         cardLimit: cardLimit,
         workerToken: workerToken,
         model: options.modelId,
         modelParams: options.modelParams,
         engineDefaults: options.engineDefaultsJobJson(),
+        allowHighReasoning: options.allowHighReasoning,
         cursorApiKey: cursorApiKey,
         workerScriptPath: workerScriptPath,
         onProcessStarted: (worker) {
@@ -440,7 +437,16 @@ class AgentDispatchService {
     } catch (error) {
       result = AgentWorkerResult(ok: false, error: 'Worker 启动或通信失败：$error');
     } finally {
-      McpDispatchCardGate.instance.endBatch(workerToken);
+      try {
+        await closeScopedEndpoint(workerToken);
+      } catch (error) {
+        log(
+          '回收 scoped MCP 端点失败：$error',
+          level: AgentDispatchLogLevel.warning,
+        );
+      } finally {
+        McpDispatchCardGate.instance.endBatch(workerToken);
+      }
       _activeWorker = null;
       _activeWorkerToken = null;
       stopwatch.stop();

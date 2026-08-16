@@ -9,6 +9,7 @@ class McpSubmissionSnapshot {
     required this.cardId,
     required this.workMode,
     required this.suggestedCommitMessage,
+    this.incompleteChecklistIds = const [],
     this.incompleteFeedbackIds = const [],
     required this.capturedAt,
   });
@@ -17,6 +18,7 @@ class McpSubmissionSnapshot {
   final String cardId;
   final String workMode;
   final String suggestedCommitMessage;
+  final List<String> incompleteChecklistIds;
   final List<String> incompleteFeedbackIds;
   final int capturedAt;
 
@@ -25,6 +27,8 @@ class McpSubmissionSnapshot {
         'cardId': cardId,
         'workMode': workMode,
         'suggestedCommitMessage': suggestedCommitMessage,
+        if (incompleteChecklistIds.isNotEmpty)
+          'incompleteChecklistIds': incompleteChecklistIds,
         if (incompleteFeedbackIds.isNotEmpty)
           'incompleteFeedbackIds': incompleteFeedbackIds,
         'capturedAt': capturedAt,
@@ -40,6 +44,10 @@ class McpSubmissionSnapshot {
       cardId: json['cardId'] as String,
       workMode: workMode,
       suggestedCommitMessage: json['suggestedCommitMessage'] as String,
+      incompleteChecklistIds:
+          (json['incompleteChecklistIds'] as List? ?? const [])
+              .whereType<String>()
+              .toList(growable: false),
       incompleteFeedbackIds:
           (json['incompleteFeedbackIds'] as List? ?? const [])
               .whereType<String>()

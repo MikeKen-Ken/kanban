@@ -21,6 +21,7 @@ void main() {
     });
     expect(settings.cardLimitMax, isTrue);
     expect(settings.runAfterQueueOnFailure, isTrue);
+    expect(settings.allowHighReasoning, isFalse);
     expect(
       settings.toRunOptions(projectTitleOf: (_) => null).cardLimit,
       isA<AgentDispatchCardLimitMax>(),
@@ -72,8 +73,9 @@ void main() {
     expect(text, contains('Skill 正文'));
     expect(text, contains('projectId:proj-1'));
     expect(text, contains('禁止搜索'));
-    expect(text, contains('禁止任何 git 命令'));
-    expect(text, contains('commit_and_submit_card'));
+    expect(text, contains('ready_to_submit'));
+    expect(text, contains('禁止调用 pick_next_card'));
+    expect(text, isNot(contains('commit_and_submit_card')));
     expect(text, isNot(contains('name:')));
     expect(text, isNot(contains('dispatchSessionId')));
     expect(text, isNot(contains('CARD_DONE')));
@@ -122,6 +124,7 @@ disable-model-invocation: true
         'fast': 'true',
         'reasoning_effort': 'high',
       },
+      allowHighReasoning: true,
     );
     final opts = settings.toRunOptions(
       projectTitleOf: (id) => id == 'p1' ? '项目甲' : null,
@@ -134,6 +137,7 @@ disable-model-invocation: true
       (id: 'reasoning_effort', value: 'high'),
     ]);
     expect(opts.cardLimit, isA<AgentDispatchCardLimitMax>());
+    expect(opts.allowHighReasoning, isTrue);
     expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
     expect(opts.engineDefaults['codex']?.modelId, isNull);
   });
@@ -146,9 +150,9 @@ disable-model-invocation: true
     );
 
     final toCodex = cursor.switchEngine(AgentDispatchEngine.codex).copyWith(
-          modelId: 'gpt-5',
-          modelParamValues: {'model_reasoning_effort': 'low'},
-        );
+      modelId: 'gpt-5',
+      modelParamValues: {'model_reasoning_effort': 'low'},
+    );
     final back = toCodex.rememberActiveEngineProfile().switchEngine(
           AgentDispatchEngine.cursor,
         );
@@ -191,6 +195,7 @@ disable-model-invocation: true
     expect(roundTrip.repoPathByProject['a'], '/tmp/a');
     expect(roundTrip.repoPaths, ['/tmp/x', '/tmp/a']);
     expect(roundTrip.modelParamValues, {'fast': 'false', 'effort': 'high'});
+    expect(roundTrip.allowHighReasoning, isFalse);
     expect(original.toJson(), isNot(contains('cursorApiKey')));
   });
 

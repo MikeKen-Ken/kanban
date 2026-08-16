@@ -127,6 +127,7 @@ Future<McpGitTree> inspectMcpGitTree(
 Future<McpGitCommitOutcome> commitMcpWorkingTree({
   required String repoPath,
   required String message,
+  List<String> trailers = const [],
   McpGitRunner? runner,
 }) async {
   final repo = repoPath.trim();
@@ -174,6 +175,7 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
       'git',
       [
         'commit',
+        for (final trailer in trailers) ...['--trailer', trailer],
         '--trailer',
         'Co-authored-by: Cursor <cursoragent@cursor.com>',
         '-F',
@@ -205,6 +207,73 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
       await messageFile.delete();
     }
   }
+}
+
+Future<List<String>?> listMcpGitChangedPaths(
+  String repoPath, {
+  McpGitRunner? runner,
+}) async {
+  final run = runner ?? _defaultGitRunner;
+  final result = await run(
+    'git',
+    ['status', '--porcelain=v1', '-z'],
+    workingDirectory: repoPath.trim(),
+    environment: mcpGitEnvironment(),
+  );
+  if (result.exitCode != 0) return null;
+  final raw = '${result.stdout}';
+  final paths = <String>[];
+  for (final entry in raw.split('\x00')) {
+    if (entry.length < 4) continue;
+    final value = entry.substring(3).trim();
+    if (value.isEmpty) continue;
+    final renamed = value.contains(' -> ') ? value.split(' -> ').last : value;
+    paths.add(renamed.replaceAll('\\', '/'));
+  }
+  return paths;
+}
+
+bool isMcpSensitiveGitPath(String path) {
+  final normalized = path.replaceAll('\\', '/').toLowerCase();
+  final segments = normalized.split('/');
+  final name = segments.isEmpty ? normalized : segments.last;
+  return name == '.env' ||
+      name.startsWith('.env.') ||
+      name == 'credentials.json' ||
+      name == 'auth.json' ||
+      name == 'id_rsa' ||
+      name == 'id_rsa.pub' ||
+      name.endsWith('.pem') ||
+      name.endsWith('.key') ||
+      name.endsWith('.p12') ||
+      name.endsWith('.pfx') ||
+      segments.contains('secrets');
+}
+
+Future<String?> findMcpCommitByDispatchTrailers({
+  required String repoPath,
+  required String sessionId,
+  required String cardId,
+  McpGitRunner? runner,
+}) async {
+  final run = runner ?? _defaultGitRunner;
+  final result = await run(
+    'git',
+    [
+      'log',
+      '-1',
+      '--format=%h',
+      '--all-match',
+      '--fixed-strings',
+      '--grep=Kanban-Session: $sessionId',
+      '--grep=Kanban-Card: $cardId',
+    ],
+    workingDirectory: repoPath.trim(),
+    environment: mcpGitEnvironment(),
+  );
+  if (result.exitCode != 0) return null;
+  final value = '${result.stdout}'.trim();
+  return value.isEmpty ? null : value;
 }
 
 Future<String?> mcpGitShortHead(

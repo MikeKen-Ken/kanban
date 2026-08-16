@@ -43,6 +43,7 @@ class AgentDispatchSettings {
     this.modelId = defaultModelId,
     this.modelParamValues = defaultModelParamValues,
     this.engineProfiles = const {},
+    this.allowHighReasoning = false,
     this.cardLimitMax = true,
     this.cardLimitCount = 1,
     this.afterQueue = const [],
@@ -74,6 +75,8 @@ class AgentDispatchSettings {
   /// 各平台上次配置；切换下拉框时恢复，不互相覆盖。
   final Map<String, AgentDispatchEngineProfile> engineProfiles;
 
+  final bool allowHighReasoning;
+
   final bool cardLimitMax;
   final int cardLimitCount;
 
@@ -96,6 +99,7 @@ class AgentDispatchSettings {
     Object? modelId = _sentinel,
     Map<String, String>? modelParamValues,
     Map<String, AgentDispatchEngineProfile>? engineProfiles,
+    bool? allowHighReasoning,
     bool? cardLimitMax,
     int? cardLimitCount,
     List<AgentDispatchAfterStep>? afterQueue,
@@ -113,6 +117,7 @@ class AgentDispatchSettings {
       modelId: modelId == _sentinel ? this.modelId : modelId as String?,
       modelParamValues: modelParamValues ?? this.modelParamValues,
       engineProfiles: engineProfiles ?? this.engineProfiles,
+      allowHighReasoning: allowHighReasoning ?? this.allowHighReasoning,
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       afterQueue: afterQueue ?? this.afterQueue,
@@ -186,8 +191,7 @@ class AgentDispatchSettings {
 
   AgentDispatchRunOptions toRunOptions({
     required String? Function(String projectId) projectTitleOf,
-    Map<AgentDispatchEngine, List<AgentDispatchModelInfo>> catalogs =
-        const {},
+    Map<AgentDispatchEngine, List<AgentDispatchModelInfo>> catalogs = const {},
   }) {
     final title =
         useProject && projectId != null ? projectTitleOf(projectId!) : null;
@@ -211,6 +215,7 @@ class AgentDispatchSettings {
       modelId: modelId,
       modelParams: params,
       engineDefaults: engineDefaults,
+      allowHighReasoning: allowHighReasoning,
       cardLimit: cardLimitMax
           ? AgentDispatchCardLimit.max
           : AgentDispatchCardLimit.count(cardLimitCount),
@@ -229,6 +234,7 @@ class AgentDispatchSettings {
             for (final entry in engineProfiles.entries)
               entry.key: entry.value.toJson(),
           },
+        'allowHighReasoning': allowHighReasoning,
         'cardLimitMax': cardLimitMax,
         'cardLimitCount': cardLimitCount,
         if (afterQueue.isNotEmpty)
@@ -273,8 +279,7 @@ class AgentDispatchSettings {
       modelParamValues = Map<String, String>.from(defaultModelParamValues);
     }
     final engine = AgentDispatchEngine.fromName(json['engine'] as String?);
-    final modelId =
-        json['modelId'] as String? ?? legacyModel ?? defaultModelId;
+    final modelId = json['modelId'] as String? ?? legacyModel ?? defaultModelId;
     final profilesRaw = json['engineProfiles'] as Map<String, dynamic>?;
     final engineProfiles = <String, AgentDispatchEngineProfile>{
       if (profilesRaw != null)
@@ -298,6 +303,7 @@ class AgentDispatchSettings {
       modelId: modelId,
       modelParamValues: modelParamValues,
       engineProfiles: engineProfiles,
+      allowHighReasoning: json['allowHighReasoning'] as bool? ?? false,
       // 始终默认勾选「全部」；仅保留上次填写的张数。
       cardLimitMax: true,
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??

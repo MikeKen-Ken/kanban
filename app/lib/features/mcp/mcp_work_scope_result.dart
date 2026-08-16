@@ -7,7 +7,6 @@ import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../attachments/attachment_store.dart';
 import '../kanban/next_work_card.dart';
-import 'mcp_tool_results.dart';
 
 const _maxInlineAttachmentBytes = 20 * 1024 * 1024;
 

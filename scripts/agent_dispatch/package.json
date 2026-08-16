@@ -6,7 +6,10 @@
   "description": "本机 Cursor SDK / Codex exec worker，由看板 App 调度",
   "scripts": {
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/cli.js",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "engines": {
     "node": ">=24.18 <25"
