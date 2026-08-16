@@ -147,30 +147,37 @@ class _KanbanCardContextMenuOverlay<T> extends StatelessWidget {
         shape: popupTheme.shape ??
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         clipBehavior: Clip.antiAlias,
-        child: IntrinsicWidth(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: items,
+        child: Semantics(
+          role: SemanticsRole.menu,
+          explicitChildNodes: true,
+          container: true,
+          child: IntrinsicWidth(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: items,
+            ),
           ),
         ),
       ),
     );
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Positioned.fill(
-          child: Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (event) => _onBarrierPointerDown(context, event),
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (event) => _onBarrierPointerDown(context, event),
+            ),
           ),
-        ),
-        CustomSingleChildLayout(
-          delegate: _PopupMenuPositionDelegate(position, padding),
-          child: FadeTransition(opacity: animation, child: menuPanel),
-        ),
-      ],
+          CustomSingleChildLayout(
+            delegate: _PopupMenuPositionDelegate(position, padding),
+            child: FadeTransition(opacity: animation, child: menuPanel),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -181,13 +188,15 @@ class _PopupMenuPositionDelegate extends SingleChildLayoutDelegate {
   final RelativeRect position;
   final EdgeInsets padding;
 
+  static const double _screenPadding = 8;
+
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    return BoxConstraints.loose(
-      Size(
-        constraints.maxWidth - position.left - position.right,
-        constraints.maxHeight - position.top - position.bottom,
-      ),
+    // 锚点 RelativeRect 的 left+right / top+bottom 等于 overlay 宽高。
+    // 若用 max - left - right 作为菜单上限，宽高恒为 0，菜单不可见，
+    // 再叠加不可点击关闭的透明 barrier，界面会像卡死。
+    return BoxConstraints.loose(constraints.biggest).deflate(
+      padding + const EdgeInsets.all(_screenPadding),
     );
   }
 

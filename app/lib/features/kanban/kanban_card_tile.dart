@@ -298,9 +298,12 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
           );
         }
 
+        // 右键只走上下文菜单，不进入拖拽手势竞技场，避免菜单被拖拽识别器卡住。
+        bool primaryButtonOnly(int buttons) => buttons == kPrimaryButton;
         final Widget draggableChild = immediateDrag
             ? CardDraggable<KanbanCard>(
                 data: widget.card,
+                allowedButtonsFilter: primaryButtonOnly,
                 dragAnchorStrategy: anchorStrategy,
                 onDragStarted: _onDragStarted,
                 onDragEnd: (_) => _onDragEnded(),
@@ -310,6 +313,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
               )
             : CardLongPressDraggable<KanbanCard>(
                 data: widget.card,
+                allowedButtonsFilter: primaryButtonOnly,
                 delay: controller.appSettings.dragDelay,
                 hapticFeedbackOnStart: true,
                 dragAnchorStrategy: anchorStrategy,
