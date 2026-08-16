@@ -67,6 +67,29 @@ void main() {
     expect(record.totalTokens, 242863);
   });
 
+  test('官网 Dashboard 分项已拆开时不再改写 Input 与 Total', () {
+    final record = AgentDispatchTokenRecord.fromUsage(
+      at: DateTime(2026, 8, 16, 15),
+      inputTokens: 204287,
+      outputTokens: 1540,
+      cacheReadTokens: 215040,
+      cacheWriteTokens: 0,
+      totalTokens: 420867,
+    );
+    expect(record.inputTokens, 204287);
+    expect(record.outputTokens, 1540);
+    expect(record.cacheReadTokens, 215040);
+    expect(record.cacheWriteTokens, 0);
+    expect(record.totalTokens, 420867);
+    expect(
+      record.inputTokens +
+          record.cacheReadTokens +
+          record.cacheWriteTokens +
+          record.outputTokens,
+      record.totalTokens,
+    );
+  });
+
   test('读取旧持久化记录时同样纠正重复累计', () {
     final record = AgentDispatchTokenRecord.fromJson({
       'at': '2026-08-14T08:00:00.000Z',
@@ -120,6 +143,16 @@ void main() {
     expect(daily.last.totalTokens, 550);
     expect(daily.last.sessions, 2);
     expect(daily[daily.length - 2].totalTokens, 150);
+
+    expect(stats.lastDays(3).totalTokens, 700);
+    expect(stats.lastHours(1).sessionCount, 0);
+    expect(
+      AgentDispatchTokenStats(
+        now: DateTime(2026, 8, 14, 12, 30),
+        records: stats.records,
+      ).lastHours(1).totalTokens,
+      150,
+    );
   });
 
   test('token 历史按项目持久化且与日志分离', () async {

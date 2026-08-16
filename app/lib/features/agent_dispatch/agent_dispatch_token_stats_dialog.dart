@@ -14,8 +14,8 @@ Future<void> showAgentDispatchTokenStatsDialog({
     builder: (context) => AlertDialog(
       title: const Text('Token 统计'),
       content: SizedBox(
-        width: 560,
-        height: 520,
+        width: 640,
+        height: 560,
         child: _TokenStatsBody(projectId: projectId),
       ),
       actions: [
@@ -37,8 +37,18 @@ class _TokenStatsBody extends StatefulWidget {
   State<_TokenStatsBody> createState() => _TokenStatsBodyState();
 }
 
+enum _TokenRange {
+  lastHour,
+  today,
+  last3Days,
+  last7Days,
+  last30Days,
+  all,
+}
+
 class _TokenStatsBodyState extends State<_TokenStatsBody> {
   AgentDispatchTokenStats? _stats;
+  _TokenRange _range = _TokenRange.last7Days;
 
   @override
   void initState() {
@@ -67,31 +77,43 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
       );
     }
 
-    final today = stats.today;
-    final last7 = stats.lastDays(7);
-    final last30 = stats.lastDays(30);
-    final daily = stats.daily(7);
+    final selected = _selectedStats(stats);
+    final dailyDays = _dailyDays;
+    final daily = dailyDays == null ? const <AgentDispatchDailyToken>[] : stats.daily(dailyDays);
     final textTheme = Theme.of(context).textTheme;
 
     return ListView(
       children: [
         Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in _TokenRange.values)
+              ChoiceChip(
+                label: Text(_rangeLabel(option)),
+                selected: _range == option,
+                onSelected: (_) => setState(() => _range = option),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
-            _MetricCard(label: '会话数', value: '${stats.sessionCount}'),
+            _MetricCard(label: '会话数', value: '${selected.sessionCount}'),
             _MetricCard(
-              label: '累计 Token',
-              value: _formatCount(stats.totalTokens),
+              label: '合计 Token',
+              value: _formatCount(selected.totalTokens),
             ),
             _MetricCard(
               label: '平均每次',
-              value: _formatCount(stats.averageTotal?.round() ?? 0),
+              value: _formatCount(selected.averageTotal?.round() ?? 0),
             ),
             _MetricCard(
-              label: '今日',
-              value: _formatCount(today.totalTokens),
-              subtitle: '${today.sessionCount} 次',
+              label: '全部累计',
+              value: _formatCount(stats.totalTokens),
+              subtitle: '${stats.sessionCount} 次',
             ),
           ],
         ),
@@ -99,64 +121,100 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
         Text('输入 / 缓存 / 输出', style: textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
-          '输入 ${_formatCount(stats.totalInput)}'
-          '（均 ${_formatCount(stats.averageInput?.round() ?? 0)}） · '
-          '缓存读 ${_formatCount(stats.totalCacheRead)} · '
-          '缓存写 ${_formatCount(stats.totalCacheWrite)} · '
-          '输出 ${_formatCount(stats.totalOutput)}'
-          '（均 ${_formatCount(stats.averageOutput?.round() ?? 0)}）',
+          '口径与官网 Dashboard 一致：Total = Input + Cache Read + Cache Write + Output，'
+          '不把缓存再计入 Input。',
+          style: textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '输入 ${_formatCount(selected.totalInput)}'
+          '（均 ${_formatCount(selected.averageInput?.round() ?? 0)}） · '
+          '缓存读 ${_formatCount(selected.totalCacheRead)} · '
+          '缓存写 ${_formatCount(selected.totalCacheWrite)} · '
+          '输出 ${_formatCount(selected.totalOutput)}'
+          '（均 ${_formatCount(selected.averageOutput?.round() ?? 0)}）',
           style: textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
         _SplitBar(
-          input: stats.totalInput,
-          cache: stats.totalCacheRead + stats.totalCacheWrite,
-          output: stats.totalOutput,
+          input: selected.totalInput,
+          cache: selected.totalCacheRead + selected.totalCacheWrite,
+          output: selected.totalOutput,
         ),
-        const SizedBox(height: 20),
-        Text('最近 7 天', style: textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text(
-          '共 ${_formatCount(last7.totalTokens)} token · '
-          '${last7.sessionCount} 次 · '
-          '日均 ${_formatCount(last7.sessionCount == 0 ? 0 : (last7.totalTokens / 7).round())}',
-          style: textTheme.bodySmall,
-        ),
-        const SizedBox(height: 12),
-        _DailyBars(values: daily),
-        const SizedBox(height: 20),
-        Text('最近 30 天', style: textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text(
-          '共 ${_formatCount(last30.totalTokens)} token · ${last30.sessionCount} 次',
-          style: textTheme.bodySmall,
-        ),
-        if (stats.peakSession != null) ...[
+        if (daily.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text('按日明细', style: textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            '共 ${_formatCount(selected.totalTokens)} token · '
+            '${selected.sessionCount} 次'
+            '${dailyDays == null ? '' : ' · 日均 ${_formatCount(selected.sessionCount == 0 ? 0 : (selected.totalTokens / dailyDays).round())}'}',
+            style: textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          if (daily.length <= 10) _DailyBars(values: daily),
+          const SizedBox(height: 12),
+          _DailyTable(values: daily),
+        ],
+        if (selected.peakSession != null) ...[
           const SizedBox(height: 16),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.trending_up_outlined),
             title: const Text('单次峰值'),
             subtitle: Text(
-              '${_formatCount(stats.peakSession!.totalTokens)} '
-              '(入 ${_formatCount(stats.peakSession!.inputTokens)} / '
-              '缓存 ${_formatCount(stats.peakSession!.cacheReadTokens + stats.peakSession!.cacheWriteTokens)} / '
-              '出 ${_formatCount(stats.peakSession!.outputTokens)})',
+              '${_formatCount(selected.peakSession!.totalTokens)} '
+              '(入 ${_formatCount(selected.peakSession!.inputTokens)} / '
+              '缓存 ${_formatCount(selected.peakSession!.cacheReadTokens + selected.peakSession!.cacheWriteTokens)} / '
+              '出 ${_formatCount(selected.peakSession!.outputTokens)})',
             ),
           ),
         ],
-        if (stats.lastSession != null)
+        if (selected.lastSession != null)
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.schedule_outlined),
             title: const Text('最近一次'),
             subtitle: Text(
-              '${_formatCount(stats.lastSession!.totalTokens)} token · '
-              '${_formatStamp(stats.lastSession!.at)}',
+              '${_formatCount(selected.lastSession!.totalTokens)} token · '
+              '${_formatStamp(selected.lastSession!.at)}',
             ),
           ),
       ],
     );
+  }
+
+  AgentDispatchTokenStats _selectedStats(AgentDispatchTokenStats stats) {
+    return switch (_range) {
+      _TokenRange.lastHour => stats.lastHours(1),
+      _TokenRange.today => stats.today,
+      _TokenRange.last3Days => stats.lastDays(3),
+      _TokenRange.last7Days => stats.lastDays(7),
+      _TokenRange.last30Days => stats.lastDays(30),
+      _TokenRange.all => stats,
+    };
+  }
+
+  int? get _dailyDays {
+    return switch (_range) {
+      _TokenRange.lastHour => null,
+      _TokenRange.today => 1,
+      _TokenRange.last3Days => 3,
+      _TokenRange.last7Days => 7,
+      _TokenRange.last30Days => 30,
+      _TokenRange.all => null,
+    };
+  }
+
+  String _rangeLabel(_TokenRange range) {
+    return switch (range) {
+      _TokenRange.lastHour => '过去 1 小时',
+      _TokenRange.today => '今天',
+      _TokenRange.last3Days => '近 3 天',
+      _TokenRange.last7Days => '近 7 天',
+      _TokenRange.last30Days => '近 30 天',
+      _TokenRange.all => '全部',
+    };
   }
 }
 
@@ -279,6 +337,51 @@ class _DailyBars extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DailyTable extends StatelessWidget {
+  const _DailyTable({required this.values});
+
+  final List<AgentDispatchDailyToken> values;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = values.reversed.where((day) => day.sessions > 0).toList();
+    if (rows.isEmpty) {
+      return Text('该范围内暂无会话。', style: Theme.of(context).textTheme.bodySmall);
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowHeight: 36,
+        dataRowMinHeight: 32,
+        dataRowMaxHeight: 36,
+        columns: const [
+          DataColumn(label: Text('日期')),
+          DataColumn(label: Text('次数'), numeric: true),
+          DataColumn(label: Text('Input'), numeric: true),
+          DataColumn(label: Text('Cache Read'), numeric: true),
+          DataColumn(label: Text('Cache Write'), numeric: true),
+          DataColumn(label: Text('Output'), numeric: true),
+          DataColumn(label: Text('Total'), numeric: true),
+        ],
+        rows: [
+          for (final day in rows)
+            DataRow(
+              cells: [
+                DataCell(Text('${day.day.month}/${day.day.day}')),
+                DataCell(Text('${day.sessions}')),
+                DataCell(Text(_formatCount(day.inputTokens))),
+                DataCell(Text(_formatCount(day.cacheReadTokens))),
+                DataCell(Text(_formatCount(day.cacheWriteTokens))),
+                DataCell(Text(_formatCount(day.outputTokens))),
+                DataCell(Text(_formatCount(day.totalTokens))),
+              ],
             ),
         ],
       ),

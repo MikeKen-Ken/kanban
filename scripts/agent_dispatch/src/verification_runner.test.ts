@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   MAX_VERIFICATION_TIMEOUT_MS,
   clampTimeout,
+  formatVerificationFailure,
   runVerificationCommand,
   runVerificationCommands,
 } from "./verification_runner.ts";
@@ -85,5 +86,22 @@ describe("verification_runner", () => {
 
   it("timeout 会钳制 Worker 上限", () => {
     assert.equal(clampTimeout(Number.MAX_SAFE_INTEGER), MAX_VERIFICATION_TIMEOUT_MS);
+  });
+
+  it("失败原因附带输出首行，便于定位 spawn ENOENT", () => {
+    assert.equal(
+      formatVerificationFailure({
+        commandSummary: "flutter test targeted.dart",
+        executable: "flutter",
+        args: ["test", "targeted.dart"],
+        cwd: "app",
+        exitCode: -1,
+        durationMs: 12,
+        output: "spawn flutter ENOENT",
+        timedOut: false,
+        passed: false,
+      }),
+      "验证命令失败（exitCode=-1）：flutter test targeted.dart；spawn flutter ENOENT",
+    );
   });
 });

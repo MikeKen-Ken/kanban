@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { spawnUnexpanded } from "./windows_spawn.ts";
 
 export const DEFAULT_VERIFICATION_TIMEOUT_MS = 10 * 60_000;
 export const MAX_VERIFICATION_TIMEOUT_MS = 15 * 60_000;
@@ -53,17 +54,34 @@ export async function runVerificationCommand(
     };
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolvePromise) => {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
     let settled = false;
-    const child = spawn(item.executable, item.args, {
+    const spawnOptions = {
       cwd: resolvedCwd,
       shell: false,
       windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+      stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"],
+    };
+    let child;
+    try {
+      child = spawnUnexpanded(item.executable, item.args, spawnOptions);
+    } catch (error) {
+      resolvePromise({
+        commandSummary,
+        executable: item.executable,
+        args: [...item.args],
+        cwd: commandCwd,
+        exitCode: -1,
+        durationMs: Date.now() - startedAt,
+        output: error instanceof Error ? error.message : String(error),
+        timedOut: false,
+        passed: false,
+      });
+      return;
+    }
     child.stdout?.on("data", (chunk: Buffer | string) => {
       stdout = appendTruncated(stdout, String(chunk));
     });
@@ -77,7 +95,7 @@ export async function runVerificationCommand(
       clearTimeout(timer);
       clearTimeout(killGrace);
       const output = combineOutput(stdout, stderr);
-      resolve({
+      resolvePromise({
         commandSummary,
         executable: item.executable,
         args: [...item.args],
@@ -118,6 +136,18 @@ export async function runVerificationCommands(
     if (!result.passed) break;
   }
   return results;
+}
+
+export function formatVerificationFailure(failed: VerificationResult): string {
+  if (failed.timedOut) {
+    return `验证命令超时：${failed.commandSummary}`;
+  }
+  const detail = failed.output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  const base = `验证命令失败（exitCode=${failed.exitCode}）：${failed.commandSummary}`;
+  return detail ? `${base}；${detail}` : base;
 }
 
 export function clampTimeout(value: number | undefined): number {

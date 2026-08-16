@@ -177,6 +177,17 @@ class AgentDispatchTokenStats {
     );
   }
 
+  /// 最近 [hours] 小时（相对 [now]，含当前时刻）。
+  AgentDispatchTokenStats lastHours(int hours) {
+    return AgentDispatchTokenStats(
+      records: inRange(
+        now.subtract(Duration(hours: hours)),
+        now.add(const Duration(milliseconds: 1)),
+      ),
+      now: now,
+    );
+  }
+
   /// 最近 [days] 天，按本地日历日聚合（含无用量的空日）。
   List<AgentDispatchDailyToken> daily(int days) {
     final todayStart = DateTime(now.year, now.month, now.day);

@@ -1321,8 +1321,86 @@ function extensionForMime(mimeType) {
 }
 
 // src/verification_runner.ts
-import { spawn as spawn3 } from "node:child_process";
+import { spawn as spawn4 } from "node:child_process";
 import { isAbsolute as isAbsolute2, relative, resolve, sep } from "node:path";
+
+// src/windows_spawn.ts
+import { spawn as spawn3 } from "node:child_process";
+import { existsSync as existsSync5, statSync } from "node:fs";
+import { delimiter, extname, join as join5 } from "node:path";
+var WINDOWS_BATCH_EXTS = /* @__PURE__ */ new Set([".bat", ".cmd"]);
+function spawnUnexpanded(command, args, options) {
+  if (process.platform !== "win32") {
+    return spawn3(command, args, { ...options, shell: false });
+  }
+  const resolved = resolveWindowsExecutable(command, envFrom(options));
+  if (resolved && isWindowsBatchFile(resolved)) {
+    const invocation = buildWindowsCmdInvocation(resolved, args);
+    return spawn3(invocation.command, invocation.args, {
+      ...options,
+      shell: false,
+      windowsVerbatimArguments: true
+    });
+  }
+  return spawn3(resolved ?? command, args, { ...options, shell: false });
+}
+function resolveWindowsExecutable(command, env = process.env) {
+  const trimmed = command.trim();
+  if (!trimmed) return void 0;
+  if (hasPathSeparator(trimmed)) {
+    return resolveWithPathext(trimmed, env);
+  }
+  const pathValue = env.Path ?? env.PATH ?? "";
+  for (const dir of pathValue.split(delimiter)) {
+    if (!dir.trim()) continue;
+    const found = resolveWithPathext(join5(dir, trimmed), env);
+    if (found) return found;
+  }
+  return void 0;
+}
+function buildWindowsCmdInvocation(executable, args) {
+  const inner = [quoteCmdArg(executable), ...args.map(quoteCmdArg)].join(" ");
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/v:off", "/c", `"${inner}"`]
+  };
+}
+function quoteCmdArg(value) {
+  return `"${value.replace(/%/g, "%%").replace(/"/g, '""')}"`;
+}
+function isWindowsBatchFile(file) {
+  return WINDOWS_BATCH_EXTS.has(extname(file).toLowerCase());
+}
+function hasPathSeparator(command) {
+  return command.includes("/") || command.includes("\\") || /^[A-Za-z]:/.test(command);
+}
+function resolveWithPathext(base, env) {
+  const ext = extname(base);
+  if (ext) return isExistingFile(base) ? base : void 0;
+  const pathext = env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD";
+  for (const item of pathext.split(";")) {
+    const suffix = item.trim();
+    if (!suffix) continue;
+    const candidate = base + suffix;
+    if (isExistingFile(candidate)) return candidate;
+  }
+  return void 0;
+}
+function isExistingFile(path) {
+  try {
+    return existsSync5(path) && statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+function envFrom(options) {
+  if (options.env && typeof options.env === "object") {
+    return options.env;
+  }
+  return process.env;
+}
+
+// src/verification_runner.ts
 var DEFAULT_VERIFICATION_TIMEOUT_MS = 10 * 6e4;
 var MAX_VERIFICATION_TIMEOUT_MS = 15 * 6e4;
 var MAX_OUTPUT_CHARS = 16e3;
@@ -1348,17 +1426,34 @@ async function runVerificationCommand(item, repoRoot) {
       passed: false
     };
   }
-  return new Promise((resolve3) => {
+  return new Promise((resolvePromise) => {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
     let settled = false;
-    const child = spawn3(item.executable, item.args, {
+    const spawnOptions = {
       cwd: resolvedCwd,
       shell: false,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"]
-    });
+    };
+    let child;
+    try {
+      child = spawnUnexpanded(item.executable, item.args, spawnOptions);
+    } catch (error) {
+      resolvePromise({
+        commandSummary,
+        executable: item.executable,
+        args: [...item.args],
+        cwd: commandCwd,
+        exitCode: -1,
+        durationMs: Date.now() - startedAt,
+        output: error instanceof Error ? error.message : String(error),
+        timedOut: false,
+        passed: false
+      });
+      return;
+    }
     child.stdout?.on("data", (chunk) => {
       stdout = appendTruncated(stdout, String(chunk));
     });
@@ -1371,7 +1466,7 @@ async function runVerificationCommand(item, repoRoot) {
       clearTimeout(timer);
       clearTimeout(killGrace);
       const output = combineOutput(stdout, stderr);
-      resolve3({
+      resolvePromise({
         commandSummary,
         executable: item.executable,
         args: [...item.args],
@@ -1407,6 +1502,14 @@ async function runVerificationCommands(commands, cwd) {
   }
   return results;
 }
+function formatVerificationFailure(failed) {
+  if (failed.timedOut) {
+    return `\u9A8C\u8BC1\u547D\u4EE4\u8D85\u65F6\uFF1A${failed.commandSummary}`;
+  }
+  const detail = failed.output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0);
+  const base = `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${failed.exitCode}\uFF09\uFF1A${failed.commandSummary}`;
+  return detail ? `${base}\uFF1B${detail}` : base;
+}
 function clampTimeout(value) {
   if (!Number.isFinite(value)) return DEFAULT_VERIFICATION_TIMEOUT_MS;
   return Math.max(100, Math.min(MAX_VERIFICATION_TIMEOUT_MS, Math.trunc(value)));
@@ -1431,7 +1534,7 @@ function terminateProcessTree(pid) {
   if (!pid) return;
   try {
     if (process.platform === "win32") {
-      const killer = spawn3("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      const killer = spawn4("taskkill", ["/PID", String(pid), "/T", "/F"], {
         windowsHide: true,
         stdio: "ignore"
       });
@@ -1772,7 +1875,8 @@ async function validateAndFinalize(mcp, job, pending, dependencies) {
     });
     status = String(recorded.status ?? "");
     if (failed) {
-      const reason = failed.timedOut ? `\u9A8C\u8BC1\u547D\u4EE4\u8D85\u65F6\uFF1A${failed.commandSummary}` : `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${failed.exitCode}\uFF09\uFF1A${failed.commandSummary}`;
+      if (failed.output.trim()) workerLog(failed.output);
+      const reason = formatVerificationFailure(failed);
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,

@@ -23,6 +23,7 @@ import {
   type RoundDispatchJob,
 } from "./types.ts";
 import {
+  formatVerificationFailure,
   runVerificationCommands,
   type VerificationCommand,
   type VerificationResult,
@@ -398,9 +399,8 @@ async function validateAndFinalize(
     });
     status = String(recorded.status ?? "");
     if (failed) {
-      const reason = failed.timedOut
-        ? `验证命令超时：${failed.commandSummary}`
-        : `验证命令失败（exitCode=${failed.exitCode}）：${failed.commandSummary}`;
+      if (failed.output.trim()) workerLog(failed.output);
+      const reason = formatVerificationFailure(failed);
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,
