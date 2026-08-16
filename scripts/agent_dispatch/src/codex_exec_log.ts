@@ -141,7 +141,11 @@ function recordsFromCodexItem(
       if (eventType !== "item.completed") return [];
       return toRecords(expandMultiline("思考：", pickString(item, "text")), "ai");
     case "command_execution":
-      return recordsFromCommand(eventType, item, failed);
+      return recordsFromCommand(
+        eventType,
+        item,
+        commandExecutionFailed(eventType, item, status),
+      );
     case "file_change":
       if (eventType !== "item.completed") return [];
       return recordsFromFileChange(item, failed);
@@ -166,6 +170,19 @@ function recordsFromCodexItem(
     default:
       return [];
   }
+}
+
+function commandExecutionFailed(
+  eventType: string,
+  item: Record<string, unknown>,
+  status: string,
+): boolean {
+  if (eventType === "item.failed") return true;
+  const exitCode = item.exit_code;
+  if (typeof exitCode === "number" && Number.isFinite(exitCode)) {
+    return exitCode !== 0;
+  }
+  return status === "failed";
 }
 
 function recordsFromCommand(
@@ -406,10 +423,16 @@ function diagnosticRecord(
 ): WorkerLogRecord | undefined {
   const trimmed = line.trim();
   if (!DIAGNOSTIC_PATTERN.test(trimmed)) return undefined;
+  if (looksLikeDartNamedArgument(trimmed)) return undefined;
   const level: WorkerLogLevel = /^\s*(?:warning:|WARN\b)/i.test(trimmed)
     ? "warning"
     : "error";
   return { line: trimmed, source, level };
+}
+
+/** 源码里的命名参数（error: e, / error: '...'）不是 git/编译器诊断。 */
+function looksLikeDartNamedArgument(line: string): boolean {
+  return /^\s*error:\s*(?:[A-Za-z_]\w*|'[^']*'|"[^"]*")\s*,?\s*$/.test(line);
 }
 
 function expandMultiline(prefix: string, body: string): string[] {

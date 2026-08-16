@@ -515,7 +515,11 @@ function recordsFromCodexItem(eventType, item) {
       if (eventType !== "item.completed") return [];
       return toRecords(expandMultiline("\u601D\u8003\uFF1A", pickString(item, "text")), "ai");
     case "command_execution":
-      return recordsFromCommand(eventType, item, failed);
+      return recordsFromCommand(
+        eventType,
+        item,
+        commandExecutionFailed(eventType, item, status)
+      );
     case "file_change":
       if (eventType !== "item.completed") return [];
       return recordsFromFileChange(item, failed);
@@ -538,6 +542,14 @@ function recordsFromCodexItem(eventType, item) {
     default:
       return [];
   }
+}
+function commandExecutionFailed(eventType, item, status) {
+  if (eventType === "item.failed") return true;
+  const exitCode = item.exit_code;
+  if (typeof exitCode === "number" && Number.isFinite(exitCode)) {
+    return exitCode !== 0;
+  }
+  return status === "failed";
 }
 function recordsFromCommand(eventType, item, failed) {
   const command = pickString(item, "command");
@@ -728,8 +740,12 @@ function withDefaultLevel(records) {
 function diagnosticRecord(line, source) {
   const trimmed = line.trim();
   if (!DIAGNOSTIC_PATTERN.test(trimmed)) return void 0;
+  if (looksLikeDartNamedArgument(trimmed)) return void 0;
   const level = /^\s*(?:warning:|WARN\b)/i.test(trimmed) ? "warning" : "error";
   return { line: trimmed, source, level };
+}
+function looksLikeDartNamedArgument(line) {
+  return /^\s*error:\s*(?:[A-Za-z_]\w*|'[^']*'|"[^"]*")\s*,?\s*$/.test(line);
 }
 function expandMultiline(prefix, body) {
   const trimmed = body.trimEnd();
@@ -1890,9 +1906,17 @@ function formatVerificationFailure(failed) {
   if (failed.timedOut) {
     return `\u9A8C\u8BC1\u547D\u4EE4\u8D85\u65F6\uFF1A${failed.commandSummary}`;
   }
-  const detail = failed.output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0);
+  const detail = pickFailureDetail(failed.output);
   const base = `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${failed.exitCode}\uFF09\uFF1A${failed.commandSummary}`;
   return detail ? `${base}\uFF1B${detail}` : base;
+}
+function pickFailureDetail(output) {
+  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0 && !/^(stdout|stderr):$/i.test(line));
+  if (lines.length === 0) return void 0;
+  const summary = [...lines].reverse().find(
+    (line) => /\d+\s+issues?\s+found/i.test(line) || /error|failed|errno|enoent/i.test(line)
+  );
+  return summary ?? lines[0];
 }
 function clampTimeout(value) {
   if (!Number.isFinite(value)) return DEFAULT_VERIFICATION_TIMEOUT_MS;

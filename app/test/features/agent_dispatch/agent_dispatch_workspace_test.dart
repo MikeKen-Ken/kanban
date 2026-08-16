@@ -134,4 +134,47 @@ void main() {
 
     expect(position.pixels, before);
   });
+
+  testWidgets('日志概览突出失败并可按级别筛选', (tester) async {
+    final controller = TextEditingController(
+      text: [
+        '[09:00:00] [MCP] [失败] 提交失败：看板未就绪',
+        '[09:00:01] [命令] [警告] 网络连接较慢',
+        '[09:00:02] [Worker] [信息] 本会话 token：input=12 output=34 total=46',
+      ].join('\n'),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 480,
+            height: 360,
+            child: AgentDispatchLogPane(
+              controller: controller,
+              running: false,
+              onClear: () {},
+              onExport: () {},
+              onCopy: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('失败 '), findsOneWidget);
+    expect(find.text('警告 '), findsOneWidget);
+    expect(find.text('最新 Token '), findsOneWidget);
+    expect(find.text('46'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-dispatch-log-level-error')),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('提交失败'), findsOneWidget);
+    expect(find.textContaining('网络连接较慢'), findsNothing);
+    expect(find.textContaining('本会话 token'), findsNothing);
+  });
 }

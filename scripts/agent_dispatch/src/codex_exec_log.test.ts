@@ -83,6 +83,47 @@ describe("recordsFromCodexEvent", () => {
     ]);
   });
 
+  it("不把 Dart 命名参数 error: 当成命令诊断", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command: "Get-Content agent_dispatch_service.dart",
+        status: "completed",
+        exit_code: 0,
+        aggregated_output:
+          "error: e,\nerror: '尚未配置 Cursor API Key，请先在 Agent 调度面板中安全保存',\nerror: failed to add",
+      },
+    });
+    assert.deepEqual(
+      records.filter((record) => record.level === "error"),
+      [
+        {
+          line: "error: failed to add",
+          source: "shell",
+          level: "error",
+        },
+      ],
+    );
+  });
+
+  it("exit_code=0 时不把 Codex status=failed 当成命令失败", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command: "rg Agent app",
+        status: "failed",
+        exit_code: 0,
+        aggregated_output: "app/lib/main.dart:1: Agent",
+      },
+    });
+    assert.equal(
+      records.some((record) => record.line.startsWith("命令失败：")),
+      false,
+    );
+  });
+
   it("MCP 调用按工具来源记录，失败才升级为错误", () => {
     const started = recordsFromCodexEvent({
       type: "item.started",

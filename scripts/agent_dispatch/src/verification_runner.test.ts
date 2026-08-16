@@ -104,4 +104,22 @@ describe("verification_runner", () => {
       "验证命令失败（exitCode=-1）：flutter test targeted.dart；spawn flutter ENOENT",
     );
   });
+
+  it("跳过 stdout/stderr 标签，优先使用 issues found 摘要", () => {
+    assert.equal(
+      formatVerificationFailure({
+        commandSummary: "flutter analyze",
+        executable: "flutter",
+        args: ["analyze"],
+        cwd: "app",
+        exitCode: 1,
+        durationMs: 72700,
+        output:
+          "stdout:\ninfo - Use const\n\nstderr:\n44 issues found. (ran in 72.7s)",
+        timedOut: false,
+        passed: false,
+      }),
+      "验证命令失败（exitCode=1）：flutter analyze；44 issues found. (ran in 72.7s)",
+    );
+  });
 });

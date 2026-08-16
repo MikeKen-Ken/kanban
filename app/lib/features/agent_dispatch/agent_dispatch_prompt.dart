@@ -25,6 +25,9 @@ Worker 会在卡片上下文后附上已缓存的 Architecture.md；禁止重复
 本轮卡片已由 Worker 原子领取；禁止调用 pick_next_card，也不要处理其它卡片。
 完成实施后必须以 ready_to_submit 收尾，显式列出本轮完成的 checklist/feedback id。
 禁止在会话内预跑即将交给 ready_to_submit 的 verificationCommands；由 Worker 收尾执行。
+verificationCommands 必须是与本卡改动直接相关的定向测试（例如 flutter test 某个测试文件）。
+禁止提交全仓库 flutter analyze、全量 flutter test、pub get、构建、安装或启动应用。
+batchArchitecture 里「每个阶段至少运行 flutter analyze」只约束人类开发/CI，不得作为单卡收尾命令。
 
 # Skill 正文
 

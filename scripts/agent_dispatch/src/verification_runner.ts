@@ -142,12 +142,22 @@ export function formatVerificationFailure(failed: VerificationResult): string {
   if (failed.timedOut) {
     return `验证命令超时：${failed.commandSummary}`;
   }
-  const detail = failed.output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
+  const detail = pickFailureDetail(failed.output);
   const base = `验证命令失败（exitCode=${failed.exitCode}）：${failed.commandSummary}`;
   return detail ? `${base}；${detail}` : base;
+}
+
+function pickFailureDetail(output: string): string | undefined {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !/^(stdout|stderr):$/i.test(line));
+  if (lines.length === 0) return undefined;
+  const summary = [...lines].reverse().find((line) =>
+    /\d+\s+issues?\s+found/i.test(line) ||
+    /error|failed|errno|enoent/i.test(line)
+  );
+  return summary ?? lines[0];
 }
 
 export function clampTimeout(value: number | undefined): number {

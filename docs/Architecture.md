@@ -121,4 +121,5 @@
 - 存储和同步使用模型、合并与集成测试。
 - Windows 快捷键、右键菜单和通知需要平台验证。
 - Android 通知权限、TalkBack、窄屏布局与长按拖拽需要平台验证。
-- 每个阶段至少运行 `flutter analyze` 和相关测试；最终运行全部测试与 Windows/Android 构建。
+- 人类开发阶段与 CI：至少运行 `flutter analyze` 和相关测试；最终运行全部测试与 Windows/Android 构建。
+- Agent 单卡收尾不要把全仓库 `flutter analyze` / 全量测试作为 `verificationCommands`；只提交与本卡改动直接相关的定向测试。

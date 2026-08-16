@@ -194,9 +194,11 @@ class AgentDispatchLogPane extends StatefulWidget {
 class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   final _scrollController = ScrollController();
   AgentDispatchLogSource? _sourceFilter;
+  AgentDispatchLogLevel? _levelFilter;
   var _pinToBottom = true;
   String? _cachedText;
   AgentDispatchLogSource? _cachedSourceFilter;
+  AgentDispatchLogLevel? _cachedLevelFilter;
   List<String> _cachedLines = const [];
 
   static const _bottomThreshold = 48.0;
@@ -235,17 +237,44 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
 
   List<String> _visibleLines() {
     final text = widget.controller.text;
-    if (_cachedText == text && _cachedSourceFilter == _sourceFilter) {
+    if (_cachedText == text &&
+        _cachedSourceFilter == _sourceFilter &&
+        _cachedLevelFilter == _levelFilter) {
       return _cachedLines;
     }
     _cachedText = text;
     _cachedSourceFilter = _sourceFilter;
+    _cachedLevelFilter = _levelFilter;
     _cachedLines = text.split('\n').where((line) {
       if (AgentDispatchLogEntry.isLowValue(line)) return false;
-      if (_sourceFilter == null) return true;
-      return AgentDispatchLogEntry.sourceOf(line) == _sourceFilter;
+      if (_sourceFilter != null &&
+          AgentDispatchLogEntry.sourceOf(line) != _sourceFilter) {
+        return false;
+      }
+      if (_levelFilter != null &&
+          AgentDispatchLogEntry.levelOf(line) != _levelFilter) {
+        return false;
+      }
+      return true;
     }).toList();
     return _cachedLines;
+  }
+
+  _LogSummary _summary() {
+    final allLines = widget.controller.text.split('\n').where(
+      (line) => !AgentDispatchLogEntry.isLowValue(line),
+    );
+    var errors = 0;
+    var warnings = 0;
+    String? totalTokens;
+    for (final line in allLines) {
+      final level = AgentDispatchLogEntry.levelOf(line);
+      if (level == AgentDispatchLogLevel.error) errors++;
+      if (level == AgentDispatchLogLevel.warning) warnings++;
+      final match = RegExp(r'\btotal=(\d+)').firstMatch(line);
+      if (match != null) totalTokens = match.group(1);
+    }
+    return _LogSummary(errors: errors, warnings: warnings, totalTokens: totalTokens);
   }
 
   @override
@@ -337,10 +366,85 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     );
   }
 
+  Widget _summaryChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    AgentDispatchLogLevel? filter,
+  }) {
+    final selected = filter != null && _levelFilter == filter;
+    return InkWell(
+      key: filter == null ? null : ValueKey('agent-dispatch-log-level-${filter.name}'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: filter == null
+          ? null
+          : () => setState(() {
+                _levelFilter = selected ? null : filter;
+              }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: selected ? 0.22 : 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: selected ? 0.8 : 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 4),
+            Text('$label ', style: const TextStyle(fontSize: 11)),
+            Text(value, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _logLine(BuildContext context, String line) {
+    final level = AgentDispatchLogEntry.levelOf(line);
+    final source = AgentDispatchLogEntry.sourceOf(line);
+    final color = _lineColor(context, level, source);
+    final isAlert = level == AgentDispatchLogLevel.error ||
+        level == AgentDispatchLogLevel.warning;
+    final icon = switch (level) {
+      AgentDispatchLogLevel.error => Icons.error_outline,
+      AgentDispatchLogLevel.warning => Icons.warning_amber_rounded,
+      AgentDispatchLogLevel.success => Icons.check_circle_outline,
+      AgentDispatchLogLevel.info => Icons.circle_outlined,
+    };
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: isAlert ? color.withValues(alpha: 0.09) : null,
+        borderRadius: BorderRadius.circular(4),
+        border: isAlert ? Border(left: BorderSide(color: color, width: 3)) : null,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1, right: 6),
+            child: Icon(icon, size: 14, color: color),
+          ),
+          Expanded(
+            child: SelectableText.rich(
+              TextSpan(children: _lineSpans(context, line)),
+              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasLog = widget.controller.text.isNotEmpty;
     final lines = _visibleLines();
+    final summary = _summary();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -367,6 +471,33 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         const SizedBox(height: 4),
         _sourceLegend(context),
         const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            _summaryChip(
+              icon: Icons.error_outline,
+              label: '失败',
+              value: '${summary.errors}',
+              color: Theme.of(context).colorScheme.error,
+              filter: AgentDispatchLogLevel.error,
+            ),
+            _summaryChip(
+              icon: Icons.warning_amber_rounded,
+              label: '警告',
+              value: '${summary.warnings}',
+              color: Colors.orange.shade800,
+              filter: AgentDispatchLogLevel.warning,
+            ),
+            _summaryChip(
+              icon: Icons.token_outlined,
+              label: '最新 Token',
+              value: summary.totalTokens ?? '—',
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         if (widget.running) const LinearProgressIndicator(),
         if (widget.running) const SizedBox(height: 8),
         Expanded(
@@ -388,13 +519,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
                   key: const ValueKey('agent-dispatch-log-scroll'),
                   controller: _scrollController,
                   itemCount: lines.length,
-                  itemBuilder: (context, index) => SelectableText.rich(
-                    TextSpan(children: _lineSpans(context, lines[index])),
-                    style: const TextStyle(
-                      fontFamily: 'Consolas',
-                      fontSize: 12,
-                    ),
-                  ),
+                  itemBuilder: (context, index) => _logLine(context, lines[index]),
                 ),
               ),
             ),
@@ -403,6 +528,18 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
       ],
     );
   }
+}
+
+class _LogSummary {
+  const _LogSummary({
+    required this.errors,
+    required this.warnings,
+    required this.totalTokens,
+  });
+
+  final int errors;
+  final int warnings;
+  final String? totalTokens;
 }
 
 class _ScrollablePane extends StatelessWidget {

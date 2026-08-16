@@ -226,6 +226,25 @@ void main() {
     );
     expect(rejected.isError, isTrue);
 
+    final analyzeRejected = await dispatchReadyToSubmit(
+      controller,
+      workerToken: 'worker-a',
+      cardId: cardId,
+      completedChecklistIds: const ['check-a'],
+      completedFeedbackIds: const ['feedback-a'],
+      verificationCommands: const [
+        DispatchVerificationCommand(
+          executable: 'flutter',
+          args: ['analyze'],
+        ),
+      ],
+    );
+    expect(analyzeRejected.isError, isTrue);
+    expect(
+      analyzeRejected.content.whereType<TextContent>().first.text,
+      contains('禁止全仓库'),
+    );
+
     final ready = await dispatchReadyToSubmit(
       controller,
       workerToken: 'worker-a',
