@@ -86,6 +86,7 @@ function createHappyDependencies(options?: {
   expectedReasoning?: string;
   manualReason?: string;
   claimError?: string;
+  finalizeResult?: Record<string, unknown>;
   runAgent?: (round: RoundDispatchJob) => Promise<{ ok: boolean; error?: string }>;
 }): {
   dependencies: RunBatchDependencies;
@@ -146,7 +147,7 @@ function createHappyDependencies(options?: {
           status: "validated",
         };
       case "dispatch_finalize":
-        return {
+        return options?.finalizeResult ?? {
           sessionId: "session-a",
           cardId: "card-a",
           status: "finalized",
@@ -345,6 +346,31 @@ describe("run_batch", () => {
     const result = await runBatch(job, undefined, dependencies);
 
     assert.equal(result.ok, true);
+    assert.ok(full.calls.some((item) => item.name === "dispatch_finalize"));
+  });
+
+  it("finalize 要求保留 pending 时不 fail 会话", async () => {
+    const { dependencies, full } = createHappyDependencies({
+      finalizeResult: {
+        ok: false,
+        sessionId: "session-a",
+        cardId: "card-a",
+        status: "committed",
+        commitRef: "abc1234",
+        error: "Git 提交后工作区不干净，拒绝更新看板",
+        preservePending: true,
+      },
+    });
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.preservePending, true);
+    assert.match(result.error ?? "", /工作区不干净/);
+    assert.equal(
+      full.calls.some((item) => item.name === "dispatch_fail_agent_session"),
+      false,
+    );
     assert.ok(full.calls.some((item) => item.name === "dispatch_finalize"));
   });
 

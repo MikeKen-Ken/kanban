@@ -268,7 +268,7 @@ export async function runBatch(
           dependencies,
         );
         if (!finalized.ok) {
-          if (!terminalRecorded) {
+          if (!finalized.preservePending && !terminalRecorded) {
             await recordRoundFailure(
               mcp,
               job,
@@ -416,6 +416,15 @@ async function validateAndFinalize(
     workerToken: job.workerToken,
     sessionId,
   });
+  if (finalized.preservePending === true) {
+    return {
+      ok: false,
+      preservePending: true,
+      error: String(
+        finalized.error ?? "Git 提交后工作区不干净，拒绝更新看板",
+      ),
+    };
+  }
   if (
     finalized.status !== "finalized" ||
     String(finalized.sessionId ?? "") !== sessionId ||

@@ -135,7 +135,19 @@ Future<CallToolResult> dispatchFinalize(
     if (record.status == DispatchPendingStatus.committed) {
       final afterCommit = await inspectMcpGitTree(repo, runner: gitRunner);
       if (afterCommit.kind == McpGitTreeKind.dirty) {
-        return mcpErrorResult('Git 提交后工作区不干净，拒绝更新看板');
+        const error = 'Git 提交后工作区不干净，拒绝更新看板。请清理工作区后重新运行批次以恢复送验。';
+        record = record.copyWith(error: error);
+        await store.write(record);
+        return mcpJsonResult({
+          'ok': false,
+          'sessionId': record.sessionId,
+          'projectId': record.projectId,
+          'cardId': record.cardId,
+          'status': record.status.name,
+          if (record.commitRef != null) 'commitRef': record.commitRef,
+          'error': error,
+          'preservePending': true,
+        });
       }
     }
   } else if (record.status == DispatchPendingStatus.validated) {

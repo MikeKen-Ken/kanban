@@ -384,6 +384,11 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
       if (cardId.isEmpty || fromColumnId.isEmpty || toColumnId.isEmpty) {
         return mcpErrorResult('cardId / fromColumnId / toColumnId 不能为空');
       }
+      final rejected = rejectLockedCardFromFullMcp(
+        cardId,
+        operation: 'move_card',
+      );
+      if (rejected != null) return rejected;
       final located = await resolveMcpProjectIdForCard(
         controller,
         cardId: cardId,
@@ -570,6 +575,11 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
       if (cardId.isEmpty || columnId.isEmpty) {
         return mcpErrorResult('cardId 与 columnId 均不能为空');
       }
+      final rejected = rejectLockedCardFromFullMcp(
+        cardId,
+        operation: 'complete_card',
+      );
+      if (rejected != null) return rejected;
       final located = await resolveMcpProjectIdForCard(
         controller,
         cardId: cardId,
@@ -643,6 +653,11 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
     callback: (args, extra) async {
       final cardId = mcpTrimmedString(args['cardId']) ?? '';
       if (cardId.isEmpty) return mcpErrorResult('cardId 不能为空');
+      final rejected = rejectLockedCardFromFullMcp(
+        cardId,
+        operation: 'set_card_commit_ref',
+      );
+      if (rejected != null) return rejected;
       return mcpSetCardCommitRef(
         controller,
         cardId: cardId,
@@ -679,6 +694,11 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
       if (cardId.isEmpty || columnId.isEmpty) {
         return mcpErrorResult('cardId 与 columnId 均不能为空');
       }
+      final rejected = rejectLockedCardFromFullMcp(
+        cardId,
+        operation: 'delete_card',
+      );
+      if (rejected != null) return rejected;
       final located = await resolveMcpProjectIdForCard(
         controller,
         cardId: cardId,

@@ -221,17 +221,33 @@ Future<List<String>?> listMcpGitChangedPaths(
     environment: mcpGitEnvironment(),
   );
   if (result.exitCode != 0) return null;
-  final raw = '${result.stdout}';
+  return parseMcpGitPorcelainZ('${result.stdout}');
+}
+
+/// 解析 `git status --porcelain=v1 -z`。rename/copy 的源路径是独立 NUL 字段，没有 `XY ` 前缀。
+List<String> parseMcpGitPorcelainZ(String raw) {
+  final entries = raw.split('\x00');
   final paths = <String>[];
-  for (final entry in raw.split('\x00')) {
-    if (entry.length < 4) continue;
-    final value = entry.substring(3).trim();
-    if (value.isEmpty) continue;
-    final renamed = value.contains(' -> ') ? value.split(' -> ').last : value;
-    paths.add(renamed.replaceAll('\\', '/'));
+  for (var index = 0; index < entries.length; index++) {
+    final entry = entries[index];
+    if (entry.length < 3) continue;
+    final xy = entry.substring(0, 2);
+    final path = _normalizeGitPath(
+      entry.length > 3 ? entry.substring(3) : '',
+    );
+    if (path.isNotEmpty) paths.add(path);
+    final kind = xy.isEmpty ? '' : xy[0];
+    if (kind != 'R' && kind != 'C') continue;
+    index += 1;
+    if (index >= entries.length) break;
+    final source = _normalizeGitPath(entries[index]);
+    if (source.isNotEmpty) paths.add(source);
   }
   return paths;
 }
+
+String _normalizeGitPath(String path) =>
+    path.trim().replaceAll('\\', '/');
 
 bool isMcpSensitiveGitPath(String path) {
   final normalized = path.replaceAll('\\', '/').toLowerCase();

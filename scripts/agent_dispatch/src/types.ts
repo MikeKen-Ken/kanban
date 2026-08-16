@@ -56,6 +56,8 @@ export type DispatchResult = {
   summary?: string;
   error?: string;
   processedCards?: number;
+  /** 为 true 时不要把 pending 标成 failed，供清理工作区后恢复。 */
+  preservePending?: boolean;
 };
 
 export function isReasoningParamId(id: string): boolean {
@@ -155,13 +157,19 @@ export function mergeJobWithCardOverrides(
   return { ...job, engine, model, modelParams };
 }
 
-function clampUnattendedParam(
+export function clampUnattendedParam(
   param: ModelParam,
   allowHighReasoning: boolean,
 ): string {
-  if (allowHighReasoning) return param.value;
   const id = param.id.toLowerCase();
   const value = param.value.toLowerCase();
+  if (isContextParamId(id)) {
+    const tokens = parseTokenBudget(value);
+    if (tokens != null && tokens > MAX_UNATTENDED_CONTEXT_TOKENS) {
+      return "64k";
+    }
+  }
+  if (allowHighReasoning) return param.value;
   const expensive = new Set([
     "high",
     "xhigh",
@@ -176,12 +184,29 @@ function clampUnattendedParam(
   if (
     expensive.has(value) &&
     (isReasoningParamId(id) ||
-      id.includes("context") ||
+      isContextParamId(id) ||
       id.includes("thinking"))
   ) {
     return "medium";
   }
   return param.value;
+}
+
+export function isContextParamId(id: string): boolean {
+  return id.toLowerCase().includes("context");
+}
+
+export const MAX_UNATTENDED_CONTEXT_TOKENS = 64_000;
+
+export function parseTokenBudget(value: string): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)\s*(k|m|kb|mb)?$/i.exec(value.trim());
+  if (!match) return undefined;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return undefined;
+  const unit = (match[2] ?? "").toLowerCase();
+  if (unit === "m" || unit === "mb") return amount * 1_000_000;
+  if (unit === "k" || unit === "kb") return amount * 1_000;
+  return amount;
 }
 
 export function resolveModelParams(

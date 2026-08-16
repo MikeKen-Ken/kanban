@@ -24,6 +24,8 @@ Agent 直接提交 Git 并移动卡片会把“声明完成、验证、提交、
    依赖 pathspec 排除后继续提交。
 6. Git 提交必须带稳定的 session/card trailers。commit 后必须确认工作区 clean，再写入
    `commitRef`、只勾 ready 显式声明的 id，将验证摘要记入 Activity，并将卡片移入「待验证」。
+   若提交后工作区仍脏，保留 `committed`、写入错误并拒绝看板更新，供清理后恢复；不得改成
+   `failed` 以免丢失已创建提交。
 7. finalize 是幂等的：`committed` 状态可继续完成看板写入；重复调用 `finalized` 返回既有
    结果。`committing` 状态应优先按 trailers 查找已创建提交并恢复。
 8. 咨询卡仍可由 `submit_consultation` 直接送验，但 scoped 端点必须校验本会话 cardId。

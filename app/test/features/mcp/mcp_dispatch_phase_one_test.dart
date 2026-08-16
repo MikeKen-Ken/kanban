@@ -355,6 +355,61 @@ void main() {
     );
   });
 
+  test('committed 后工作区仍脏则拒绝送验并保留 committed', () async {
+    final repo = await _createGitRepo(tempDir, 'dirty_after_commit');
+    final todo =
+        controller.board!.columns.firstWhere((item) => item.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '提交后脏工作区卡'))!;
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: repo,
+    );
+    await dispatchClaimNextCard(controller, workerToken: 'worker-a');
+    final ready = await dispatchReadyToSubmit(
+      controller,
+      workerToken: 'worker-a',
+      cardId: cardId,
+      completedChecklistIds: const [],
+      completedFeedbackIds: const [],
+      verificationCommands: const [],
+      manualVerificationReason: '无需自动命令',
+    );
+    final sessionId = _jsonOf(ready)['sessionId'] as String;
+    final store = DispatchPendingStore();
+    final declared = (await store.read(sessionId))!;
+    await store.write(
+      declared.copyWith(
+        status: DispatchPendingStatus.committed,
+        commitRef: 'abc1234',
+      ),
+    );
+    await File(p.join(repo, 'leftover.txt')).writeAsString('仍脏\n');
+
+    final result = await dispatchFinalize(
+      controller,
+      workerToken: 'worker-a',
+      sessionId: sessionId,
+    );
+
+    expect(result.isError, isNot(true));
+    final payload = _jsonOf(result);
+    expect(payload['ok'], isFalse);
+    expect(payload['preservePending'], isTrue);
+    expect(payload['status'], 'committed');
+    expect(payload['commitRef'], 'abc1234');
+    expect(payload['error'], contains('工作区不干净'));
+    final persisted = await store.read(sessionId);
+    expect(persisted?.status, DispatchPendingStatus.committed);
+    expect(persisted?.error, contains('工作区不干净'));
+    expect(
+      findVerifyColumn(controller.board!.columns)
+          ?.cards
+          .any((item) => item.id == cardId),
+      isNot(true),
+    );
+  });
+
   test('finalize 拒绝 Agent 自行提交导致的 HEAD 漂移', () async {
     final repo = await _createGitRepo(tempDir, 'head_drift_repo');
     final todo =
@@ -493,6 +548,22 @@ void main() {
         cardId,
         operation: 'update_card(checklist/verificationFeedback)',
       ),
+      isNotNull,
+    );
+    expect(
+      rejectLockedCardFromFullMcp(cardId, operation: 'move_card'),
+      isNotNull,
+    );
+    expect(
+      rejectLockedCardFromFullMcp(cardId, operation: 'complete_card'),
+      isNotNull,
+    );
+    expect(
+      rejectLockedCardFromFullMcp(cardId, operation: 'delete_card'),
+      isNotNull,
+    );
+    expect(
+      rejectLockedCardFromFullMcp(cardId, operation: 'set_card_commit_ref'),
       isNotNull,
     );
     expect(

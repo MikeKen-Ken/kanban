@@ -7,6 +7,19 @@ import { settleWithin } from "./async_limit.ts";
 import type { RoundImage } from "./types.ts";
 
 const DEFAULT_MCP_TIMEOUT_MS = 30_000;
+export const MCP_CLAIM_TIMEOUT_MS = 120_000;
+export const MCP_FINALIZE_TIMEOUT_MS = 10 * 60_000;
+
+export function mcpTimeoutForTool(name: string): number {
+  switch (name) {
+    case "dispatch_claim_next_card":
+      return MCP_CLAIM_TIMEOUT_MS;
+    case "dispatch_finalize":
+      return MCP_FINALIZE_TIMEOUT_MS;
+    default:
+      return DEFAULT_MCP_TIMEOUT_MS;
+  }
+}
 
 export type ParsedClaimResult = {
   payload: Record<string, unknown>;
@@ -19,10 +32,12 @@ export interface KanbanMcpConnection {
   callRaw(
     name: string,
     args: Record<string, unknown>,
+    options?: { timeoutMs?: number },
   ): Promise<CallToolResult>;
   callJson(
     name: string,
     args: Record<string, unknown>,
+    options?: { timeoutMs?: number },
   ): Promise<Record<string, unknown>>;
   close(): Promise<void>;
 }
@@ -62,10 +77,11 @@ export class KanbanMcpClient implements KanbanMcpConnection {
   async callRaw(
     name: string,
     args: Record<string, unknown>,
+    options?: { timeoutMs?: number },
   ): Promise<CallToolResult> {
     const result = await withTimeout(
       `调用 ${name}`,
-      this.timeoutMs,
+      options?.timeoutMs ?? mcpTimeoutForTool(name),
       this.client.callTool({ name, arguments: args }),
     );
     if (result.isError) {
@@ -77,8 +93,9 @@ export class KanbanMcpClient implements KanbanMcpConnection {
   async callJson(
     name: string,
     args: Record<string, unknown>,
+    options?: { timeoutMs?: number },
   ): Promise<Record<string, unknown>> {
-    const result = await this.callRaw(name, args);
+    const result = await this.callRaw(name, args, options);
     const text = resultText(result);
     try {
       return JSON.parse(text) as Record<string, unknown>;

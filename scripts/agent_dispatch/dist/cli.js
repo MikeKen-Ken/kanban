@@ -490,9 +490,15 @@ function mergeJobWithCardOverrides(job, claim) {
   return { ...job, engine, model, modelParams };
 }
 function clampUnattendedParam(param, allowHighReasoning) {
-  if (allowHighReasoning) return param.value;
   const id = param.id.toLowerCase();
   const value = param.value.toLowerCase();
+  if (isContextParamId(id)) {
+    const tokens = parseTokenBudget(value);
+    if (tokens != null && tokens > MAX_UNATTENDED_CONTEXT_TOKENS) {
+      return "64k";
+    }
+  }
+  if (allowHighReasoning) return param.value;
   const expensive = /* @__PURE__ */ new Set([
     "high",
     "xhigh",
@@ -504,10 +510,24 @@ function clampUnattendedParam(param, allowHighReasoning) {
     "xlarge",
     "huge"
   ]);
-  if (expensive.has(value) && (isReasoningParamId(id) || id.includes("context") || id.includes("thinking"))) {
+  if (expensive.has(value) && (isReasoningParamId(id) || isContextParamId(id) || id.includes("thinking"))) {
     return "medium";
   }
   return param.value;
+}
+function isContextParamId(id) {
+  return id.toLowerCase().includes("context");
+}
+var MAX_UNATTENDED_CONTEXT_TOKENS = 64e3;
+function parseTokenBudget(value) {
+  const match = /^(\d+(?:\.\d+)?)\s*(k|m|kb|mb)?$/i.exec(value.trim());
+  if (!match) return void 0;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return void 0;
+  const unit = (match[2] ?? "").toLowerCase();
+  if (unit === "m" || unit === "mb") return amount * 1e6;
+  if (unit === "k" || unit === "kb") return amount * 1e3;
+  return amount;
 }
 function resolveModelParams(job) {
   if (job.modelParams && job.modelParams.length > 0) {
@@ -742,6 +762,18 @@ function settleWithin(ms, work) {
 
 // src/mcp_client.ts
 var DEFAULT_MCP_TIMEOUT_MS = 3e4;
+var MCP_CLAIM_TIMEOUT_MS = 12e4;
+var MCP_FINALIZE_TIMEOUT_MS = 10 * 6e4;
+function mcpTimeoutForTool(name) {
+  switch (name) {
+    case "dispatch_claim_next_card":
+      return MCP_CLAIM_TIMEOUT_MS;
+    case "dispatch_finalize":
+      return MCP_FINALIZE_TIMEOUT_MS;
+    default:
+      return DEFAULT_MCP_TIMEOUT_MS;
+  }
+}
 var KanbanMcpClient = class {
   client = new Client({
     name: "kanban-agent-worker",
@@ -770,10 +802,10 @@ var KanbanMcpClient = class {
     );
     return result.tools.map((tool) => tool.name).sort();
   }
-  async callRaw(name, args) {
+  async callRaw(name, args, options) {
     const result = await withTimeout(
       `\u8C03\u7528 ${name}`,
-      this.timeoutMs,
+      options?.timeoutMs ?? mcpTimeoutForTool(name),
       this.client.callTool({ name, arguments: args })
     );
     if (result.isError) {
@@ -781,8 +813,8 @@ var KanbanMcpClient = class {
     }
     return result;
   }
-  async callJson(name, args) {
-    const result = await this.callRaw(name, args);
+  async callJson(name, args, options) {
+    const result = await this.callRaw(name, args, options);
     const text = resultText(result);
     try {
       return JSON.parse(text);
@@ -1617,7 +1649,7 @@ ${afterSkip.output}`,
           dependencies
         );
         if (!finalized.ok) {
-          if (!terminalRecorded) {
+          if (!finalized.preservePending && !terminalRecorded) {
             await recordRoundFailure(
               mcp,
               job,
@@ -1745,6 +1777,15 @@ async function validateAndFinalize(mcp, job, pending, dependencies) {
     workerToken: job.workerToken,
     sessionId
   });
+  if (finalized.preservePending === true) {
+    return {
+      ok: false,
+      preservePending: true,
+      error: String(
+        finalized.error ?? "Git \u63D0\u4EA4\u540E\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u62D2\u7EDD\u66F4\u65B0\u770B\u677F"
+      )
+    };
+  }
   if (finalized.status !== "finalized" || String(finalized.sessionId ?? "") !== sessionId || String(finalized.cardId ?? "") !== cardId) {
     return { ok: false, error: `dispatch_finalize \u8FD4\u56DE\u72B6\u6001\u4E0D\u4E00\u81F4\uFF1A${sessionId}` };
   }

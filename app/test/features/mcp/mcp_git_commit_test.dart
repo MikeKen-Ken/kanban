@@ -124,4 +124,30 @@ void main() {
     expect(isMcpSensitiveGitPath('id_rsa'), isTrue);
     expect(isMcpSensitiveGitPath('lib/main.dart'), isFalse);
   });
+
+  test('parseMcpGitPorcelainZ 把 rename 源路径当作独立字段', () {
+    final raw = [
+      'R  notes.md',
+      '.env',
+      'C  backup/id_rsa',
+      'id_rsa',
+      ' M lib/main.dart',
+      '?? extra.txt',
+      '',
+    ].join('\x00');
+    expect(parseMcpGitPorcelainZ(raw), [
+      'notes.md',
+      '.env',
+      'backup/id_rsa',
+      'id_rsa',
+      'lib/main.dart',
+      'extra.txt',
+    ]);
+    final paths = parseMcpGitPorcelainZ(raw);
+    expect(paths.where(isMcpSensitiveGitPath), [
+      '.env',
+      'backup/id_rsa',
+      'id_rsa',
+    ]);
+  });
 }

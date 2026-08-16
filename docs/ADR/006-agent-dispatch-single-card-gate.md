@@ -37,7 +37,8 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
   不得回退完整工具目录。
 - Cursor 会话只注入该精简端点。Codex 使用临时 `CODEX_HOME`（复制用户 `auth.json`、只写精简 `kanbanMCP`），避免加载用户全局 MCP。
 - 调度中 `ready_to_submit` / `block_card` / `submit_consultation` 只能操作本轮领取的卡片。
-- 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、checklist 或 feedback 契约。
+- 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、move、complete、delete、
+  commitRef、checklist 或 feedback 契约。
 - claim 失败或空队列不占用本轮名额，且不得创建临时端点。
 - finalize 必须拒绝 HEAD 相对 baseline 被 Agent 移动，并按 ADR-007 执行。
 
