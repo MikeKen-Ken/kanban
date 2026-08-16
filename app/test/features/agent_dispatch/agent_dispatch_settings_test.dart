@@ -39,17 +39,17 @@ void main() {
     expect(settings.cardLimitMax, isTrue);
   });
 
-  test('加载设置时始终默认勾选全部并保留张数', () {
+  test('加载设置时记住是否勾选全部以及张数', () {
     final settings = AgentDispatchSettings.fromJson({
       'cardLimitMax': false,
       'cardLimitCount': 7,
     });
 
-    expect(settings.cardLimitMax, isTrue);
+    expect(settings.cardLimitMax, isFalse);
     expect(settings.cardLimitCount, 7);
   });
 
-  test('保存设置时始终写入 cardLimitMax=true', () async {
+  test('保存设置时保留用户选择的运行次数', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -61,7 +61,7 @@ void main() {
     await prefs.saveAgentDispatchSettings(settings);
     final loaded = prefs.loadAgentDispatchSettings();
 
-    expect(loaded.cardLimitMax, isTrue);
+    expect(loaded.cardLimitMax, isFalse);
     expect(loaded.cardLimitCount, 7);
   });
 

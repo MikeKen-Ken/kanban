@@ -304,8 +304,7 @@ class AgentDispatchSettings {
       modelParamValues: modelParamValues,
       engineProfiles: engineProfiles,
       allowHighReasoning: json['allowHighReasoning'] as bool? ?? false,
-      // 始终默认勾选「全部」；仅保留上次填写的张数。
-      cardLimitMax: true,
+      cardLimitMax: json['cardLimitMax'] as bool? ?? true,
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
           (json['maxCards'] as num?)?.toInt() ??
           1,
@@ -372,7 +371,7 @@ extension AgentDispatchSettingsStore on SharedPreferences {
   Future<void> saveAgentDispatchSettings(AgentDispatchSettings settings) {
     return setString(
       _key,
-      jsonEncode(settings.copyWith(cardLimitMax: true).toJson()),
+      jsonEncode(settings.toJson()),
     );
   }
 }

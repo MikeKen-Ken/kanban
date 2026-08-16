@@ -76,16 +76,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     _syncLogFromService();
     _service.addLogListener(_onServiceLog);
     _service.addRunningListener(_onServiceRunningChanged);
-    AgentDispatchWindow.visible.addListener(_onWindowVisibilityChanged);
     if (_running) _startHeartbeat();
     _bootstrap();
-  }
-
-  void _onWindowVisibilityChanged() {
-    if (!AgentDispatchWindow.visible.value || !mounted) return;
-    if (!_settings.cardLimitMax) {
-      setState(() => _settings = _settings.copyWith(cardLimitMax: true));
-    }
   }
 
   void _syncLogFromService() {
@@ -622,7 +614,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   @override
   void dispose() {
     _logRefreshScheduler.cancel();
-    AgentDispatchWindow.visible.removeListener(_onWindowVisibilityChanged);
     _service.removeLogListener(_onServiceLog);
     _service.removeRunningListener(_onServiceRunningChanged);
     _stopHeartbeat();
