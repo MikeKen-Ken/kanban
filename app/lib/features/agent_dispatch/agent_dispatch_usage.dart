@@ -16,6 +16,12 @@ class AgentDispatchUsageSnapshot {
   bool get hasPoolPercents =>
       autoRemainingPercent != null || apiRemainingPercent != null;
 
+  bool get hasAccountIdentity {
+    final email = userEmail?.trim() ?? '';
+    final name = apiKeyName?.trim() ?? '';
+    return email.isNotEmpty || name.isNotEmpty;
+  }
+
   factory AgentDispatchUsageSnapshot.fromJson(Map<String, dynamic> json) {
     return AgentDispatchUsageSnapshot(
       userEmail: json['userEmail'] as String?,
@@ -25,4 +31,14 @@ class AgentDispatchUsageSnapshot {
       message: json['message'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        if (userEmail != null) 'userEmail': userEmail,
+        if (apiKeyName != null) 'apiKeyName': apiKeyName,
+        if (autoRemainingPercent != null)
+          'autoRemainingPercent': autoRemainingPercent,
+        if (apiRemainingPercent != null)
+          'apiRemainingPercent': apiRemainingPercent,
+        if (message != null) 'message': message,
+      };
 }

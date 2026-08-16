@@ -27,6 +27,7 @@ import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_token_stats_dialog.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_usage_pane.dart';
+import 'agent_dispatch_usage_store.dart';
 import 'agent_dispatch_window.dart';
 import 'agent_dispatch_worker.dart';
 import 'agent_dispatch_workspace.dart';
@@ -375,15 +376,26 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   Future<void> _onCursorKeyChanged() async {
-    await _loadAccountInfo();
+    await _loadAccountInfo(force: true);
   }
 
-  Future<void> _loadAccountInfo() async {
+  Future<void> _loadAccountInfo({bool force = false}) async {
     if (_usageBusy || _settings.engine != AgentDispatchEngine.cursor) return;
+    final apiKey = await _credentials.resolveCursorApiKey();
+    final fingerprint = agentDispatchUsageKeyFingerprint(apiKey);
+    if (!force) {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.loadAgentDispatchUsage(keyFingerprint: fingerprint);
+      if (cached != null) {
+        if (!mounted) return;
+        setState(() => _usage = cached);
+        return;
+      }
+    }
     setState(() => _usageBusy = true);
     try {
       final snapshot = await fetchAgentDispatchUsage(
-        cursorApiKey: await _credentials.resolveCursorApiKey(),
+        cursorApiKey: apiKey,
         workerScriptPath: _settings.workerScriptPath,
       );
       final name = snapshot.apiKeyName?.trim();
@@ -395,6 +407,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               : null;
       if (label != null) {
         await _credentials.updateActiveCursorApiKeyLabel(label);
+      }
+      if (fingerprint.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.saveAgentDispatchUsage(
+          snapshot,
+          keyFingerprint: fingerprint,
+        );
       }
       if (!mounted) return;
       setState(() {
