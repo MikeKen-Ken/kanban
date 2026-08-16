@@ -10,12 +10,19 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WorkerCancellation } from "./cancellation.ts";
+import {
+  createCodexLogState,
+  createLineBuffer,
+  recordsFromCodexJsonLine,
+  recordsFromCodexStderrLine,
+} from "./codex_exec_log.ts";
 import { createCodexAgentHome, resolveUserCodexHome } from "./codex_mcp.ts";
 import {
   effortToCodexConfigArgs,
   type DispatchResult,
   type RoundDispatchJob,
 } from "./types.ts";
+import { workerLog, workerLogRecords } from "./worker_log.ts";
 
 export function resolveCodexCommand(): {
   command: string;
@@ -48,6 +55,7 @@ export function resolveCodexCommand(): {
 /**
  * Codex 0.147 已移除 `exec --full-auto`。
  * `--approve-for-me` 会走 workspace-write 沙箱并自动审批，不能再叠加 `--sandbox`。
+ * `--json` 把会话事件打到 stdout，避免把 TTY 回放误当成 stderr 警告。
  */
 export function buildCodexExecArgs(options: {
   cwd: string;
@@ -57,6 +65,7 @@ export function buildCodexExecArgs(options: {
 }): string[] {
   const args = [
     "exec",
+    "--json",
     "--approve-for-me",
     "--skip-git-repo-check",
     "--cd",
@@ -92,7 +101,7 @@ export async function runCodex(
       userCodexHome: resolveUserCodexHome(),
       tempRoot: temp,
     });
-    console.log(
+    workerLog(
       `Codex 使用隔离 CODEX_HOME，仅注入精简看板 MCP（${mcpUrl}）`,
     );
 
@@ -103,7 +112,7 @@ export async function runCodex(
       model: job.model,
     });
 
-    console.log(`Codex args=${args.join(" ")}`);
+    workerLog(`Codex args=${args.join(" ")}`);
 
     const code = await new Promise<number>((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
@@ -127,6 +136,13 @@ export async function runCodex(
         resolvePromise(130);
         return;
       }
+      const logState = createCodexLogState();
+      const stdoutLines = createLineBuffer((line) => {
+        workerLogRecords(recordsFromCodexJsonLine(line, logState));
+      });
+      const stderrLines = createLineBuffer((line) => {
+        workerLogRecords(recordsFromCodexStderrLine(line, logState));
+      });
       child = spawn(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
         env: { ...process.env, CODEX_HOME: agentHome.home },
@@ -134,10 +150,10 @@ export async function runCodex(
         shell: codex.shell,
       });
       child.stdout?.on("data", (buf: Buffer) => {
-        process.stdout.write(buf);
+        stdoutLines.push(buf);
       });
       child.stderr?.on("data", (buf: Buffer) => {
-        process.stderr.write(buf);
+        stderrLines.push(buf);
       });
       child.on("error", reject);
       if (!child.stdin) {
@@ -147,6 +163,8 @@ export async function runCodex(
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
+        stdoutLines.flush();
+        stderrLines.flush();
         if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
           resolvePromise(130);
           return;
@@ -156,11 +174,11 @@ export async function runCodex(
     });
 
     if (cancellation?.isSkipRequested) {
-      console.log(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
+      workerLog(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
       return { ok: false, error: "已跳过" };
     }
     if (cancellation?.isCancelled) {
-      console.log(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
+      workerLog(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
       return { ok: false, error: "已取消" };
     }
 
@@ -171,7 +189,7 @@ export async function runCodex(
       summary = undefined;
     }
 
-    console.log(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
+    workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex 会话完成" };
     }

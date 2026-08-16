@@ -21,12 +21,26 @@ void main() {
   });
 
   test('解析 Worker stdout 的来源与级别前缀', () {
-    final entry = AgentDispatchLogEntry.parseWorkerLine(
+    final success = AgentDispatchLogEntry.parseWorkerLine(
       '[success] [ai] 助手：已完成',
     );
-    expect(entry.level, AgentDispatchLogLevel.success);
-    expect(entry.source, AgentDispatchLogSource.ai);
-    expect(entry.message, '助手：已完成');
+    expect(success.level, AgentDispatchLogLevel.success);
+    expect(success.source, AgentDispatchLogSource.ai);
+    expect(success.message, '助手：已完成');
+
+    final warning = AgentDispatchLogEntry.parseWorkerLine(
+      '[warning] [shell] warning: LF will be replaced by CRLF',
+    );
+    expect(warning.level, AgentDispatchLogLevel.warning);
+    expect(warning.source, AgentDispatchLogSource.shell);
+    expect(warning.message, 'warning: LF will be replaced by CRLF');
+
+    final error = AgentDispatchLogEntry.parseWorkerLine(
+      '[error] [mcp] 工具失败：ready_to_submit 看板未就绪',
+    );
+    expect(error.level, AgentDispatchLogLevel.error);
+    expect(error.source, AgentDispatchLogSource.mcp);
+    expect(error.message, '工具失败：ready_to_submit 看板未就绪');
   });
 
   test('会话指标行拆出重点着色片段', () {

@@ -12,13 +12,15 @@ describe("buildCodexExecArgs", () => {
     });
     assert.equal(args.includes("--full-auto"), false);
     assert.equal(args.includes("--sandbox"), false);
-    assert.deepEqual(args.slice(0, 3), [
+    assert.deepEqual(args.slice(0, 4), [
       "exec",
+      "--json",
       "--approve-for-me",
       "--skip-git-repo-check",
     ]);
     assert.deepEqual(args, [
       "exec",
+      "--json",
       "--approve-for-me",
       "--skip-git-repo-check",
       "--cd",

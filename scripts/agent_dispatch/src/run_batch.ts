@@ -244,7 +244,7 @@ export async function runBatch(
         }
         if (state === "verify" && pending == null) {
           processedCards += 1;
-          workerLog(`[success] 咨询卡 ${cardId} 已送交验证`);
+          workerLog(`咨询卡 ${cardId} 已送交验证`, "worker", "success");
           continue;
         }
         if (!pending || pending.status !== "declared") {
@@ -282,7 +282,7 @@ export async function runBatch(
         }
         terminalRecorded = true;
         processedCards += 1;
-        workerLog(`[success] 卡片 ${cardId} 已验证、提交并送交人工验证`);
+        workerLog(`卡片 ${cardId} 已验证、提交并送交人工验证`, "worker", "success");
         if (cancellation?.shouldStopAfterCurrentSession) {
           return cancellation.isCancelled ? cancelledResult() : drainedResult();
         }
@@ -353,7 +353,7 @@ async function recoverPendingSessions(
     );
     if (!result.ok) return { ...result, processedCards };
     processedCards += 1;
-    workerLog(`[success] 已恢复 pending 会话 ${sessionId}`);
+    workerLog(`已恢复 pending 会话 ${sessionId}`, "worker", "success");
   }
   return { ok: true, processedCards };
 }
@@ -475,7 +475,9 @@ async function recordRoundFailure(
     },
   ).catch((error) => {
     workerLog(
-      `[warning] 记录会话失败状态失败：${error instanceof Error ? error.message : String(error)}`,
+      `记录会话失败状态失败：${error instanceof Error ? error.message : String(error)}`,
+      "worker",
+      "warning",
     );
   });
 }
@@ -532,7 +534,7 @@ function completedResult(
   processedCards: number,
   reason: string,
 ): DispatchResult {
-  workerLog(`[success] Worker 批次完成：${reason}；已处理 ${processedCards} 张`);
+  workerLog(`Worker 批次完成：${reason}；已处理 ${processedCards} 张`, "worker", "success");
   return {
     ok: true,
     summary: `Worker 批次完成：${reason}；已处理 ${processedCards} 张`,

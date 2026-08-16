@@ -1,0 +1,290 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  createCodexLogState,
+  createLineBuffer,
+  recordsFromCodexEvent,
+  recordsFromCodexJsonLine,
+  recordsFromCodexStderrLine,
+} from "./codex_exec_log.ts";
+
+describe("recordsFromCodexEvent", () => {
+  it("把助手回复标成 AI 信息，而不是警告", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: { type: "agent_message", text: "已声明完成，等待 Worker 验证与收尾。" },
+    });
+    assert.deepEqual(records, [
+      {
+        line: "助手：已声明完成，等待 Worker 验证与收尾。",
+        source: "ai",
+        level: "info",
+      },
+    ]);
+  });
+
+  it("把 reasoning 标成思考", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: { type: "reasoning", text: "先定位玻璃层实现。" },
+    });
+    assert.equal(records[0]?.source, "ai");
+    assert.equal(records[0]?.line, "思考：先定位玻璃层实现。");
+  });
+
+  it("命令开始是命令来源；失败才是错误；输出里的 git warning 仍是警告", () => {
+    const started = recordsFromCodexEvent({
+      type: "item.started",
+      item: {
+        type: "command_execution",
+        command: "git add app/lib/foo.dart",
+        status: "in_progress",
+      },
+    });
+    assert.deepEqual(started, [
+      { line: "命令：git add app/lib/foo.dart", source: "shell", level: "info" },
+    ]);
+
+    const failed = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command: "git add app/lib/foo.dart",
+        status: "failed",
+        exit_code: 1,
+        aggregated_output:
+          "warning: in the working copy of 'foo.dart', LF will be replaced by CRLF\nerror: failed to add",
+      },
+    });
+    assert.equal(failed[0]?.level, "error");
+    assert.equal(failed[0]?.source, "shell");
+    assert.ok(failed.some((record) => record.level === "warning"));
+    assert.ok(failed.some((record) => record.level === "error" && record.line.includes("error: failed")));
+  });
+
+  it("成功命令不刷完整输出，只抽出诊断行", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command: "git status",
+        status: "completed",
+        exit_code: 0,
+        aggregated_output:
+          "import 'dart:ui';\nwarning: in the working copy of 'foo.dart', LF will be replaced by CRLF\nclass Foo {}",
+      },
+    });
+    assert.deepEqual(records, [
+      {
+        line: "warning: in the working copy of 'foo.dart', LF will be replaced by CRLF",
+        source: "shell",
+        level: "warning",
+      },
+    ]);
+  });
+
+  it("MCP 调用按工具来源记录，失败才升级为错误", () => {
+    const started = recordsFromCodexEvent({
+      type: "item.started",
+      item: {
+        type: "mcp_tool_call",
+        server: "kanbanMCP",
+        tool: "ready_to_submit",
+        arguments: { cardId: "abc" },
+        status: "in_progress",
+      },
+    });
+    assert.equal(started[0]?.source, "mcp");
+    assert.match(started[0]?.line ?? "", /^工具：ready_to_submit /);
+    assert.equal(started[0]?.level, "info");
+
+    const failed = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "mcp_tool_call",
+        tool: "ready_to_submit",
+        status: "failed",
+        error: { message: "看板未就绪" },
+      },
+    });
+    assert.deepEqual(failed, [
+      {
+        line: "工具失败：ready_to_submit 看板未就绪",
+        source: "mcp",
+        level: "error",
+      },
+    ]);
+  });
+
+  it("apply_patch 完成记录变更路径", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "file_change",
+        status: "completed",
+        changes: [
+          { path: "app/lib/a.dart", kind: "update" },
+          { path: "app/lib/b.dart", kind: "add" },
+        ],
+      },
+    });
+    assert.deepEqual(records, [
+      {
+        line: "工具：apply_patch 更新 app/lib/a.dart；新增 app/lib/b.dart",
+        source: "mcp",
+        level: "info",
+      },
+    ]);
+  });
+
+  it("回合用量写成会话 token 行", () => {
+    const records = recordsFromCodexEvent({
+      type: "turn.completed",
+      usage: {
+        input_tokens: 24763,
+        cached_input_tokens: 24448,
+        output_tokens: 122,
+      },
+    });
+    assert.equal(records.length, 1);
+    assert.equal(records[0]?.source, "worker");
+    assert.match(records[0]?.line ?? "", /^本会话 token：/);
+    assert.match(records[0]?.line ?? "", /total=/);
+  });
+
+  it("顶层 error 默认是失败，重连提示仍是信息", () => {
+    const fatal = recordsFromCodexEvent({
+      type: "error",
+      message: "stream error: broken pipe",
+    });
+    assert.deepEqual(fatal, [
+      { line: "stream error: broken pipe", source: "worker", level: "error" },
+    ]);
+
+    const reconnect = recordsFromCodexEvent({
+      type: "error",
+      message: "Reconnecting... 1/5",
+    });
+    assert.deepEqual(reconnect, [
+      { line: "Reconnecting... 1/5", source: "worker", level: "info" },
+    ]);
+  });
+
+  it("item.error 是非致命警告", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: { type: "error", message: "command output truncated" },
+    });
+    assert.deepEqual(records, [
+      {
+        line: "command output truncated",
+        source: "worker",
+        level: "warning",
+      },
+    ]);
+  });
+});
+
+describe("recordsFromCodexJsonLine / stderr", () => {
+  it("JSON 接通后不再把 TTY 会话回放当警告，只保留诊断行", () => {
+    const state = createCodexLogState();
+    const jsonRecords = recordsFromCodexJsonLine(
+      JSON.stringify({
+        type: "item.completed",
+        item: { type: "agent_message", text: "完成" },
+      }),
+      state,
+    );
+    assert.equal(jsonRecords[0]?.source, "ai");
+    assert.equal(state.jsonSeen, true);
+
+    assert.deepEqual(recordsFromCodexStderrLine("codex", state), []);
+    assert.deepEqual(
+      recordsFromCodexStderrLine("我会只处理这张卡片。", state),
+      [],
+    );
+    assert.deepEqual(
+      recordsFromCodexStderrLine(
+        "warning: in the working copy of 'foo.dart', LF will be replaced by CRLF",
+        state,
+      ),
+      [
+        {
+          line: "warning: in the working copy of 'foo.dart', LF will be replaced by CRLF",
+          source: "worker",
+          level: "warning",
+        },
+      ],
+    );
+  });
+
+  it("没有 JSON 时按 TTY 角色分类，并跳过用户提示正文", () => {
+    const state = createCodexLogState();
+    assert.deepEqual(recordsFromCodexStderrLine("OpenAI Codex v0.147.0", state), [
+      { line: "OpenAI Codex v0.147.0", source: "worker", level: "info" },
+    ]);
+    assert.deepEqual(recordsFromCodexStderrLine("user", state), []);
+    assert.deepEqual(
+      recordsFromCodexStderrLine("# Skill 正文", state),
+      [],
+    );
+    assert.deepEqual(
+      recordsFromCodexStderrLine('  "error": "看板未就绪"', state),
+      [],
+    );
+    assert.deepEqual(recordsFromCodexStderrLine("codex", state), []);
+    assert.deepEqual(recordsFromCodexStderrLine("先定位玻璃层。", state), [
+      { line: "助手：先定位玻璃层。", source: "ai", level: "info" },
+    ]);
+    assert.deepEqual(recordsFromCodexStderrLine("exec", state), []);
+    assert.deepEqual(
+      recordsFromCodexStderrLine("git status --short", state),
+      [{ line: "命令：git status --short", source: "shell", level: "info" }],
+    );
+    assert.deepEqual(
+      recordsFromCodexStderrLine(
+        "warning: in the working copy of 'foo.dart', LF will be replaced by CRLF",
+        state,
+      ),
+      [
+        {
+          line: "warning: in the working copy of 'foo.dart', LF will be replaced by CRLF",
+          source: "shell",
+          level: "warning",
+        },
+      ],
+    );
+    assert.deepEqual(
+      recordsFromCodexStderrLine("mcp: kanbanMCP/ready_to_submit started", state),
+      [{ line: "工具：ready_to_submit 开始", source: "mcp", level: "info" }],
+    );
+  });
+
+  it("源码里出现 error 字样不会被当成错误", () => {
+    const state = createCodexLogState();
+    recordsFromCodexStderrLine("exec", state);
+    recordsFromCodexStderrLine("rg error", state);
+    assert.deepEqual(
+      recordsFromCodexStderrLine(
+        "app/lib/foo.dart:43:    if (board == null) return mcpErrorResult('看板未就绪');",
+        state,
+      ),
+      [],
+    );
+  });
+});
+
+describe("createLineBuffer", () => {
+  it("按行切分并不丢尾块", () => {
+    const lines: string[] = [];
+    const buffer = createLineBuffer((line) => lines.push(line));
+    buffer.push('{"type":"turn.started"}\n{"type":"turn.completed"}');
+    buffer.push("\npartial");
+    buffer.flush();
+    assert.deepEqual(lines, [
+      '{"type":"turn.started"}',
+      '{"type":"turn.completed"}',
+      "partial",
+    ]);
+  });
+});

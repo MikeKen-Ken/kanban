@@ -373,6 +373,417 @@ import { tmpdir as tmpdir2 } from "node:os";
 import { dirname, join as join2 } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// src/cursor_token_usage.ts
+function asCount(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(value));
+}
+function toDashboardTokenUsage(raw) {
+  const input = asCount(raw.inputTokens);
+  const output = asCount(raw.outputTokens);
+  const cacheRead = asCount(raw.cacheReadTokens);
+  const cacheWrite = asCount(raw.cacheWriteTokens);
+  const reportedTotal = asCount(raw.totalTokens);
+  const cache = cacheRead + cacheWrite;
+  const extra = reportedTotal - input - output;
+  const inferredCache = cache > 0 ? cache : Math.max(0, extra);
+  const inferredRead = cacheRead > 0 ? cacheRead : inferredCache;
+  const inferredWrite = cacheWrite;
+  const cacheSum = inferredRead + inferredWrite;
+  const inputLooksInclusive = cacheSum > 0 && input >= cacheSum && extra >= cacheSum;
+  if (inputLooksInclusive) {
+    const uncached = input - cacheSum;
+    return {
+      inputTokens: uncached,
+      outputTokens: output,
+      cacheReadTokens: inferredRead,
+      cacheWriteTokens: inferredWrite,
+      totalTokens: uncached + output + cacheSum
+    };
+  }
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    cacheReadTokens: inferredRead,
+    cacheWriteTokens: inferredWrite,
+    totalTokens: input + output + cacheSum
+  };
+}
+function formatSessionTokenLog(raw) {
+  const usage = toDashboardTokenUsage(raw);
+  return `\u672C\u4F1A\u8BDD token\uFF1Ainput=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}`;
+}
+
+// src/codex_exec_log.ts
+var OUTPUT_CLIP = 4e3;
+var JSON_CLIP = 2e3;
+var ANSI_PATTERN = /\x1B\[[0-9;]*m/g;
+var DIAGNOSTIC_PATTERN = /^\s*(?:warning:|error:|fatal:|WARN\b|ERROR\b|FATAL\b)/i;
+var RECONNECT_PATTERN = /reconnecting\.\.\.\s*\d+\s*\/\s*\d+/i;
+function createCodexLogState() {
+  return {
+    jsonSeen: false,
+    ttyRole: "none",
+    ttyExecAwaitingCommand: false,
+    ttyAwaitingTokenCount: false
+  };
+}
+function createLineBuffer(onLine) {
+  let pending = "";
+  return {
+    push(chunk) {
+      pending += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      pending = pending.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      let index = pending.indexOf("\n");
+      while (index >= 0) {
+        onLine(pending.slice(0, index));
+        pending = pending.slice(index + 1);
+        index = pending.indexOf("\n");
+      }
+    },
+    flush() {
+      if (pending.length > 0) onLine(pending);
+      pending = "";
+    }
+  };
+}
+function recordsFromCodexJsonLine(raw, state) {
+  const line = stripAnsi(raw).trim();
+  if (!line) return [];
+  if (!line.startsWith("{")) {
+    return recordsFromCodexStderrLine(line, state);
+  }
+  let event;
+  try {
+    event = asRecord2(JSON.parse(line)) ?? {};
+  } catch {
+    return withDefaultLevel([{ line: clip(line, 200), source: "worker" }]);
+  }
+  state.jsonSeen = true;
+  return recordsFromCodexEvent(event);
+}
+function recordsFromCodexStderrLine(raw, state) {
+  const line = stripAnsi(raw).replace(/\s+$/, "");
+  if (!line.trim()) return [];
+  const diagnostic = diagnosticRecord(line, "worker");
+  if (state.jsonSeen) return withDefaultLevel(diagnostic ? [diagnostic] : []);
+  return withDefaultLevel(recordsFromCodexTtyLine(line, state));
+}
+function recordsFromCodexEvent(event) {
+  return withDefaultLevel(recordsFromCodexEventInner(event));
+}
+function recordsFromCodexEventInner(event) {
+  const type = String(event.type ?? "");
+  switch (type) {
+    case "thread.started": {
+      const threadId = pickString(event, "thread_id");
+      return threadId ? [{ line: `Codex \u4F1A\u8BDD ${threadId}`, source: "worker" }] : [];
+    }
+    case "turn.started":
+      return [];
+    case "turn.completed":
+      return recordsFromUsage(asRecord2(event.usage));
+    case "turn.failed": {
+      const message = pickString(asRecord2(event.error), "message") || pickString(event, "message") || "Codex \u56DE\u5408\u5931\u8D25";
+      return [{ line: message, source: "worker", level: "error" }];
+    }
+    case "error": {
+      const message = pickString(event, "message") || "Codex \u9519\u8BEF";
+      if (RECONNECT_PATTERN.test(message)) {
+        return [{ line: message, source: "worker" }];
+      }
+      return [{ line: message, source: "worker", level: "error" }];
+    }
+    case "item.started":
+    case "item.updated":
+    case "item.completed":
+      return recordsFromCodexItem(type, asRecord2(event.item) ?? {});
+    default:
+      return [];
+  }
+}
+function recordsFromCodexItem(eventType, item) {
+  const itemType = String(item.type ?? item.item_type ?? "");
+  const status = String(item.status ?? "");
+  const failed = status === "failed" || eventType === "item.failed";
+  switch (itemType) {
+    case "agent_message":
+    case "assistant_message":
+      if (eventType !== "item.completed") return [];
+      return toRecords(expandMultiline("\u52A9\u624B\uFF1A", pickString(item, "text")), "ai");
+    case "reasoning":
+      if (eventType !== "item.completed") return [];
+      return toRecords(expandMultiline("\u601D\u8003\uFF1A", pickString(item, "text")), "ai");
+    case "command_execution":
+      return recordsFromCommand(eventType, item, failed);
+    case "file_change":
+      if (eventType !== "item.completed") return [];
+      return recordsFromFileChange(item, failed);
+    case "mcp_tool_call":
+      return recordsFromMcp(eventType, item, failed);
+    case "web_search":
+      if (eventType !== "item.completed") return [];
+      return pickString(item, "query") ? [{ line: `\u5DE5\u5177\uFF1Aweb_search ${pickString(item, "query")}`, source: "mcp" }] : [];
+    case "todo_list":
+      return recordsFromTodo(item);
+    case "error":
+      if (eventType !== "item.completed") return [];
+      return [
+        {
+          line: pickString(item, "message") || "Codex \u975E\u81F4\u547D\u8B66\u544A",
+          source: "worker",
+          level: "warning"
+        }
+      ];
+    default:
+      return [];
+  }
+}
+function recordsFromCommand(eventType, item, failed) {
+  const command = pickString(item, "command");
+  if (eventType === "item.started") {
+    return command ? toRecords(expandMultiline("\u547D\u4EE4\uFF1A", command), "shell") : [];
+  }
+  if (eventType !== "item.completed") return [];
+  const records = [];
+  if (command && failed) {
+    records.push({
+      line: `\u547D\u4EE4\u5931\u8D25\uFF1A${clip(command, JSON_CLIP)}`,
+      source: "shell",
+      level: "error"
+    });
+  }
+  const output = pickString(item, "aggregated_output");
+  if (failed && output.trim()) {
+    records.push(
+      ...toRecords(expandMultiline("\u547D\u4EE4\u8F93\u51FA\uFF1A", clip(output, OUTPUT_CLIP)), "shell", "error")
+    );
+  }
+  records.push(...diagnosticRecordsFromOutput(output, "shell"));
+  return records;
+}
+function recordsFromFileChange(item, failed) {
+  const changes = Array.isArray(item.changes) ? item.changes : [];
+  const parts = changes.map((entry) => asRecord2(entry)).filter((entry) => entry != null).map((entry) => {
+    const path = pickString(entry, "path");
+    if (!path) return "";
+    const kind = String(entry.kind ?? "update");
+    const label = kind === "add" ? "\u65B0\u589E" : kind === "delete" ? "\u5220\u9664" : "\u66F4\u65B0";
+    return `${label} ${path}`;
+  }).filter(Boolean);
+  const detail = parts.join("\uFF1B") || "apply_patch";
+  return [
+    {
+      line: `\u5DE5\u5177\uFF1Aapply_patch ${detail}`,
+      source: "mcp",
+      level: failed ? "error" : "info"
+    }
+  ];
+}
+function recordsFromMcp(eventType, item, failed) {
+  const tool = pickString(item, "tool") || "tool";
+  if (eventType === "item.started") {
+    const args = usefulJson(item.arguments);
+    const detail = args ? `${tool} ${args}` : `${tool} \u5F00\u59CB`;
+    return [{ line: `\u5DE5\u5177\uFF1A${detail}`, source: "mcp" }];
+  }
+  if (eventType !== "item.completed") return [];
+  if (failed) {
+    const err = pickString(asRecord2(item.error), "message") || pickString(item, "error") || "\u8C03\u7528\u5931\u8D25";
+    return [
+      {
+        line: `\u5DE5\u5177\u5931\u8D25\uFF1A${tool} ${err}`,
+        source: "mcp",
+        level: "error"
+      }
+    ];
+  }
+  const result = mcpResultText(item.result);
+  if (!result.trim()) return [];
+  return toRecords(expandMultiline(`\u5DE5\u5177\u7ED3\u679C\uFF1A${tool} `, result), "mcp");
+}
+function recordsFromTodo(item) {
+  const items = Array.isArray(item.items) ? item.items : [];
+  const parts = items.map((entry) => asRecord2(entry)).filter((entry) => entry != null).map((entry) => {
+    const text = pickString(entry, "text");
+    if (!text) return "";
+    return `${entry.completed === true ? "\u2713 " : ""}${text}`;
+  }).filter(Boolean);
+  if (parts.length === 0) return [];
+  return [{ line: `\u8BA1\u5212\uFF1A${parts.join("\uFF1B")}`, source: "worker" }];
+}
+function recordsFromUsage(usage) {
+  if (!usage) return [];
+  const cached = asCount2(usage.cached_input_tokens);
+  const inputRaw = asCount2(usage.input_tokens);
+  const input = cached > 0 && inputRaw >= cached ? inputRaw - cached : inputRaw;
+  const output = asCount2(usage.output_tokens);
+  if (input + output + cached <= 0) return [];
+  return [
+    {
+      line: formatSessionTokenLog({
+        inputTokens: input,
+        outputTokens: output,
+        cacheReadTokens: cached
+      }),
+      source: "worker"
+    }
+  ];
+}
+function recordsFromCodexTtyLine(line, state) {
+  const trimmed = line.trim();
+  const role = ttyRoleOf(trimmed);
+  if (role) {
+    state.ttyRole = role;
+    state.ttyExecAwaitingCommand = role === "exec";
+    state.ttyAwaitingTokenCount = trimmed === "tokens used";
+    if (trimmed.startsWith("mcp:")) return recordsFromTtyMcp(trimmed);
+    if (trimmed === "apply patch") {
+      return [{ line: "\u5DE5\u5177\uFF1Aapply_patch", source: "mcp" }];
+    }
+    if (trimmed === "patch: completed") {
+      return [{ line: "\u5DE5\u5177\u7ED3\u679C\uFF1Aapply_patch", source: "mcp" }];
+    }
+    if (trimmed === "tokens used") return [];
+    return [];
+  }
+  if (state.ttyAwaitingTokenCount) {
+    state.ttyAwaitingTokenCount = false;
+    const total = Number(trimmed.replace(/,/g, ""));
+    if (Number.isFinite(total) && total > 0) {
+      return [{ line: `Codex tokens used\uFF1A${trimmed}`, source: "worker" }];
+    }
+  }
+  if (isBannerLine(trimmed)) {
+    return [{ line: trimmed, source: "worker" }];
+  }
+  if (state.ttyRole === "user") return [];
+  if (state.ttyRole === "codex") {
+    return toRecords(expandMultiline("\u52A9\u624B\uFF1A", line), "ai");
+  }
+  if (state.ttyRole === "exec") {
+    if (state.ttyExecAwaitingCommand) {
+      state.ttyExecAwaitingCommand = false;
+      return toRecords(expandMultiline("\u547D\u4EE4\uFF1A", trimmed), "shell");
+    }
+    if (/^failed in /i.test(trimmed) || /^error in /i.test(trimmed)) {
+      return [{ line: `\u547D\u4EE4\u5931\u8D25\uFF1A${trimmed}`, source: "shell", level: "error" }];
+    }
+    const diagnostic2 = diagnosticRecord(trimmed, "shell");
+    return diagnostic2 ? [diagnostic2] : [];
+  }
+  if (state.ttyRole === "patch") {
+    if (trimmed.startsWith("diff ") || trimmed.startsWith("index ")) return [];
+    if (/^[+-]/.test(trimmed) || trimmed.startsWith("@@")) return [];
+    if (/^[A-Za-z]:\\/.test(trimmed) || trimmed.includes("/")) {
+      return [{ line: `\u5DE5\u5177\u7ED3\u679C\uFF1Aapply_patch ${trimmed}`, source: "mcp" }];
+    }
+    return [];
+  }
+  const diagnostic = diagnosticRecord(trimmed, "worker");
+  if (diagnostic) return [diagnostic];
+  return [{ line: trimmed, source: "worker" }];
+}
+function ttyRoleOf(trimmed) {
+  if (trimmed === "user") return "user";
+  if (trimmed === "codex") return "codex";
+  if (trimmed === "exec") return "exec";
+  if (trimmed === "apply patch" || trimmed === "patch: completed") return "patch";
+  if (trimmed === "tokens used") return "none";
+  if (trimmed.startsWith("mcp:")) return "none";
+  return void 0;
+}
+function recordsFromTtyMcp(line) {
+  const match = /^mcp:\s*([^/]+)\/(\S+)\s+(started|\(completed\))$/.exec(line);
+  if (!match) return [{ line: `\u5DE5\u5177\uFF1A${line.slice(4).trim()}`, source: "mcp" }];
+  const tool = match[2];
+  if (match[3] === "started") {
+    return [{ line: `\u5DE5\u5177\uFF1A${tool} \u5F00\u59CB`, source: "mcp" }];
+  }
+  return [{ line: `\u5DE5\u5177\u7ED3\u679C\uFF1A${tool} \u5B8C\u6210`, source: "mcp" }];
+}
+function isBannerLine(line) {
+  return line.startsWith("OpenAI Codex") || line === "--------" || /^(workdir|model|provider|approval|sandbox|reasoning effort|reasoning summaries|session id):/i.test(
+    line
+  );
+}
+function diagnosticRecordsFromOutput(output, source) {
+  if (!output.trim()) return [];
+  const records = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const line of output.split(/\r?\n/)) {
+    const record = diagnosticRecord(stripAnsi(line), source);
+    if (!record || seen.has(record.line)) continue;
+    seen.add(record.line);
+    records.push(record);
+  }
+  return records;
+}
+function withDefaultLevel(records) {
+  return records.map((record) => ({
+    ...record,
+    level: record.level ?? "info"
+  }));
+}
+function diagnosticRecord(line, source) {
+  const trimmed = line.trim();
+  if (!DIAGNOSTIC_PATTERN.test(trimmed)) return void 0;
+  const level = /^\s*(?:warning:|WARN\b)/i.test(trimmed) ? "warning" : "error";
+  return { line: trimmed, source, level };
+}
+function expandMultiline(prefix, body) {
+  const trimmed = body.trimEnd();
+  if (!trimmed) return prefix.endsWith(" ") || prefix.endsWith("\uFF1A") ? [] : [prefix];
+  const lines = trimmed.split(/\r?\n/);
+  const result = [`${prefix}${lines[0]}`];
+  for (let i = 1; i < lines.length; i++) {
+    result.push(`  \u2502 ${lines[i]}`);
+  }
+  return result;
+}
+function toRecords(lines, source, level = "info") {
+  return lines.map((line) => ({ line, source, level }));
+}
+function mcpResultText(result) {
+  const record = asRecord2(result);
+  if (!record) return usefulJson(result);
+  const content = record.content;
+  if (Array.isArray(content)) {
+    const texts = content.map((block) => asRecord2(block)).filter((block) => block != null).filter((block) => block.type === "text" && typeof block.text === "string").map((block) => String(block.text).trim()).filter(Boolean);
+    if (texts.length > 0) return clip(texts.join("\n"), OUTPUT_CLIP);
+  }
+  return usefulJson(record.structured_content ?? result);
+}
+function usefulJson(value, max = JSON_CLIP) {
+  if (value === void 0 || value === null) return "";
+  if (typeof value === "string") return clip(value.trim(), max);
+  try {
+    const text = JSON.stringify(value);
+    if (!text || text === "{}" || text === "[]" || text === "null") return "";
+    return clip(text, max);
+  } catch {
+    return clip(String(value), max);
+  }
+}
+function pickString(record, key) {
+  const value = record?.[key];
+  return typeof value === "string" ? value : "";
+}
+function asRecord2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function asCount2(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(value));
+}
+function clip(text, max) {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\u2026`;
+}
+function stripAnsi(text) {
+  return text.replace(ANSI_PATTERN, "");
+}
+
 // src/codex_mcp.ts
 import {
   copyFileSync,
@@ -566,6 +977,21 @@ function effortToCodexConfigArgs(job) {
   return [];
 }
 
+// src/worker_log.ts
+import { writeSync } from "node:fs";
+function workerLog(line, source = "worker", level = "info") {
+  const prefix = level === "info" ? `[${source}]` : `[${level}] [${source}]`;
+  for (const part of line.split(/\r?\n/)) {
+    writeSync(1, `${prefix} ${part}
+`);
+  }
+}
+function workerLogRecords(records) {
+  for (const record of records) {
+    workerLog(record.line, record.source ?? "worker", record.level ?? "info");
+  }
+}
+
 // src/run_codex.ts
 function resolveCodexCommand() {
   const packageRoot = join2(dirname(fileURLToPath(import.meta.url)), "..");
@@ -593,6 +1019,7 @@ function resolveCodexCommand() {
 function buildCodexExecArgs(options) {
   const args = [
     "exec",
+    "--json",
     "--approve-for-me",
     "--skip-git-repo-check",
     "--cd",
@@ -623,7 +1050,7 @@ async function runCodex(job, cancellation) {
       userCodexHome: resolveUserCodexHome(),
       tempRoot: temp
     });
-    console.log(
+    workerLog(
       `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u4EC5\u6CE8\u5165\u7CBE\u7B80\u770B\u677F MCP\uFF08${mcpUrl}\uFF09`
     );
     const args = buildCodexExecArgs({
@@ -632,7 +1059,7 @@ async function runCodex(job, cancellation) {
       extraConfigArgs: effortToCodexConfigArgs(job),
       model: job.model
     });
-    console.log(`Codex args=${args.join(" ")}`);
+    workerLog(`Codex args=${args.join(" ")}`);
     const code = await new Promise((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
       let child;
@@ -654,6 +1081,13 @@ async function runCodex(job, cancellation) {
         resolvePromise(130);
         return;
       }
+      const logState = createCodexLogState();
+      const stdoutLines = createLineBuffer((line) => {
+        workerLogRecords(recordsFromCodexJsonLine(line, logState));
+      });
+      const stderrLines = createLineBuffer((line) => {
+        workerLogRecords(recordsFromCodexStderrLine(line, logState));
+      });
       child = spawn2(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
         env: { ...process.env, CODEX_HOME: agentHome.home },
@@ -661,10 +1095,10 @@ async function runCodex(job, cancellation) {
         shell: codex.shell
       });
       child.stdout?.on("data", (buf) => {
-        process.stdout.write(buf);
+        stdoutLines.push(buf);
       });
       child.stderr?.on("data", (buf) => {
-        process.stderr.write(buf);
+        stderrLines.push(buf);
       });
       child.on("error", reject);
       if (!child.stdin) {
@@ -674,6 +1108,8 @@ async function runCodex(job, cancellation) {
       child.stdin.write(readFileSync(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
+        stdoutLines.flush();
+        stderrLines.flush();
         if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
           resolvePromise(130);
           return;
@@ -682,11 +1118,11 @@ async function runCodex(job, cancellation) {
       });
     });
     if (cancellation?.isSkipRequested) {
-      console.log(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
+      workerLog(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
       return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
     }
     if (cancellation?.isCancelled) {
-      console.log(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
+      workerLog(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
       return { ok: false, error: "\u5DF2\u53D6\u6D88" };
     }
     let summary;
@@ -695,7 +1131,7 @@ async function runCodex(job, cancellation) {
     } catch {
       summary = void 0;
     }
-    console.log(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
+    workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
     }
@@ -884,56 +1320,6 @@ import { mkdirSync as mkdirSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join3 } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
-
-// src/cursor_token_usage.ts
-function asCount(value) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
-  return Math.max(0, Math.trunc(value));
-}
-function toDashboardTokenUsage(raw) {
-  const input = asCount(raw.inputTokens);
-  const output = asCount(raw.outputTokens);
-  const cacheRead = asCount(raw.cacheReadTokens);
-  const cacheWrite = asCount(raw.cacheWriteTokens);
-  const reportedTotal = asCount(raw.totalTokens);
-  const cache = cacheRead + cacheWrite;
-  const extra = reportedTotal - input - output;
-  const inferredCache = cache > 0 ? cache : Math.max(0, extra);
-  const inferredRead = cacheRead > 0 ? cacheRead : inferredCache;
-  const inferredWrite = cacheWrite;
-  const cacheSum = inferredRead + inferredWrite;
-  const inputLooksInclusive = cacheSum > 0 && input >= cacheSum && extra >= cacheSum;
-  if (inputLooksInclusive) {
-    const uncached = input - cacheSum;
-    return {
-      inputTokens: uncached,
-      outputTokens: output,
-      cacheReadTokens: inferredRead,
-      cacheWriteTokens: inferredWrite,
-      totalTokens: uncached + output + cacheSum
-    };
-  }
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    cacheReadTokens: inferredRead,
-    cacheWriteTokens: inferredWrite,
-    totalTokens: input + output + cacheSum
-  };
-}
-function formatSessionTokenLog(raw) {
-  const usage = toDashboardTokenUsage(raw);
-  return `\u672C\u4F1A\u8BDD token\uFF1Ainput=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}`;
-}
-
-// src/worker_log.ts
-import { writeSync } from "node:fs";
-function workerLog(line, source = "worker") {
-  writeSync(1, `[${source}] ${line}
-`);
-}
-
-// src/run_cursor.ts
 function logLine(line, source = "worker") {
   workerLog(line, source);
 }
@@ -952,7 +1338,7 @@ function formatJson(value, max = 4e3) {
     return String(value);
   }
 }
-function expandMultiline(prefix, body) {
+function expandMultiline2(prefix, body) {
   const trimmed = body.trimEnd();
   if (!trimmed) return [`${prefix}\uFF08\u7A7A\uFF09`];
   const lines = trimmed.split(/\r?\n/);
@@ -962,10 +1348,10 @@ function expandMultiline(prefix, body) {
   }
   return result;
 }
-function asRecord2(value) {
+function asRecord3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-function pickString(message, ...keys) {
+function pickString2(message, ...keys) {
   if (!message) return "";
   for (const key of keys) {
     const value = message[key];
@@ -978,12 +1364,12 @@ function parseJsonRecord(value) {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return void 0;
   try {
-    return asRecord2(JSON.parse(trimmed));
+    return asRecord3(JSON.parse(trimmed));
   } catch {
     return void 0;
   }
 }
-function usefulJson(value, max = 4e3) {
+function usefulJson2(value, max = 4e3) {
   if (value === void 0 || value === null) return "";
   if (typeof value === "string") return value.trim();
   const text = formatJson(value, max);
@@ -991,12 +1377,12 @@ function usefulJson(value, max = 4e3) {
   return text;
 }
 function toolPayload(step) {
-  return asRecord2(step.message) ?? asRecord2(step.toolCall) ?? asRecord2(step.call) ?? asRecord2(step.tool) ?? asRecord2(asRecord2(step.message)?.toolCall) ?? asRecord2(asRecord2(step.message)?.call);
+  return asRecord3(step.message) ?? asRecord3(step.toolCall) ?? asRecord3(step.call) ?? asRecord3(step.tool) ?? asRecord3(asRecord3(step.message)?.toolCall) ?? asRecord3(asRecord3(step.message)?.call);
 }
 function extractToolDetail(payload) {
   if (!payload) return "";
-  const nested = asRecord2(payload.args) ?? asRecord2(payload.arguments) ?? asRecord2(payload.input) ?? asRecord2(payload.params) ?? asRecord2(asRecord2(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord2(payload.function)?.arguments);
-  const command = pickString(
+  const nested = asRecord3(payload.args) ?? asRecord3(payload.arguments) ?? asRecord3(payload.input) ?? asRecord3(payload.params) ?? asRecord3(asRecord3(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord3(payload.function)?.arguments);
+  const command = pickString2(
     payload,
     "command",
     "cmd",
@@ -1008,7 +1394,7 @@ function extractToolDetail(payload) {
   );
   if (command) return command;
   if (nested) {
-    const nestedCommand = pickString(
+    const nestedCommand = pickString2(
       nested,
       "command",
       "cmd",
@@ -1023,10 +1409,10 @@ function extractToolDetail(payload) {
       delete extra.command;
       delete extra.cmd;
       delete extra.shellCommand;
-      const rest = usefulJson(extra, 2e3);
+      const rest = usefulJson2(extra, 2e3);
       return rest ? `${nestedCommand}  ${rest}` : nestedCommand;
     }
-    return usefulJson(nested);
+    return usefulJson2(nested);
   }
   const rawArgs = payload.args ?? payload.arguments ?? payload.input ?? payload.params;
   if (typeof rawArgs === "string" && rawArgs.trim()) return rawArgs.trim();
@@ -1036,38 +1422,38 @@ function isShellTool(name) {
   return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
 }
 function describeStep(step) {
-  const record = asRecord2(step) ?? {};
+  const record = asRecord3(step) ?? {};
   const type = String(record.type ?? "unknown");
   const message = toolPayload(record);
   switch (type) {
     case "assistantMessage":
       return {
-        lines: expandMultiline("\u52A9\u624B\uFF1A", String(message?.text ?? "")),
+        lines: expandMultiline2("\u52A9\u624B\uFF1A", String(message?.text ?? "")),
         source: "ai"
       };
     case "thinkingMessage": {
-      const text = pickString(message, "text", "thinking", "content");
+      const text = pickString2(message, "text", "thinking", "content");
       return {
-        lines: text ? expandMultiline("\u601D\u8003\uFF1A", text) : [],
+        lines: text ? expandMultiline2("\u601D\u8003\uFF1A", text) : [],
         source: "ai"
       };
     }
     case "toolCall": {
-      const toolName = pickString(message, "name", "toolName", "functionName", "type") || pickString(record, "name", "toolName") || "tool";
+      const toolName = pickString2(message, "name", "toolName", "functionName", "type") || pickString2(record, "name", "toolName") || "tool";
       const detail = extractToolDetail(message);
       if (!detail) {
         return { lines: [], source: isShellTool(toolName) ? "shell" : "mcp" };
       }
       if (isShellTool(toolName)) {
-        return { lines: expandMultiline("\u547D\u4EE4\uFF1A", detail), source: "shell" };
+        return { lines: expandMultiline2("\u547D\u4EE4\uFF1A", detail), source: "shell" };
       }
       return {
-        lines: expandMultiline(`\u5DE5\u5177\uFF1A${toolName} `, detail),
+        lines: expandMultiline2(`\u5DE5\u5177\uFF1A${toolName} `, detail),
         source: "mcp"
       };
     }
     case "toolResult": {
-      const toolName = pickString(message, "name", "toolName", "type") || "tool";
+      const toolName = pickString2(message, "name", "toolName", "type") || "tool";
       const result = message?.result ?? message?.output ?? message?.content ?? message?.text;
       if (result === void 0) {
         return { lines: [], source: "mcp" };
@@ -1075,21 +1461,21 @@ function describeStep(step) {
       const body = typeof result === "string" ? result : formatJson(result);
       if (!String(body).trim()) return { lines: [], source: "mcp" };
       return {
-        lines: expandMultiline(`\u5DE5\u5177\u7ED3\u679C\uFF1A${toolName} `, body),
+        lines: expandMultiline2(`\u5DE5\u5177\u7ED3\u679C\uFF1A${toolName} `, body),
         source: "mcp"
       };
     }
     case "shellConversationTurn":
     case "shell": {
-      const command = extractToolDetail(message) || pickString(message, "command", "text");
+      const command = extractToolDetail(message) || pickString2(message, "command", "text");
       if (!command) return { lines: [], source: "shell" };
       return {
-        lines: expandMultiline("\u547D\u4EE4\uFF1A", command),
+        lines: expandMultiline2("\u547D\u4EE4\uFF1A", command),
         source: "shell"
       };
     }
     default: {
-      const detail = message ? usefulJson(message, 800) : "";
+      const detail = message ? usefulJson2(message, 800) : "";
       if (!detail) return { lines: [], source: "worker" };
       return {
         lines: [`\u6B65\u9AA4\uFF1A${type} ${detail}`],
@@ -1727,7 +2113,7 @@ ${afterSkip.output}`,
           ...projectId ? { projectId } : {}
         });
         const state = cardState(latest);
-        const pending = asRecord3(status.pending);
+        const pending = asRecord4(status.pending);
         if (state === "blocked") {
           return {
             ok: false,
@@ -1737,7 +2123,7 @@ ${afterSkip.output}`,
         }
         if (state === "verify" && pending == null) {
           processedCards += 1;
-          workerLog(`[success] \u54A8\u8BE2\u5361 ${cardId} \u5DF2\u9001\u4EA4\u9A8C\u8BC1`);
+          workerLog(`\u54A8\u8BE2\u5361 ${cardId} \u5DF2\u9001\u4EA4\u9A8C\u8BC1`, "worker", "success");
           continue;
         }
         if (!pending || pending.status !== "declared") {
@@ -1774,7 +2160,7 @@ ${afterSkip.output}`,
         }
         terminalRecorded = true;
         processedCards += 1;
-        workerLog(`[success] \u5361\u7247 ${cardId} \u5DF2\u9A8C\u8BC1\u3001\u63D0\u4EA4\u5E76\u9001\u4EA4\u4EBA\u5DE5\u9A8C\u8BC1`);
+        workerLog(`\u5361\u7247 ${cardId} \u5DF2\u9A8C\u8BC1\u3001\u63D0\u4EA4\u5E76\u9001\u4EA4\u4EBA\u5DE5\u9A8C\u8BC1`, "worker", "success");
         if (cancellation?.shouldStopAfterCurrentSession) {
           return cancellation.isCancelled ? cancelledResult() : drainedResult();
         }
@@ -1820,7 +2206,7 @@ async function recoverPendingSessions(mcp, job, dependencies) {
   const pending = Array.isArray(listed.pending) ? listed.pending : [];
   let processedCards = 0;
   for (const raw of pending) {
-    const record = asRecord3(raw);
+    const record = asRecord4(raw);
     if (!record) continue;
     const sessionId = requiredString(record, "sessionId");
     const recovered = await mcp.callJson("dispatch_recover", {
@@ -1835,7 +2221,7 @@ async function recoverPendingSessions(mcp, job, dependencies) {
     );
     if (!result.ok) return { ...result, processedCards };
     processedCards += 1;
-    workerLog(`[success] \u5DF2\u6062\u590D pending \u4F1A\u8BDD ${sessionId}`);
+    workerLog(`\u5DF2\u6062\u590D pending \u4F1A\u8BDD ${sessionId}`, "worker", "success");
   }
   return { ok: true, processedCards };
 }
@@ -1907,7 +2293,7 @@ async function validateAndFinalize(mcp, job, pending, dependencies) {
 function parseVerificationCommands(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map((item) => {
-    const record = asRecord3(item);
+    const record = asRecord4(item);
     if (!record) throw new Error("verificationCommands \u683C\u5F0F\u65E0\u6548");
     return {
       executable: requiredString(record, "executable"),
@@ -1934,7 +2320,9 @@ async function recordRoundFailure(mcp, job, sessionId, reason, block = false) {
     }
   ).catch((error) => {
     workerLog(
-      `[warning] \u8BB0\u5F55\u4F1A\u8BDD\u5931\u8D25\u72B6\u6001\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`
+      `\u8BB0\u5F55\u4F1A\u8BDD\u5931\u8D25\u72B6\u6001\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`,
+      "worker",
+      "warning"
     );
   });
 }
@@ -1965,11 +2353,11 @@ function requiredString(record, key) {
   if (!value) throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${key} \u4E0D\u80FD\u4E3A\u7A7A`);
   return value;
 }
-function asRecord3(value) {
+function asRecord4(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function completedResult(processedCards, reason) {
-  workerLog(`[success] Worker \u6279\u6B21\u5B8C\u6210\uFF1A${reason}\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`);
+  workerLog(`Worker \u6279\u6B21\u5B8C\u6210\uFF1A${reason}\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`, "worker", "success");
   return {
     ok: true,
     summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A${reason}\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`,
