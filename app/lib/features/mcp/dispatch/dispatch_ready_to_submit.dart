@@ -5,7 +5,6 @@ import '../mcp_dispatch_card_gate.dart';
 import '../mcp_submission_snapshot_store.dart';
 import '../mcp_tool_results.dart';
 import 'dispatch_pending_store.dart';
-import 'dispatch_verification_policy.dart';
 
 Future<CallToolResult> dispatchReadyToSubmit(
   BoardController controller, {
@@ -78,8 +77,6 @@ Future<CallToolResult> dispatchReadyToSubmit(
     if (command.timeoutMs != null && command.timeoutMs! <= 0) {
       return mcpErrorResult('verificationCommands.timeoutMs 必须大于 0');
     }
-    final policyError = dispatchVerificationPolicyError(command);
-    if (policyError != null) return mcpErrorResult(policyError);
   }
 
   final store = pendingStore ?? DispatchPendingStore();

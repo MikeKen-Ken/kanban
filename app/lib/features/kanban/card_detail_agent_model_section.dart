@@ -116,6 +116,25 @@ class _CardDetailAgentModelSectionState
     );
   }
 
+  Widget _compactSwitch({
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: style),
+        Switch(
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          value: value,
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
   List<DropdownMenuItem<String>> _items({
     required List<({String value, String label})> options,
   }) {
@@ -248,12 +267,8 @@ class _CardDetailAgentModelSectionState
                 ),
                 onChanged: _onModel,
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
               if (fast != null) ...[
+                const SizedBox(width: 6),
                 _dropdown(
                   label: 'Fast',
                   value: widget.agentModelParamValues[fast.id] ?? _inherit,
@@ -268,9 +283,9 @@ class _CardDetailAgentModelSectionState
                   ),
                   onChanged: (value) => _onParam(fast.id, value),
                 ),
-                const SizedBox(width: 6),
               ],
               if (reasoning != null) ...[
+                const SizedBox(width: 6),
                 _dropdown(
                   label: '推理程度',
                   value:
@@ -286,8 +301,8 @@ class _CardDetailAgentModelSectionState
                   ),
                   onChanged: (value) => _onParam(reasoning.id, value),
                 ),
-                const SizedBox(width: 6),
               ],
+              const SizedBox(width: 6),
               _dropdown(
                 label: '上下文',
                 value:
@@ -303,35 +318,22 @@ class _CardDetailAgentModelSectionState
                 ),
                 onChanged: (value) => _onParam(contextParam.id, value),
               ),
+              const SizedBox(width: 6),
+              _compactSwitch(
+                label: '允许脏工作区',
+                value: widget.agentAllowDirtyWorkspace == true,
+                onChanged: (value) => _emit(
+                  agentAllowDirtyWorkspace: value ? true : null,
+                ),
+              ),
+              _compactSwitch(
+                label: '开沙箱',
+                value: widget.agentEnableSandbox == true,
+                onChanged: (value) => _emit(
+                  agentEnableSandbox: value ? true : null,
+                ),
+              ),
             ],
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('允许脏工作区'),
-            subtitle: Text(
-              widget.agentAllowDirtyWorkspace == true
-                  ? '已覆盖工作台。本卡在未提交改动的工作区也能领取。'
-                  : '关闭则沿用工作台（默认未提交改动会失败）。打开后仅本卡允许脏工作区。',
-            ),
-            value: widget.agentAllowDirtyWorkspace == true,
-            onChanged: (value) => _emit(
-              agentAllowDirtyWorkspace: value ? true : null,
-            ),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('开沙箱'),
-            subtitle: Text(
-              widget.agentEnableSandbox == true
-                  ? '已覆盖工作台。本卡运行 Cursor SDK 时启用沙箱。'
-                  : '关闭则沿用工作台（默认关闭沙箱）。打开后仅本卡启用沙箱。',
-            ),
-            value: widget.agentEnableSandbox == true,
-            onChanged: (value) => _emit(
-              agentEnableSandbox: value ? true : null,
-            ),
           ),
         ],
       ),
