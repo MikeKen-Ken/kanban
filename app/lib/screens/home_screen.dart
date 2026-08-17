@@ -18,6 +18,7 @@ import '../features/wallpapers/wallpaper_models.dart';
 import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
 import '../features/kanban/swimlane_board.dart';
+import '../features/remote_actions/remote_actions_toolbar_button.dart';
 import '../webdav_sync/sync_actions_sheet.dart';
 import '../webdav_sync/sync_actions_switcher.dart';
 import '../webdav_sync/webdav_sync_service.dart';
@@ -411,6 +412,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.delete_outline),
                 onPressed: _openTrash,
               ),
+            if (!compact) const RemoteActionsToolbarButton(),
             Selector<BoardController,
                 (SyncStatus, String?, int, DateTime?, SyncProgress?, int)>(
               selector: (_, c) => (
