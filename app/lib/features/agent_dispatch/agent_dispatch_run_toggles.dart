@@ -21,21 +21,65 @@ class AgentDispatchRunToggles extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          title: const Text('禁止使用卡片参数'),
+        _ToggleRow(
+          title: '禁止使用卡片参数',
           value: ignoreCardParams,
-          onChanged: enabled ? onIgnoreCardParamsChanged : null,
+          enabled: enabled,
+          onChanged: onIgnoreCardParamsChanged,
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          title: const Text('允许脏工作区'),
+        _ToggleRow(
+          title: '允许脏工作区',
           value: allowDirtyWorkspace,
-          onChanged: enabled ? onAllowDirtyWorkspaceChanged : null,
+          enabled: enabled,
+          onChanged: onAllowDirtyWorkspaceChanged,
         ),
       ],
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.title,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String title;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(title)),
+          ToggleButtons(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 32),
+            isSelected: [!value, value],
+            onPressed: enabled
+                ? (index) {
+                    final next = index == 1;
+                    if (next != value) onChanged(next);
+                  }
+                : null,
+            children: const [
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text('关'),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text('开'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -52,7 +52,7 @@ void main() {
     expect(find.byType(Divider), findsNWidgets(3));
   });
 
-  testWidgets('Skill 预览默认折叠，点开后才显示正文', (tester) async {
+  testWidgets('Skill 预览默认展开，可折叠正文', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -72,14 +72,14 @@ void main() {
     );
 
     expect(find.text('Skill'), findsOneWidget);
-    expect(find.text('Skill 正文预览'), findsNothing);
-    expect(find.text('/tmp/skill.md'), findsNothing);
+    expect(find.text('Skill 正文预览'), findsOneWidget);
+    expect(find.text('/tmp/skill.md'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('agent-dispatch-skill-expand')));
     await tester.pump();
 
-    expect(find.text('Skill 正文预览'), findsOneWidget);
-    expect(find.text('/tmp/skill.md'), findsOneWidget);
+    expect(find.text('Skill 正文预览'), findsNothing);
+    expect(find.text('/tmp/skill.md'), findsNothing);
   });
 
   testWidgets('点击来源图例只显示该类型日志，并隐藏无内容进度行', (tester) async {

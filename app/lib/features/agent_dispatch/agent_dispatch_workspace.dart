@@ -129,7 +129,7 @@ class AgentDispatchSkillPane extends StatefulWidget {
 }
 
 class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
-  var _expanded = false;
+  var _expanded = true;
 
   @override
   Widget build(BuildContext context) {
