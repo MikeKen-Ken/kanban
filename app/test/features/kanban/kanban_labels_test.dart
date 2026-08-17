@@ -5,7 +5,7 @@ import 'package:kanban/features/project/project_theme.dart';
 
 void main() {
   group('预设标签', () {
-    test('预设包含四象限、缺资源和咨询，含完整说明', () {
+    test('预设只包含四象限、缺资源与咨询', () {
       final presets = presetKanbanLabels();
       expect(presets.map((l) => l.key).toList(), [
         'important_urgent',
@@ -48,10 +48,15 @@ void main() {
       expect(keys.containsAll(kPresetLabelKeys), isTrue);
     });
 
-    test('每个主题都提供相同的当前预置 key', () {
+    test('每个主题都提供相同的象限预置 key', () {
       for (final theme in kProjectThemePresets) {
         expect(
           theme.presetLabels.map((label) => label.key).toSet(),
+          kThemePresetLabelKeys,
+          reason: theme.id,
+        );
+        expect(
+          presetKanbanLabels(theme.id).map((label) => label.key).toSet(),
           kPresetLabelKeys,
           reason: theme.id,
         );

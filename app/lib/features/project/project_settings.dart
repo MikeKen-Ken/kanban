@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../automations/automation_models.dart';
 import '../kanban/column_card_preferences.dart';
 import '../kanban/swimlane.dart';
+import 'project_mcp_tags.dart';
 import '../wallpapers/wallpaper_models.dart';
 
 /// 单个项目的偏好设置（随项目数据同步到 WebDAV）
@@ -20,6 +21,7 @@ class ProjectSettings {
     this.columnPreferences = const {},
     this.columnWipLimits = const {},
     this.swimlaneMode = SwimlaneMode.none,
+    this.agentMcpTags = const [],
     this.automationRules = const [],
     this.updatedAt = 0,
     this.revision = 0,
@@ -58,6 +60,9 @@ class ProjectSettings {
 
   /// 看板泳道分组方式
   final SwimlaneMode swimlaneMode;
+
+  /// 项目主题相关的附加 MCP 标签；Hub MCP 始终保留，不在这里开关。
+  final List<String> agentMcpTags;
 
   /// 本地自动化规则
   final List<AutomationRule> automationRules;
@@ -125,6 +130,7 @@ class ProjectSettings {
     Map<String, ColumnCardPreferences>? columnPreferences,
     Map<String, int>? columnWipLimits,
     SwimlaneMode? swimlaneMode,
+    List<String>? agentMcpTags,
     List<AutomationRule>? automationRules,
     int? updatedAt,
     int? revision,
@@ -149,6 +155,7 @@ class ProjectSettings {
       columnPreferences: columnPreferences ?? this.columnPreferences,
       columnWipLimits: columnWipLimits ?? this.columnWipLimits,
       swimlaneMode: swimlaneMode ?? this.swimlaneMode,
+      agentMcpTags: agentMcpTags ?? this.agentMcpTags,
       automationRules: automationRules ?? this.automationRules,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
@@ -202,6 +209,7 @@ class ProjectSettings {
         ),
       if (columnWipLimits.isNotEmpty) 'columnWipLimits': columnWipLimits,
       if (swimlaneMode != SwimlaneMode.none) 'swimlaneMode': swimlaneMode.name,
+      if (agentMcpTags.isNotEmpty) 'agentMcpTags': agentMcpTags,
       if (automationRules.isNotEmpty)
         'automationRules': automationRules.map((r) => r.toJson()).toList(),
       'updatedAt': updatedAt,
@@ -230,6 +238,7 @@ class ProjectSettings {
       json['wallpaperPlaybackMode'] as String?,
     );
     final intervalRaw = (json['wallpaperIntervalSeconds'] as num?)?.toInt();
+    final mcpTagsRaw = json['agentMcpTags'] as List<dynamic>? ?? const [];
     return ProjectSettings(
       doneColumnName:
           json['doneColumnName'] as String? ?? defaultDoneColumnName,
@@ -264,6 +273,7 @@ class ProjectSettings {
           ? const {}
           : wipRaw.map((key, value) => MapEntry(key, value as int)),
       swimlaneMode: SwimlaneModeX.fromString(json['swimlaneMode'] as String?),
+      agentMcpTags: sanitizeProjectMcpTags(mcpTagsRaw),
       automationRules: rulesRaw == null
           ? const []
           : rulesRaw

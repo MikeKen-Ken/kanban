@@ -83,7 +83,8 @@ void main() {
     expect(text, contains('禁止调用 pick_next_card'));
     expect(text, contains('开发前必读'));
     expect(text, contains('禁止再读取该文件'));
-    expect(text, contains('其它已加载的 MCP 可按本卡需要使用'));
+    expect(text, contains('hubMCP 始终保留'));
+    expect(text, contains('当前项目配置了对应 MCP 标签'));
     expect(text, contains('验证必须在本会话内跑通后才能声明'));
     expect(text, contains('禁止把 verificationCommands 交给 Worker'));
     expect(text, contains('测试失败、卡住或超时不得当作通过'));

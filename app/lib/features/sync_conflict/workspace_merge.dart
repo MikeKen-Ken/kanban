@@ -64,6 +64,7 @@ bool _settingsContentDiffers(ProjectSettings a, ProjectSettings b) =>
     !_prefsEq(a.columnPreferences, b.columnPreferences) ||
     !_intMapEq(a.columnWipLimits, b.columnWipLimits) ||
     a.swimlaneMode != b.swimlaneMode ||
+    !_stringListEq(a.agentMcpTags, b.agentMcpTags) ||
     !AutomationRule.listEquals(a.automationRules, b.automationRules);
 
 /// Settings：字段级合并；同字段冲突挂 conflictSide
@@ -158,6 +159,10 @@ ProjectSettings mergeSettings({
   final swimlaneLocalChanged = effectiveLocal.swimlaneMode != base.swimlaneMode;
   final swimlaneRemoteChanged =
       effectiveRemote.swimlaneMode != base.swimlaneMode;
+  final mcpTagsLocalChanged =
+      !_stringListEq(effectiveLocal.agentMcpTags, base.agentMcpTags);
+  final mcpTagsRemoteChanged =
+      !_stringListEq(effectiveRemote.agentMcpTags, base.agentMcpTags);
   final automationLocalChanged = !AutomationRule.listEquals(
     effectiveLocal.automationRules,
     base.automationRules,
@@ -207,6 +212,9 @@ ProjectSettings mergeSettings({
   final swimlaneConflict = swimlaneLocalChanged &&
       swimlaneRemoteChanged &&
       effectiveLocal.swimlaneMode != effectiveRemote.swimlaneMode;
+  final mcpTagsConflict = mcpTagsLocalChanged &&
+      mcpTagsRemoteChanged &&
+      !_stringListEq(effectiveLocal.agentMcpTags, effectiveRemote.agentMcpTags);
   final automationConflict = automationLocalChanged &&
       automationRemoteChanged &&
       !AutomationRule.listEquals(
@@ -223,6 +231,7 @@ ProjectSettings mergeSettings({
       prefsConflict ||
       wipConflict ||
       swimlaneConflict ||
+      mcpTagsConflict ||
       automationConflict) {
     final localWins = effectiveLocal.updatedAt >= effectiveRemote.updatedAt;
     final primary = localWins ? effectiveLocal : effectiveRemote;
@@ -296,6 +305,11 @@ ProjectSettings mergeSettings({
         : swimlaneRemoteChanged
             ? effectiveRemote.swimlaneMode
             : base.swimlaneMode,
+    agentMcpTags: mcpTagsLocalChanged
+        ? effectiveLocal.agentMcpTags
+        : mcpTagsRemoteChanged
+            ? effectiveRemote.agentMcpTags
+            : base.agentMcpTags,
     automationRules: automationLocalChanged
         ? effectiveLocal.automationRules
         : automationRemoteChanged

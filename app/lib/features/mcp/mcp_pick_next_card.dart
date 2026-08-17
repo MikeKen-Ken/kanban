@@ -167,6 +167,8 @@ Future<CallToolResult> mcpPickNextCard(
       'found': true,
       'projectId': resolvedProjectId,
       'cardId': card.id,
+      if (controller.projectSettings.agentMcpTags.isNotEmpty)
+        'projectMcpTags': controller.projectSettings.agentMcpTags,
       'sourceColumn': picked.sourceColumn,
       'fromColumnId': fromColumnId,
       'columnId': columnId,

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { McpServerConfig } from "@cursor/sdk";
+import { filterRecordByMcpAllowlist } from "./dispatch_mcp_allowlist.ts";
 
 export const KANBAN_MCP_SERVER = "kanbanMCP";
 
@@ -15,6 +16,7 @@ export function mergeCursorMcpServers(options: {
   userJson?: string | null;
   projectJson?: string | null;
   scopedKanbanUrl: string;
+  projectMcpTags?: readonly string[];
   env?: NodeJS.ProcessEnv;
 }): CursorMcpServers {
   const env = options.env ?? process.env;
@@ -23,13 +25,15 @@ export function mergeCursorMcpServers(options: {
     ...parseMcpServers(options.projectJson, env),
   };
   delete merged[KANBAN_MCP_SERVER];
-  merged[KANBAN_MCP_SERVER] = scopedKanbanMcpServer(options.scopedKanbanUrl);
-  return merged;
+  const allowed = filterRecordByMcpAllowlist(merged, options.projectMcpTags ?? []);
+  allowed[KANBAN_MCP_SERVER] = scopedKanbanMcpServer(options.scopedKanbanUrl);
+  return allowed;
 }
 
 export function loadCursorMcpServers(options: {
   cwd: string;
   scopedKanbanUrl: string;
+  projectMcpTags?: readonly string[];
   homeDir?: string;
 }): { servers: CursorMcpServers; names: string[] } {
   const home = options.homeDir ?? homedir();
@@ -37,6 +41,7 @@ export function loadCursorMcpServers(options: {
     userJson: readOptionalFile(join(home, ".cursor", "mcp.json")),
     projectJson: readOptionalFile(join(options.cwd, ".cursor", "mcp.json")),
     scopedKanbanUrl: options.scopedKanbanUrl,
+    projectMcpTags: options.projectMcpTags,
   });
   return { servers, names: Object.keys(servers) };
 }

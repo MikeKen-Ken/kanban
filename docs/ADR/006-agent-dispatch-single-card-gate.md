@@ -38,15 +38,17 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
 
 - scoped MCP 与完整目录共用 `/mcp` 路径，靠每会话临时端口区分。临时端口启动失败时
   不得回退完整工具目录。
-- Cursor 与 Codex 都可以加载用户/项目里的其它 MCP（Unity、Cocos 等）。`kanbanMCP`
-  必须覆盖为本轮 scoped 端点，不得使用常驻完整看板 MCP。
-- Cursor：`settingSources` 加载用户与项目规则；MCP 由 Worker 显式合并用户/项目
-  `mcp.json` 后再覆盖 `kanbanMCP`。
+- Cursor 与 Codex 默认只注入本卡 scoped `kanbanMCP`，并始终保留 `hubMCP`。用户/
+  项目里的其它 MCP（Aseprite、Chrome DevTools、Tavily、Unity、Cocos、Node REPL
+  等）仅当当前项目在 `ProjectSettings.agentMcpTags` 中配置对应标签时才合并；
+  `kanbanMCP` 必须覆盖为本轮 scoped 端点，不得使用常驻完整看板 MCP。
+- Cursor：`settingSources` 加载用户与项目规则；MCP 由 Worker 按当前项目 MCP 标签从
+  用户/项目 `mcp.json` 筛选后再覆盖 `kanbanMCP`。
 - `kanban-complete-tasks` 仅供 Worker 注入，不用于对话手动或自动调用。Skill 正文假定
   Architecture 已注入，禁止再打开该文件。Worker 只剥 YAML frontmatter 写入 prompt，
   不改写磁盘上的 Skill，也不再过滤正文中的 Architecture 行。
-- Codex：临时 `CODEX_HOME` 复制用户 `auth.json` 与 `skills`，合并用户
-  `config.toml` 中除看板外的 MCP，再写入 scoped `kanbanMCP`。复制 `AGENTS.md` 时覆盖
+- Codex：临时 `CODEX_HOME` 复制用户 `auth.json` 与 `skills`，按当前项目 MCP 标签筛选
+  用户 `config.toml` 中的 MCP，再写入 scoped `kanbanMCP`。复制 `AGENTS.md` 时覆盖
   「必须再打开 Architecture.md」：Worker 已注入全文，视为已读；不改用户磁盘上的原文。
 - 调度中 `ready_to_submit` / `block_card` / `submit_consultation` 只能操作本轮领取的卡片。
 - 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、move、complete、delete、

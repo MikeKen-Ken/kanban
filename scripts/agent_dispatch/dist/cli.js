@@ -924,9 +924,10 @@ function looksLikeDartNamedArgument(line) {
   return /^\s*error:\s*(?:[A-Za-z_]\w*|'[^']*'|"[^"]*")\s*,?\s*$/.test(line);
 }
 function expandMultiline(prefix, body) {
-  const trimmed = body.trimEnd();
-  if (!trimmed) return prefix.endsWith(" ") || prefix.endsWith("\uFF1A") ? [] : [prefix];
-  const lines = trimmed.split(/\r?\n/);
+  const lines = body.replace(/\s+$/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length === 0) {
+    return prefix.endsWith(" ") || prefix.endsWith("\uFF1A") ? [] : [prefix];
+  }
   const result = [`${prefix}${lines[0]}`];
   for (let i = 1; i < lines.length; i++) {
     result.push(`  \u2502 ${lines[i]}`);
@@ -990,26 +991,70 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
+// src/dispatch_mcp_allowlist.ts
+var MCP_LABEL_SERVERS = {
+  aseprite: ["aseprite"],
+  "chrome-devtools": ["chrome-devtools"],
+  chrome: ["chrome-devtools"],
+  tavily: ["tavily"],
+  unity: ["unitymcp", "unityMCP"],
+  cocos: ["cocos-creator"],
+  node_repl: ["node_repl"]
+};
+var ALWAYS_ENABLED_MCP_SERVERS = ["hubMCP"];
+function parseProjectMcpTags(payload) {
+  const raw = payload.projectMcpTags;
+  if (!Array.isArray(raw)) return [];
+  const result = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const label = item.trim();
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    result.push(label);
+  }
+  return result;
+}
+function allowedMcpServerNames(labels) {
+  const allowed = new Set(ALWAYS_ENABLED_MCP_SERVERS);
+  for (const raw of labels) {
+    const key = raw.trim();
+    if (!key) continue;
+    const mapped = MCP_LABEL_SERVERS[key] ?? MCP_LABEL_SERVERS[key.toLowerCase()];
+    if (mapped) {
+      for (const name of mapped) allowed.add(name);
+      continue;
+    }
+    allowed.add(key);
+  }
+  return allowed;
+}
+function mcpServerNameAllowed(serverName, allowed) {
+  const name = serverName.trim();
+  if (!name) return false;
+  if (allowed.has(name)) return true;
+  const lower = name.toLowerCase();
+  for (const item of allowed) {
+    if (item.toLowerCase() === lower) return true;
+  }
+  return false;
+}
+function filterRecordByMcpAllowlist(servers, labels) {
+  const allowed = allowedMcpServerNames(labels);
+  if (allowed.size === 0) return {};
+  const result = {};
+  for (const [name, value] of Object.entries(servers)) {
+    if (mcpServerNameAllowed(name, allowed)) result[name] = value;
+  }
+  return result;
+}
+
 // src/codex_agent_config.ts
 var KANBAN_TABLE = "mcp_servers.kanbanMCP";
 function isKanbanMcpTable(name) {
   const table = name.trim();
   return table === KANBAN_TABLE || table.startsWith(`${KANBAN_TABLE}.`);
-}
-function stripKanbanMcpTables(source) {
-  const matches = [...source.matchAll(/^\[([^\]]+)\]/gm)];
-  if (matches.length === 0) return source;
-  const firstIndex = matches[0]?.index ?? 0;
-  let result = source.slice(0, firstIndex);
-  for (let index = 0; index < matches.length; index += 1) {
-    const match = matches[index];
-    const name = match[1] ?? "";
-    const start = match.index ?? 0;
-    const end = matches[index + 1]?.index ?? source.length;
-    if (isKanbanMcpTable(name)) continue;
-    result += source.slice(start, end);
-  }
-  return collapseBlankLines(result);
 }
 function ensureCodexRmcpClient(source) {
   if (/^\s*rmcp_client\s*=\s*true\s*$/m.test(source)) return source;
@@ -1026,10 +1071,26 @@ ${block}`;
   return `${source.slice(0, insertAt)}
 rmcp_client = true${source.slice(insertAt)}`;
 }
-function buildCodexAgentConfigToml(mcpUrl, userConfig = "") {
+function filterCodexMcpTables(source, allowedServers) {
+  const matches = [...source.matchAll(/^\[([^\]]+)\]/gm)];
+  if (matches.length === 0) return source;
+  const firstIndex = matches[0]?.index ?? 0;
+  let result = source.slice(0, firstIndex);
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const name = match[1] ?? "";
+    const start = match.index ?? 0;
+    const end = matches[index + 1]?.index ?? source.length;
+    if (!shouldKeepTomlTable(name, allowedServers)) continue;
+    result += source.slice(start, end);
+  }
+  return collapseBlankLines(result);
+}
+function buildCodexAgentConfigToml(mcpUrl, userConfig = "", projectMcpTags = []) {
   const url = mcpUrl.trim();
-  const withoutKanban = stripKanbanMcpTables(userConfig);
-  const withFeatures = ensureCodexRmcpClient(withoutKanban);
+  const allowed = allowedMcpServerNames(projectMcpTags);
+  const filtered = filterCodexMcpTables(userConfig, allowed);
+  const withFeatures = ensureCodexRmcpClient(filtered);
   const block = `[mcp_servers.kanbanMCP]
 url = "${url}"
 `;
@@ -1043,6 +1104,13 @@ ${block}`;
   return `${trimmed}
 
 ${block}`;
+}
+function shouldKeepTomlTable(table, allowed) {
+  const name = table.trim();
+  if (isKanbanMcpTable(name)) return false;
+  const mcp = /^mcp_servers\.([^.]+)/.exec(name);
+  if (mcp == null) return true;
+  return mcpServerNameAllowed(mcp[1] ?? "", allowed);
 }
 function listCodexMcpServerNames(toml) {
   const names = [];
@@ -1104,7 +1172,11 @@ function createCodexAgentHome(options) {
   mkdirSync(home, { recursive: true });
   const userConfigPath = join(options.userCodexHome, "config.toml");
   const userConfig = existsSync2(userConfigPath) ? readFileSync(userConfigPath, "utf8") : "";
-  const config = buildCodexAgentConfigToml(options.mcpUrl, userConfig);
+  const config = buildCodexAgentConfigToml(
+    options.mcpUrl,
+    userConfig,
+    options.projectMcpTags ?? []
+  );
   writeFileSync(join(home, "config.toml"), config, "utf8");
   for (const name of AUTH_FILES) {
     copyUserPath(
@@ -1208,6 +1280,7 @@ async function runCodex(job, cancellation) {
     const agentHome = createCodexAgentHome({
       mcpUrl,
       userCodexHome: resolveUserCodexHome(),
+      projectMcpTags: job.round.projectMcpTags,
       tempRoot: temp
     });
     workerLog(
@@ -1496,15 +1569,17 @@ function mergeCursorMcpServers(options) {
     ...parseMcpServers(options.projectJson, env)
   };
   delete merged[KANBAN_MCP_SERVER];
-  merged[KANBAN_MCP_SERVER] = scopedKanbanMcpServer(options.scopedKanbanUrl);
-  return merged;
+  const allowed = filterRecordByMcpAllowlist(merged, options.projectMcpTags ?? []);
+  allowed[KANBAN_MCP_SERVER] = scopedKanbanMcpServer(options.scopedKanbanUrl);
+  return allowed;
 }
 function loadCursorMcpServers(options) {
   const home = options.homeDir ?? homedir2();
   const servers = mergeCursorMcpServers({
     userJson: readOptionalFile(join3(home, ".cursor", "mcp.json")),
     projectJson: readOptionalFile(join3(options.cwd, ".cursor", "mcp.json")),
-    scopedKanbanUrl: options.scopedKanbanUrl
+    scopedKanbanUrl: options.scopedKanbanUrl,
+    projectMcpTags: options.projectMcpTags
   });
   return { servers, names: Object.keys(servers) };
 }
@@ -1600,9 +1675,8 @@ function formatJson(value, max = 4e3) {
   }
 }
 function expandMultiline2(prefix, body) {
-  const trimmed = body.trimEnd();
-  if (!trimmed) return [`${prefix}\uFF08\u7A7A\uFF09`];
-  const lines = trimmed.split(/\r?\n/);
+  const lines = body.replace(/\s+$/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length === 0) return [`${prefix}\uFF08\u7A7A\uFF09`];
   const result = [`${prefix}${lines[0]}`];
   for (let i = 1; i < lines.length; i++) {
     result.push(`  \u2502 ${lines[i]}`);
@@ -1769,7 +1843,8 @@ async function runCursor(job, cancellation) {
     mkdirSync2(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
       cwd: job.cwd,
-      scopedKanbanUrl: agentMcpUrl
+      scopedKanbanUrl: agentMcpUrl,
+      projectMcpTags: job.round.projectMcpTags
     });
     logLine(
       `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1BsettingSources=user,project\uFF08\u52A0\u8F7D\u672C\u673A\u4E0E\u4ED3\u5E93\u89C4\u5219 / Skill / Hooks\uFF09`
@@ -2073,7 +2148,8 @@ ${tree.output}`);
             sessionId,
             agentEndpointUrl,
             images: context.images,
-            attachmentPaths: context.attachmentPaths
+            attachmentPaths: context.attachmentPaths,
+            projectMcpTags: parseProjectMcpTags(claim.payload)
           }
         };
         logModelOverride(job, roundJob, cardId);

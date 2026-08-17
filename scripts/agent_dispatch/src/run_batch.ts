@@ -16,6 +16,7 @@ import {
   readBatchArchitecture,
   type SessionContext,
 } from "./session_context.ts";
+import { parseProjectMcpTags } from "./dispatch_mcp_allowlist.ts";
 import {
   mergeJobWithCardOverrides,
   type DispatchJob,
@@ -163,6 +164,7 @@ export async function runBatch(
             agentEndpointUrl,
             images: context.images,
             attachmentPaths: context.attachmentPaths,
+            projectMcpTags: parseProjectMcpTags(claim.payload),
           },
         };
         logModelOverride(job, roundJob, cardId);

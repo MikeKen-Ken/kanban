@@ -247,6 +247,7 @@ export async function runCursor(
     const mcp = loadCursorMcpServers({
       cwd: job.cwd,
       scopedKanbanUrl: agentMcpUrl,
+      projectMcpTags: job.round.projectMcpTags,
     });
     logLine(
       `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +

@@ -171,6 +171,12 @@ function createHappyDependencies(options?: {
     runAgent: async (round) => {
       assert.equal(round.round.cardId, "card-a");
       assert.equal(round.round.images.length, 1);
+      assert.deepEqual(
+          round.round.projectMcpTags,
+          Array.isArray(options?.peekFields?.projectMcpTags)
+            ? options.peekFields.projectMcpTags
+            : [],
+      );
       assert.equal(
         round.modelParams?.find((item) => item.id === "reasoning_effort")?.value,
         options?.expectedReasoning ?? "high",
@@ -234,7 +240,9 @@ describe("run_batch", () => {
   });
 
   it("claim、门禁、会话验证记账、finalize 形成完整单卡流程", async () => {
-    const { dependencies, full, scoped } = createHappyDependencies();
+    const { dependencies, full, scoped } = createHappyDependencies({
+      peekFields: { projectMcpTags: ["unity"] },
+    });
 
     const result = await runBatch(job, undefined, dependencies);
 

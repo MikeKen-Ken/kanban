@@ -582,6 +582,16 @@ void main() {
     expect(roundtrip.wallpaperIntervalSeconds, 60);
   });
 
+  test('ProjectSettings 项目 MCP 标签序列化去重并保序', () {
+    final settings = const ProjectSettings(
+      agentMcpTags: ['unity', 'unity', 'tavily', ''],
+      updatedAt: 42,
+      revision: 3,
+    );
+    final roundtrip = ProjectSettings.fromJson(settings.toJson());
+    expect(roundtrip.agentMcpTags, ['unity', 'tavily']);
+  });
+
   test('Settings 三路合并可分别采纳壁纸配置与主题', () {
     const base = ProjectSettings(updatedAt: 1, revision: 1);
     final local = base.copyWith(
@@ -597,6 +607,24 @@ void main() {
     expect(merged.wallpaperIds, ['w1', 'w2']);
     expect(merged.wallpaperPlaybackMode, WallpaperPlaybackMode.random);
     expect(merged.wallpaperIntervalSeconds, 30);
+    expect(merged.themeId, 'dark');
+    expect(merged.hasConflict, isFalse);
+  });
+
+  test('Settings 三路合并可分别采纳项目 MCP 标签', () {
+    const base = ProjectSettings(updatedAt: 1, revision: 1);
+    final local = base.copyWith(
+      agentMcpTags: ['unity'],
+      updatedAt: 2,
+      revision: 2,
+    );
+    final remote = base.copyWith(
+      themeId: 'dark',
+      updatedAt: 3,
+      revision: 2,
+    );
+    final merged = mergeSettings(local: local, remote: remote, base: base);
+    expect(merged.agentMcpTags, ['unity']);
     expect(merged.themeId, 'dark');
     expect(merged.hasConflict, isFalse);
   });

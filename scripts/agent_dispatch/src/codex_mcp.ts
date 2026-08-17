@@ -32,6 +32,7 @@ export function resolveUserCodexHome(
 export function createCodexAgentHome(options: {
   mcpUrl: string;
   userCodexHome: string;
+  projectMcpTags?: readonly string[];
   tempRoot?: string;
 }): { home: string; mcpServerNames: string[] } {
   const prefix = join(
@@ -44,7 +45,11 @@ export function createCodexAgentHome(options: {
   const userConfig = existsSync(userConfigPath)
     ? readFileSync(userConfigPath, "utf8")
     : "";
-  const config = buildCodexAgentConfigToml(options.mcpUrl, userConfig);
+  const config = buildCodexAgentConfigToml(
+    options.mcpUrl,
+    userConfig,
+    options.projectMcpTags ?? [],
+  );
   writeFileSync(join(home, "config.toml"), config, "utf8");
   for (const name of AUTH_FILES) {
     copyUserPath(

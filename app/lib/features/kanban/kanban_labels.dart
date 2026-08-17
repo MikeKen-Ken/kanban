@@ -51,7 +51,7 @@ class KanbanLabel {
 }
 
 /// 当前预置 key（新项目 / 选标签列表）
-const kPresetLabelKeys = <String>{
+const kThemePresetLabelKeys = <String>{
   'important_urgent',
   'important_not_urgent',
   'urgent_not_important',
@@ -59,6 +59,8 @@ const kPresetLabelKeys = <String>{
   'need_resource',
   'consultation',
 };
+
+const kPresetLabelKeys = <String>{...kThemePresetLabelKeys};
 
 /// 已废弃但仍可解析显示的旧预置 key
 const kLegacyPresetLabelKeys = <String>{
@@ -72,7 +74,7 @@ const kLegacyPresetLabelKeys = <String>{
 
 /// 按项目主题返回当前预置标签（不含旧 key）
 List<KanbanLabel> presetKanbanLabels([String themeId = '']) =>
-    projectThemeForId(themeId).presetLabels;
+    [...projectThemeForId(themeId).presetLabels];
 
 /// 旧预置：仅用于已有卡片上的 key 解析，不进入选标签列表
 List<KanbanLabel> legacyPresetKanbanLabels([String themeId = '']) =>

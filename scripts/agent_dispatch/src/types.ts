@@ -48,6 +48,8 @@ export type RoundContext = {
   agentEndpointUrl: string;
   images: RoundImage[];
   attachmentPaths: string[];
+  /** 项目级 MCP 标签 key，用于按需注入用户 MCP；hubMCP 始终保留。 */
+  projectMcpTags: string[];
 };
 
 export type RoundDispatchJob = DispatchJob & {

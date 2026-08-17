@@ -18,7 +18,7 @@ describe("codex_mcp", () => {
     assert.equal(text.includes("unityMCP"), false);
   });
 
-  it("隔离主目录复制 auth、AGENTS.md、skills，并合并用户 MCP", () => {
+  it("隔离主目录复制 auth、AGENTS.md、skills；无标签时不合并用户 MCP", () => {
     const root = mkdtempSync(join(tmpdir(), "kanban-codex-mcp-"));
     try {
       const userHome = join(root, "user");
@@ -71,10 +71,17 @@ url = "http://127.0.0.1:18765/mcp"
         agents,
       );
       assert.equal(skill, "# demo\n");
-      assert.match(config, /mcp_servers\.other/);
+      assert.equal(config.includes("mcp_servers.other"), false);
       assert.match(config, /url = "http:\/\/127\.0\.0\.1:19000\/mcp"/);
       assert.equal(config.includes("18765"), false);
-      assert.deepEqual(created.mcpServerNames, ["other", "kanbanMCP"]);
+      assert.deepEqual(created.mcpServerNames, ["kanbanMCP"]);
+      const labeled = createCodexAgentHome({
+        mcpUrl: "http://127.0.0.1:19000/mcp",
+        userCodexHome: userHome,
+        tempRoot: root,
+        projectMcpTags: ["other"],
+      });
+      assert.deepEqual(labeled.mcpServerNames, ["other", "kanbanMCP"]);
       assert.equal(resolveUserCodexHome({ CODEX_HOME: "D:\\codex" }), "D:\\codex");
     } finally {
       rmSync(root, { recursive: true, force: true });

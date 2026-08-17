@@ -78,7 +78,7 @@ class ProjectThemePreset {
         CardPriority.high => priorityHigh,
       };
 
-  /// 当前预置：艾森豪威尔四象限、缺资源与咨询。
+  /// 当前预置：艾森豪威尔四象限、缺资源与咨询。MCP 调度标签在标签模块中追加。
   List<KanbanLabel> get presetLabels => [
         KanbanLabel(
           key: 'important_urgent',

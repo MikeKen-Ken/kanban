@@ -99,6 +99,7 @@ export async function runCodex(
     const agentHome = createCodexAgentHome({
       mcpUrl,
       userCodexHome: resolveUserCodexHome(),
+      projectMcpTags: job.round.projectMcpTags,
       tempRoot: temp,
     });
     workerLog(

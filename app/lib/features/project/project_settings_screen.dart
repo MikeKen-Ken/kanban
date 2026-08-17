@@ -11,6 +11,7 @@ import '../kanban/swimlane.dart';
 import '../wallpapers/wallpaper_image.dart';
 import '../wallpapers/wallpaper_library_dialog.dart';
 import '../wallpapers/wallpaper_models.dart';
+import 'project_mcp_tags.dart';
 import 'project_settings.dart';
 import 'project_theme.dart';
 
@@ -27,6 +28,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   late String _selectedThemeId;
   late Map<String, int> _wipLimits;
   late SwimlaneMode _swimlaneMode;
+  late List<String> _agentMcpTags;
   double? _overlayDraft;
   double? _cardOpacityDraft;
   bool _saving = false;
@@ -42,6 +44,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
         settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
     _wipLimits = Map<String, int>.from(settings.columnWipLimits);
     _swimlaneMode = settings.swimlaneMode;
+    _agentMcpTags = List<String>.from(settings.agentMcpTags);
   }
 
   @override
@@ -68,6 +71,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
         themeId: themeId,
         columnWipLimits: _wipLimits,
         swimlaneMode: _swimlaneMode,
+        agentMcpTags: _agentMcpTags,
         clearConflictSide: true,
       ),
     );
@@ -110,6 +114,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
       _selectedThemeId =
           settings.themeId.isEmpty ? kDefaultProjectThemeId : settings.themeId;
       _wipLimits = Map<String, int>.from(settings.columnWipLimits);
+      _agentMcpTags = List<String>.from(settings.agentMcpTags);
       _overlayDraft = null;
       _cardOpacityDraft = null;
     });
@@ -161,10 +166,36 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
         other.columnWipLimits.toString()) {
       parts.add('列 WIP 上限不同');
     }
+    if (_agentMcpTagsSummary(primary.agentMcpTags) !=
+        _agentMcpTagsSummary(other.agentMcpTags)) {
+      parts.add('项目 MCP：${_agentMcpTagsSummary(other.agentMcpTags)}');
+    }
     if (parts.isEmpty) {
       return '另一侧为较旧或空默认设置，通常保留当前即可';
     }
     return '另一侧：${parts.join('；')}';
+  }
+
+  String _agentMcpTagsSummary(List<String> tags) {
+    if (tags.isEmpty) return '无';
+    final names = [
+      for (final option in kProjectMcpTagOptions)
+        if (tags.contains(option.key)) option.name,
+      for (final tag in tags)
+        if (!kProjectMcpTagKeys.contains(tag)) tag,
+    ];
+    return names.join('、');
+  }
+
+  void _toggleAgentMcpTag(String key, bool selected) {
+    setState(() {
+      if (selected) {
+        if (_agentMcpTags.contains(key)) return;
+        _agentMcpTags = [..._agentMcpTags, key];
+        return;
+      }
+      _agentMcpTags = _agentMcpTags.where((item) => item != key).toList();
+    });
   }
 
   @override
@@ -257,6 +288,52 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                             setState(() => _selectedThemeId = preset.id),
                       );
                     }).toList(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SettingsSection(
+              icon: Icons.memory_outlined,
+              title: 'Agent MCP',
+              subtitle: 'Hub MCP 始终保留；这里只配置当前项目按主题附加的 MCP',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final option in kProjectMcpTagOptions)
+                            FilterChip(
+                              label: Text(option.name),
+                              selected: _agentMcpTags.contains(option.key),
+                              onSelected: (selected) =>
+                                  _toggleAgentMcpTag(option.key, selected),
+                              selectedColor: option.color.withValues(alpha: 0.18),
+                              side: BorderSide(color: option.color.withValues(alpha: 0.35)),
+                              labelStyle: TextStyle(
+                                color: _agentMcpTags.contains(option.key)
+                                    ? option.color
+                                    : null,
+                                fontWeight: _agentMcpTags.contains(option.key)
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        '这些标签会随项目同步，Worker 仅在当前项目需要时把对应 MCP 注入单卡会话。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
