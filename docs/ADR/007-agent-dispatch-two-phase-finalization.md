@@ -32,6 +32,10 @@ Agent 直接提交 Git 并移动卡片会把“声明完成、验证、提交、
    结果。`committing` 状态应优先按 trailers 查找已创建提交并恢复。
 8. 咨询卡仍可由 `submit_consultation` 直接送验，但 scoped 端点必须校验本会话 cardId。
 9. block、fail、skip 和关闭临时端点由 Worker 私有工具显式执行并记录状态。
+10. `ready_to_submit.gitRevertCommit` 仅接受卡片明确要求的 7–64 位提交哈希。Worker 在
+    baseline 未漂移且领取后工作区干净时执行 `git revert --no-commit <hash>`，再通过既有
+    统一提交路径创建带 session/card trailers 的提交；冲突会自动 abort。不得借此开放
+    `reset`、`rebase`、`checkout`、`push` 或 Agent 直接移动 HEAD。
 
 ## 结果
 

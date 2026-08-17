@@ -69,12 +69,40 @@ Future<CallToolResult> dispatchFinalize(
         return mcpErrorResult(failed.error!);
       }
 
-      final tree = await inspectMcpGitTree(repo, runner: gitRunner);
+      var tree = await inspectMcpGitTree(repo, runner: gitRunner);
+      final revertCommit = record.gitRevertCommit;
+      if (revertCommit != null) {
+        if (tree.kind != McpGitTreeKind.clean) {
+          final failed = record.copyWith(
+            status: DispatchPendingStatus.failed,
+            error: '受控 Git revert 要求领取后的工作区保持干净',
+          );
+          await store.write(failed);
+          return mcpErrorResult(failed.error!);
+        }
+        final reverted = await revertMcpCommitWithoutCommit(
+          repoPath: repo,
+          commitRef: revertCommit,
+          runner: gitRunner,
+        );
+        if (!reverted.ok) {
+          final failed = record.copyWith(
+            status: DispatchPendingStatus.failed,
+            error: reverted.error ?? 'git revert 失败',
+          );
+          await store.write(failed);
+          return mcpErrorResult(failed.error!);
+        }
+        tree = await inspectMcpGitTree(repo, runner: gitRunner);
+      }
       if (tree.kind == McpGitTreeKind.dirty) {
         final changed = await listMcpGitChangedPaths(repo, runner: gitRunner);
         if (changed == null) return mcpErrorResult('无法读取 Git 变更清单');
         final sensitive = changed.where(isMcpSensitiveGitPath).toList();
         if (sensitive.isNotEmpty) {
+          if (revertCommit != null) {
+            await abortMcpGitRevert(repoPath: repo, runner: gitRunner);
+          }
           final failed = record.copyWith(
             status: DispatchPendingStatus.failed,
             error: '检测到敏感文件，拒绝提交：${sensitive.join(', ')}',
@@ -95,7 +123,9 @@ Future<CallToolResult> dispatchFinalize(
         await store.write(record);
         final committed = await commitMcpWorkingTree(
           repoPath: repo,
-          message: snapshot.suggestedCommitMessage,
+          message: revertCommit == null
+              ? snapshot.suggestedCommitMessage
+              : 'Revert $revertCommit',
           trailers: [
             'Kanban-Session: ${record.sessionId}',
             'Kanban-Card: ${record.cardId}',

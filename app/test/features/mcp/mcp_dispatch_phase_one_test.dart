@@ -468,6 +468,90 @@ void main() {
     );
   });
 
+  test('Worker 按声明受控撤销指定提交并统一收尾', () async {
+    final repo = await _createGitRepo(tempDir, 'revert_repo');
+    await File(p.join(repo, 'app.txt')).writeAsString('需要撤销\n');
+    await _git(repo, ['add', '-A']);
+    await _git(repo, ['commit', '-m', '需要撤销的变更']);
+    final target = (await Process.run(
+      'git',
+      ['rev-parse', '--short', 'HEAD'],
+      workingDirectory: repo,
+    ))
+        .stdout
+        .toString()
+        .trim();
+    final todo =
+        controller.board!.columns.firstWhere((item) => item.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '撤销指定提交'))!;
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: repo,
+    );
+    await dispatchClaimNextCard(controller, workerToken: 'worker-a');
+    final ready = await dispatchReadyToSubmit(
+      controller,
+      workerToken: 'worker-a',
+      cardId: cardId,
+      completedChecklistIds: const [],
+      completedFeedbackIds: const [],
+      verificationCommands: const [],
+      manualVerificationReason: 'Git 撤销待人工确认',
+      gitRevertCommit: target,
+    );
+    final sessionId = _jsonOf(ready)['sessionId'] as String;
+    final store = DispatchPendingStore();
+    final declared = (await store.read(sessionId))!;
+    expect(declared.gitRevertCommit, target);
+    await store
+        .write(declared.copyWith(status: DispatchPendingStatus.validated));
+
+    final result = await dispatchFinalize(
+      controller,
+      workerToken: 'worker-a',
+      sessionId: sessionId,
+    );
+
+    expect(result.isError, isNot(true));
+    expect(_jsonOf(result)['status'], 'finalized');
+    expect(
+      (await File(p.join(repo, 'app.txt')).readAsString())
+          .replaceAll('\r\n', '\n'),
+      'initial\n',
+    );
+    final log = await Process.run(
+      'git',
+      ['log', '-1', '--format=%s'],
+      workingDirectory: repo,
+    );
+    expect(log.stdout.toString().trim(), 'Revert $target');
+  });
+
+  test('ready 拒绝非提交哈希的受控撤销声明', () async {
+    final todo =
+        controller.board!.columns.firstWhere((item) => item.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '非法撤销声明'))!;
+    gate.beginBatch('worker-a', projectId: controller.activeProjectId!);
+    await dispatchClaimNextCard(controller, workerToken: 'worker-a');
+
+    final result = await dispatchReadyToSubmit(
+      controller,
+      workerToken: 'worker-a',
+      cardId: cardId,
+      completedChecklistIds: const [],
+      completedFeedbackIds: const [],
+      verificationCommands: const [],
+      gitRevertCommit: 'HEAD~1',
+    );
+
+    expect(result.isError, isTrue);
+    expect(
+      result.content.whereType<TextContent>().first.text,
+      contains('gitRevertCommit'),
+    );
+  });
+
   test('新 Worker 仅能恢复同 project/repo 的 committed 事务', () async {
     final repo = await _createGitRepo(tempDir, 'recover_repo');
     final projectId = controller.activeProjectId!;

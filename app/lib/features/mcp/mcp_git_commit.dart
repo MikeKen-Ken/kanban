@@ -40,6 +40,19 @@ class McpGitCommitOutcome {
   final String? error;
 }
 
+class McpGitRevertOutcome {
+  const McpGitRevertOutcome._({required this.ok, this.error});
+
+  factory McpGitRevertOutcome.success() =>
+      const McpGitRevertOutcome._(ok: true);
+
+  factory McpGitRevertOutcome.failure(String error) =>
+      McpGitRevertOutcome._(ok: false, error: error);
+
+  final bool ok;
+  final String? error;
+}
+
 const _gitEnv = {
   'GIT_TERMINAL_PROMPT': '0',
   'GCM_INTERACTIVE': 'Never',
@@ -209,6 +222,53 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
   }
 }
 
+/// 仅由 Worker 调用。失败时尽力 abort，避免把冲突状态留给下一轮。
+Future<McpGitRevertOutcome> revertMcpCommitWithoutCommit({
+  required String repoPath,
+  required String commitRef,
+  McpGitRunner? runner,
+}) async {
+  final repo = repoPath.trim();
+  final target = commitRef.trim();
+  if (repo.isEmpty || !RegExp(r'^[0-9a-fA-F]{7,64}$').hasMatch(target)) {
+    return McpGitRevertOutcome.failure('撤销目标必须是有效的 Git 提交哈希');
+  }
+  final run = runner ?? _defaultGitRunner;
+  final result = await run(
+    'git',
+    ['revert', '--no-commit', target],
+    workingDirectory: repo,
+    environment: mcpGitEnvironment(),
+  );
+  if (result.exitCode == 0) return McpGitRevertOutcome.success();
+
+  final aborted = await run(
+    'git',
+    ['revert', '--abort'],
+    workingDirectory: repo,
+    environment: mcpGitEnvironment(),
+  );
+  final abortHint = aborted.exitCode == 0
+      ? '；已恢复撤销前状态'
+      : '；自动恢复失败，请人工检查 Git 状态：${_combinedOutput(aborted)}';
+  return McpGitRevertOutcome.failure(
+    'git revert 失败：${_combinedOutput(result)}$abortHint',
+  );
+}
+
+Future<void> abortMcpGitRevert({
+  required String repoPath,
+  McpGitRunner? runner,
+}) async {
+  final run = runner ?? _defaultGitRunner;
+  await run(
+    'git',
+    ['revert', '--abort'],
+    workingDirectory: repoPath.trim(),
+    environment: mcpGitEnvironment(),
+  );
+}
+
 Future<List<String>?> listMcpGitChangedPaths(
   String repoPath, {
   McpGitRunner? runner,
@@ -246,8 +306,7 @@ List<String> parseMcpGitPorcelainZ(String raw) {
   return paths;
 }
 
-String _normalizeGitPath(String path) =>
-    path.trim().replaceAll('\\', '/');
+String _normalizeGitPath(String path) => path.trim().replaceAll('\\', '/');
 
 bool isMcpSensitiveGitPath(String path) {
   final normalized = path.replaceAll('\\', '/').toLowerCase();

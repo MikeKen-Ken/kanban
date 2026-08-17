@@ -32,7 +32,8 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
 10. Agent 临时端点只暴露 `ready_to_submit`、`submit_consultation`、`block_card`。
     Worker 与 IDE 使用常驻完整工具目录及私有 dispatch 工具。
 11. 实施卡由 Agent 调用 `ready_to_submit` 声明完成；Git 提交与送验由 Worker 驱动的
-    两阶段 finalize 完成。Agent 不得自行 `git commit` 或移动 HEAD。
+    两阶段 finalize 完成。Agent 不得自行 `git commit` 或移动 HEAD。对于卡片正文明确
+    指定哈希的提交撤销，Agent 只能声明 `gitRevertCommit` 意图，由 Worker 受控执行。
 
 ## 实现约束
 

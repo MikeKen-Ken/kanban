@@ -18,7 +18,7 @@ String buildSkillDispatchPrompt({
 下面「Skill 正文」就是完整指令，不是路径、不是需要再打开的文件。
 禁止搜索、glob、grep 或读取 SKILL.md / 技能目录来「确认流程」或「定位 Skill」。
 禁止读取 agent-transcripts 或任何历史对话。
-禁止执行 git commit、git reset、git checkout、git switch、git rebase 或任何会移动 HEAD 的命令。
+禁止直接执行 git commit、git revert、git reset、git checkout、git switch、git rebase 或任何会移动 HEAD 的命令。仅当本卡正文明确要求撤销某个提交且给出哈希时，才可在 ready_to_submit 中传 gitRevertCommit；Worker 会在收尾阶段受控执行。
 禁止为看板工具再拉取 schema；参数以 Skill 为准，直接调用。
 Worker 已注入 Architecture.md 全文，用户规则 / AGENTS.md 中的「开发前必读」已满足；禁止再读取该文件。
 看板 MCP 已由 Worker 注入本卡专用工具集；禁止列出或探测看板工具，禁止调用 pick_next_card。hubMCP 始终保留；其它 MCP 仅当当前项目配置了对应 MCP 标签时由 Worker 注入，可按本卡需要使用。

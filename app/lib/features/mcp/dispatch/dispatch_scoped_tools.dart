@@ -55,6 +55,10 @@ void registerDispatchScopedAgentTools(
         'manualVerificationReason': JsonSchema.string(
           description: '无法自动验证时的人工验证原因；会话内已跑测试则可省略',
         ),
+        'gitRevertCommit': JsonSchema.string(
+          description:
+              '仅当本卡明确要求撤销指定提交时传其 7–64 位哈希；由 Worker 执行，不要自行运行 git revert',
+        ),
       },
       required: [
         'cardId',
@@ -91,6 +95,7 @@ void registerDispatchScopedAgentTools(
         verificationCommands: commands,
         manualVerificationReason:
             mcpTrimmedString(args['manualVerificationReason']),
+        gitRevertCommit: mcpTrimmedString(args['gitRevertCommit']),
       );
     },
   );

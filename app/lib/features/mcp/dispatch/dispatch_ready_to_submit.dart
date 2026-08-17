@@ -14,6 +14,7 @@ Future<CallToolResult> dispatchReadyToSubmit(
   required List<String> completedFeedbackIds,
   required List<DispatchVerificationCommand> verificationCommands,
   String? manualVerificationReason,
+  String? gitRevertCommit,
   McpDispatchCardGate? gate,
   McpSubmissionSnapshotStore? snapshotStore,
   DispatchPendingStore? pendingStore,
@@ -61,6 +62,12 @@ Future<CallToolResult> dispatchReadyToSubmit(
   }
 
   final reason = manualVerificationReason?.trim();
+  final revertCommit = gitRevertCommit?.trim();
+  if (revertCommit != null &&
+      (revertCommit.isEmpty ||
+          !RegExp(r'^[0-9a-fA-F]{7,64}$').hasMatch(revertCommit))) {
+    return mcpErrorResult('gitRevertCommit 必须是 7–64 位 Git 提交哈希');
+  }
   final hasManualReason = reason != null && reason.isNotEmpty;
   if (verificationCommands.isNotEmpty) {
     return mcpErrorResult(
@@ -87,6 +94,7 @@ Future<CallToolResult> dispatchReadyToSubmit(
     verificationCommands: verificationCommands,
     repoPath: dispatchGate.repoPathForToken(token),
     baselineCommitRef: dispatchGate.baselineCommitRefForCard(id),
+    gitRevertCommit: revertCommit,
     manualVerificationReason: hasManualReason ? reason : null,
     updatedAt: DateTime.now().millisecondsSinceEpoch,
   );
@@ -99,5 +107,7 @@ Future<CallToolResult> dispatchReadyToSubmit(
     'status': record.status.name,
     'completedChecklistIds': record.completedChecklistIds,
     'completedFeedbackIds': record.completedFeedbackIds,
+    if (record.gitRevertCommit != null)
+      'gitRevertCommit': record.gitRevertCommit,
   });
 }

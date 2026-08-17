@@ -147,6 +147,7 @@ class DispatchPendingRecord {
     required this.updatedAt,
     this.repoPath,
     this.baselineCommitRef,
+    this.gitRevertCommit,
     this.manualVerificationReason,
     this.validationResults = const [],
     this.commitRef,
@@ -166,6 +167,10 @@ class DispatchPendingRecord {
   final List<DispatchVerificationCommand> verificationCommands;
   final String? repoPath;
   final String? baselineCommitRef;
+
+  /// 由 Worker 在 finalize 时执行的受控 `git revert --no-commit <hash>`。
+  /// Agent 只能声明意图，不能自行移动 HEAD。
+  final String? gitRevertCommit;
   final String? manualVerificationReason;
   final List<DispatchValidationResult> validationResults;
   final String? commitRef;
@@ -192,6 +197,7 @@ class DispatchPendingRecord {
         verificationCommands: verificationCommands,
         repoPath: repoPath,
         baselineCommitRef: baselineCommitRef,
+        gitRevertCommit: gitRevertCommit,
         manualVerificationReason: manualVerificationReason,
         validationResults: validationResults ?? this.validationResults,
         commitRef: commitRef ?? this.commitRef,
@@ -210,6 +216,7 @@ class DispatchPendingRecord {
             verificationCommands.map((item) => item.toJson()).toList(),
         if (repoPath != null) 'repoPath': repoPath,
         if (baselineCommitRef != null) 'baselineCommitRef': baselineCommitRef,
+        if (gitRevertCommit != null) 'gitRevertCommit': gitRevertCommit,
         if (manualVerificationReason != null)
           'manualVerificationReason': manualVerificationReason,
         'validationResults':
@@ -241,6 +248,7 @@ class DispatchPendingRecord {
           .toList(growable: false),
       repoPath: json['repoPath'] as String?,
       baselineCommitRef: json['baselineCommitRef'] as String?,
+      gitRevertCommit: json['gitRevertCommit'] as String?,
       manualVerificationReason: json['manualVerificationReason'] as String?,
       validationResults: (json['validationResults'] as List? ?? const [])
           .whereType<Map>()
