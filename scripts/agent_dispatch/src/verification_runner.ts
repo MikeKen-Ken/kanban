@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { spawnUnexpanded } from "./windows_spawn.ts";
+import { resolveWindowsExecutable, spawnUnexpanded } from "./windows_spawn.ts";
 
 export const DEFAULT_VERIFICATION_TIMEOUT_MS = 10 * 60_000;
 export const MAX_VERIFICATION_TIMEOUT_MS = 15 * 60_000;
@@ -37,21 +37,28 @@ export async function runVerificationCommand(
     : 0;
   const commandCwd = item.cwd?.trim() || ".";
   const commandSummary = summarizeCommand(item.executable, item.args);
+  const failedLaunch = (
+    output: string,
+  ): VerificationResult => ({
+    commandSummary,
+    executable: item.executable,
+    args: [...item.args],
+    cwd: commandCwd,
+    exitCode: -1,
+    durationMs: Date.now() - startedAt,
+    output,
+    timedOut: false,
+    passed: false,
+  });
   let resolvedCwd: string;
   try {
     resolvedCwd = resolveCommandCwd(repoRoot, commandCwd);
   } catch (error) {
-    return {
-      commandSummary,
-      executable: item.executable,
-      args: [...item.args],
-      cwd: commandCwd,
-      exitCode: -1,
-      durationMs: Date.now() - startedAt,
-      output: error instanceof Error ? error.message : String(error),
-      timedOut: false,
-      passed: false,
-    };
+    return failedLaunch(error instanceof Error ? error.message : String(error));
+  }
+  if (process.platform === "win32" &&
+      !resolveWindowsExecutable(item.executable)) {
+    return failedLaunch(describeMissingExecutable(item.executable));
   }
 
   return new Promise((resolvePromise) => {
@@ -69,17 +76,7 @@ export async function runVerificationCommand(
     try {
       child = spawnUnexpanded(item.executable, item.args, spawnOptions);
     } catch (error) {
-      resolvePromise({
-        commandSummary,
-        executable: item.executable,
-        args: [...item.args],
-        cwd: commandCwd,
-        exitCode: -1,
-        durationMs: Date.now() - startedAt,
-        output: error instanceof Error ? error.message : String(error),
-        timedOut: false,
-        passed: false,
-      });
+      resolvePromise(failedLaunch(describeLaunchError(item.executable, error)));
       return;
     }
     child.stdout?.on("data", (chunk: Buffer | string) => {
@@ -109,7 +106,7 @@ export async function runVerificationCommand(
     };
 
     child.on("error", (error) => {
-      stderr = appendTruncated(stderr, error.message);
+      stderr = appendTruncated(stderr, describeLaunchError(item.executable, error));
       finish(-1);
     });
     child.on("close", (code) => finish(timedOut ? 124 : (code ?? -1)));
@@ -136,6 +133,35 @@ export async function runVerificationCommands(
     if (!result.passed) break;
   }
   return results;
+}
+
+const SKIPPED_OUTPUT = "因前序验证失败未执行";
+
+/// 将 fail-fast 截断的结果补齐为与声明命令等长，避免 MCP 因条数不一致拒收。
+export function fillSkippedVerificationResults(
+  commands: VerificationCommand[],
+  results: VerificationResult[],
+): VerificationResult[] {
+  if (results.length >= commands.length) {
+    return results.slice(0, commands.length);
+  }
+  const filled = results.slice();
+  for (let index = results.length; index < commands.length; index += 1) {
+    const command = commands[index]!;
+    const cwd = command.cwd?.trim() || ".";
+    filled.push({
+      commandSummary: summarizeCommand(command.executable, command.args),
+      executable: command.executable,
+      args: [...command.args],
+      cwd,
+      exitCode: -1,
+      durationMs: 0,
+      output: SKIPPED_OUTPUT,
+      timedOut: false,
+      passed: false,
+    });
+  }
+  return filled;
 }
 
 export function formatVerificationFailure(failed: VerificationResult): string {
@@ -211,8 +237,29 @@ export function resolveCommandCwd(repoRoot: string, cwd: string): string {
   return target;
 }
 
-function summarizeCommand(executable: string, args: string[]): string {
+export function summarizeCommand(executable: string, args: string[]): string {
   return [executable, ...args]
     .map((part) => /\s|"/.test(part) ? JSON.stringify(part) : part)
     .join(" ");
+}
+
+export function describeMissingExecutable(executable: string): string {
+  const name = executable.trim() || "(空)";
+  return (
+    `未找到可执行文件 ${name}（ENOENT）。` +
+    `Worker 继承看板进程的 PATH；从开始菜单或快捷方式启动时，往往不含终端里才有的 Flutter。` +
+    `请把 Flutter 的 bin 目录写入系统 PATH 后重启看板，或从已配置 PATH 的终端启动看板。`
+  );
+}
+
+function describeLaunchError(executable: string, error: unknown): string {
+  if (isExecutableNotFoundError(error)) {
+    return describeMissingExecutable(executable);
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isExecutableNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  return (error as { code?: unknown }).code === "ENOENT";
 }

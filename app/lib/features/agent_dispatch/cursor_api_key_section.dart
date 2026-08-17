@@ -304,13 +304,6 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          '仅用于 Cursor SDK；不会写入仓库、偏好或运行日志',
-          style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-        ),
         if (showSaveButton) ...[
           const SizedBox(height: 8),
           Wrap(

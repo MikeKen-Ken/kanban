@@ -23,6 +23,11 @@ import {
   type RoundDispatchJob,
 } from "./types.ts";
 import {
+  logVerificationPlan,
+  logVerificationResults,
+} from "./verification_log.ts";
+import {
+  fillSkippedVerificationResults,
   formatVerificationFailure,
   runVerificationCommands,
   type VerificationCommand,
@@ -149,6 +154,7 @@ export async function runBatch(
       let context: SessionContext | undefined;
       let terminalRecorded = false;
       let allowDirtyWorkspace = preview.allowDirtyWorkspace === true;
+      let postAgent = false;
       try {
         scoped = await dependencies.connectMcp(agentEndpointUrl);
         const tools = await scoped.listTools();
@@ -230,6 +236,7 @@ export async function runBatch(
             processedCards,
           };
         }
+        postAgent = true;
 
         const status = await mcp.callJson("dispatch_agent_session_status", {
           workerToken: job.workerToken,
@@ -299,7 +306,7 @@ export async function runBatch(
       } catch (error) {
         const reason = error instanceof WorkerCancelledError
           ? "用户取消当前 Agent 会话"
-          : `Agent 会话异常：${error instanceof Error ? error.message : String(error)}`;
+          : `${postAgent ? "Worker 收尾失败" : "Agent 会话异常"}：${error instanceof Error ? error.message : String(error)}`;
         if (!terminalRecorded) {
           await recordRoundFailure(
             mcp,
@@ -310,7 +317,7 @@ export async function runBatch(
           );
         }
         const tree = dependencies.inspectGit(job.cwd);
-        const dirtySuffix = allowDirtyWorkspace
+        const dirtySuffix = allowDirtyWorkspace || postAgent
           ? ""
           : tree.kind === "dirty"
           ? `\n工作区不干净，停止批次：\n${tree.output}`
@@ -370,6 +377,15 @@ async function recoverPendingSessions(
   return { ok: true, processedCards };
 }
 
+async function runAndLogVerification(
+  dependencies: RunBatchDependencies,
+  commands: VerificationCommand[],
+  cwd: string,
+): Promise<VerificationResult[]> {
+  logVerificationPlan(commands);
+  return dependencies.runVerification(commands, cwd);
+}
+
 async function validateAndFinalize(
   mcp: KanbanMcpConnection,
   job: DispatchJob,
@@ -384,35 +400,49 @@ async function validateAndFinalize(
     const commands = parseVerificationCommands(pending.verificationCommands);
     const results = manualReason
       ? []
-      : await dependencies.runVerification(commands, job.cwd);
+      : fillSkippedVerificationResults(
+          commands,
+          await runAndLogVerification(dependencies, commands, job.cwd),
+        );
     const failed = results.find((item) => !item.passed);
-    const recorded = await mcp.callJson("dispatch_record_validation_results", {
-      workerToken: job.workerToken,
-      sessionId,
-      results: results.map(({
-        commandSummary,
-        executable,
-        args,
-        cwd,
-        exitCode,
-        durationMs,
-        timedOut,
-        output,
-      }) => ({
-        commandSummary,
-        executable,
-        args,
-        cwd,
-        exitCode,
-        durationMs,
-        timedOut,
-        output,
-      })),
-    });
+    logVerificationResults(results);
+    let recorded: Record<string, unknown>;
+    try {
+      recorded = await mcp.callJson("dispatch_record_validation_results", {
+        workerToken: job.workerToken,
+        sessionId,
+        results: results.map(({
+          commandSummary,
+          executable,
+          args,
+          cwd,
+          exitCode,
+          durationMs,
+          timedOut,
+          output,
+        }) => ({
+          commandSummary,
+          executable,
+          args,
+          cwd,
+          exitCode,
+          durationMs,
+          timedOut,
+          output,
+        })),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const extra = failed
+        ? `；当时验证结果：${formatVerificationFailure(failed)}`
+        : "";
+      throw new Error(`${message}${extra}`);
+    }
     status = String(recorded.status ?? "");
-    if (failed) {
-      if (failed.output.trim()) workerLog(failed.output);
-      const reason = formatVerificationFailure(failed);
+    if (failed || status === "failed") {
+      const reason = failed
+        ? formatVerificationFailure(failed)
+        : String(recorded.error ?? "验证失败");
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,

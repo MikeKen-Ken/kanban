@@ -35,12 +35,31 @@ export function resolveWindowsExecutable(
     return resolveWithPathext(trimmed, env);
   }
   const pathValue = env.Path ?? env.PATH ?? "";
-  for (const dir of pathValue.split(delimiter)) {
+  const dirs = [
+    ...flutterSdkBinDirs(env),
+    ...pathValue.split(delimiter),
+  ];
+  for (const dir of dirs) {
     if (!dir.trim()) continue;
     const found = resolveWithPathext(join(dir, trimmed), env);
     if (found) return found;
   }
   return undefined;
+}
+
+/** 常见 Flutter 安装位置优先于 PATH，避免桌面进程 PATH 里没有 Flutter。 */
+export function flutterSdkBinDirs(env: NodeJS.ProcessEnv = process.env): string[] {
+  const dirs: string[] = [];
+  const root = (env.FLUTTER_ROOT ?? "").trim();
+  if (root) dirs.push(join(root, "bin"));
+  const localAppData = (env.LOCALAPPDATA ?? "").trim();
+  if (localAppData) dirs.push(join(localAppData, "flutter", "bin"));
+  const home = (env.USERPROFILE ?? env.HOME ?? "").trim();
+  if (home) {
+    dirs.push(join(home, "flutter", "bin"));
+    dirs.push(join(home, "fvm", "default", "bin"));
+  }
+  return dirs;
 }
 
 export function buildWindowsCmdInvocation(

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { runVerificationCommand } from "./verification_runner.ts";
 import {
   buildWindowsCmdInvocation,
+  flutterSdkBinDirs,
   quoteCmdArg,
   resolveWindowsExecutable,
 } from "./windows_spawn.ts";
@@ -15,6 +16,18 @@ describe("windows_spawn", () => {
     assert.equal(quoteCmdArg("hello && echo x"), '"hello && echo x"');
     assert.equal(quoteCmdArg("%PATH%"), '"%%PATH%%"');
     assert.equal(quoteCmdArg('say "hi"'), '"say ""hi"""');
+  });
+
+  it("lists FLUTTER_ROOT bin as a search dir", () => {
+    assert.deepEqual(
+      flutterSdkBinDirs({ FLUTTER_ROOT: String.raw`D:\sdk\flutter` }),
+      [join(String.raw`D:\sdk\flutter`, "bin")],
+    );
+    assert.deepEqual(flutterSdkBinDirs({}), []);
+    assert.deepEqual(
+      flutterSdkBinDirs({ LOCALAPPDATA: String.raw`C:\Users\me\AppData\Local` }),
+      [join(String.raw`C:\Users\me\AppData\Local`, "flutter", "bin")],
+    );
   });
 
   it("批处理走 cmd.exe /d /s /v:off，整行再包一层引号", () => {
@@ -42,6 +55,22 @@ describe("windows_spawn", () => {
       PATHEXT: ".COM;.EXE;.BAT;.CMD",
     });
     assert.equal(found?.toLowerCase(), cmdPath.toLowerCase());
+  });
+
+  it("prefers FLUTTER_ROOT bin over PATH", () => {
+    if (process.platform !== "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "kanban-flutter-root-"));
+    const bin = join(dir, "bin");
+    mkdirSync(bin, { recursive: true });
+    const flutterBat = join(bin, "flutter.bat");
+    writeFileSync(flutterBat, "@echo off\r\n");
+    const found = resolveWindowsExecutable("flutter", {
+      Path: dir,
+      PATH: dir,
+      FLUTTER_ROOT: dir,
+      PATHEXT: ".COM;.EXE;.BAT;.CMD",
+    });
+    assert.equal(found?.toLowerCase(), flutterBat.toLowerCase());
   });
 
   it("验证命令能运行 PATH 中的 .cmd，且 && 不会被当成额外命令", async () => {

@@ -25,7 +25,6 @@ class AgentDispatchRunToggles extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('禁止使用卡片参数'),
-          subtitle: const Text('打开后忽略卡片上的引擎、模型和脏工作区等覆盖，只用工作台默认。'),
           value: ignoreCardParams,
           onChanged: enabled ? onIgnoreCardParamsChanged : null,
         ),
@@ -33,9 +32,6 @@ class AgentDispatchRunToggles extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('允许脏工作区'),
-          subtitle: const Text(
-            '默认关闭。关闭时未提交改动会停止批次；代码审查等需要已有文件时可打开。',
-          ),
           value: allowDirtyWorkspace,
           onChanged: enabled ? onAllowDirtyWorkspaceChanged : null,
         ),

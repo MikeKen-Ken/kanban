@@ -86,9 +86,17 @@ function createHappyDependencies(options?: {
   expectedReasoning?: string;
   manualReason?: string;
   claimError?: string;
+  recordError?: string;
   finalizeResult?: Record<string, unknown>;
   peekFields?: Record<string, unknown>;
+  pendingCommands?: Array<{
+    executable: string;
+    args: string[];
+    cwd: string;
+    expectedExitCode: number;
+  }>;
   runAgent?: (round: RoundDispatchJob) => Promise<{ ok: boolean; error?: string }>;
+  runVerification?: RunBatchDependencies["runVerification"];
 }): {
   dependencies: RunBatchDependencies;
   full: FakeMcp;
@@ -131,7 +139,7 @@ function createHappyDependencies(options?: {
             ...(options?.manualReason
               ? { manualVerificationReason: options.manualReason }
               : {
-                verificationCommands: [{
+                verificationCommands: options?.pendingCommands ?? [{
                   executable: process.execPath,
                   args: ["-e", "process.exit(0)"],
                   cwd: ".",
@@ -143,6 +151,9 @@ function createHappyDependencies(options?: {
       case "get_card":
         return { cardId: "card-a", columnId: "doing" };
       case "dispatch_record_validation_results":
+        if (options?.recordError) {
+          throw new Error(options.recordError);
+        }
         return {
           sessionId: "session-a",
           cardId: "card-a",
@@ -183,7 +194,7 @@ function createHappyDependencies(options?: {
         ? options.runAgent(round)
         : { ok: true, summary: "完成" };
     },
-    runVerification: async () => {
+    runVerification: options?.runVerification ?? (async () => {
       if (options?.manualReason) {
         throw new Error("人工验证不应执行命令");
       }
@@ -198,7 +209,7 @@ function createHappyDependencies(options?: {
         timedOut: false,
         passed: options?.verificationPasses !== false,
       }];
-    },
+    }),
   };
   return { dependencies, full, scoped };
 }
@@ -283,6 +294,91 @@ describe("run_batch", () => {
       full.calls.some((item) => item.name === "dispatch_finalize"),
       false,
     );
+  });
+
+  it("首条验证失败时补齐未执行命令并阻塞", async () => {
+    const first = {
+      commandSummary: `${process.execPath} -e "process.exit(7)"`,
+      executable: process.execPath,
+      args: ["-e", "process.exit(7)"],
+      cwd: ".",
+      exitCode: 7,
+      durationMs: 5,
+      output: "第一条失败",
+      timedOut: false,
+      passed: false,
+    };
+    const { dependencies, full } = createHappyDependencies({
+      pendingCommands: [
+        {
+          executable: process.execPath,
+          args: ["-e", "process.exit(7)"],
+          cwd: ".",
+          expectedExitCode: 0,
+        },
+        {
+          executable: process.execPath,
+          args: ["-e", "process.exit(0)"],
+          cwd: ".",
+          expectedExitCode: 0,
+        },
+      ],
+      runVerification: async () => [first],
+    });
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /验证命令失败/);
+    const recorded = full.calls.find(
+      (item) => item.name === "dispatch_record_validation_results",
+    );
+    const results = recorded?.args.results as unknown[];
+    assert.equal(results?.length, 2);
+    assert.equal(
+      (recorded?.args.results as Array<{ output?: string }>)[1]?.output,
+      "因前序验证失败未执行",
+    );
+    assert.ok(
+      full.calls.some((item) => item.name === "dispatch_block_agent_session"),
+    );
+    assert.equal(
+      full.calls.some((item) => item.name === "dispatch_finalize"),
+      false,
+    );
+  });
+
+  it("收尾记账失败不误报为脏工作区停止", async () => {
+    const { dependencies, full } = createHappyDependencies({
+      recordError: "dispatch_record_validation_results 失败：验证结果数量与声明命令不一致",
+    });
+    dependencies.inspectGit = () => {
+      const claimed = full.calls.some(
+        (item) => item.name === "dispatch_claim_next_card",
+      );
+      return claimed
+        ? { kind: "dirty", output: " M app/lib/foo.dart" }
+        : { kind: "clean" };
+    };
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /Worker 收尾失败/);
+    assert.doesNotMatch(result.error ?? "", /工作区不干净，停止批次/);
+  });
+
+  it("收尾记账失败时带上已跑完的验证原因", async () => {
+    const { dependencies } = createHappyDependencies({
+      verificationPasses: false,
+      recordError: "dispatch_record_validation_results 失败：验证结果数量与声明命令不一致",
+    });
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /Worker 收尾失败/);
+    assert.match(result.error ?? "", /当时验证结果：验证命令失败/);
   });
 
   it("禁止使用卡片参数时沿用工作台默认", async () => {

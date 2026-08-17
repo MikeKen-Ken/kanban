@@ -4,7 +4,7 @@ import 'agent_dispatch_log.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
-/// 宽窗口使用「配置与 Worker / Skill / 对话记录」三列布局；窄窗口则
+/// 宽窗口使用「调度配置 / Worker 与 Skill / 对话记录」三列布局；窄窗口则
 /// 回退为纵向滚动，避免字段被压缩到不可用。
 class AgentDispatchWorkspace extends StatelessWidget {
   const AgentDispatchWorkspace({
@@ -30,22 +30,23 @@ class AgentDispatchWorkspace extends StatelessWidget {
             children: [
               Expanded(
                 flex: 10,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: _ScrollablePane(
-                        title: '调度配置',
-                        child: settings,
-                      ),
-                    ),
-                    const Divider(height: 32),
-                    worker,
-                  ],
+                child: _ScrollablePane(
+                  title: '调度配置',
+                  child: settings,
                 ),
               ),
               const VerticalDivider(width: 25),
-              Expanded(flex: 9, child: skill),
+              Expanded(
+                flex: 9,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    worker,
+                    const Divider(height: 24),
+                    Expanded(child: skill),
+                  ],
+                ),
+              ),
               const VerticalDivider(width: 25),
               Expanded(flex: 12, child: log),
             ],
@@ -62,7 +63,7 @@ class AgentDispatchWorkspace extends StatelessWidget {
               const Divider(height: 32),
               worker,
               const Divider(height: 32),
-              SizedBox(height: 400, child: skill),
+              skill,
               const Divider(height: 32),
               SizedBox(height: 400, child: log),
             ],
@@ -107,7 +108,7 @@ class AgentDispatchWorkerPane extends StatelessWidget {
   }
 }
 
-class AgentDispatchSkillPane extends StatelessWidget {
+class AgentDispatchSkillPane extends StatefulWidget {
   const AgentDispatchSkillPane({
     required this.skillPath,
     required this.skillPreview,
@@ -124,49 +125,77 @@ class AgentDispatchSkillPane extends StatelessWidget {
   final VoidCallback onRefreshSkill;
 
   @override
+  State<AgentDispatchSkillPane> createState() => _AgentDispatchSkillPaneState();
+}
+
+class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
+  var _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            const Expanded(child: _PaneTitle(title: 'Skill')),
-            IconButton(
-              tooltip: '打开 Skill 目录',
-              onPressed: enabled ? onOpenSkillDirectory : null,
-              icon: const Icon(Icons.folder_open_outlined, size: 20),
-            ),
-            IconButton(
-              tooltip: '重新读取 Skill',
-              onPressed: enabled ? onRefreshSkill : null,
-              icon: const Icon(Icons.refresh, size: 20),
-            ),
-          ],
-        ),
-        Text(
-          skillPath,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).dividerColor),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                skillPreview ?? '（未找到或无法读取 Skill）',
-                style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final canFill = constraints.maxHeight.isFinite &&
+            constraints.maxHeight > 160 &&
+            _expanded;
+        final preview = Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).dividerColor),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              widget.skillPreview ?? '（未找到或无法读取 Skill）',
+              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
             ),
           ),
-        ),
-      ],
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  key: const ValueKey('agent-dispatch-skill-expand'),
+                  tooltip: _expanded ? '折叠 Skill' : '展开 Skill',
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                  icon: Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 22,
+                  ),
+                ),
+                const Expanded(child: _PaneTitle(title: 'Skill')),
+                IconButton(
+                  tooltip: '打开 Skill 目录',
+                  onPressed:
+                      widget.enabled ? widget.onOpenSkillDirectory : null,
+                  icon: const Icon(Icons.folder_open_outlined, size: 20),
+                ),
+                IconButton(
+                  tooltip: '重新读取 Skill',
+                  onPressed: widget.enabled ? widget.onRefreshSkill : null,
+                  icon: const Icon(Icons.refresh, size: 20),
+                ),
+              ],
+            ),
+            if (_expanded) ...[
+              Text(
+                widget.skillPath,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              if (canFill)
+                Expanded(child: preview)
+              else
+                SizedBox(height: 280, child: preview),
+            ],
+          ],
+        );
+      },
     );
   }
 }

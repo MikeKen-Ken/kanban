@@ -10,6 +10,7 @@ import 'dispatch_finalizer.dart';
 import 'dispatch_pending_store.dart';
 import 'dispatch_recovery.dart';
 import 'dispatch_session_end.dart';
+import 'dispatch_validation_shape.dart';
 
 typedef DispatchScopedEndpointCloser = Future<void> Function(
     String workerToken);
@@ -121,7 +122,8 @@ void registerDispatchPrivateTools(
 
   server.registerTool(
     'dispatch_record_validation_results',
-    description: 'Worker 私有工具：记录验证结果并将 pending 标记为 validated。',
+    description:
+        'Worker 私有工具：记录验证结果。全部通过则标记 validated；失败（含 fail-fast 前缀）则标记 failed。',
     inputSchema: JsonSchema.object(
       properties: {
         'workerToken': JsonSchema.string(),
@@ -316,22 +318,12 @@ Future<CallToolResult> _recordValidation(
   if (record.status != DispatchPendingStatus.declared) {
     return mcpErrorResult('当前状态不能记录验证结果：${record.status.name}');
   }
-  if (record.manualVerificationReason == null) {
-    if (results.length != record.verificationCommands.length) {
-      return mcpErrorResult('验证结果数量与声明命令不一致');
-    }
-    for (var index = 0; index < results.length; index++) {
-      final expected = record.verificationCommands[index];
-      final actual = results[index];
-      if (actual.executable != expected.executable ||
-          !_sameStrings(actual.args, expected.args) ||
-          actual.cwd != expected.cwd) {
-        return mcpErrorResult('验证结果与第 ${index + 1} 条声明命令不一致');
-      }
-    }
-  } else if (results.isNotEmpty) {
-    return mcpErrorResult('人工验证声明不应附带命令结果');
-  }
+  final shapeError = dispatchValidationShapeError(
+    isManual: record.manualVerificationReason != null,
+    commands: record.verificationCommands,
+    results: results,
+  );
+  if (shapeError != null) return mcpErrorResult(shapeError);
   DispatchValidationResult? failed;
   for (var index = 0; index < results.length; index++) {
     final result = results[index];
@@ -384,14 +376,6 @@ Future<CallToolResult> _recordValidation(
     },
   );
   return mcpJsonResult(next.toJson());
-}
-
-bool _sameStrings(List<String> a, List<String> b) {
-  if (a.length != b.length) return false;
-  for (var index = 0; index < a.length; index++) {
-    if (a[index] != b[index]) return false;
-  }
-  return true;
 }
 
 String _truncate(String value) =>

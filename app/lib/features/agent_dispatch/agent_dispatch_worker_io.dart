@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_windows_job.dart';
+import 'agent_dispatch_worker_environment.dart';
 import 'agent_worker_health.dart';
 
 class AgentWorkerResult {
@@ -208,17 +209,18 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     }
     onLog?.call('启动 worker：$cli');
     onLog?.call('node：$node');
-    final environment = _workerEnvironment(
+    final workerEnv = _workerEnvironment(
       nodeExecutable: node,
       cursorApiKey: cursorApiKey,
     );
+    onLog?.call(workerEnv.summary);
     final process = await Process.start(
       node,
       [cli, '--job', jobFile.path],
       // Cursor SDK 的内置 Shell 可能继承 Worker 进程目录，因此在进程边界
       // 就将工作目录固定为用户选择的代码仓库。
       workingDirectory: cwd,
-      environment: environment,
+      environment: workerEnv.environment,
     );
     final workerProcess = AgentWorkerProcess(
       process,
@@ -294,7 +296,7 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   final environment = _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
-  );
+  ).environment;
   onLog?.call('拉取模型列表…');
   final result = await Process.run(
     node,
@@ -344,7 +346,7 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
   final environment = _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
-  );
+  ).environment;
   onLog?.call('拉取 Cursor 额度…');
   final result = await Process.run(
     node,
@@ -521,22 +523,19 @@ String describeWorkerExitWithoutOutput(int code) {
   return 'worker 退出码 $code，且无 out.json';
 }
 
-Map<String, String> _workerEnvironment({
+WindowsRegistryEnvironment? _windowsRegistryCache;
+
+WorkerEnvironmentBuild _workerEnvironment({
   required String nodeExecutable,
   String? cursorApiKey,
 }) {
-  final environment = Map<String, String>.from(Platform.environment);
-  final nodeDir = p.dirname(nodeExecutable);
-  final original = environment['Path'] ?? environment['PATH'] ?? '';
-  final pathListSeparator = Platform.isWindows ? ';' : ':';
-  final merged =
-      original.isEmpty ? nodeDir : '$nodeDir$pathListSeparator$original';
-  environment['Path'] = merged;
-  environment['PATH'] = merged;
-  if (cursorApiKey != null && cursorApiKey.trim().isNotEmpty) {
-    environment['CURSOR_API_KEY'] = cursorApiKey.trim();
-  }
-  return environment;
+  return buildWorkerEnvironment(
+    processEnvironment: Platform.environment,
+    nodeExecutable: nodeExecutable,
+    cursorApiKey: cursorApiKey,
+    windowsRegistry:
+        Platform.isWindows ? (_windowsRegistryCache ??= readWindowsRegistryEnvironment()) : null,
+  );
 }
 
 Future<String?> _resolveNodeExecutable({

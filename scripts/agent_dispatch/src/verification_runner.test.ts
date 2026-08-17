@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   MAX_VERIFICATION_TIMEOUT_MS,
   clampTimeout,
+  fillSkippedVerificationResults,
   formatVerificationFailure,
   runVerificationCommand,
   runVerificationCommands,
@@ -38,6 +39,20 @@ describe("verification_runner", () => {
     assert.equal(results.length, 1);
     assert.equal(results[0]?.exitCode, 7);
     assert.equal(results[0]?.passed, false);
+
+    const filled = fillSkippedVerificationResults(
+      [
+        { executable: process.execPath, args: ["-e", "process.exit(7)"] },
+        { executable: process.execPath, args: ["-e", "process.exit(0)"], cwd: "src" },
+      ],
+      results,
+    );
+    assert.equal(filled.length, 2);
+    assert.equal(filled[0]?.exitCode, 7);
+    assert.equal(filled[1]?.passed, false);
+    assert.equal(filled[1]?.exitCode, -1);
+    assert.equal(filled[1]?.cwd, "src");
+    assert.equal(filled[1]?.output, "因前序验证失败未执行");
   });
 
   it("超时命令会被终止并标记 124", async () => {
@@ -82,6 +97,23 @@ describe("verification_runner", () => {
 
     assert.equal(result.passed, true);
     assert.equal(result.output, literal);
+  });
+
+  it("找不到可执行文件时说明 Worker PATH 可能不含 Flutter", async () => {
+    const result = await runVerificationCommand(
+      {
+        executable: "kanban-definitely-missing-binary",
+        args: ["test", "targeted.dart"],
+        cwd: ".",
+      },
+      process.cwd(),
+    );
+
+    assert.equal(result.passed, false);
+    assert.equal(result.exitCode, -1);
+    assert.match(result.output, /未找到可执行文件 kanban-definitely-missing-binary/);
+    assert.match(result.output, /ENOENT/);
+    assert.match(result.output, /看板进程的 PATH/);
   });
 
   it("timeout 会钳制 Worker 上限", () => {
