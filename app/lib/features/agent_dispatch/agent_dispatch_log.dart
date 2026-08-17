@@ -227,7 +227,7 @@ class AgentDispatchLogTask {
 class AgentDispatchLogTasks {
   AgentDispatchLogTasks._();
 
-  static final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)/(\d+)');
+  static final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)(?:/(\d+))?');
   static final _titlePattern = RegExp(r'^当前卡片：(.+)$');
 
   static List<AgentDispatchLogTask> parse(List<String> lines) {
@@ -273,7 +273,7 @@ class AgentDispatchLogTasks {
         AgentDispatchLogTask(
           ordinal: ordinal,
           roundIndex: int.parse(round.group(1)!),
-          roundTotal: int.parse(round.group(2)!),
+          roundTotal: int.parse(round.group(2) ?? round.group(1)!),
           title: '',
           start: i,
           end: lines.length,

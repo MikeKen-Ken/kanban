@@ -67,17 +67,11 @@ class AgentDispatchHub extends StatelessWidget {
     if (progress.running &&
         currentBoard != null &&
         currentBoard.id == project.id) {
-      final liveTotal = liveDispatchTotal(
-        cardLimitMax: progress.cardLimitMax,
-        cardLimitCount: progress.cardLimitCount,
-        processedCards: progress.processedCards,
+      progress = applyLiveBoardQueue(
+        progress,
         remainingQueue: countWorkQueueCards(currentBoard),
         hasActiveCard: hasIncompleteDoingCard(currentBoard),
-        drainAfterCurrent: progress.drainAfterCurrent,
       );
-      if (liveTotal != progress.totalCards) {
-        progress = progress.copyWith(totalCards: liveTotal);
-      }
     }
     return AgentDispatchHubItem(
       projectId: project.id,

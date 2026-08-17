@@ -115,7 +115,26 @@ int clampedTotalAfterStop(AgentDispatchProgress progress) {
   return progress.processedCards + 1;
 }
 
-final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)/(\d+)');
+/// 用看板实时队列校正分母；Max 模式会随待办增减，固定张数仍受上限约束。
+AgentDispatchProgress applyLiveBoardQueue(
+  AgentDispatchProgress progress, {
+  required int remainingQueue,
+  required bool hasActiveCard,
+}) {
+  if (!progress.running) return progress;
+  final liveTotal = liveDispatchTotal(
+    cardLimitMax: progress.cardLimitMax,
+    cardLimitCount: progress.cardLimitCount,
+    processedCards: progress.processedCards,
+    remainingQueue: remainingQueue,
+    hasActiveCard: hasActiveCard,
+    drainAfterCurrent: progress.drainAfterCurrent,
+  );
+  if (liveTotal == progress.totalCards) return progress;
+  return progress.copyWith(totalCards: liveTotal);
+}
+
+final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)(?:/(\d+))?');
 final _confirmedPattern = RegExp(r'Worker 确认第 (\d+) 次');
 final _processedPattern = RegExp(r'已处理 (\d+) 张');
 final _currentTitlePattern = RegExp(r'^当前卡片：(.+)$', multiLine: true);
@@ -130,13 +149,16 @@ AgentDispatchProgress applyWorkerProgressLog(
   final round = _roundPattern.firstMatch(message);
   if (round != null) {
     final roundIndex = int.parse(round.group(1)!);
-    final roundTotal = int.parse(round.group(2)!);
-    final nextTotal = current.drainAfterCurrent
-        ? (roundIndex > current.totalCards ? roundIndex : current.totalCards)
-        : (roundTotal > current.totalCards ? roundTotal : current.totalCards);
+    final roundTotalRaw = round.group(2);
+    final roundTotal =
+        roundTotalRaw == null ? null : int.parse(roundTotalRaw);
     return current.copyWith(
       currentRound: roundIndex,
-      totalCards: nextTotal,
+      totalCards: _totalAfterRoundLog(
+        current,
+        roundIndex: roundIndex,
+        roundTotal: roundTotal,
+      ),
       currentTitle: '',
       currentDetail: '',
       phaseLabel: '领取',
@@ -187,4 +209,18 @@ AgentDispatchProgress _withProcessed(AgentDispatchProgress current, int processe
   final total =
       current.totalCards > processed ? current.totalCards : processed;
   return current.copyWith(processedCards: processed, totalCards: total);
+}
+
+int _totalAfterRoundLog(
+  AgentDispatchProgress current, {
+  required int roundIndex,
+  required int? roundTotal,
+}) {
+  final keep = roundIndex > current.totalCards ? roundIndex : current.totalCards;
+  if (current.drainAfterCurrent) return keep;
+  // Max 把 Worker 上限写成 999，那是哨兵不是队列长度。
+  if (current.cardLimitMax || roundTotal == null) {
+    return current.totalCards > 0 ? keep : current.totalCards;
+  }
+  return roundTotal > current.totalCards ? roundTotal : current.totalCards;
 }

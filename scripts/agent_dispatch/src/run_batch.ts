@@ -98,7 +98,8 @@ export async function runBatch(
       if (cancellation?.shouldStopAfterCurrentSession) {
         return cancellation.isCancelled ? cancelledResult() : drainedResult();
       }
-      workerLog(`──────── Worker 单卡轮次 ${index}/${limit} ────────`);
+      const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
+      workerLog(`──────── Worker 单卡轮次 ${roundLabel} ────────`);
       const peek = await mcp.callJson("peek_next_card", {
         ...(job.projectId ? { projectId: job.projectId } : {}),
       });

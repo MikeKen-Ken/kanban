@@ -8,7 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/import_export/backup_file_picker.dart';
+import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
+import '../kanban/verify_column.dart';
 import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_after_queue_field.dart';
 import 'agent_dispatch_config.dart';
@@ -20,6 +22,7 @@ import 'agent_dispatch_log.dart';
 import 'agent_dispatch_log_refresh_scheduler.dart';
 import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
+import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_registry.dart';
 import 'agent_dispatch_run_toggles.dart';
@@ -99,6 +102,18 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   void _onServiceProgressChanged() {
     if (mounted) setState(() {});
+  }
+
+  AgentDispatchProgress _liveProgress(KanbanBoard? currentBoard) {
+    final progress = _service.progress;
+    if (currentBoard == null || currentBoard.id != widget.projectId) {
+      return progress;
+    }
+    return applyLiveBoardQueue(
+      progress,
+      remainingQueue: countWorkQueueCards(currentBoard),
+      hasActiveCard: hasIncompleteDoingCard(currentBoard),
+    );
   }
 
   void _onServiceRunningChanged() {
@@ -907,7 +922,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           log: AgentDispatchLogPane(
             controller: _logController,
             running: _running,
-            progress: _service.progress,
+            progress: _liveProgress(board.board),
             onClear: _clearLog,
             onExport: _exportLog,
             onCopy: _copyLog,

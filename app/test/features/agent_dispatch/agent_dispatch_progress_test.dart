@@ -150,6 +150,46 @@ void main() {
     expect(progress.totalCards, 3);
   });
 
+  test('Max 模式忽略 Worker 日志里的 999 上限分母', () {
+    var progress = const AgentDispatchProgress(
+      running: true,
+      processedCards: 0,
+      totalCards: 4,
+      cardLimitMax: true,
+    );
+    progress = applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/999 ────────');
+    expect(progress.currentRound, 1);
+    expect(progress.liveCardLabel, '1/4');
+    expect(progress.totalCards, 4);
+  });
+
+  test('无分母的 Max 轮次日志仍更新当前张数', () {
+    var progress = const AgentDispatchProgress(
+      running: true,
+      processedCards: 0,
+      totalCards: 4,
+      cardLimitMax: true,
+    );
+    progress = applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1 ────────');
+    expect(progress.liveCardLabel, '1/4');
+  });
+
+  test('Max 用看板实时队列覆盖被 999 抬高的分母', () {
+    const inflated = AgentDispatchProgress(
+      running: true,
+      processedCards: 0,
+      totalCards: 999,
+      currentRound: 1,
+      cardLimitMax: true,
+    );
+    final live = applyLiveBoardQueue(
+      inflated,
+      remainingQueue: 3,
+      hasActiveCard: true,
+    );
+    expect(live.liveCardLabel, '1/4');
+  });
+
   test('总览能读到各项目运行进度', () {
     final registry = AgentDispatchRegistry.instance;
     addTearDown(registry.debugReset);

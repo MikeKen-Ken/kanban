@@ -1862,7 +1862,8 @@ async function runCursor(job, cancellation) {
         // MCP 已在上面显式合并；kanbanMCP 始终覆盖为本卡 scoped 端点。
         settingSources: ["user", "project"],
         store: new JsonlLocalAgentStore(storeDir),
-        autoReview: true,
+        // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
+        autoReview: false,
         sandboxOptions: { enabled: job.enableSandbox === true }
       }
     });
@@ -2086,7 +2087,8 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
       if (cancellation?.shouldStopAfterCurrentSession) {
         return cancellation.isCancelled ? cancelledResult() : drainedResult();
       }
-      workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${index}/${limit} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
+      const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
+      workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${roundLabel} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const peek = await mcp.callJson("peek_next_card", {
         ...job.projectId ? { projectId: job.projectId } : {}
       });

@@ -125,4 +125,15 @@ void main() {
     expect(AgentDispatchLogTasks.slice(text, 2), isNot(contains('完成甲')));
     expect(AgentDispatchLogTasks.slice(text, 1), isNot(contains('启动批次')));
   });
+
+  test('无分母的 Max 轮次日志仍能切出任务段', () {
+    final lines = [
+      '[09:00:01] [Worker] [信息] ──────── Worker 单卡轮次 1 ────────',
+      '[09:00:02] [系统] [信息] 当前卡片：任务甲',
+      '[09:00:03] [Worker] [信息] ──────── Worker 单卡轮次 2 ────────',
+    ];
+    final tasks = AgentDispatchLogTasks.parse(lines);
+    expect(tasks, hasLength(2));
+    expect(tasks.first.label, contains('任务甲'));
+  });
 }
