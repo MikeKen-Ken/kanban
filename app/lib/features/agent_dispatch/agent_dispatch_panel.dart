@@ -197,6 +197,25 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     setState(() => _settings = synced);
     final prefs = await SharedPreferences.getInstance();
     await prefs.saveAgentDispatchSettings(synced);
+    if (_service.isRunning && mounted) {
+      await _pushLiveRunOptions(synced);
+    }
+  }
+
+  Future<void> _pushLiveRunOptions(AgentDispatchSettings settings) async {
+    final prefs = await SharedPreferences.getInstance();
+    final catalogs = {
+      for (final engine in AgentDispatchEngine.values)
+        engine: prefs.loadAgentDispatchModelCatalog(engine: engine),
+    };
+    if (!mounted) return;
+    final board = context.read<BoardController>();
+    _service.updateLiveRunOptions(
+      settings.toRunOptions(
+        projectTitleOf: (id) => board.manifest?.findById(id)?.title,
+        catalogs: catalogs,
+      ),
+    );
   }
 
   Future<void> _persistAfterQueue(AgentDispatchSettings next) async {
@@ -474,7 +493,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   Future<void> _onEngineChanged(AgentDispatchEngine? nextEngine) async {
-    if (nextEngine == null || _running || _busy) return;
+    if (nextEngine == null || _busy) return;
     final switched = _settings.switchEngine(nextEngine);
     final prefs = await SharedPreferences.getInstance();
     final cachedModels = prefs.loadAgentDispatchModelCatalog(
@@ -662,7 +681,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final modelParameters = _selectedModel?.parameters ?? const [];
     final skillPath = _settings.resolveSkillPath();
     final viewport = MediaQuery.sizeOf(context);
-    final dialogWidth = (viewport.width - 96).clamp(560.0, 1320.0).toDouble();
+    final dialogWidth = (viewport.width - 48).clamp(560.0, 1600.0).toDouble();
     final dialogHeight = (viewport.height - 180).clamp(420.0, 820.0).toDouble();
 
     return AlertDialog(
@@ -682,12 +701,17 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               DropdownButtonFormField<AgentDispatchEngine>(
                 key: ValueKey('engine-${_settings.engine}'),
                 initialValue: _settings.engine,
-                decoration: const InputDecoration(labelText: 'AI 平台'),
+                decoration: InputDecoration(
+                  labelText: 'AI 平台',
+                  helperText: _settings.engine == _settings.defaultEngine
+                      ? '当前正在编辑默认平台'
+                      : '仅编辑此平台配置，不改变本批次默认',
+                ),
                 items: [
                   for (final e in AgentDispatchEngine.values)
                     DropdownMenuItem(value: e, child: Text(e.label)),
                 ],
-                onChanged: _running || _busy ? null : _onEngineChanged,
+                onChanged: _busy ? null : _onEngineChanged,
               ),
               const SizedBox(height: 12),
               if (_projectErrorText != null)
@@ -722,7 +746,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 Text('Cursor API Key',
                     style: Theme.of(context).textTheme.labelLarge),
                 CursorApiKeySection(
-                  enabled: !_running && !_busy,
+                  enabled: !_busy,
                   credentials: _credentials,
                   workerScriptPath: _settings.workerScriptPath,
                   onActiveKeyChanged: _onCursorKeyChanged,
@@ -776,7 +800,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                                   ),
                                 ),
                             ],
-                            onChanged: _running || _busy
+                            onChanged: _busy
                                 ? null
                                 : (id) {
                                     AgentDispatchModelInfo? selected;
@@ -804,7 +828,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                         parameters: modelParameters,
                         defaultVariant: _selectedModel?.defaultVariant,
                         values: _settings.modelParamValues,
-                        enabled: !_running && !_busy,
+                        enabled: !_busy,
                         onChanged: (id, value) {
                           final values = Map<String, String>.from(
                             _settings.modelParamValues,
@@ -822,7 +846,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     ),
                   ],
                   TextButton(
-                    onPressed: _running || _busy ? null : _loadModels,
+                    onPressed: _busy ? null : _loadModels,
                     style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -835,7 +859,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 ignoreCardParams: _settings.ignoreCardParams,
                 allowDirtyWorkspace: _settings.allowDirtyWorkspace,
                 enableSandbox: _settings.enableSandbox,
-                enabled: !_running && !_busy,
+                enabled: !_busy,
                 onIgnoreCardParamsChanged: (value) => _persist(
                   _settings.copyWith(ignoreCardParams: value),
                 ),
@@ -873,6 +897,29 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
+            ],
+          ),
+          batch: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DropdownButtonFormField<AgentDispatchEngine>(
+                key: ValueKey('default-engine-${_settings.defaultEngine}'),
+                initialValue: _settings.defaultEngine,
+                decoration: const InputDecoration(
+                  labelText: '默认 AI 平台',
+                  helperText: '未指定平台的卡片使用此项',
+                ),
+                items: [
+                  for (final e in AgentDispatchEngine.values)
+                    DropdownMenuItem(value: e, child: Text(e.label)),
+                ],
+                onChanged: _busy
+                    ? null
+                    : (next) {
+                        if (next == null) return;
+                        _persist(_settings.copyWith(defaultEngine: next));
+                      },
+              ),
               const SizedBox(height: 12),
               AgentDispatchCardLimitField(
                 controller: _countController,
@@ -905,12 +952,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   );
                 },
               ),
+              const SizedBox(height: 12),
+              AgentDispatchWorkerPane(
+                workerStatus: _workerStatus,
+                enabled: !_running && !_busy,
+                onFixWorker: _fixWorker,
+              ),
             ],
-          ),
-          worker: AgentDispatchWorkerPane(
-            workerStatus: _workerStatus,
-            enabled: !_running && !_busy,
-            onFixWorker: _fixWorker,
           ),
           skill: AgentDispatchSkillPane(
             skillPath: skillPath,

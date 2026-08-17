@@ -5,18 +5,18 @@ import 'agent_dispatch_progress.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
-/// 宽窗口使用「调度配置 / Skill（含 Worker）/ 对话记录」三列布局；窄窗口则
-/// 回退为纵向滚动，避免字段被压缩到不可用。
+/// 宽窗口使用「调度配置 / 批次配置 / Skill / 运行日志」四列；窄窗口回退为
+/// 纵向滚动，避免字段被压缩到不可用。
 class AgentDispatchWorkspace extends StatelessWidget {
   const AgentDispatchWorkspace({
-    required this.worker,
+    required this.batch,
     required this.skill,
     required this.settings,
     required this.log,
     super.key,
   });
 
-  final Widget worker;
+  final Widget batch;
   final Widget skill;
   final Widget settings;
   final Widget log;
@@ -25,7 +25,7 @@ class AgentDispatchWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= 1040) {
+        if (constraints.maxWidth >= 1200) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -36,12 +36,17 @@ class AgentDispatchWorkspace extends StatelessWidget {
                   child: settings,
                 ),
               ),
-              const VerticalDivider(width: 25),
+              const VerticalDivider(width: 20),
               Expanded(
-                flex: 9,
-                child: _SkillColumn(worker: worker, skill: skill),
+                flex: 8,
+                child: _ScrollablePane(
+                  title: '批次配置',
+                  child: batch,
+                ),
               ),
-              const VerticalDivider(width: 25),
+              const VerticalDivider(width: 20),
+              Expanded(flex: 7, child: skill),
+              const VerticalDivider(width: 20),
               Expanded(flex: 12, child: log),
             ],
           );
@@ -55,37 +60,17 @@ class AgentDispatchWorkspace extends StatelessWidget {
               const SizedBox(height: 12),
               settings,
               const Divider(height: 32),
-              _SkillColumn(worker: worker, skill: skill, fillHeight: false),
+              const _PaneTitle(title: '批次配置'),
+              const SizedBox(height: 12),
+              batch,
+              const Divider(height: 32),
+              skill,
               const Divider(height: 32),
               SizedBox(height: 400, child: log),
             ],
           ),
         );
       },
-    );
-  }
-}
-
-class _SkillColumn extends StatelessWidget {
-  const _SkillColumn({
-    required this.worker,
-    required this.skill,
-    this.fillHeight = true,
-  });
-
-  final Widget worker;
-  final Widget skill;
-  final bool fillHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        worker,
-        const SizedBox(height: 8),
-        if (fillHeight) Expanded(child: skill) else skill,
-      ],
     );
   }
 }

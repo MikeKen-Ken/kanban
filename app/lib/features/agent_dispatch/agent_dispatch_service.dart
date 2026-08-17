@@ -70,6 +70,25 @@ class AgentDispatchService {
     _runAfterQueueOnFailure = runOnFailure;
   }
 
+  /// 运行中更新默认平台与模型；当前卡片不变，下一张领取时生效。
+  void updateLiveRunOptions(AgentDispatchRunOptions options) {
+    unawaited(_activeWorker?.writeLiveOverrides({
+      'engine': options.engine.name,
+      if (options.modelId != null && options.modelId!.trim().isNotEmpty)
+        'model': options.modelId!.trim(),
+      if (options.modelParams.isNotEmpty)
+        'modelParams': [
+          for (final item in options.modelParams)
+            {'id': item.id, 'value': item.value},
+        ],
+      if (options.engineDefaults.isNotEmpty)
+        'engineDefaults': options.engineDefaultsJobJson(),
+      'ignoreCardParams': options.ignoreCardParams,
+      'allowDirtyWorkspace': options.allowDirtyWorkspace,
+      'enableSandbox': options.enableSandbox,
+    }));
+  }
+
   AgentDispatchProgress get progress => _progress;
 
   void addLogListener(void Function(AgentDispatchLogEntry entry) listener) {

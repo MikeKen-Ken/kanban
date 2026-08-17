@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  applyLiveJobOverlay,
   effortToCodexConfigArgs,
   ensureContextParameter,
   mergeJobWithCardOverrides,
@@ -163,5 +164,22 @@ describe("mergeJobWithCardOverrides", () => {
         "model_context_window=272000",
       ],
     );
+  });
+});
+
+describe("applyLiveJobOverlay", () => {
+  it("用运行中写入的默认平台和模型覆盖启动快照", () => {
+    const live = applyLiveJobOverlay(job, {
+      engine: "codex",
+      model: "gpt-5",
+      modelParams: [{ id: "model_reasoning_effort", value: "low" }],
+    });
+    assert.equal(live.engine, "codex");
+    assert.equal(live.model, "gpt-5");
+    assert.deepEqual(live.modelParams, [
+      { id: "model_reasoning_effort", value: "low" },
+    ]);
+    assert.equal(live.cwd, job.cwd);
+    assert.equal(live.cardLimit, job.cardLimit);
   });
 });

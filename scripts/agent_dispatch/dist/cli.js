@@ -1,5 +1,5 @@
 // src/cli.ts
-import { readFileSync as readFileSync5, writeFileSync as writeFileSync4 } from "node:fs";
+import { readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
@@ -228,6 +228,19 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 // src/types.ts
+function applyLiveJobOverlay(job, live) {
+  if (!live) return job;
+  return {
+    ...job,
+    engine: parseEngine(live.engine, job.engine),
+    model: typeof live.model === "string" ? live.model : job.model,
+    modelParams: Array.isArray(live.modelParams) ? live.modelParams : job.modelParams,
+    engineDefaults: live.engineDefaults ?? job.engineDefaults,
+    ignoreCardParams: typeof live.ignoreCardParams === "boolean" ? live.ignoreCardParams : job.ignoreCardParams,
+    allowDirtyWorkspace: typeof live.allowDirtyWorkspace === "boolean" ? live.allowDirtyWorkspace : job.allowDirtyWorkspace,
+    enableSandbox: typeof live.enableSandbox === "boolean" ? live.enableSandbox : job.enableSandbox
+  };
+}
 function isReasoningParamId(id) {
   return id === "reasoning" || id === "reasoning_effort" || id === "model_reasoning_effort" || id === "effort" || id === "thinking";
 }
@@ -2041,6 +2054,7 @@ function extensionForMime(mimeType) {
 }
 
 // src/run_batch.ts
+import { readFileSync as readFileSync5 } from "node:fs";
 var SCOPED_TOOL_NAMES = [
   "block_card",
   "ready_to_submit",
@@ -2087,15 +2101,16 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
       if (cancellation?.shouldStopAfterCurrentSession) {
         return cancellation.isCancelled ? cancelledResult() : drainedResult();
       }
+      const liveJob = readLiveJob(job);
       const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
       workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${roundLabel} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const peek = await mcp.callJson("peek_next_card", {
-        ...job.projectId ? { projectId: job.projectId } : {}
+        ...liveJob.projectId ? { projectId: liveJob.projectId } : {}
       });
       if (peek.found !== true) {
         return completedResult(processedCards, "\u5F53\u524D\u65E0\u66F4\u591A\u5361\u7247");
       }
-      const preview = mergeJobWithCardOverrides(job, peek);
+      const preview = mergeJobWithCardOverrides(liveJob, peek);
       const tree = dependencies.inspectGit(job.cwd);
       if (tree.kind === "dirty" && preview.allowDirtyWorkspace === true) {
         workerLog(`\u5DF2\u5141\u8BB8\u810F\u5DE5\u4F5C\u533A\uFF0C\u7EE7\u7EED\u9886\u53D6\uFF1A
@@ -2140,7 +2155,7 @@ ${tree.output}`);
           architecture,
           claim
         });
-        const overridden = mergeJobWithCardOverrides(job, claim.payload);
+        const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob = {
           ...overridden,
@@ -2154,7 +2169,7 @@ ${tree.output}`);
             projectMcpTags: parseProjectMcpTags(claim.payload)
           }
         };
-        logModelOverride(job, roundJob, cardId);
+        logModelOverride(liveJob, roundJob, cardId);
         logClaimedCard(claim.payload);
         workerLog("Worker \u6B63\u5728\u5B9E\u65BD\u5F53\u524D\u5361\u7247");
         const agentResult = await dependencies.runAgent(roundJob, cancellation);
@@ -2451,6 +2466,15 @@ function logClaimedCard(payload) {
     workerLog(`\u5F53\u524D\u4EFB\u52A1\uFF1A${detail}`);
   }
 }
+function readLiveJob(job) {
+  if (!job.liveFile) return job;
+  try {
+    const raw = JSON.parse(readFileSync5(job.liveFile, "utf8"));
+    return applyLiveJobOverlay(job, raw);
+  } catch {
+    return job;
+  }
+}
 function logModelOverride(original, round, cardId) {
   if (round.engine === original.engine && round.model === original.model && JSON.stringify(round.modelParams ?? []) === JSON.stringify(original.modelParams ?? [])) {
     return;
@@ -2583,7 +2607,7 @@ async function listModels(engine) {
 `);
 }
 async function runJob(jobPath) {
-  const job = JSON.parse(readFileSync5(jobPath, "utf8"));
+  const job = JSON.parse(readFileSync6(jobPath, "utf8"));
   if (!job.outPath) {
     throw new Error("job.outPath \u5FC5\u586B");
   }

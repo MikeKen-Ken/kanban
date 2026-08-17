@@ -33,17 +33,29 @@ class AgentWorkerProcess {
     String? cancelFile,
     String? drainFile,
     String? skipFile,
+    String? liveFile,
   })  : _windowsJob = windowsJob,
         _cancelFile = cancelFile,
         _drainFile = drainFile,
-        _skipFile = skipFile;
+        _skipFile = skipFile,
+        _liveFile = liveFile;
 
   final Process _process;
   AgentDispatchWindowsJob? _windowsJob;
   final String? _cancelFile;
   final String? _drainFile;
   final String? _skipFile;
+  final String? _liveFile;
   bool _stopRequested = false;
+
+  /// 把工作台最新的默认平台 / 模型写给 Worker，下一张卡生效。
+  Future<void> writeLiveOverrides(Map<String, dynamic> payload) async {
+    final liveFile = _liveFile;
+    if (liveFile == null) return;
+    try {
+      await File(liveFile).writeAsString(jsonEncode(payload));
+    } catch (_) {}
+  }
 
   /// 在当前 Skill 会话结束后停止批次，不中断进行中的会话。
   Future<void> requestDrainAfterCurrent() async {
@@ -173,6 +185,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   final cancelFile = File(p.join(tempDir.path, 'cancel'));
   final drainFile = File(p.join(tempDir.path, 'drain'));
   final skipFile = File(p.join(tempDir.path, 'skip'));
+  final liveFile = File(p.join(tempDir.path, 'live.json'));
   final job = <String, dynamic>{
     'engine': engine.name,
     'cwd': cwd,
@@ -194,6 +207,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     'cancelFile': cancelFile.path,
     'drainFile': drainFile.path,
     'skipFile': skipFile.path,
+    'liveFile': liveFile.path,
     'outPath': outFile.path,
   };
   await jobFile.writeAsString(jsonEncode(job));
@@ -233,6 +247,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       cancelFile: cancelFile.path,
       drainFile: drainFile.path,
       skipFile: skipFile.path,
+      liveFile: liveFile.path,
     );
     onProcessStarted?.call(workerProcess);
     process.stdout

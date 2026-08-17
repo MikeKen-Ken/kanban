@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { CallToolResult } from "@modelcontextprotocol/client";
 import type { KanbanMcpConnection } from "./mcp_client.ts";
@@ -445,5 +448,36 @@ describe("run_batch", () => {
     const result = await runBatch(job, undefined, dependencies);
     assert.equal(result.ok, false);
     assert.match(result.error ?? "", /卡片已漂移/);
+  });
+
+  it("领卡前读取 liveFile，下一张使用更新后的默认模型", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kanban-live-"));
+    const liveFile = join(dir, "live.json");
+    writeFileSync(
+      liveFile,
+      JSON.stringify({
+        model: "composer-2.5",
+        modelParams: [{ id: "reasoning_effort", value: "low" }],
+      }),
+    );
+    const { dependencies } = createHappyDependencies({
+      expectedReasoning: "low",
+      runAgent: async (round) => {
+        assert.equal(round.model, "composer-2.5");
+        return { ok: true, summary: "完成" };
+      },
+    });
+
+    const result = await runBatch(
+      {
+        ...job,
+        model: "old-model",
+        ignoreCardParams: true,
+        liveFile,
+      },
+      undefined,
+      dependencies,
+    );
+    assert.equal(result.ok, true);
   });
 });

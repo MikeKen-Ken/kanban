@@ -26,6 +26,8 @@ class AgentWorkerProcess {
   Future<void> requestDrainAfterCurrent() async {}
 
   Future<void> requestSkipToNext() async {}
+
+  Future<void> writeLiveOverrides(Map<String, dynamic> payload) async {}
 }
 
 Future<AgentWorkerResult> runAgentWorkerJob({

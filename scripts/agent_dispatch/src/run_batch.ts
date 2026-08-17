@@ -18,12 +18,14 @@ import {
 } from "./session_context.ts";
 import { parseProjectMcpTags } from "./dispatch_mcp_allowlist.ts";
 import {
+  applyLiveJobOverlay,
   mergeJobWithCardOverrides,
   type DispatchJob,
   type DispatchResult,
   type RoundDispatchJob,
 } from "./types.ts";
 import { workerLog } from "./worker_log.ts";
+import { readFileSync } from "node:fs";
 
 const SCOPED_TOOL_NAMES = [
   "block_card",
@@ -98,16 +100,17 @@ export async function runBatch(
       if (cancellation?.shouldStopAfterCurrentSession) {
         return cancellation.isCancelled ? cancelledResult() : drainedResult();
       }
+      const liveJob = readLiveJob(job);
       const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
       workerLog(`──────── Worker 单卡轮次 ${roundLabel} ────────`);
       const peek = await mcp.callJson("peek_next_card", {
-        ...(job.projectId ? { projectId: job.projectId } : {}),
+        ...(liveJob.projectId ? { projectId: liveJob.projectId } : {}),
       });
       if (peek.found !== true) {
         return completedResult(processedCards, "当前无更多卡片");
       }
 
-      const preview = mergeJobWithCardOverrides(job, peek);
+      const preview = mergeJobWithCardOverrides(liveJob, peek);
       const tree = dependencies.inspectGit(job.cwd);
       if (tree.kind === "dirty" && preview.allowDirtyWorkspace === true) {
         workerLog(`已允许脏工作区，继续领取：\n${tree.output}`);
@@ -154,7 +157,7 @@ export async function runBatch(
           architecture,
           claim,
         });
-        const overridden = mergeJobWithCardOverrides(job, claim.payload);
+        const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob: RoundDispatchJob = {
           ...overridden,
@@ -168,7 +171,7 @@ export async function runBatch(
             projectMcpTags: parseProjectMcpTags(claim.payload),
           },
         };
-        logModelOverride(job, roundJob, cardId);
+        logModelOverride(liveJob, roundJob, cardId);
         logClaimedCard(claim.payload);
         workerLog("Worker 正在实施当前卡片");
 
@@ -516,6 +519,16 @@ function logClaimedCard(payload: Record<string, unknown>): void {
   if (details.length > 0) {
     const detail = details.join("\n").slice(0, 800);
     workerLog(`当前任务：${detail}`);
+  }
+}
+
+function readLiveJob(job: DispatchJob): DispatchJob {
+  if (!job.liveFile) return job;
+  try {
+    const raw = JSON.parse(readFileSync(job.liveFile, "utf8")) as Partial<DispatchJob>;
+    return applyLiveJobOverlay(job, raw);
+  } catch {
+    return job;
   }
 }
 

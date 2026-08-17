@@ -34,8 +34,35 @@ export type DispatchJob = {
   drainFile?: string;
   /** Dart 侧 touch 此文件以跳过当前卡片并继续下一张 */
   skipFile?: string;
+  /** 运行中覆盖默认平台 / 模型 / 参数；Worker 每轮领卡前重读。 */
+  liveFile?: string;
   outPath: string;
 };
+
+export function applyLiveJobOverlay(
+  job: DispatchJob,
+  live: Partial<DispatchJob> | null | undefined,
+): DispatchJob {
+  if (!live) return job;
+  return {
+    ...job,
+    engine: parseEngine(live.engine, job.engine),
+    model: typeof live.model === "string" ? live.model : job.model,
+    modelParams: Array.isArray(live.modelParams)
+      ? live.modelParams
+      : job.modelParams,
+    engineDefaults: live.engineDefaults ?? job.engineDefaults,
+    ignoreCardParams: typeof live.ignoreCardParams === "boolean"
+      ? live.ignoreCardParams
+      : job.ignoreCardParams,
+    allowDirtyWorkspace: typeof live.allowDirtyWorkspace === "boolean"
+      ? live.allowDirtyWorkspace
+      : job.allowDirtyWorkspace,
+    enableSandbox: typeof live.enableSandbox === "boolean"
+      ? live.enableSandbox
+      : job.enableSandbox,
+  };
+}
 
 export type RoundImage = {
   data: string;

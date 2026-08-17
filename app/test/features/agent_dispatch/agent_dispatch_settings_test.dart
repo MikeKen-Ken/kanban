@@ -167,8 +167,47 @@ disable-model-invocation: true
     expect(opts.ignoreCardParams, isTrue);
     expect(opts.allowDirtyWorkspace, isTrue);
     expect(opts.enableSandbox, isTrue);
+    expect(opts.engine, AgentDispatchEngine.cursor);
     expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
     expect(opts.engineDefaults['codex']?.modelId, isNull);
+  });
+
+  test('toRunOptions 使用默认平台，而不是当前正在编辑的平台', () {
+    const settings = AgentDispatchSettings(
+      engine: AgentDispatchEngine.codex,
+      defaultEngine: AgentDispatchEngine.cursor,
+      modelId: 'gpt-5',
+      modelParamValues: {'model_reasoning_effort': 'low'},
+      engineProfiles: {
+        'cursor': AgentDispatchEngineProfile(
+          modelId: 'composer-2.5',
+          modelParamValues: {'fast': 'false', 'reasoning_effort': 'high'},
+        ),
+      },
+    );
+
+    final opts = settings.toRunOptions(projectTitleOf: (_) => null);
+
+    expect(opts.engine, AgentDispatchEngine.cursor);
+    expect(opts.modelId, 'composer-2.5');
+    expect(opts.modelParams, [
+      (id: 'fast', value: 'false'),
+      (id: 'reasoning_effort', value: 'high'),
+    ]);
+    expect(opts.engineDefaults['codex']?.modelId, 'gpt-5');
+  });
+
+  test('旧设置把当前引擎当作默认平台', () {
+    final settings = AgentDispatchSettings.fromJson({
+      'engine': 'codex',
+      'modelId': 'gpt-5',
+    });
+
+    expect(settings.defaultEngine, AgentDispatchEngine.codex);
+    expect(
+      settings.toRunOptions(projectTitleOf: (_) => null).engine,
+      AgentDispatchEngine.codex,
+    );
   });
 
   test('切换平台会记住并恢复各自的模型', () {
