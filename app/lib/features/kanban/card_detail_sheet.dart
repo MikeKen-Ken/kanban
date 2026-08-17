@@ -39,6 +39,10 @@ import 'verify_column.dart';
 @visibleForTesting
 const bool kCardDetailSheetEnableDrag = false;
 
+/// 电脑端 Material 3 默认底栏最大宽度约 640，详情里多列选项会挤。
+@visibleForTesting
+const double kCardDetailSheetMaxWidth = 880;
+
 /// 卡片详情底部弹层：标题、备注、子任务、验证反馈、优先级、标签、卡片背景色、截止日期、关联、提交号等
 Future<void> showCardDetailSheet({
   required BuildContext context,
@@ -56,6 +60,7 @@ Future<void> showCardDetailSheet({
     enableDrag: kCardDetailSheetEnableDrag,
     // 仅顶部手柄可拖拽关闭，避免按钮/内容控件参与 BottomSheet 拖动手势。
     showDragHandle: true,
+    constraints: const BoxConstraints(maxWidth: kCardDetailSheetMaxWidth),
     builder: (ctx) => _CardDetailSheet(
       columnId: columnId,
       card: card,

@@ -8,6 +8,11 @@ void main() {
     expect(kCardDetailSheetEnableDrag, isFalse);
   });
 
+  test('电脑端卡片详情比默认 640 更宽，减轻选项拥挤', () {
+    expect(kCardDetailSheetMaxWidth, 880);
+    expect(kCardDetailSheetMaxWidth, greaterThan(640));
+  });
+
   testWidgets('enableDrag=false 时在按钮上垂直拖拽不关闭弹层，点击可关闭',
       (tester) async {
     var saved = false;

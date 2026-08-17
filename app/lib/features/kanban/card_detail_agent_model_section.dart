@@ -106,7 +106,8 @@ class _CardDetailAgentModelSectionState
         decoration: InputDecoration(
           labelText: label,
           isDense: true,
-          labelStyle: const TextStyle(fontSize: 11),
+          // 比选项值 11 略大，仍小于正文约 14，便于当标题又不抢主体。
+          labelStyle: const TextStyle(fontSize: 12.5),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         ),

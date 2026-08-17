@@ -20,7 +20,7 @@ void main() {
             onChanged: ({
               agentEngine,
               agentModelId,
-              agentModelParamValues,
+              agentModelParamValues = const {},
               agentAllowDirtyWorkspace,
               agentEnableSandbox,
             }) {},
@@ -43,5 +43,13 @@ void main() {
       ).first,
     );
     expect(row.children.length, greaterThan(4));
+
+    final fields = tester.widgetList<DropdownButtonFormField<String>>(
+      find.byType(DropdownButtonFormField<String>),
+    );
+    expect(fields, isNotEmpty);
+    for (final field in fields) {
+      expect(field.decoration.labelStyle?.fontSize, 12.5);
+    }
   });
 }
