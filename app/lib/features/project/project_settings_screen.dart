@@ -417,7 +417,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                         },
                       ),
                       Text(
-                        '100% 会保持实色；降低后卡片底色半透明，可透过磨砂层看到壁纸，标题与文字仍保持清晰',
+                        '范围 0–100%。100% 为实色卡片；调低后底色变透明，可直接看到壁纸。标题与文字仍保持清晰。',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

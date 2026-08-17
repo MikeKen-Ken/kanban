@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +21,7 @@ import 'card_drag.dart';
 import 'kanban_card_context_menu.dart';
 import 'card_tile_meta.dart';
 import 'confirm_delete_card.dart';
+import 'kanban_card_surface.dart';
 import 'kanban_labels.dart';
 import 'markdown_plain_text.dart';
 import 'transfer_card_sheet.dart';
@@ -387,14 +386,16 @@ class _CardContent extends StatelessWidget {
         card.attachments.length > 1 ? card.attachments.length - 1 : 0;
     final cardColor = card.colorValue != null ? Color(card.colorValue!) : null;
     final opacity = ProjectSettings.clampCardSurfaceOpacity(surfaceOpacity);
-    // note: 卡片底色带不透明度，降低后可透过整张卡片看到壁纸；文字仍用不透明前景色
+    // note: 只用底色 alpha 表现不透明度。再叠 BackdropFilter 会把壁纸磨成
+    // 近似实色，滑杆从 0% 调到 100% 看起来都没变化。
     final solidBackground = cardColor != null
         ? Color.alphaBlend(
             cardColor.withValues(alpha: 0.18),
             colorScheme.surface,
           )
         : colorScheme.surface;
-    final cardBackground = solidBackground.withValues(alpha: opacity);
+    final cardBackground =
+        kanbanCardSurfaceColor(solid: solidBackground, opacity: opacity);
 
     final hasConflict = card.hasConflict;
     final isDark = theme.brightness == Brightness.dark;
@@ -408,18 +409,11 @@ class _CardContent extends StatelessWidget {
             : BorderSide(color: glassEdge);
     return Padding(
       padding: dragging ? EdgeInsets.zero : const EdgeInsets.only(bottom: 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Card(
-      // 拖拽反馈去掉列间距 margin；间距由外层 Padding 承担
-      margin: EdgeInsets.zero,
-      color: cardBackground,
-      surfaceTintColor: Colors.transparent,
-      // 仅反馈层抬升阴影；列表态 elevation 0，避免本体再垫一层阴影板
-      elevation: dragging ? 6 : 0,
-      shadowColor: Colors.black54,
+      child: Material(
+        color: cardBackground,
+        surfaceTintColor: Colors.transparent,
+        elevation: dragging ? 6 : 0,
+        shadowColor: Colors.black54,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: cardOutline,
@@ -807,9 +801,7 @@ class _CardContent extends StatelessWidget {
           ],
         ),
       ),
-          ),
-        ),
-      ),
+    ),
     );
   }
 
