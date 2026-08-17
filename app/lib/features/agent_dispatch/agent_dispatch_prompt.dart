@@ -21,7 +21,7 @@ String buildSkillDispatchPrompt({
 禁止直接执行 git commit、git revert、git reset、git checkout、git switch、git rebase 或任何会移动 HEAD 的命令。仅当本卡正文明确要求撤销某个提交且给出哈希时，才可在 ready_to_submit 中传 gitRevertCommit；Worker 会在收尾阶段受控执行。
 禁止为看板工具再拉取 schema；参数以 Skill 为准，直接调用。
 Worker 已注入 Architecture.md 全文，用户规则 / AGENTS.md 中的「开发前必读」已满足；禁止再读取该文件。
-看板 MCP 已由 Worker 注入本卡专用工具集；禁止列出或探测看板工具，禁止调用 pick_next_card。hubMCP 始终保留；其它 MCP 仅当当前项目配置了对应 MCP 标签时由 Worker 注入，可按本卡需要使用。
+看板 MCP 已由 Worker 注入本卡专用工具集；禁止列出或探测看板工具，禁止调用 pick_next_card。其它 MCP 仅当当前项目配置了对应 MCP 标签时由 Worker 注入，可按本卡需要使用。
 本轮卡片已由 Worker 原子领取；禁止调用 pick_next_card，也不要处理其它卡片。
 完成实施后必须以 ready_to_submit 收尾，显式列出本轮完成的 checklist/feedback id。
 验证必须在本会话内跑通后才能声明；禁止把 verificationCommands 交给 Worker（传入会失败）。
