@@ -15,23 +15,42 @@ String agentDispatchUsageKeyFingerprint(String? apiKey) {
 extension AgentDispatchUsageStore on SharedPreferences {
   static const _key = 'agent_dispatch_usage_snapshot';
 
+  Map<String, AgentDispatchUsageSnapshot> loadAgentDispatchUsageMap() {
+    final raw = getString(_key);
+    if (raw == null || raw.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return {};
+      final snapshots = decoded['snapshots'];
+      if (snapshots is Map<String, dynamic>) {
+        return {
+          for (final entry in snapshots.entries)
+            if (entry.value is Map<String, dynamic>)
+              entry.key: AgentDispatchUsageSnapshot.fromJson(
+                entry.value as Map<String, dynamic>,
+              ),
+        };
+      }
+      final fingerprint = decoded['keyFingerprint'] as String?;
+      final snapshot = decoded['snapshot'];
+      if (fingerprint == null ||
+          fingerprint.isEmpty ||
+          snapshot is! Map<String, dynamic>) {
+        return {};
+      }
+      return {
+        fingerprint: AgentDispatchUsageSnapshot.fromJson(snapshot),
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
   AgentDispatchUsageSnapshot? loadAgentDispatchUsage({
     required String keyFingerprint,
   }) {
     if (keyFingerprint.isEmpty) return null;
-    final raw = getString(_key);
-    if (raw == null || raw.trim().isEmpty) return null;
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return null;
-      final storedFingerprint = decoded['keyFingerprint'] as String?;
-      if (storedFingerprint != keyFingerprint) return null;
-      final snapshot = decoded['snapshot'];
-      if (snapshot is! Map<String, dynamic>) return null;
-      return AgentDispatchUsageSnapshot.fromJson(snapshot);
-    } catch (_) {
-      return null;
-    }
+    return loadAgentDispatchUsageMap()[keyFingerprint];
   }
 
   Future<void> saveAgentDispatchUsage(
@@ -39,11 +58,16 @@ extension AgentDispatchUsageStore on SharedPreferences {
     required String keyFingerprint,
   }) {
     if (keyFingerprint.isEmpty) return Future.value();
+    final next = {
+      ...loadAgentDispatchUsageMap(),
+      keyFingerprint: snapshot,
+    };
     return setString(
       _key,
       jsonEncode({
-        'keyFingerprint': keyFingerprint,
-        'snapshot': snapshot.toJson(),
+        'snapshots': {
+          for (final entry in next.entries) entry.key: entry.value.toJson(),
+        },
       }),
     );
   }

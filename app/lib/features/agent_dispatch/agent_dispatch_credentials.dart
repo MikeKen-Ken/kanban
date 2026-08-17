@@ -106,6 +106,8 @@ class AgentDispatchCredentials {
     return _readValue(activeId);
   }
 
+  Future<String?> readStoredCursorApiKeyById(String id) => _readValue(id);
+
   String? readEnvironmentCursorApiKey() {
     final value = Platform.environment['CURSOR_API_KEY']?.trim();
     return value == null || value.isEmpty ? null : value;
@@ -123,18 +125,23 @@ class AgentDispatchCredentials {
     await _storage.write(key: _activeIdKey, value: id);
   }
 
-  /// 仅更新当前激活 Key 的显示别名；无已保存 Key 时静默跳过。
-  Future<void> updateActiveCursorApiKeyLabel(String label) async {
+  /// 更新指定 Key 的显示别名；找不到时静默跳过。
+  Future<void> updateCursorApiKeyLabel(String id, String label) async {
     final trimmed = label.trim();
     if (trimmed.isEmpty) return;
-    final activeId = await _readActiveId();
-    if (activeId == null) return;
     final meta = await _readMeta();
-    final index = meta.indexWhere((item) => item.id == activeId);
+    final index = meta.indexWhere((item) => item.id == id);
     if (index < 0 || meta[index].label == trimmed) return;
     final updated = [...meta];
-    updated[index] = _CursorApiKeyMeta(id: activeId, label: trimmed);
+    updated[index] = _CursorApiKeyMeta(id: id, label: trimmed);
     await _writeMeta(updated);
+  }
+
+  /// 仅更新当前激活 Key 的显示别名；无已保存 Key 时静默跳过。
+  Future<void> updateActiveCursorApiKeyLabel(String label) async {
+    final activeId = await _readActiveId();
+    if (activeId == null) return;
+    await updateCursorApiKeyLabel(activeId, label);
   }
 
   Future<void> saveCursorApiKey(String value, {String? label}) async {

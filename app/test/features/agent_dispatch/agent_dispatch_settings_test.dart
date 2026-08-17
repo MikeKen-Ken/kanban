@@ -498,6 +498,24 @@ disable-model-invocation: true
     expect(await credentials.readStoredCursorApiKey(), 'updated-key');
   });
 
+  test('可更新非当前 Key 的显示别名', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    const credentials = AgentDispatchCredentials();
+
+    await credentials.saveCursorApiKey('first-key', label: '主账号');
+    await credentials.saveCursorApiKey('second-key', label: '备用');
+    final keys = await credentials.listStoredCursorApiKeys();
+    final firstId = keys.firstWhere((item) => item.label == '主账号').id;
+
+    await credentials.updateCursorApiKeyLabel(firstId, 'one@example.com');
+    final updated = await credentials.listStoredCursorApiKeys();
+    expect(
+      updated.firstWhere((item) => item.id == firstId).label,
+      'one@example.com',
+    );
+    expect(updated.where((item) => item.isActive).single.label, '备用');
+  });
+
   test('访问冲突退出码给出明确说明', () {
     final message = describeWorkerExitWithoutOutput(-1073741819);
     expect(message, contains('0xC0000005'));

@@ -22,6 +22,8 @@ class AgentDispatchUsageSnapshot {
     return email.isNotEmpty || name.isNotEmpty;
   }
 
+  bool get hasUserEmail => (userEmail?.trim() ?? '').isNotEmpty;
+
   /// 已保存 Key 下拉优先显示邮箱，没有邮箱时再回退 Key 名。
   String? get displayLabel {
     final email = userEmail?.trim() ?? '';
@@ -50,4 +52,14 @@ class AgentDispatchUsageSnapshot {
           'apiRemainingPercent': apiRemainingPercent,
         if (message != null) 'message': message,
       };
+}
+
+/// 切换 Key 下拉优先用账号快照里的邮箱，否则沿用已保存别名。
+String cursorApiKeyMenuLabel({
+  required String storedLabel,
+  AgentDispatchUsageSnapshot? usage,
+}) {
+  final fromUsage = usage?.displayLabel?.trim() ?? '';
+  if (fromUsage.isNotEmpty) return fromUsage;
+  return storedLabel;
 }

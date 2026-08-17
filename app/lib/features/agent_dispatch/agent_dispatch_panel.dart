@@ -396,6 +396,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.loadAgentDispatchUsage(keyFingerprint: fingerprint);
       if (cached != null) {
+        final label = cached.displayLabel;
+        if (label != null) {
+          await _credentials.updateActiveCursorApiKeyLabel(label);
+        }
         if (!mounted) return;
         setState(() => _usage = cached);
         return;

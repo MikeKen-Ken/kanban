@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'adaptive_popup_menu.dart';
 import 'agent_dispatch_field_style.dart';
 import 'agent_dispatch_credentials.dart';
+import 'agent_dispatch_usage.dart';
+import 'agent_dispatch_usage_store.dart';
 import 'agent_dispatch_worker.dart';
 
 /// Cursor SDK 凭据编辑区。输入内容不会写入普通设置或运行日志。
@@ -45,7 +48,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
 
   Future<void> _refreshStatus() async {
     try {
-      final keys = await widget.credentials.listStoredCursorApiKeys();
+      var keys = await widget.credentials.listStoredCursorApiKeys();
+      keys = await _overlayCachedDisplayLabels(keys);
       final environment = widget.credentials.readEnvironmentCursorApiKey();
       if (!mounted) return;
       setState(() {
@@ -55,6 +59,144 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _message = '读取安全存储失败：$error');
+    }
+  }
+
+  Future<List<CursorApiKeySummary>> _overlayCachedDisplayLabels(
+    List<CursorApiKeySummary> keys,
+  ) async {
+    if (keys.isEmpty) return keys;
+    final prefs = await SharedPreferences.getInstance();
+    final cache = prefs.loadAgentDispatchUsageMap();
+    if (cache.isEmpty) return keys;
+    final next = <CursorApiKeySummary>[];
+    for (final item in keys) {
+      final value = await widget.credentials.readStoredCursorApiKeyById(item.id);
+      final usage = cache[agentDispatchUsageKeyFingerprint(value)];
+      final label = cursorApiKeyMenuLabel(
+        storedLabel: item.label,
+        usage: usage,
+      );
+      if (label != item.label) {
+        await widget.credentials.updateCursorApiKeyLabel(item.id, label);
+      }
+      next.add(
+        CursorApiKeySummary(
+          id: item.id,
+          label: label,
+          isActive: item.isActive,
+        ),
+      );
+    }
+    return next;
+  }
+
+  Future<void> _hydrateMissingEmails() async {
+    final prefs = await SharedPreferences.getInstance();
+    var changed = false;
+    for (final item in [..._keys]) {
+      final value = await widget.credentials.readStoredCursorApiKeyById(item.id);
+      final fingerprint = agentDispatchUsageKeyFingerprint(value);
+      final cached = prefs.loadAgentDispatchUsage(keyFingerprint: fingerprint);
+      if (cached != null && cached.hasUserEmail) continue;
+      try {
+        final snapshot = await fetchAgentDispatchUsage(
+          cursorApiKey: value,
+          workerScriptPath: widget.workerScriptPath,
+        );
+        if (fingerprint.isNotEmpty) {
+          await prefs.saveAgentDispatchUsage(
+            snapshot,
+            keyFingerprint: fingerprint,
+          );
+        }
+        final label = snapshot.displayLabel;
+        if (label != null) {
+          await widget.credentials.updateCursorApiKeyLabel(item.id, label);
+          changed = true;
+        }
+      } catch (_) {}
+    }
+    if (changed) {
+      await _refreshStatus();
+    }
+  }
+
+  Future<void> _openSavedKeysMenu(BuildContext buttonContext) async {
+    if (!widget.enabled || _busy || _keys.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await _hydrateMissingEmails();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted || _keys.isEmpty) return;
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(buttonContext).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        box.localToGlobal(Offset.zero, ancestor: overlay),
+        box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+    final theme = Theme.of(context);
+    final keyMenuWidth = adaptivePopupMenuWidth(
+      context: context,
+      labels: _keys.map((item) => item.label),
+      trailingWidth: kAdaptivePopupMenuKeyTrailingWidth,
+    );
+    final itemWidth = keyMenuWidth - kAdaptivePopupMenuItemPadding;
+    final selected = await showMenu<String>(
+      context: context,
+      position: position,
+      constraints: BoxConstraints.tightFor(width: keyMenuWidth),
+      items: [
+        for (final item in _keys)
+          PopupMenuItem(
+            value: item.id,
+            child: SizedBox(
+              width: itemWidth,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    child: item.isActive
+                        ? Icon(
+                            Icons.check,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '删除此 Key',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _delete(item.id);
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+    if (selected != null) {
+      await _selectKey(selected);
     }
   }
 
@@ -175,11 +317,6 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     final hasInput = _controller.text.trim().isNotEmpty;
     final showSaveButton = !available || hasInput;
     final enabled = widget.enabled && !_busy;
-    final keyMenuWidth = adaptivePopupMenuWidth(
-      context: context,
-      labels: _keys.map((item) => item.label),
-      trailingWidth: kAdaptivePopupMenuKeyTrailingWidth,
-    );
     final statusText = available
         ? (_hasEnvironmentKey && active == null ? '已检测到环境变量' : null)
         : '尚未配置';
@@ -234,62 +371,17 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                     minHeight: 28,
                     maxHeight: 28,
                   ),
-                  suffixIcon: PopupMenuButton<String>(
-                    tooltip: '展开已保存 Key',
-                    enabled: enabled && _keys.isNotEmpty,
-                    padding: EdgeInsets.zero,
-                    constraints: BoxConstraints.tightFor(width: keyMenuWidth),
-                    iconSize: 20,
-                    icon: const Icon(Icons.arrow_drop_down),
-                    onSelected: _selectKey,
-                    itemBuilder: (context) {
-                      final itemWidth =
-                          keyMenuWidth - kAdaptivePopupMenuItemPadding;
-                      return [
-                        for (final item in _keys)
-                          PopupMenuItem(
-                            value: item.id,
-                            child: SizedBox(
-                              width: itemWidth,
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 18,
-                                  child: item.isActive
-                                      ? Icon(
-                                          Icons.check,
-                                          size: 18,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    item.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: '删除此 Key',
-                                  visualDensity: VisualDensity.compact,
-                                  iconSize: 18,
-                                  onPressed: enabled
-                                      ? () {
-                                          Navigator.of(context).pop();
-                                          _delete(item.id);
-                                        }
-                                      : null,
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ];
+                  suffixIcon: Builder(
+                    builder: (buttonContext) {
+                      return IconButton(
+                        tooltip: '展开已保存 Key',
+                        padding: EdgeInsets.zero,
+                        iconSize: 20,
+                        onPressed: enabled && _keys.isNotEmpty
+                            ? () => _openSavedKeysMenu(buttonContext)
+                            : null,
+                        icon: const Icon(Icons.arrow_drop_down),
+                      );
                     },
                   ),
                 ),
