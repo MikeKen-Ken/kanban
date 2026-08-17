@@ -83,7 +83,7 @@ class AgentDispatchHub extends StatelessWidget {
       title: project.title,
       running: progress.running,
       isCurrent: project.id == currentId,
-      progressLabel: progress.running ? progress.fractionLabel : null,
+      progressLabel: progress.running ? progress.liveCardLabel : null,
       progressFraction: progress.fraction,
     );
   }

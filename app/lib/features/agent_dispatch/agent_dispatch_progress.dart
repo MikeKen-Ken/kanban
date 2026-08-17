@@ -39,7 +39,10 @@ class AgentDispatchProgress {
 
   double? get fraction {
     if (!running || totalCards <= 0) return null;
-    final value = processedCards / totalCards;
+    final completed = currentRound > processedCards
+        ? currentRound - 1
+        : processedCards;
+    final value = completed / totalCards;
     if (value < 0) return 0;
     if (value > 1) return 1;
     return value;
@@ -110,8 +113,11 @@ AgentDispatchProgress applyWorkerProgressLog(
 ) {
   final round = _roundPattern.firstMatch(message);
   if (round != null) {
+    final roundIndex = int.parse(round.group(1)!);
+    final roundTotal = int.parse(round.group(2)!);
     return current.copyWith(
-      currentRound: int.parse(round.group(1)!),
+      currentRound: roundIndex,
+      totalCards: roundTotal > current.totalCards ? roundTotal : current.totalCards,
       currentTitle: '',
       currentDetail: '',
       phaseLabel: '领取',

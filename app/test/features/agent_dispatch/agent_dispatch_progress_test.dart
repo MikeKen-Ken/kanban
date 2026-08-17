@@ -30,6 +30,18 @@ void main() {
     );
   });
 
+  test('进行中第二张时总览用轮次而不是已完成数', () {
+    var progress = const AgentDispatchProgress(
+      running: true,
+      processedCards: 0,
+      totalCards: 2,
+    );
+    progress = applyWorkerProgressLog(progress, 'Worker 单卡轮次 2/2');
+    expect(progress.fractionLabel, '0/2');
+    expect(progress.liveCardLabel, '2/2');
+    expect(progress.fraction, 0.5);
+  });
+
   test('从 Worker 日志解析轮次与已处理张数', () {
     var progress = const AgentDispatchProgress(running: true, totalCards: 5);
     progress = applyWorkerProgressLog(progress, 'Worker 单卡轮次 2/5');
