@@ -140,4 +140,47 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
     expect(called, 1);
   });
+
+  testWidgets('飞行终点优先已完成列中的卡片矩形，而不是源列占位', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Stack(
+          children: [
+            Positioned(
+              left: 10,
+              top: 40,
+              width: 80,
+              height: 40,
+              child: CardLayoutAnchor.card(
+                cardId: 'c1',
+                columnId: 'todo',
+                child: const SizedBox.expand(),
+              ),
+            ),
+            Positioned(
+              left: 200,
+              top: 80,
+              width: 80,
+              height: 40,
+              child: CardLayoutAnchor.card(
+                cardId: 'c1',
+                columnId: 'done',
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final target = CardLayoutRegistry.instance.resolveFlightTarget(
+      cardId: 'c1',
+      doneColumnId: 'done',
+      screenSize: const Size(800, 600),
+    );
+    expect(target, isNotNull);
+    expect(target!.left, closeTo(200, 0.5));
+    expect(target.top, closeTo(80, 0.5));
+  });
 }

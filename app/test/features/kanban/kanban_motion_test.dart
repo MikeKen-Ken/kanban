@@ -68,4 +68,50 @@ void main() {
     expect(result.map((e) => e.card.id), ['w', 'x', 'y', 'z']);
     expect(result.every((e) => !e.leaving && !e.animateEnter), isTrue);
   });
+
+  test('完成飞行期间源列保留占位且不播离场动画', () {
+    final previous = [
+      TrackedKanbanCard(card: _card('a')),
+      TrackedKanbanCard(card: _card('b')),
+      TrackedKanbanCard(card: _card('c')),
+    ];
+    final result = reconcileTrackedKanbanCards(
+      previous: previous,
+      next: [_card('a'), _card('c')],
+      holdCardId: 'b',
+    );
+    expect(result.map((e) => e.card.id), ['a', 'b', 'c']);
+    expect(result[1].heldForFlight, isTrue);
+    expect(result[1].leaving, isFalse);
+    expect(result.every((e) => !e.leaving && !e.animateEnter), isTrue);
+  });
+
+  test('飞行结束后占位立即移除', () {
+    final previous = [
+      TrackedKanbanCard(card: _card('a')),
+      TrackedKanbanCard(card: _card('b'), heldForFlight: true),
+      TrackedKanbanCard(card: _card('c')),
+    ];
+    final result = reconcileTrackedKanbanCards(
+      previous: previous,
+      next: [_card('a'), _card('c')],
+    );
+    expect(result.map((e) => e.card.id), ['a', 'c']);
+    expect(result.every((e) => !e.heldForFlight), isTrue);
+  });
+
+  test('完成列插入飞行中的卡片时不播进入动画', () {
+    final previous = [
+      TrackedKanbanCard(card: _card('a')),
+      TrackedKanbanCard(card: _card('c')),
+    ];
+    final result = reconcileTrackedKanbanCards(
+      previous: previous,
+      next: [_card('a'), _card('b'), _card('c')],
+      holdCardId: 'b',
+    );
+    expect(result.map((e) => e.card.id), ['a', 'b', 'c']);
+    expect(result[1].animateEnter, isFalse);
+    expect(result[1].heldForFlight, isFalse);
+  });
 }

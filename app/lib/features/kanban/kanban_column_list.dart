@@ -39,6 +39,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
   final ScrollController _scrollController = ScrollController();
   late List<TrackedKanbanCard> _tracked;
   int? _hoverInsertIndex;
+  CardCompleteFlightController? _flight;
 
   @override
   void initState() {
@@ -47,7 +48,19 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final flight = maybeCardCompleteFlightController(context, listen: false);
+    if (!identical(flight, _flight)) {
+      _flight?.removeListener(_onFlightChanged);
+      _flight = flight;
+      _flight?.addListener(_onFlightChanged);
+    }
+  }
+
+  @override
   void dispose() {
+    _flight?.removeListener(_onFlightChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -64,14 +77,24 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
   int get _pinnedCount =>
       pinnedCardCount(widget.pinnedCardIds, widget.cards);
 
-  @override
-  void didUpdateWidget(covariant KanbanColumnList oldWidget) {
-    super.didUpdateWidget(oldWidget);
+  void _onFlightChanged() {
+    if (!mounted) return;
+    setState(_reconcileTracked);
+  }
+
+  void _reconcileTracked() {
     _tracked = reconcileTrackedKanbanCards(
       previous: _tracked,
       next: widget.cards,
+      holdCardId: _flight?.flyingCardId,
     );
     _pruneCardKeys();
+  }
+
+  @override
+  void didUpdateWidget(covariant KanbanColumnList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _reconcileTracked();
   }
 
   void _pruneCardKeys() {
@@ -264,6 +287,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
           onLeft: () => _onCardLeft(item.card.id),
           child: CardLayoutAnchor.card(
             cardId: item.card.id,
+            columnId: widget.columnId,
             child: CardFlightHidden(
               cardId: item.card.id,
               child: KanbanCardTile(

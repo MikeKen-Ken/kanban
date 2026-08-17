@@ -39,23 +39,38 @@ class CardLayoutRegistry {
 
   static final CardLayoutRegistry instance = CardLayoutRegistry._();
 
-  final Map<String, List<State>> _cards = {};
-  final Map<String, List<State>> _columns = {};
+  final Map<String, List<_LayoutAnchor>> _cards = {};
+  final Map<String, List<_LayoutAnchor>> _columns = {};
 
-  void _register(Map<String, List<State>> map, String id, State state) {
-    final list = map.putIfAbsent(id, () => <State>[]);
-    if (!list.contains(state)) list.add(state);
+  void _register(
+    Map<String, List<_LayoutAnchor>> map,
+    String id,
+    State state, {
+    String? columnId,
+  }) {
+    final list = map.putIfAbsent(id, () => <_LayoutAnchor>[]);
+    for (final anchor in list) {
+      if (identical(anchor.state, state)) {
+        anchor.columnId = columnId;
+        return;
+      }
+    }
+    list.add(_LayoutAnchor(state, columnId));
   }
 
-  void _unregister(Map<String, List<State>> map, String id, State state) {
+  void _unregister(
+    Map<String, List<_LayoutAnchor>> map,
+    String id,
+    State state,
+  ) {
     final list = map[id];
     if (list == null) return;
-    list.remove(state);
+    list.removeWhere((anchor) => identical(anchor.state, state));
     if (list.isEmpty) map.remove(id);
   }
 
-  void registerCard(String cardId, State state) =>
-      _register(_cards, cardId, state);
+  void registerCard(String cardId, State state, {String? columnId}) =>
+      _register(_cards, cardId, state, columnId: columnId);
 
   void unregisterCard(String cardId, State state) =>
       _unregister(_cards, cardId, state);
@@ -66,8 +81,16 @@ class CardLayoutRegistry {
   void unregisterColumn(String columnId, State state) =>
       _unregister(_columns, columnId, state);
 
-  Rect? rectForCard(String cardId, {Size? screenSize}) =>
-      _bestRect(_cards[cardId], screenSize: screenSize);
+  Rect? rectForCard(
+    String cardId, {
+    Size? screenSize,
+    String? preferColumnId,
+  }) =>
+      _bestRect(
+        _cards[cardId],
+        screenSize: screenSize,
+        preferColumnId: preferColumnId,
+      );
 
   Rect? rectForColumn(String columnId, {Size? screenSize}) =>
       _bestRect(_columns[columnId], screenSize: screenSize);
@@ -77,17 +100,21 @@ class CardLayoutRegistry {
     String? doneColumnId,
     required Size screenSize,
   }) {
-    final cardRect = rectForCard(cardId, screenSize: screenSize);
-    if (cardRect != null &&
-        isRectOnScreen(cardRect, screenSize, minVisible: 24)) {
-      return cardRect;
-    }
     if (doneColumnId != null) {
+      final destCard = rectForCard(
+        cardId,
+        screenSize: screenSize,
+        preferColumnId: doneColumnId,
+      );
+      if (destCard != null &&
+          isRectOnScreen(destCard, screenSize, minVisible: 24)) {
+        return destCard;
+      }
       final columnRect = rectForColumn(doneColumnId, screenSize: screenSize);
       if (columnRect != null &&
           isRectOnScreen(columnRect, screenSize, minVisible: 24)) {
-        final width = cardRect?.width ?? math.min(280, columnRect.width - 16);
-        final height = cardRect?.height ?? 72;
+        final width = destCard?.width ?? math.min(280, columnRect.width - 16);
+        final height = destCard?.height ?? 72;
         return Rect.fromLTWH(
           columnRect.left + 8,
           columnRect.bottom - height - 12,
@@ -95,26 +122,45 @@ class CardLayoutRegistry {
           height,
         );
       }
-      if (cardRect != null) return cardRect;
+      if (destCard != null) return destCard;
       if (columnRect != null) return columnRect;
     }
-    return cardRect;
+    return rectForCard(cardId, screenSize: screenSize);
   }
 }
 
-Rect? _bestRect(List<State>? states, {Size? screenSize}) {
-  if (states == null || states.isEmpty) return null;
+class _LayoutAnchor {
+  _LayoutAnchor(this.state, this.columnId);
+
+  final State state;
+  String? columnId;
+}
+
+Rect? _bestRect(
+  List<_LayoutAnchor>? anchors, {
+  Size? screenSize,
+  String? preferColumnId,
+}) {
+  if (anchors == null || anchors.isEmpty) return null;
   Rect? fallback;
-  for (final state in states) {
-    final rect = _rectOfState(state);
+  Rect? preferred;
+  for (final anchor in anchors) {
+    final rect = _rectOfState(anchor.state);
     if (rect == null) continue;
     fallback ??= rect;
-    if (screenSize != null &&
-        isRectOnScreen(rect, screenSize, minVisible: 24)) {
+    final onScreen = screenSize != null &&
+        isRectOnScreen(rect, screenSize, minVisible: 24);
+    if (preferColumnId != null &&
+        anchor.columnId == preferColumnId &&
+        (preferred == null || onScreen)) {
+      preferred = rect;
+      if (onScreen) return rect;
+    }
+    if (preferColumnId == null && onScreen) {
       return rect;
     }
   }
-  return fallback;
+  return preferred ?? fallback;
 }
 
 Rect? _rectOfState(State state) {
@@ -129,8 +175,9 @@ class CardLayoutAnchor extends StatefulWidget {
   const CardLayoutAnchor.card({
     super.key,
     required this.cardId,
+    this.columnId,
     required this.child,
-  }) : columnId = null;
+  });
 
   const CardLayoutAnchor.column({
     super.key,
@@ -173,7 +220,11 @@ class _CardLayoutAnchorState extends State<CardLayoutAnchor> {
     final cardId = widget.cardId;
     final columnId = widget.columnId;
     if (cardId != null) {
-      CardLayoutRegistry.instance.registerCard(cardId, this);
+      CardLayoutRegistry.instance.registerCard(
+        cardId,
+        this,
+        columnId: widget.columnId,
+      );
     }
     if (columnId != null) {
       CardLayoutRegistry.instance.registerColumn(columnId, this);
@@ -231,7 +282,7 @@ double flightOpacityAt(double t, {required bool fadeOut}) {
   return (1 - (clamped - 0.45) / 0.55).clamp(0.0, 1.0);
 }
 
-CardCompleteFlightController? _maybeFlightController(
+CardCompleteFlightController? maybeCardCompleteFlightController(
   BuildContext context, {
   bool listen = true,
 }) {
@@ -255,7 +306,7 @@ class CardFlightHidden extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = _maybeFlightController(context);
+    final controller = maybeCardCompleteFlightController(context);
     final hidden = controller?.hides(cardId) ?? false;
     if (!hidden) return child;
     return IgnorePointer(
@@ -285,7 +336,7 @@ Future<String?> playCardCompleteFlight({
   }
 
   final overlayState = Overlay.of(context, rootOverlay: true);
-  final flight = _maybeFlightController(context, listen: false);
+  final flight = maybeCardCompleteFlightController(context, listen: false);
   final screenSize = MediaQuery.sizeOf(context);
   final startRect = fromRect;
 
