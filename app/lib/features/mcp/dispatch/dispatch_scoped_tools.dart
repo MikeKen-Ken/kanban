@@ -44,16 +44,16 @@ void registerDispatchScopedAgentTools(
                 description: '仓库内相对工作目录；默认 .',
               ),
               'timeoutMs': JsonSchema.number(
-                description: '可选超时毫秒数；Worker 会钳制上限',
+                description: '可选超时毫秒数',
               ),
               'expectedExitCode': JsonSchema.number(),
             },
             required: ['executable', 'args'],
           ),
-          description: '结构化验证命令；与 manualVerificationReason 二选一',
+          description: '已废弃：测试由 Agent 会话内执行，不要传此字段',
         ),
         'manualVerificationReason': JsonSchema.string(
-          description: '无法自动验证时的人工验证原因；与 verificationCommands 二选一',
+          description: '无法自动验证时的人工验证原因；会话内已跑测试则可省略',
         ),
       },
       required: [

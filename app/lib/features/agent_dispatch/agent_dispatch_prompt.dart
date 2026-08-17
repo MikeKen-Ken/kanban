@@ -24,8 +24,8 @@ Worker 会在卡片上下文后附上已缓存的 Architecture.md；禁止重复
 看板 MCP 已由 Worker 注入本卡专用工具集，不得确认、探测或列出 MCP。
 本轮卡片已由 Worker 原子领取；禁止调用 pick_next_card，也不要处理其它卡片。
 完成实施后必须以 ready_to_submit 收尾，显式列出本轮完成的 checklist/feedback id。
-禁止在会话内预跑即将交给 ready_to_submit 的 verificationCommands；由 Worker 收尾执行。
-verificationCommands 由 Agent 按目标仓库自行选择；Worker 只执行，不按语言或框架拦截。
+验证必须在本会话内跑通后才能声明；禁止把 verificationCommands 交给 Worker（传入会失败）。
+测试失败、卡住或超时不得当作通过。无法自动验证时只传 manualVerificationReason，并写明未执行。
 
 # Skill 正文
 

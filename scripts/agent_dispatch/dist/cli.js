@@ -1,6 +1,6 @@
 // src/cli.ts
 import { readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "node:fs";
-import { resolve as resolve2 } from "node:path";
+import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
 // src/cancellation.ts
@@ -487,7 +487,7 @@ var AppServerClient = class {
   pending = /* @__PURE__ */ new Map();
   request(method, params) {
     const id = this.nextId++;
-    const promise = new Promise((resolve3, reject) => {
+    const promise = new Promise((resolve2, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`${method} \u8BF7\u6C42\u8D85\u65F6`));
@@ -495,7 +495,7 @@ var AppServerClient = class {
       this.pending.set(id, {
         resolve: (value) => {
           clearTimeout(timeout);
-          resolve3(value);
+          resolve2(value);
         },
         reject: (error) => {
           clearTimeout(timeout);
@@ -1234,17 +1234,17 @@ import {
 
 // src/async_limit.ts
 function settleWithin(ms, work) {
-  return new Promise((resolve3) => {
-    const timer = setTimeout(resolve3, ms);
+  return new Promise((resolve2) => {
+    const timer = setTimeout(resolve2, ms);
     timer.unref?.();
     work.then(
       () => {
         clearTimeout(timer);
-        resolve3();
+        resolve2();
       },
       () => {
         clearTimeout(timer);
-        resolve3();
+        resolve2();
       }
     );
   });
@@ -1749,353 +1749,6 @@ function extensionForMime(mimeType) {
   }
 }
 
-// src/verification_runner.ts
-import { spawn as spawn4 } from "node:child_process";
-import { isAbsolute as isAbsolute2, relative, resolve, sep } from "node:path";
-
-// src/windows_spawn.ts
-import { spawn as spawn3 } from "node:child_process";
-import { existsSync as existsSync5, statSync } from "node:fs";
-import { delimiter, extname, join as join5 } from "node:path";
-var WINDOWS_BATCH_EXTS = /* @__PURE__ */ new Set([".bat", ".cmd"]);
-function spawnUnexpanded(command, args, options) {
-  if (process.platform !== "win32") {
-    return spawn3(command, args, { ...options, shell: false });
-  }
-  const resolved = resolveWindowsExecutable(command, envFrom(options));
-  if (resolved && isWindowsBatchFile(resolved)) {
-    const invocation = buildWindowsCmdInvocation(resolved, args);
-    return spawn3(invocation.command, invocation.args, {
-      ...options,
-      shell: false,
-      windowsVerbatimArguments: true
-    });
-  }
-  return spawn3(resolved ?? command, args, { ...options, shell: false });
-}
-function resolveWindowsExecutable(command, env = process.env) {
-  const trimmed = command.trim();
-  if (!trimmed) return void 0;
-  if (hasPathSeparator(trimmed)) {
-    return resolveWithPathext(trimmed, env);
-  }
-  const pathValue = env.Path ?? env.PATH ?? "";
-  const dirs = [
-    ...flutterSdkBinDirs(env),
-    ...pathValue.split(delimiter)
-  ];
-  for (const dir of dirs) {
-    if (!dir.trim()) continue;
-    const found = resolveWithPathext(join5(dir, trimmed), env);
-    if (found) return found;
-  }
-  return void 0;
-}
-function flutterSdkBinDirs(env = process.env) {
-  const dirs = [];
-  const root = (env.FLUTTER_ROOT ?? "").trim();
-  if (root) dirs.push(join5(root, "bin"));
-  const localAppData = (env.LOCALAPPDATA ?? "").trim();
-  if (localAppData) dirs.push(join5(localAppData, "flutter", "bin"));
-  const home = (env.USERPROFILE ?? env.HOME ?? "").trim();
-  if (home) {
-    dirs.push(join5(home, "flutter", "bin"));
-    dirs.push(join5(home, "fvm", "default", "bin"));
-  }
-  return dirs;
-}
-function buildWindowsCmdInvocation(executable, args) {
-  const inner = [quoteCmdArg(executable), ...args.map(quoteCmdArg)].join(" ");
-  return {
-    command: process.env.ComSpec || "cmd.exe",
-    args: ["/d", "/s", "/v:off", "/c", `"${inner}"`]
-  };
-}
-function quoteCmdArg(value) {
-  return `"${value.replace(/%/g, "%%").replace(/"/g, '""')}"`;
-}
-function isWindowsBatchFile(file) {
-  return WINDOWS_BATCH_EXTS.has(extname(file).toLowerCase());
-}
-function hasPathSeparator(command) {
-  return command.includes("/") || command.includes("\\") || /^[A-Za-z]:/.test(command);
-}
-function resolveWithPathext(base, env) {
-  const ext = extname(base);
-  if (ext) return isExistingFile(base) ? base : void 0;
-  const pathext = env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD";
-  for (const item of pathext.split(";")) {
-    const suffix = item.trim();
-    if (!suffix) continue;
-    const candidate = base + suffix;
-    if (isExistingFile(candidate)) return candidate;
-  }
-  return void 0;
-}
-function isExistingFile(path) {
-  try {
-    return existsSync5(path) && statSync(path).isFile();
-  } catch {
-    return false;
-  }
-}
-function envFrom(options) {
-  if (options.env && typeof options.env === "object") {
-    return options.env;
-  }
-  return process.env;
-}
-
-// src/verification_runner.ts
-var DEFAULT_VERIFICATION_TIMEOUT_MS = 10 * 6e4;
-var MAX_VERIFICATION_TIMEOUT_MS = 15 * 6e4;
-var MAX_OUTPUT_CHARS = 16e3;
-async function runVerificationCommand(item, repoRoot) {
-  const startedAt = Date.now();
-  const timeoutMs = clampTimeout(item.timeoutMs);
-  const expectedExitCode = Number.isInteger(item.expectedExitCode) ? item.expectedExitCode : 0;
-  const commandCwd = item.cwd?.trim() || ".";
-  const commandSummary = summarizeCommand(item.executable, item.args);
-  const failedLaunch = (output) => ({
-    commandSummary,
-    executable: item.executable,
-    args: [...item.args],
-    cwd: commandCwd,
-    exitCode: -1,
-    durationMs: Date.now() - startedAt,
-    output,
-    timedOut: false,
-    passed: false
-  });
-  let resolvedCwd;
-  try {
-    resolvedCwd = resolveCommandCwd(repoRoot, commandCwd);
-  } catch (error) {
-    return failedLaunch(error instanceof Error ? error.message : String(error));
-  }
-  if (process.platform === "win32" && !resolveWindowsExecutable(item.executable)) {
-    return failedLaunch(describeMissingExecutable(item.executable));
-  }
-  return new Promise((resolvePromise) => {
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let settled = false;
-    const spawnOptions = {
-      cwd: resolvedCwd,
-      shell: false,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"]
-    };
-    let child;
-    try {
-      child = spawnUnexpanded(item.executable, item.args, spawnOptions);
-    } catch (error) {
-      resolvePromise(failedLaunch(describeLaunchError(item.executable, error)));
-      return;
-    }
-    child.stdout?.on("data", (chunk) => {
-      stdout = appendTruncated(stdout, String(chunk));
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderr = appendTruncated(stderr, String(chunk));
-    });
-    const finish = (exitCode) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      clearTimeout(killGrace);
-      const output = combineOutput(stdout, stderr);
-      resolvePromise({
-        commandSummary,
-        executable: item.executable,
-        args: [...item.args],
-        cwd: commandCwd,
-        exitCode,
-        durationMs: Date.now() - startedAt,
-        output,
-        timedOut,
-        passed: !timedOut && exitCode === expectedExitCode
-      });
-    };
-    child.on("error", (error) => {
-      stderr = appendTruncated(stderr, describeLaunchError(item.executable, error));
-      finish(-1);
-    });
-    child.on("close", (code) => finish(timedOut ? 124 : code ?? -1));
-    let killGrace;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      terminateProcessTree(child.pid);
-      killGrace = setTimeout(() => finish(124), 3e3);
-      killGrace.unref?.();
-    }, timeoutMs);
-    timer.unref?.();
-  });
-}
-async function runVerificationCommands(commands, cwd) {
-  const results = [];
-  for (const command of commands) {
-    const result = await runVerificationCommand(command, cwd);
-    results.push(result);
-    if (!result.passed) break;
-  }
-  return results;
-}
-var SKIPPED_OUTPUT = "\u56E0\u524D\u5E8F\u9A8C\u8BC1\u5931\u8D25\u672A\u6267\u884C";
-function fillSkippedVerificationResults(commands, results) {
-  if (results.length >= commands.length) {
-    return results.slice(0, commands.length);
-  }
-  const filled = results.slice();
-  for (let index = results.length; index < commands.length; index += 1) {
-    const command = commands[index];
-    const cwd = command.cwd?.trim() || ".";
-    filled.push({
-      commandSummary: summarizeCommand(command.executable, command.args),
-      executable: command.executable,
-      args: [...command.args],
-      cwd,
-      exitCode: -1,
-      durationMs: 0,
-      output: SKIPPED_OUTPUT,
-      timedOut: false,
-      passed: false
-    });
-  }
-  return filled;
-}
-function formatVerificationFailure(failed) {
-  if (failed.timedOut) {
-    return `\u9A8C\u8BC1\u547D\u4EE4\u8D85\u65F6\uFF1A${failed.commandSummary}`;
-  }
-  const detail = pickFailureDetail(failed.output);
-  const base = `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${failed.exitCode}\uFF09\uFF1A${failed.commandSummary}`;
-  return detail ? `${base}\uFF1B${detail}` : base;
-}
-function pickFailureDetail(output) {
-  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0 && !/^(stdout|stderr):$/i.test(line));
-  if (lines.length === 0) return void 0;
-  const summary = [...lines].reverse().find(
-    (line) => /\d+\s+issues?\s+found/i.test(line) || /error|failed|errno|enoent/i.test(line)
-  );
-  return summary ?? lines[0];
-}
-function clampTimeout(value) {
-  if (!Number.isFinite(value)) return DEFAULT_VERIFICATION_TIMEOUT_MS;
-  return Math.max(100, Math.min(MAX_VERIFICATION_TIMEOUT_MS, Math.trunc(value)));
-}
-function appendTruncated(current, next) {
-  const combined = current + next;
-  if (combined.length <= MAX_OUTPUT_CHARS) return combined;
-  return `\u2026\uFF08\u524D\u6587\u5DF2\u622A\u65AD\uFF09${combined.slice(-MAX_OUTPUT_CHARS)}`;
-}
-function combineOutput(stdout, stderr) {
-  const out = stdout.trim();
-  const err = stderr.trim();
-  if (!out) return err;
-  if (!err) return out;
-  return `stdout:
-${out}
-
-stderr:
-${err}`;
-}
-function terminateProcessTree(pid) {
-  if (!pid) return;
-  try {
-    if (process.platform === "win32") {
-      const killer = spawn4("taskkill", ["/PID", String(pid), "/T", "/F"], {
-        windowsHide: true,
-        stdio: "ignore"
-      });
-      killer.unref();
-    } else {
-      process.kill(pid, "SIGTERM");
-    }
-  } catch {
-  }
-}
-function resolveCommandCwd(repoRoot, cwd) {
-  const root = resolve(repoRoot);
-  if (isAbsolute2(cwd)) {
-    throw new Error(`\u9A8C\u8BC1 cwd \u5FC5\u987B\u662F\u4ED3\u5E93\u5185\u76F8\u5BF9\u8DEF\u5F84\uFF1A${cwd}`);
-  }
-  const target = resolve(root, cwd);
-  const relation = relative(root, target);
-  if (relation === ".." || relation.startsWith(`..${sep}`) || isAbsolute2(relation)) {
-    throw new Error(`\u9A8C\u8BC1 cwd \u9003\u51FA\u4ED3\u5E93\uFF1A${cwd}`);
-  }
-  return target;
-}
-function summarizeCommand(executable, args) {
-  return [executable, ...args].map((part) => /\s|"/.test(part) ? JSON.stringify(part) : part).join(" ");
-}
-function describeMissingExecutable(executable) {
-  const name = executable.trim() || "(\u7A7A)";
-  return `\u672A\u627E\u5230\u53EF\u6267\u884C\u6587\u4EF6 ${name}\uFF08ENOENT\uFF09\u3002Worker \u7EE7\u627F\u770B\u677F\u8FDB\u7A0B\u7684 PATH\uFF1B\u4ECE\u5F00\u59CB\u83DC\u5355\u6216\u5FEB\u6377\u65B9\u5F0F\u542F\u52A8\u65F6\uFF0C\u5F80\u5F80\u4E0D\u542B\u7EC8\u7AEF\u91CC\u624D\u6709\u7684 Flutter\u3002\u8BF7\u628A Flutter \u7684 bin \u76EE\u5F55\u5199\u5165\u7CFB\u7EDF PATH \u540E\u91CD\u542F\u770B\u677F\uFF0C\u6216\u4ECE\u5DF2\u914D\u7F6E PATH \u7684\u7EC8\u7AEF\u542F\u52A8\u770B\u677F\u3002`;
-}
-function describeLaunchError(executable, error) {
-  if (isExecutableNotFoundError(error)) {
-    return describeMissingExecutable(executable);
-  }
-  return error instanceof Error ? error.message : String(error);
-}
-function isExecutableNotFoundError(error) {
-  if (!error || typeof error !== "object") return false;
-  return error.code === "ENOENT";
-}
-
-// src/verification_log.ts
-var LOG_OUTPUT_CHARS = 4e3;
-function logVerificationPlan(commands) {
-  workerLog(`\u5F00\u59CB Worker \u9A8C\u8BC1\uFF1A\u5171 ${commands.length} \u6761`);
-  for (let index = 0; index < commands.length; index += 1) {
-    const command = commands[index];
-    workerLog(
-      `\u9A8C\u8BC1\u547D\u4EE4 ${index + 1}/${commands.length}\uFF1A${summarizeCommand(command.executable, command.args)} cwd=${command.cwd?.trim() || "."}`
-    );
-  }
-}
-function logVerificationResults(results) {
-  for (let index = 0; index < results.length; index += 1) {
-    const result = results[index];
-    const ordinal = `${index + 1}/${results.length}`;
-    if (result.output.trim() === "\u56E0\u524D\u5E8F\u9A8C\u8BC1\u5931\u8D25\u672A\u6267\u884C") {
-      workerLog(
-        `\u9A8C\u8BC1\u8DF3\u8FC7 ${ordinal}\uFF1A${result.commandSummary}\uFF08\u56E0\u524D\u5E8F\u9A8C\u8BC1\u5931\u8D25\u672A\u6267\u884C\uFF09`,
-        "worker",
-        "warning"
-      );
-      continue;
-    }
-    if (result.passed) {
-      workerLog(
-        `\u9A8C\u8BC1\u901A\u8FC7 ${ordinal}\uFF1A${result.commandSummary} \u8017\u65F6=${result.durationMs}ms`,
-        "worker",
-        "success"
-      );
-      continue;
-    }
-    workerLog(
-      `\u9A8C\u8BC1\u5931\u8D25 ${ordinal}\uFF1A${formatVerificationFailure(result)} \u8017\u65F6=${result.durationMs}ms`,
-      "worker",
-      "error"
-    );
-    const output = result.output.trim();
-    if (!output) {
-      workerLog("\u9A8C\u8BC1\u65E0\u8F93\u51FA\uFF08\u8FDB\u7A0B\u53EF\u80FD\u672A\u80FD\u542F\u52A8\uFF09", "shell", "warning");
-      continue;
-    }
-    workerLog(truncateLogOutput(output), "shell", "error");
-  }
-}
-function truncateLogOutput(output) {
-  if (output.length <= LOG_OUTPUT_CHARS) return output;
-  return `${output.slice(0, LOG_OUTPUT_CHARS)}
-\u2026\uFF08\u65E5\u5FD7\u5DF2\u622A\u65AD\uFF0C\u5B8C\u6574\u8F93\u51FA\u5199\u5165\u9A8C\u8BC1\u7ED3\u679C\uFF09`;
-}
-
 // src/run_batch.ts
 var SCOPED_TOOL_NAMES = [
   "block_card",
@@ -2111,8 +1764,7 @@ var defaultDependencies = {
   inspectGit: inspectGitWorkingTree,
   readArchitecture: readBatchArchitecture,
   createContext: createSessionContext,
-  runAgent: (roundJob, cancellation) => roundJob.engine === "codex" ? runCodex(roundJob, cancellation) : runCursor(roundJob, cancellation),
-  runVerification: runVerificationCommands
+  runAgent: (roundJob, cancellation) => roundJob.engine === "codex" ? runCodex(roundJob, cancellation) : runCursor(roundJob, cancellation)
 };
 async function runBatch(job, cancellation, dependencies = defaultDependencies) {
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
@@ -2134,8 +1786,7 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
     workerLog("Worker \u5DF2\u8FDE\u63A5\u5B8C\u6574\u770B\u677F MCP\uFF0C\u6B63\u5728\u6062\u590D\u672A\u5B8C\u6210\u6536\u5C3E");
     const recovery = await recoverPendingSessions(
       mcp,
-      job,
-      dependencies
+      job
     );
     if (!recovery.ok) {
       return { ...recovery, processedCards };
@@ -2211,6 +1862,8 @@ ${tree.output}`);
           }
         };
         logModelOverride(job, roundJob, cardId);
+        logClaimedCard(claim.payload);
+        workerLog("Worker \u6B63\u5728\u5B9E\u65BD\u5F53\u524D\u5361\u7247");
         const agentResult = await dependencies.runAgent(roundJob, cancellation);
         if (cancellation?.isSkipRequested || agentResult.error === "\u5DF2\u8DF3\u8FC7") {
           cancellation?.clearSkipRequest();
@@ -2304,11 +1957,11 @@ ${afterSkip.output}`,
             processedCards
           };
         }
+        workerLog("Worker \u6B63\u5728\u63D0\u4EA4\u5F53\u524D\u5361\u7247");
         const finalized = await validateAndFinalize(
           mcp,
           job,
-          pending,
-          dependencies
+          pending
         );
         if (!finalized.ok) {
           if (!finalized.preservePending && !terminalRecorded) {
@@ -2363,7 +2016,7 @@ ${tree2.output}` : tree2.kind === "unknown" ? `
     workerLog("Worker \u5DF2\u5173\u95ED\u5B8C\u6574\u770B\u677F MCP \u8FDE\u63A5");
   }
 }
-async function recoverPendingSessions(mcp, job, dependencies) {
+async function recoverPendingSessions(mcp, job) {
   const listed = await mcp.callJson("dispatch_list_pending", {
     workerToken: job.workerToken
   });
@@ -2380,8 +2033,7 @@ async function recoverPendingSessions(mcp, job, dependencies) {
     const result = await validateAndFinalize(
       mcp,
       job,
-      recovered,
-      dependencies
+      recovered
     );
     if (!result.ok) return { ...result, processedCards };
     processedCards += 1;
@@ -2389,56 +2041,20 @@ async function recoverPendingSessions(mcp, job, dependencies) {
   }
   return { ok: true, processedCards };
 }
-async function runAndLogVerification(dependencies, commands, cwd) {
-  logVerificationPlan(commands);
-  return dependencies.runVerification(commands, cwd);
-}
-async function validateAndFinalize(mcp, job, pending, dependencies) {
+async function validateAndFinalize(mcp, job, pending) {
   const sessionId = requiredString(pending, "sessionId");
   const cardId = requiredString(pending, "cardId");
   let status = String(pending.status ?? "");
   if (status === "declared") {
-    const manualReason = String(pending.manualVerificationReason ?? "").trim();
-    const commands = parseVerificationCommands(pending.verificationCommands);
-    const results = manualReason ? [] : fillSkippedVerificationResults(
-      commands,
-      await runAndLogVerification(dependencies, commands, job.cwd)
-    );
-    const failed = results.find((item) => !item.passed);
-    logVerificationResults(results);
-    let recorded;
-    try {
-      recorded = await mcp.callJson("dispatch_record_validation_results", {
-        workerToken: job.workerToken,
-        sessionId,
-        results: results.map(({
-          commandSummary,
-          executable,
-          args,
-          cwd,
-          exitCode,
-          durationMs,
-          timedOut,
-          output
-        }) => ({
-          commandSummary,
-          executable,
-          args,
-          cwd,
-          exitCode,
-          durationMs,
-          timedOut,
-          output
-        }))
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const extra = failed ? `\uFF1B\u5F53\u65F6\u9A8C\u8BC1\u7ED3\u679C\uFF1A${formatVerificationFailure(failed)}` : "";
-      throw new Error(`${message}${extra}`);
-    }
+    workerLog("\u9A8C\u8BC1\u5DF2\u7531 Agent \u4F1A\u8BDD\u5B8C\u6210\uFF0CWorker \u4E0D\u518D\u590D\u8DD1\u6D4B\u8BD5");
+    const recorded = await mcp.callJson("dispatch_record_validation_results", {
+      workerToken: job.workerToken,
+      sessionId,
+      results: []
+    });
     status = String(recorded.status ?? "");
-    if (failed || status === "failed") {
-      const reason = failed ? formatVerificationFailure(failed) : String(recorded.error ?? "\u9A8C\u8BC1\u5931\u8D25");
+    if (status === "failed") {
+      const reason = String(recorded.error ?? "\u9A8C\u8BC1\u5931\u8D25");
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,
@@ -2450,6 +2066,7 @@ async function validateAndFinalize(mcp, job, pending, dependencies) {
   if (!["validated", "committing", "committed", "finalized"].includes(status)) {
     return { ok: false, error: `pending \u72B6\u6001\u65E0\u6CD5\u6062\u590D\uFF1A${status || "\u672A\u77E5"}` };
   }
+  workerLog("Worker \u6B63\u5728\u63D0\u4EA4\u5E76\u9001\u4EA4\u9A8C\u8BC1");
   const finalized = await mcp.callJson("dispatch_finalize", {
     workerToken: job.workerToken,
     sessionId
@@ -2467,26 +2084,6 @@ async function validateAndFinalize(mcp, job, pending, dependencies) {
     return { ok: false, error: `dispatch_finalize \u8FD4\u56DE\u72B6\u6001\u4E0D\u4E00\u81F4\uFF1A${sessionId}` };
   }
   return { ok: true };
-}
-function parseVerificationCommands(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const record = asRecord4(item);
-    if (!record) throw new Error("verificationCommands \u683C\u5F0F\u65E0\u6548");
-    return {
-      executable: requiredString(record, "executable"),
-      args: parseStringArray(record.args, "verificationCommands.args"),
-      cwd: String(record.cwd ?? ".").trim() || ".",
-      expectedExitCode: Number(record.expectedExitCode ?? 0),
-      ...Number.isFinite(record.timeoutMs) ? { timeoutMs: Number(record.timeoutMs) } : {}
-    };
-  });
-}
-function parseStringArray(raw, field) {
-  if (!Array.isArray(raw) || raw.some((item) => typeof item !== "string")) {
-    throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${field} \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6570\u7EC4`);
-  }
-  return [...raw];
 }
 async function recordRoundFailure(mcp, job, sessionId, reason, block = false) {
   await mcp.callJson(
@@ -2542,6 +2139,25 @@ function completedResult(processedCards, reason) {
     processedCards
   };
 }
+function logClaimedCard(payload) {
+  const items = Array.isArray(payload.workItems) ? payload.workItems : [];
+  let title = "";
+  const details = [];
+  for (const raw of items) {
+    const record = asRecord4(raw);
+    if (!record) continue;
+    const kind = String(record.kind ?? "");
+    const text = String(record.text ?? "").trim();
+    if (!text) continue;
+    if (kind === "title" && !title) title = text;
+    else details.push(text);
+  }
+  workerLog(`\u5F53\u524D\u5361\u7247\uFF1A${title || String(payload.cardId ?? "\u672A\u547D\u540D\u5361\u7247")}`);
+  if (details.length > 0) {
+    const detail = details.join("\n").slice(0, 800);
+    workerLog(`\u5F53\u524D\u4EFB\u52A1\uFF1A${detail}`);
+  }
+}
 function logModelOverride(original, round, cardId) {
   if (round.engine === original.engine && round.model === original.model && JSON.stringify(round.modelParams ?? []) === JSON.stringify(original.modelParams ?? [])) {
     return;
@@ -2553,7 +2169,7 @@ function logModelOverride(original, round, cardId) {
 
 // src/cli.ts
 function sleep(ms) {
-  return new Promise((resolve3) => setTimeout(resolve3, ms));
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
 function isRetryableError(err) {
   if (err && typeof err === "object") {
@@ -2750,7 +2366,7 @@ async function main() {
       "\u7528\u6CD5: node cli.js --job <job.json> | --list-models | --usage"
     );
   }
-  await runJob(resolve2(argv[idx + 1]));
+  await runJob(resolve(argv[idx + 1]));
 }
 main().catch((err) => {
   console.error(err);

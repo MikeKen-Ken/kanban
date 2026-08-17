@@ -62,21 +62,11 @@ Future<CallToolResult> dispatchReadyToSubmit(
 
   final reason = manualVerificationReason?.trim();
   final hasManualReason = reason != null && reason.isNotEmpty;
-  if (verificationCommands.isEmpty == !hasManualReason) {
+  if (verificationCommands.isNotEmpty) {
     return mcpErrorResult(
-      'verificationCommands 与 manualVerificationReason 必须且只能提供一种',
+      '验证已下放给 Agent：请在本会话内跑测试后再 ready_to_submit，'
+      '不要传 verificationCommands。无法自动验证时只传 manualVerificationReason。',
     );
-  }
-  for (final command in verificationCommands) {
-    if (command.executable.trim().isEmpty) {
-      return mcpErrorResult('verificationCommands.executable 不能为空');
-    }
-    if (!command.hasRepoRelativeCwd) {
-      return mcpErrorResult('verificationCommands.cwd 必须是仓库内相对路径');
-    }
-    if (command.timeoutMs != null && command.timeoutMs! <= 0) {
-      return mcpErrorResult('verificationCommands.timeoutMs 必须大于 0');
-    }
   }
 
   final store = pendingStore ?? DispatchPendingStore();

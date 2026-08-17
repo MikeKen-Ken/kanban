@@ -81,8 +81,9 @@ void main() {
     expect(text, contains('禁止搜索'));
     expect(text, contains('ready_to_submit'));
     expect(text, contains('禁止调用 pick_next_card'));
-    expect(text, contains('禁止在会话内预跑即将交给 ready_to_submit 的 verificationCommands'));
-    expect(text, contains('Worker 只执行，不按语言或框架拦截'));
+    expect(text, contains('验证必须在本会话内跑通后才能声明'));
+    expect(text, contains('禁止把 verificationCommands 交给 Worker'));
+    expect(text, contains('测试失败、卡住或超时不得当作通过'));
     expect(text, isNot(contains('commit_and_submit_card')));
     expect(text, isNot(contains('name:')));
     expect(text, isNot(contains('dispatchSessionId')));

@@ -68,8 +68,8 @@ void main() {
     expect(progress.currentDetail, contains('实时状态'));
     progress = applyWorkerProgressLog(progress, 'Worker 正在实施当前卡片');
     expect(progress.phaseLabel, '实施');
-    progress = applyWorkerProgressLog(progress, '开始 Worker 验证：共 1 条');
-    expect(progress.phaseLabel, '测试');
+    progress = applyWorkerProgressLog(progress, '验证已由 Agent 会话完成，Worker 不再复跑测试');
+    expect(progress.phaseLabel, '提交');
     progress = applyWorkerProgressLog(progress, 'Worker 正在提交并送交验证');
     expect(progress.phaseLabel, '提交');
     progress = applyWorkerProgressLog(progress, '完成后队列：开始「推送」');

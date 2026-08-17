@@ -212,17 +212,13 @@ Map<String, String> _validationActivityDetails(
     0,
     (total, result) => total + result.durationMs,
   );
-  final summaries = record.validationResults.map((result) {
-    final outcome = result.timedOut ? 'timeout' : 'exitCode=${result.exitCode}';
-    return '${result.commandSummary} [$outcome]';
-  }).join('；');
   return {
-    'validationMode': manual == null ? 'commands' : 'manual',
+    'validationMode': manual == null ? 'session' : 'manual',
     'commandCount': '${record.verificationCommands.length}',
     'totalDurationMs': '$totalDurationMs',
     if (manual != null) 'manualReason': _truncateActivityValue(manual),
     'resultSummary': _truncateActivityValue(
-      manual == null ? (summaries.isEmpty ? '无命令结果' : summaries) : '人工验证：待人工验收',
+      manual == null ? '会话内验证' : '人工验证：待人工验收',
     ),
   };
 }

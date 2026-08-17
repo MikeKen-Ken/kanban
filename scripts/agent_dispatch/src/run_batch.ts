@@ -22,17 +22,6 @@ import {
   type DispatchResult,
   type RoundDispatchJob,
 } from "./types.ts";
-import {
-  logVerificationPlan,
-  logVerificationResults,
-} from "./verification_log.ts";
-import {
-  fillSkippedVerificationResults,
-  formatVerificationFailure,
-  runVerificationCommands,
-  type VerificationCommand,
-  type VerificationResult,
-} from "./verification_runner.ts";
 import { workerLog } from "./worker_log.ts";
 
 const SCOPED_TOOL_NAMES = [
@@ -54,10 +43,6 @@ export type RunBatchDependencies = {
     job: RoundDispatchJob,
     cancellation?: WorkerCancellation,
   ): Promise<DispatchResult>;
-  runVerification(
-    commands: VerificationCommand[],
-    cwd: string,
-  ): Promise<VerificationResult[]>;
 };
 
 const defaultDependencies: RunBatchDependencies = {
@@ -73,7 +58,6 @@ const defaultDependencies: RunBatchDependencies = {
     roundJob.engine === "codex"
       ? runCodex(roundJob, cancellation)
       : runCursor(roundJob, cancellation),
-  runVerification: runVerificationCommands,
 };
 
 export async function runBatch(
@@ -103,7 +87,6 @@ export async function runBatch(
     const recovery = await recoverPendingSessions(
       mcp,
       job,
-      dependencies,
     );
     if (!recovery.ok) {
       return { ...recovery, processedCards };
@@ -281,12 +264,11 @@ export async function runBatch(
           };
         }
 
-        workerLog("Worker 正在验证与提交当前卡片");
+        workerLog("Worker 正在提交当前卡片");
         const finalized = await validateAndFinalize(
           mcp,
           job,
           pending,
-          dependencies,
         );
         if (!finalized.ok) {
           if (!finalized.preservePending && !terminalRecorded) {
@@ -352,7 +334,6 @@ export async function runBatch(
 async function recoverPendingSessions(
   mcp: KanbanMcpConnection,
   job: DispatchJob,
-  dependencies: RunBatchDependencies,
 ): Promise<DispatchResult> {
   const listed = await mcp.callJson("dispatch_list_pending", {
     workerToken: job.workerToken,
@@ -371,7 +352,6 @@ async function recoverPendingSessions(
       mcp,
       job,
       recovered,
-      dependencies,
     );
     if (!result.ok) return { ...result, processedCards };
     processedCards += 1;
@@ -380,72 +360,24 @@ async function recoverPendingSessions(
   return { ok: true, processedCards };
 }
 
-async function runAndLogVerification(
-  dependencies: RunBatchDependencies,
-  commands: VerificationCommand[],
-  cwd: string,
-): Promise<VerificationResult[]> {
-  logVerificationPlan(commands);
-  return dependencies.runVerification(commands, cwd);
-}
-
 async function validateAndFinalize(
   mcp: KanbanMcpConnection,
   job: DispatchJob,
   pending: Record<string, unknown>,
-  dependencies: RunBatchDependencies,
 ): Promise<DispatchResult> {
   const sessionId = requiredString(pending, "sessionId");
   const cardId = requiredString(pending, "cardId");
   let status = String(pending.status ?? "");
   if (status === "declared") {
-    const manualReason = String(pending.manualVerificationReason ?? "").trim();
-    const commands = parseVerificationCommands(pending.verificationCommands);
-    const results = manualReason
-      ? []
-      : fillSkippedVerificationResults(
-          commands,
-          await runAndLogVerification(dependencies, commands, job.cwd),
-        );
-    const failed = results.find((item) => !item.passed);
-    logVerificationResults(results);
-    let recorded: Record<string, unknown>;
-    try {
-      recorded = await mcp.callJson("dispatch_record_validation_results", {
-        workerToken: job.workerToken,
-        sessionId,
-        results: results.map(({
-          commandSummary,
-          executable,
-          args,
-          cwd,
-          exitCode,
-          durationMs,
-          timedOut,
-          output,
-        }) => ({
-          commandSummary,
-          executable,
-          args,
-          cwd,
-          exitCode,
-          durationMs,
-          timedOut,
-          output,
-        })),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const extra = failed
-        ? `；当时验证结果：${formatVerificationFailure(failed)}`
-        : "";
-      throw new Error(`${message}${extra}`);
-    }
+    workerLog("验证已由 Agent 会话完成，Worker 不再复跑测试");
+    const recorded = await mcp.callJson("dispatch_record_validation_results", {
+      workerToken: job.workerToken,
+      sessionId,
+      results: [],
+    });
     status = String(recorded.status ?? "");
-    if (failed || status === "failed") {
-      const reason = failed
-        ? formatVerificationFailure(failed)
-        : String(recorded.error ?? "验证失败");
+    if (status === "failed") {
+      const reason = String(recorded.error ?? "验证失败");
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,
@@ -479,30 +411,6 @@ async function validateAndFinalize(
     return { ok: false, error: `dispatch_finalize 返回状态不一致：${sessionId}` };
   }
   return { ok: true };
-}
-
-function parseVerificationCommands(raw: unknown): VerificationCommand[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const record = asRecord(item);
-    if (!record) throw new Error("verificationCommands 格式无效");
-    return {
-      executable: requiredString(record, "executable"),
-      args: parseStringArray(record.args, "verificationCommands.args"),
-      cwd: String(record.cwd ?? ".").trim() || ".",
-      expectedExitCode: Number(record.expectedExitCode ?? 0),
-      ...(Number.isFinite(record.timeoutMs)
-        ? { timeoutMs: Number(record.timeoutMs) }
-        : {}),
-    };
-  });
-}
-
-function parseStringArray(raw: unknown, field: string): string[] {
-  if (!Array.isArray(raw) || raw.some((item) => typeof item !== "string")) {
-    throw new Error(`协议字段 ${field} 必须是字符串数组`);
-  }
-  return [...raw] as string[];
 }
 
 async function recordRoundFailure(

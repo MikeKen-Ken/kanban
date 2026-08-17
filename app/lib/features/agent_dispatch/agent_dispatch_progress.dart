@@ -151,10 +151,9 @@ AgentDispatchProgress applyWorkerProgressLog(
 
 String? _phaseFromLog(String message) {
   if (message.contains('Worker 正在实施')) return '实施';
-  if (message.contains('开始 Worker 验证') || message.contains('验证命令')) {
-    return '测试';
-  }
-  if (message.contains('Worker 正在提交') || message.contains('已验证、提交')) {
+  if (message.contains('验证已由 Agent 会话完成') ||
+      message.contains('Worker 正在提交') ||
+      message.contains('已验证、提交')) {
     return '提交';
   }
   if (message.contains('咨询卡') && message.contains('送交验证')) return '送验';

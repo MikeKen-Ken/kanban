@@ -230,7 +230,7 @@ void main() {
     );
     expect(rejected.isError, isTrue);
 
-    final ready = await dispatchReadyToSubmit(
+    final commandsRejected = await dispatchReadyToSubmit(
       controller,
       workerToken: 'worker-a',
       cardId: cardId,
@@ -243,15 +243,27 @@ void main() {
         ),
       ],
     );
+    expect(commandsRejected.isError, isTrue);
+    expect(
+      commandsRejected.content.whereType<TextContent>().first.text,
+      contains('验证已下放给 Agent'),
+    );
+
+    final ready = await dispatchReadyToSubmit(
+      controller,
+      workerToken: 'worker-a',
+      cardId: cardId,
+      completedChecklistIds: const ['check-a'],
+      completedFeedbackIds: const ['feedback-a'],
+      verificationCommands: const [],
+    );
     expect(ready.isError, isNot(true));
     final sessionId = _jsonOf(ready)['sessionId'] as String;
     final persisted = await DispatchPendingStore().read(sessionId);
     expect(persisted?.status, DispatchPendingStatus.declared);
     expect(persisted?.completedChecklistIds, ['check-a']);
     expect(persisted?.completedFeedbackIds, ['feedback-a']);
-    expect(persisted?.verificationCommands.single.executable, 'flutter');
-    expect(
-        persisted?.verificationCommands.single.args, ['test', 'targeted.dart']);
+    expect(persisted?.verificationCommands, isEmpty);
   });
 
   test('committed 恢复 finalize 只勾显式 id 且重复调用幂等', () async {

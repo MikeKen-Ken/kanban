@@ -81,7 +81,6 @@ function makeContext(): SessionContext {
 }
 
 function createHappyDependencies(options?: {
-  verificationPasses?: boolean;
   scopedTools?: string[];
   expectedReasoning?: string;
   manualReason?: string;
@@ -89,14 +88,7 @@ function createHappyDependencies(options?: {
   recordError?: string;
   finalizeResult?: Record<string, unknown>;
   peekFields?: Record<string, unknown>;
-  pendingCommands?: Array<{
-    executable: string;
-    args: string[];
-    cwd: string;
-    expectedExitCode: number;
-  }>;
   runAgent?: (round: RoundDispatchJob) => Promise<{ ok: boolean; error?: string }>;
-  runVerification?: RunBatchDependencies["runVerification"];
 }): {
   dependencies: RunBatchDependencies;
   full: FakeMcp;
@@ -138,14 +130,7 @@ function createHappyDependencies(options?: {
             status: "declared",
             ...(options?.manualReason
               ? { manualVerificationReason: options.manualReason }
-              : {
-                verificationCommands: options?.pendingCommands ?? [{
-                  executable: process.execPath,
-                  args: ["-e", "process.exit(0)"],
-                  cwd: ".",
-                  expectedExitCode: 0,
-                }],
-              }),
+              : {}),
           },
         };
       case "get_card":
@@ -194,22 +179,6 @@ function createHappyDependencies(options?: {
         ? options.runAgent(round)
         : { ok: true, summary: "完成" };
     },
-    runVerification: options?.runVerification ?? (async () => {
-      if (options?.manualReason) {
-        throw new Error("人工验证不应执行命令");
-      }
-      return [{
-        commandSummary: `${process.execPath} -e "process.exit(0)"`,
-        executable: process.execPath,
-        args: ["-e", "process.exit(0)"],
-        cwd: ".",
-        exitCode: options?.verificationPasses === false ? 1 : 0,
-        durationMs: 12,
-        output: "测试输出",
-        timedOut: false,
-        passed: options?.verificationPasses !== false,
-      }];
-    }),
   };
   return { dependencies, full, scoped };
 }
@@ -250,7 +219,6 @@ describe("run_batch", () => {
       readArchitecture: () => "# 架构",
       createContext: () => makeContext(),
       runAgent: async () => ({ ok: true }),
-      runVerification: async () => [],
     };
 
     const result = await runBatch(job, undefined, dependencies);
@@ -265,7 +233,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("claim、门禁、验证、finalize 形成完整单卡流程", async () => {
+  it("claim、门禁、会话验证记账、finalize 形成完整单卡流程", async () => {
     const { dependencies, full, scoped } = createHappyDependencies();
 
     const result = await runBatch(job, undefined, dependencies);
@@ -273,79 +241,13 @@ describe("run_batch", () => {
     assert.equal(result.ok, true);
     assert.equal(result.processedCards, 1);
     assert.ok(full.calls.some((item) => item.name === "dispatch_claim_next_card"));
-    assert.ok(full.calls.some((item) => item.name === "dispatch_finalize"));
-    assert.ok(full.calls.some((item) => item.name === "dispatch_close_agent_session"));
-    assert.equal(scoped.closed, true);
-  });
-
-  it("验证失败时阻塞会话且不 finalize", async () => {
-    const { dependencies, full } = createHappyDependencies({
-      verificationPasses: false,
-    });
-
-    const result = await runBatch(job, undefined, dependencies);
-
-    assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /验证命令失败/);
-    assert.ok(
-      full.calls.some((item) => item.name === "dispatch_block_agent_session"),
-    );
-    assert.equal(
-      full.calls.some((item) => item.name === "dispatch_finalize"),
-      false,
-    );
-  });
-
-  it("首条验证失败时补齐未执行命令并阻塞", async () => {
-    const first = {
-      commandSummary: `${process.execPath} -e "process.exit(7)"`,
-      executable: process.execPath,
-      args: ["-e", "process.exit(7)"],
-      cwd: ".",
-      exitCode: 7,
-      durationMs: 5,
-      output: "第一条失败",
-      timedOut: false,
-      passed: false,
-    };
-    const { dependencies, full } = createHappyDependencies({
-      pendingCommands: [
-        {
-          executable: process.execPath,
-          args: ["-e", "process.exit(7)"],
-          cwd: ".",
-          expectedExitCode: 0,
-        },
-        {
-          executable: process.execPath,
-          args: ["-e", "process.exit(0)"],
-          cwd: ".",
-          expectedExitCode: 0,
-        },
-      ],
-      runVerification: async () => [first],
-    });
-
-    const result = await runBatch(job, undefined, dependencies);
-
-    assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /验证命令失败/);
     const recorded = full.calls.find(
       (item) => item.name === "dispatch_record_validation_results",
     );
-    const results = recorded?.args.results as unknown[];
-    assert.equal(results?.length, 2);
-    assert.equal(
-      (recorded?.args.results as Array<{ output?: string }>)[1]?.output,
-      "因前序验证失败未执行",
-    );
-    assert.ok(
-      full.calls.some((item) => item.name === "dispatch_block_agent_session"),
-    );
-    assert.equal(
-      full.calls.some((item) => item.name === "dispatch_finalize"),
-      false,
-    );
+    assert.deepEqual(recorded?.args.results, []);
+    assert.ok(full.calls.some((item) => item.name === "dispatch_finalize"));
+    assert.ok(full.calls.some((item) => item.name === "dispatch_close_agent_session"));
+    assert.equal(scoped.closed, true);
   });
 
   it("收尾记账失败不误报为脏工作区停止", async () => {
@@ -366,19 +268,6 @@ describe("run_batch", () => {
     assert.equal(result.ok, false);
     assert.match(result.error ?? "", /Worker 收尾失败/);
     assert.doesNotMatch(result.error ?? "", /工作区不干净，停止批次/);
-  });
-
-  it("收尾记账失败时带上已跑完的验证原因", async () => {
-    const { dependencies } = createHappyDependencies({
-      verificationPasses: false,
-      recordError: "dispatch_record_validation_results 失败：验证结果数量与声明命令不一致",
-    });
-
-    const result = await runBatch(job, undefined, dependencies);
-
-    assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /Worker 收尾失败/);
-    assert.match(result.error ?? "", /当时验证结果：验证命令失败/);
   });
 
   it("禁止使用卡片参数时沿用工作台默认", async () => {
@@ -504,7 +393,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("人工验证原因跳过命令复跑并直接 finalize", async () => {
+  it("人工验证原因也不复跑命令并直接 finalize", async () => {
     const { dependencies, full } = createHappyDependencies({
       manualReason: "需要人工检查视觉结果",
     });

@@ -320,7 +320,6 @@ Future<CallToolResult> _recordValidation(
   }
   final shapeError = dispatchValidationShapeError(
     isManual: record.manualVerificationReason != null,
-    commands: record.verificationCommands,
     results: results,
   );
   if (shapeError != null) return mcpErrorResult(shapeError);
@@ -361,14 +360,14 @@ Future<CallToolResult> _recordValidation(
     source: ActivitySource.mcp,
     details: {
       'validationMode':
-          record.manualVerificationReason == null ? 'commands' : 'manual',
+          record.manualVerificationReason == null ? 'session' : 'manual',
       'commandCount': '${record.verificationCommands.length}',
       'totalDurationMs': '$totalDurationMs',
       if (record.manualVerificationReason != null)
         'manualReason': _truncate(record.manualVerificationReason!),
       'resultSummary': _truncate(
         failed == null
-            ? '验证通过'
+            ? (record.manualVerificationReason == null ? '会话内验证' : '人工验证')
             : failed.timedOut
                 ? '验证超时：${failed.commandSummary}'
                 : '验证失败：${failed.commandSummary}，exitCode=${failed.exitCode}',
