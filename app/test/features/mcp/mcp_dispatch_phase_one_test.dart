@@ -475,7 +475,7 @@ void main() {
     await _git(repo, ['commit', '-m', '需要撤销的变更']);
     final target = (await Process.run(
       'git',
-      ['rev-parse', '--short', 'HEAD'],
+      ['rev-parse', 'HEAD'],
       workingDirectory: repo,
     ))
         .stdout

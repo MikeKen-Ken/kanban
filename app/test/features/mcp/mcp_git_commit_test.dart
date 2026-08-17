@@ -47,7 +47,7 @@ void main() {
     );
   });
 
-  test('commitMcpWorkingTree 提交后返回短 hash', () async {
+  test('commitMcpWorkingTree 提交后返回完整 hash', () async {
     final temp = await Directory.systemTemp.createTemp('kanban_git_commit_');
     addTearDown(() async {
       if (await temp.exists()) await temp.delete(recursive: true);
@@ -74,7 +74,8 @@ void main() {
       (await inspectMcpGitTree(temp.path)).kind,
       McpGitTreeKind.clean,
     );
-    expect(await mcpGitShortHead(temp.path), result.commitRef);
+    expect(await mcpGitHeadHash(temp.path), result.commitRef);
+    expect(result.commitRef, matches(RegExp(r'^[0-9a-f]{40,64}$')));
     expect(
       await findMcpCommitByDispatchTrailers(
         repoPath: temp.path,

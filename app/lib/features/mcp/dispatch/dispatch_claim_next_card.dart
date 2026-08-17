@@ -38,7 +38,7 @@ Future<CallToolResult> dispatchClaimNextCard(
   if (repoPath != null && repoPath.isNotEmpty) {
     dispatchGate.recordBaselineCommitRef(
       token,
-      await mcpGitShortHead(repoPath, runner: gitRunner),
+      await mcpGitHeadHash(repoPath, runner: gitRunner),
     );
   }
 

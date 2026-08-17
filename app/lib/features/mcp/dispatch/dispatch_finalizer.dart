@@ -58,7 +58,7 @@ Future<CallToolResult> dispatchFinalize(
 
     if (record.status == DispatchPendingStatus.validated ||
         record.status == DispatchPendingStatus.committing) {
-      final head = await mcpGitShortHead(repo, runner: gitRunner);
+      final head = await mcpGitHeadHash(repo, runner: gitRunner);
       final baseline = record.baselineCommitRef;
       if (baseline != null && head != baseline) {
         final failed = record.copyWith(

@@ -197,7 +197,7 @@ Future<CallToolResult> mcpSubmitCardForVerify(
         'afterGitCommit': {
           'tool': 'set_card_commit_ref',
           'cardId': cardId,
-          'hint': 'git commit 后调用，commitRef 传 git rev-parse --short HEAD',
+          'hint': 'git commit 后调用，commitRef 传 git rev-parse HEAD',
         },
     });
   });

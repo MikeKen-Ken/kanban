@@ -136,7 +136,7 @@ Future<McpGitTree> inspectMcpGitTree(
   return McpGitTree(kind: McpGitTreeKind.dirty, output: output);
 }
 
-/// `git add -A` 后用临时文件提交，返回短 hash。
+/// `git add -A` 后用临时文件提交，返回完整 hash。
 Future<McpGitCommitOutcome> commitMcpWorkingTree({
   required String repoPath,
   required String message,
@@ -204,7 +204,7 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
     }
     final hash = await run(
       'git',
-      ['rev-parse', '--short', 'HEAD'],
+      ['rev-parse', '--verify', 'HEAD'],
       workingDirectory: repo,
       environment: mcpGitEnvironment(),
     );
@@ -337,7 +337,7 @@ Future<String?> findMcpCommitByDispatchTrailers({
     [
       'log',
       '-1',
-      '--format=%h',
+      '--format=%H',
       '--all-match',
       '--fixed-strings',
       '--grep=Kanban-Session: $sessionId',
@@ -351,14 +351,15 @@ Future<String?> findMcpCommitByDispatchTrailers({
   return value.isEmpty ? null : value;
 }
 
-Future<String?> mcpGitShortHead(
+/// 读取当前 HEAD 的完整提交哈希，与 `git log` / Git 客户端显示一致。
+Future<String?> mcpGitHeadHash(
   String repoPath, {
   McpGitRunner? runner,
 }) async {
   final run = runner ?? _defaultGitRunner;
   final hash = await run(
     'git',
-    ['rev-parse', '--short', 'HEAD'],
+    ['rev-parse', '--verify', 'HEAD'],
     workingDirectory: repoPath.trim(),
     environment: mcpGitEnvironment(),
   );
@@ -366,3 +367,4 @@ Future<String?> mcpGitShortHead(
   final value = '${hash.stdout}'.trim();
   return value.isEmpty ? null : value;
 }
+
