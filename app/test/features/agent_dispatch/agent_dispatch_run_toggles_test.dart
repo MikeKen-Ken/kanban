@@ -23,8 +23,9 @@ void main() {
     expect(find.text('禁止使用卡片参数'), findsOneWidget);
     expect(find.text('允许脏工作区'), findsOneWidget);
     expect(find.text('开沙箱'), findsOneWidget);
-    expect(find.byType(ToggleButtons), findsNWidgets(3));
+    expect(find.byType(Checkbox), findsNWidgets(3));
     expect(find.byType(Switch), findsNothing);
+    expect(find.byType(ToggleButtons), findsNothing);
     expect(find.textContaining('打开后忽略卡片'), findsNothing);
     expect(find.textContaining('未提交改动'), findsNothing);
   });

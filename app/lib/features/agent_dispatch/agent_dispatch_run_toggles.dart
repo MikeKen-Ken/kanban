@@ -23,21 +23,24 @@ class AgentDispatchRunToggles extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Wrap(
+      spacing: 12,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _ToggleRow(
+        _Toggle(
           title: '禁止使用卡片参数',
           value: ignoreCardParams,
           enabled: enabled,
           onChanged: onIgnoreCardParamsChanged,
         ),
-        _ToggleRow(
+        _Toggle(
           title: '允许脏工作区',
           value: allowDirtyWorkspace,
           enabled: enabled,
           onChanged: onAllowDirtyWorkspaceChanged,
         ),
-        _ToggleRow(
+        _Toggle(
           title: '开沙箱',
           value: enableSandbox,
           enabled: enabled,
@@ -48,8 +51,8 @@ class AgentDispatchRunToggles extends StatelessWidget {
   }
 }
 
-class _ToggleRow extends StatelessWidget {
-  const _ToggleRow({
+class _Toggle extends StatelessWidget {
+  const _Toggle({
     required this.title,
     required this.value,
     required this.enabled,
@@ -63,31 +66,17 @@ class _ToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    return InkWell(
+      onTap: enabled ? () => onChanged(!value) : null,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(child: Text(title)),
-          ToggleButtons(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 32),
-            isSelected: [!value, value],
-            onPressed: enabled
-                ? (index) {
-                    final next = index == 1;
-                    if (next != value) onChanged(next);
-                  }
-                : null,
-            children: const [
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('关'),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('开'),
-              ),
-            ],
+          Checkbox(
+            value: value,
+            onChanged: enabled ? (next) => onChanged(next ?? false) : null,
+            visualDensity: VisualDensity.compact,
           ),
+          Text(title),
         ],
       ),
     );

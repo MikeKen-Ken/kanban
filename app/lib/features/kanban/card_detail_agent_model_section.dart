@@ -116,22 +116,26 @@ class _CardDetailAgentModelSectionState
     );
   }
 
-  Widget _compactSwitch({
+  Widget _compactToggle({
     required String label,
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
     final style = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: style),
-        Switch(
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          value: value,
-          onChanged: onChanged,
-        ),
-      ],
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Checkbox(
+            value: value,
+            onChanged: (next) => onChanged(next ?? false),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          Text(label, style: style),
+        ],
+      ),
     );
   }
 
@@ -319,14 +323,14 @@ class _CardDetailAgentModelSectionState
                 onChanged: (value) => _onParam(contextParam.id, value),
               ),
               const SizedBox(width: 6),
-              _compactSwitch(
+              _compactToggle(
                 label: '允许脏工作区',
                 value: widget.agentAllowDirtyWorkspace == true,
                 onChanged: (value) => _emit(
                   agentAllowDirtyWorkspace: value ? true : null,
                 ),
               ),
-              _compactSwitch(
+              _compactToggle(
                 label: '开沙箱',
                 value: widget.agentEnableSandbox == true,
                 onChanged: (value) => _emit(
