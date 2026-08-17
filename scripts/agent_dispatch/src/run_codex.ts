@@ -102,7 +102,8 @@ export async function runCodex(
       tempRoot: temp,
     });
     workerLog(
-      `Codex 使用隔离 CODEX_HOME，仅注入精简看板 MCP（${mcpUrl}）`,
+      `Codex 使用隔离 CODEX_HOME，复制用户 AGENTS.md 与 skills；` +
+        `仅注入精简看板 MCP（${mcpUrl}），不使用用户 config.toml 中的 MCP`,
     );
 
     const args = buildCodexExecArgs({

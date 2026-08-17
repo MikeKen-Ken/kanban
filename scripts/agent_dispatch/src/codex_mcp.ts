@@ -1,14 +1,18 @@
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 const AUTH_FILES = ["auth.json"];
+const USER_INSTRUCTION_FILES = ["AGENTS.md"];
+const USER_INSTRUCTION_DIRS = ["skills"];
 
 export function buildCodexAgentConfigToml(mcpUrl: string): string {
   const url = mcpUrl.trim();
@@ -45,10 +49,31 @@ export function createCodexAgentHome(options: {
     "utf8",
   );
   for (const name of AUTH_FILES) {
-    const from = join(options.userCodexHome, name);
-    if (existsSync(from)) {
-      copyFileSync(from, join(home, name));
-    }
+    copyUserPath(
+      join(options.userCodexHome, name),
+      join(home, name),
+    );
+  }
+  for (const name of USER_INSTRUCTION_FILES) {
+    copyUserPath(
+      join(options.userCodexHome, name),
+      join(home, name),
+    );
+  }
+  for (const name of USER_INSTRUCTION_DIRS) {
+    copyUserPath(
+      join(options.userCodexHome, name),
+      join(home, name),
+    );
   }
   return { home };
+}
+
+function copyUserPath(from: string, to: string): void {
+  if (!existsSync(from)) return;
+  if (statSync(from).isDirectory()) {
+    cpSync(from, to, { recursive: true });
+    return;
+  }
+  copyFileSync(from, to);
 }

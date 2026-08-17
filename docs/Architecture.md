@@ -88,7 +88,7 @@
 - `undo/`：可撤销命令与本机撤销栈
 - `templates/`：卡片模板与复制
 - `reminders/`：提醒、重复规则和平台调度
-- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）
+- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）。本地 Cursor 会话加载用户与项目规则 / Skill / Hooks；Codex 隔离 home 会复制用户 `AGENTS.md` 与 `skills`，MCP 仍只注入本卡 scoped 端点。
 - `mcp/`：Windows 内嵌 MCP 与 Cursor/Codex 一键配置（仅本机）
 - `statistics/`：只读统计
 - `wip/`：列上限策略

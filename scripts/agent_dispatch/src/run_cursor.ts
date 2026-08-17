@@ -243,8 +243,8 @@ export async function runCursor(
     mkdirSync(storeDir, { recursive: true });
     logLine(
       `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
-        `仅注入看板精简 MCP（${agentMcpUrl}），不加载用户级 MCP；` +
-        `settingSources 为空（不注入项目规则与个人 Skill）`,
+        `注入看板精简 MCP（${agentMcpUrl}）；` +
+        `settingSources=user,project（加载本机与仓库规则 / Skill / Hooks）`,
     );
     const agent = await Agent.create({
       apiKey,
@@ -260,9 +260,9 @@ export async function runCursor(
       },
       local: {
         cwd: job.cwd,
-        // 流程已由注入的 Skill 正文给出。加载 project 会把仓库规则与个人 Skill
-        // 整包塞进会话（日志里常见 skillCount=21、ruleCount=32），cacheRead 可达上百万。
-        settingSources: [],
+        // 加载本机 ~/.cursor/rules、个人 Skill，以及目标仓库 .cursor/ 规则、Skill、Hooks。
+        // 内联看板 MCP 仍覆盖同名服务器；user/project 里其它 MCP 也可能进入会话。
+        settingSources: ["user", "project"],
         store: new JsonlLocalAgentStore(storeDir),
         autoReview: true,
         sandboxOptions: { enabled: job.enableSandbox === true },

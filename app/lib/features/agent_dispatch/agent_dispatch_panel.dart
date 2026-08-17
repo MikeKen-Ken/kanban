@@ -407,13 +407,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         cursorApiKey: apiKey,
         workerScriptPath: _settings.workerScriptPath,
       );
-      final name = snapshot.apiKeyName?.trim();
-      final email = snapshot.userEmail?.trim();
-      final label = name != null && name.isNotEmpty
-          ? name
-          : email != null && email.isNotEmpty
-              ? email
-              : null;
+      final label = snapshot.displayLabel;
       if (label != null) {
         await _credentials.updateActiveCursorApiKeyLabel(label);
       }

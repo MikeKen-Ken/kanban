@@ -22,6 +22,15 @@ class AgentDispatchUsageSnapshot {
     return email.isNotEmpty || name.isNotEmpty;
   }
 
+  /// 已保存 Key 下拉优先显示邮箱，没有邮箱时再回退 Key 名。
+  String? get displayLabel {
+    final email = userEmail?.trim() ?? '';
+    if (email.isNotEmpty) return email;
+    final name = apiKeyName?.trim() ?? '';
+    if (name.isNotEmpty) return name;
+    return null;
+  }
+
   factory AgentDispatchUsageSnapshot.fromJson(Map<String, dynamic> json) {
     return AgentDispatchUsageSnapshot(
       userEmail: json['userEmail'] as String?,

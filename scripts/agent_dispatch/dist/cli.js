@@ -979,14 +979,18 @@ function stripAnsi(text) {
 // src/codex_mcp.ts
 import {
   copyFileSync,
+  cpSync,
   existsSync as existsSync2,
   mkdirSync,
   mkdtempSync,
+  statSync,
   writeFileSync
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 var AUTH_FILES = ["auth.json"];
+var USER_INSTRUCTION_FILES = ["AGENTS.md"];
+var USER_INSTRUCTION_DIRS = ["skills"];
 function buildCodexAgentConfigToml(mcpUrl) {
   const url = mcpUrl.trim();
   return `[features]
@@ -1014,12 +1018,32 @@ function createCodexAgentHome(options) {
     "utf8"
   );
   for (const name of AUTH_FILES) {
-    const from = join(options.userCodexHome, name);
-    if (existsSync2(from)) {
-      copyFileSync(from, join(home, name));
-    }
+    copyUserPath(
+      join(options.userCodexHome, name),
+      join(home, name)
+    );
+  }
+  for (const name of USER_INSTRUCTION_FILES) {
+    copyUserPath(
+      join(options.userCodexHome, name),
+      join(home, name)
+    );
+  }
+  for (const name of USER_INSTRUCTION_DIRS) {
+    copyUserPath(
+      join(options.userCodexHome, name),
+      join(home, name)
+    );
   }
   return { home };
+}
+function copyUserPath(from, to) {
+  if (!existsSync2(from)) return;
+  if (statSync(from).isDirectory()) {
+    cpSync(from, to, { recursive: true });
+    return;
+  }
+  copyFileSync(from, to);
 }
 
 // src/worker_log.ts
@@ -1096,7 +1120,7 @@ async function runCodex(job, cancellation) {
       tempRoot: temp
     });
     workerLog(
-      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u4EC5\u6CE8\u5165\u7CBE\u7B80\u770B\u677F MCP\uFF08${mcpUrl}\uFF09`
+      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u590D\u5236\u7528\u6237 AGENTS.md \u4E0E skills\uFF1B\u4EC5\u6CE8\u5165\u7CBE\u7B80\u770B\u677F MCP\uFF08${mcpUrl}\uFF09\uFF0C\u4E0D\u4F7F\u7528\u7528\u6237 config.toml \u4E2D\u7684 MCP`
     );
     const args = buildCodexExecArgs({
       cwd: job.cwd,
@@ -1552,7 +1576,7 @@ async function runCursor(job, cancellation) {
     const storeDir = join3(homedir2(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync2(storeDir, { recursive: true });
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F\u7CBE\u7B80 MCP\uFF08${agentMcpUrl}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP\uFF1BsettingSources \u4E3A\u7A7A\uFF08\u4E0D\u6CE8\u5165\u9879\u76EE\u89C4\u5219\u4E0E\u4E2A\u4EBA Skill\uFF09`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u6CE8\u5165\u770B\u677F\u7CBE\u7B80 MCP\uFF08${agentMcpUrl}\uFF09\uFF1BsettingSources=user,project\uFF08\u52A0\u8F7D\u672C\u673A\u4E0E\u4ED3\u5E93\u89C4\u5219 / Skill / Hooks\uFF09`
     );
     const agent = await Agent.create({
       apiKey,
@@ -1568,9 +1592,9 @@ async function runCursor(job, cancellation) {
       },
       local: {
         cwd: job.cwd,
-        // 流程已由注入的 Skill 正文给出。加载 project 会把仓库规则与个人 Skill
-        // 整包塞进会话（日志里常见 skillCount=21、ruleCount=32），cacheRead 可达上百万。
-        settingSources: [],
+        // 加载本机 ~/.cursor/rules、个人 Skill，以及目标仓库 .cursor/ 规则、Skill、Hooks。
+        // 内联看板 MCP 仍覆盖同名服务器；user/project 里其它 MCP 也可能进入会话。
+        settingSources: ["user", "project"],
         store: new JsonlLocalAgentStore(storeDir),
         autoReview: true,
         sandboxOptions: { enabled: job.enableSandbox === true }

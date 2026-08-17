@@ -385,11 +385,7 @@ Future<String?> resolveCursorApiKeyLabel({
     workerScriptPath: workerScriptPath,
     onLog: onLog,
   );
-  final name = snapshot.apiKeyName?.trim();
-  if (name != null && name.isNotEmpty) return name;
-  final email = snapshot.userEmail?.trim();
-  if (email != null && email.isNotEmpty) return email;
-  return null;
+  return snapshot.displayLabel;
 }
 
 Future<({bool ok, String message})> ensureAgentDispatchWorker({

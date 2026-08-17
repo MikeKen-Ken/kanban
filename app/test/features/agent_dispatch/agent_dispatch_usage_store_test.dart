@@ -21,6 +21,11 @@ void main() {
     final cached = prefs.loadAgentDispatchUsage(keyFingerprint: fingerprint);
     expect(cached?.userEmail, 'user@example.com');
     expect(cached?.apiKeyName, '主账号');
+    expect(snapshot.displayLabel, 'user@example.com');
+    expect(
+      const AgentDispatchUsageSnapshot(apiKeyName: '主账号').displayLabel,
+      '主账号',
+    );
     expect(
       prefs.loadAgentDispatchUsage(
         keyFingerprint: agentDispatchUsageKeyFingerprint('other-secret'),
