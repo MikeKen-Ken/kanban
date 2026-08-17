@@ -183,6 +183,8 @@ export async function runBatch(
           },
         };
         logModelOverride(job, roundJob, cardId);
+        logClaimedCard(claim.payload);
+        workerLog("Worker 正在实施当前卡片");
 
         const agentResult = await dependencies.runAgent(roundJob, cancellation);
         if (cancellation?.isSkipRequested || agentResult.error === "已跳过") {
@@ -279,6 +281,7 @@ export async function runBatch(
           };
         }
 
+        workerLog("Worker 正在验证与提交当前卡片");
         const finalized = await validateAndFinalize(
           mcp,
           job,
@@ -454,6 +457,7 @@ async function validateAndFinalize(
   if (!["validated", "committing", "committed", "finalized"].includes(status)) {
     return { ok: false, error: `pending 状态无法恢复：${status || "未知"}` };
   }
+  workerLog("Worker 正在提交并送交验证");
   const finalized = await mcp.callJson("dispatch_finalize", {
     workerToken: job.workerToken,
     sessionId,
@@ -582,6 +586,26 @@ function completedResult(
     summary: `Worker 批次完成：${reason}；已处理 ${processedCards} 张`,
     processedCards,
   };
+}
+
+function logClaimedCard(payload: Record<string, unknown>): void {
+  const items = Array.isArray(payload.workItems) ? payload.workItems : [];
+  let title = "";
+  const details: string[] = [];
+  for (const raw of items) {
+    const record = asRecord(raw);
+    if (!record) continue;
+    const kind = String(record.kind ?? "");
+    const text = String(record.text ?? "").trim();
+    if (!text) continue;
+    if (kind === "title" && !title) title = text;
+    else details.push(text);
+  }
+  workerLog(`当前卡片：${title || String(payload.cardId ?? "未命名卡片")}`);
+  if (details.length > 0) {
+    const detail = details.join("\n").slice(0, 800);
+    workerLog(`当前任务：${detail}`);
+  }
 }
 
 function logModelOverride(

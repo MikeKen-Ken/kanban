@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_progress.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_workspace.dart';
 
 void main() {
@@ -206,5 +207,42 @@ void main() {
     expect(find.textContaining('提交失败'), findsOneWidget);
     expect(find.textContaining('网络连接较慢'), findsNothing);
     expect(find.textContaining('本会话 token'), findsNothing);
+  });
+
+  testWidgets('日志窗口上方显示当前任务进度与实时状态', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 480,
+            height: 420,
+            child: AgentDispatchLogPane(
+              controller: controller,
+              running: true,
+              progress: const AgentDispatchProgress(
+                running: true,
+                processedCards: 0,
+                totalCards: 12,
+                currentRound: 1,
+                currentTitle: 'agent 工作台',
+                currentDetail: '显示进度与实时状态',
+                phaseLabel: '测试',
+              ),
+              onClear: () {},
+              onExport: () {},
+              onCopy: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('1/12'), findsOneWidget);
+    expect(find.text('测试'), findsOneWidget);
+    expect(find.text('agent 工作台'), findsOneWidget);
+    expect(find.text('显示进度与实时状态'), findsOneWidget);
   });
 }

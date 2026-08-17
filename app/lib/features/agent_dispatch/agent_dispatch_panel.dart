@@ -77,6 +77,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     _syncLogFromService();
     _service.addLogListener(_onServiceLog);
     _service.addRunningListener(_onServiceRunningChanged);
+    _service.addProgressListener(_onServiceProgressChanged);
     if (_running) _startHeartbeat();
     _bootstrap();
   }
@@ -94,6 +95,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     _logRefreshScheduler.schedule(() {
       if (mounted) setState(_syncLogFromService);
     });
+  }
+
+  void _onServiceProgressChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onServiceRunningChanged() {
@@ -628,6 +633,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     _logRefreshScheduler.cancel();
     _service.removeLogListener(_onServiceLog);
     _service.removeRunningListener(_onServiceRunningChanged);
+    _service.removeProgressListener(_onServiceProgressChanged);
     _stopHeartbeat();
     _repoController.dispose();
     _countController.dispose();
@@ -903,6 +909,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           log: AgentDispatchLogPane(
             controller: _logController,
             running: _running,
+            progress: _service.progress,
             onClear: _clearLog,
             onExport: _exportLog,
             onCopy: _copyLog,

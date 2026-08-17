@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'agent_dispatch_log.dart';
+import 'agent_dispatch_progress.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
@@ -207,6 +208,7 @@ class AgentDispatchLogPane extends StatefulWidget {
     required this.onClear,
     required this.onExport,
     required this.onCopy,
+    this.progress = AgentDispatchProgress.idle,
     super.key,
   });
 
@@ -215,6 +217,7 @@ class AgentDispatchLogPane extends StatefulWidget {
   final VoidCallback onClear;
   final VoidCallback onExport;
   final VoidCallback onCopy;
+  final AgentDispatchProgress progress;
 
   @override
   State<AgentDispatchLogPane> createState() => _AgentDispatchLogPaneState();
@@ -527,7 +530,10 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
           ],
         ),
         const SizedBox(height: 8),
-        if (widget.running) const LinearProgressIndicator(),
+        _TaskStatusPane(progress: widget.progress, running: widget.running),
+        const SizedBox(height: 8),
+        if (widget.running)
+          LinearProgressIndicator(value: widget.progress.fraction),
         if (widget.running) const SizedBox(height: 8),
         Expanded(
           child: Padding(
@@ -555,6 +561,83 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TaskStatusPane extends StatelessWidget {
+  const _TaskStatusPane({required this.progress, required this.running});
+
+  final AgentDispatchProgress progress;
+  final bool running;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final phase = progress.phaseLabel.trim().isEmpty
+        ? (running ? '运行中' : '空闲')
+        : progress.phaseLabel;
+    final title = progress.currentTitle.trim();
+    final detail = progress.currentDetail.trim();
+    return Container(
+      key: const ValueKey('agent-dispatch-task-status'),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.dividerColor),
+        borderRadius: BorderRadius.circular(8),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                progress.liveCardLabel,
+                key: const ValueKey('agent-dispatch-task-progress'),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                key: const ValueKey('agent-dispatch-task-phase'),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  phase,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title.isEmpty ? '暂无进行中的卡片' : title,
+            key: const ValueKey('agent-dispatch-task-title'),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (detail.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              detail,
+              key: const ValueKey('agent-dispatch-task-detail'),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -42,6 +42,28 @@ void main() {
     expect(progress.fractionLabel, '2/5');
   });
 
+  test('从日志解析当前卡片内容与实时阶段', () {
+    var progress = const AgentDispatchProgress(running: true, totalCards: 12);
+    progress = applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/12 ────────');
+    expect(progress.liveCardLabel, '1/12');
+    expect(progress.phaseLabel, '领取');
+    progress = applyWorkerProgressLog(progress, '当前卡片：agent 工作台');
+    progress = applyWorkerProgressLog(
+      progress,
+      '当前任务：在日志窗口上方显示 1/12 与实时状态',
+    );
+    expect(progress.currentTitle, 'agent 工作台');
+    expect(progress.currentDetail, contains('实时状态'));
+    progress = applyWorkerProgressLog(progress, 'Worker 正在实施当前卡片');
+    expect(progress.phaseLabel, '实施');
+    progress = applyWorkerProgressLog(progress, '开始 Worker 验证：共 1 条');
+    expect(progress.phaseLabel, '测试');
+    progress = applyWorkerProgressLog(progress, 'Worker 正在提交并送交验证');
+    expect(progress.phaseLabel, '提交');
+    progress = applyWorkerProgressLog(progress, '完成后队列：开始「推送」');
+    expect(progress.phaseLabel, '推送');
+  });
+
   test('队列中途加卡时 Max 分母随剩余工作量增加', () {
     expect(
       liveDispatchTotal(
