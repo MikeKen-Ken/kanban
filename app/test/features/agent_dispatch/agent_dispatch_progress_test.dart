@@ -112,6 +112,44 @@ void main() {
     );
   });
 
+  test('当前会话后停止不再把队列剩余计入分母', () {
+    expect(
+      liveDispatchTotal(
+        cardLimitMax: true,
+        cardLimitCount: 0,
+        processedCards: 2,
+        remainingQueue: 8,
+        hasActiveCard: true,
+        drainAfterCurrent: true,
+      ),
+      3,
+    );
+    expect(
+      clampedTotalAfterStop(
+        const AgentDispatchProgress(
+          running: true,
+          processedCards: 2,
+          totalCards: 10,
+          currentRound: 3,
+        ),
+      ),
+      3,
+    );
+  });
+
+  test('停止后续卡片后 Worker 轮次日志不再把分母抬回去', () {
+    var progress = const AgentDispatchProgress(
+      running: true,
+      processedCards: 2,
+      totalCards: 3,
+      currentRound: 3,
+      drainAfterCurrent: true,
+    );
+    progress = applyWorkerProgressLog(progress, 'Worker 单卡轮次 3/10');
+    expect(progress.liveCardLabel, '3/3');
+    expect(progress.totalCards, 3);
+  });
+
   test('总览能读到各项目运行进度', () {
     final registry = AgentDispatchRegistry.instance;
     addTearDown(registry.debugReset);

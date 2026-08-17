@@ -10,6 +10,7 @@ class AgentDispatchProgress {
     this.currentTitle = '',
     this.currentDetail = '',
     this.phaseLabel = '',
+    this.drainAfterCurrent = false,
   });
 
   static const idle = AgentDispatchProgress();
@@ -23,6 +24,9 @@ class AgentDispatchProgress {
   final String currentTitle;
   final String currentDetail;
   final String phaseLabel;
+
+  /// 当前会话后停止或立即停止后，不再把队列剩余计入分母。
+  final bool drainAfterCurrent;
 
   String get fractionLabel {
     if (totalCards <= 0) return '$processedCards/…';
@@ -58,6 +62,7 @@ class AgentDispatchProgress {
     String? currentTitle,
     String? currentDetail,
     String? phaseLabel,
+    bool? drainAfterCurrent,
   }) {
     return AgentDispatchProgress(
       running: running ?? this.running,
@@ -69,6 +74,7 @@ class AgentDispatchProgress {
       currentTitle: currentTitle ?? this.currentTitle,
       currentDetail: currentDetail ?? this.currentDetail,
       phaseLabel: phaseLabel ?? this.phaseLabel,
+      drainAfterCurrent: drainAfterCurrent ?? this.drainAfterCurrent,
     );
   }
 }
@@ -90,13 +96,23 @@ int liveDispatchTotal({
   required int processedCards,
   required int remainingQueue,
   required bool hasActiveCard,
+  bool drainAfterCurrent = false,
 }) {
-  final remainingWork = remainingQueue + (hasActiveCard ? 1 : 0);
+  final remainingWork = drainAfterCurrent
+      ? (hasActiveCard ? 1 : 0)
+      : remainingQueue + (hasActiveCard ? 1 : 0);
   return plannedDispatchTotal(
     cardLimitMax: cardLimitMax,
     cardLimitCount: cardLimitCount,
     queueSize: processedCards + remainingWork,
   );
+}
+
+/// 停止后续卡片后，分母收成当前这张（或已处理张数）。
+int clampedTotalAfterStop(AgentDispatchProgress progress) {
+  if (!progress.running) return progress.processedCards;
+  if (progress.currentRound > 0) return progress.currentRound;
+  return progress.processedCards + 1;
 }
 
 final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)/(\d+)');
@@ -115,9 +131,12 @@ AgentDispatchProgress applyWorkerProgressLog(
   if (round != null) {
     final roundIndex = int.parse(round.group(1)!);
     final roundTotal = int.parse(round.group(2)!);
+    final nextTotal = current.drainAfterCurrent
+        ? (roundIndex > current.totalCards ? roundIndex : current.totalCards)
+        : (roundTotal > current.totalCards ? roundTotal : current.totalCards);
     return current.copyWith(
       currentRound: roundIndex,
-      totalCards: roundTotal > current.totalCards ? roundTotal : current.totalCards,
+      totalCards: nextTotal,
       currentTitle: '',
       currentDetail: '',
       phaseLabel: '领取',

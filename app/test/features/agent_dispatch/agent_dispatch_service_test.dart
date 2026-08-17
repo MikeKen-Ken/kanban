@@ -34,6 +34,24 @@ void main() {
     expect(notified, 2);
   });
 
+  test('当前会话后停止会立刻收紧总览分母并通知进度', () async {
+    final service = AgentDispatchRegistry.instance.forProject('p');
+    var progressNotified = 0;
+    service.addProgressListener(() => progressNotified++);
+    service.debugSetProgress(
+      const AgentDispatchProgress(
+        running: true,
+        processedCards: 2,
+        totalCards: 10,
+        currentRound: 3,
+      ),
+    );
+    await service.requestDrainAfterCurrent();
+    expect(service.progress.drainAfterCurrent, isTrue);
+    expect(service.progress.liveCardLabel, '3/3');
+    expect(progressNotified, greaterThanOrEqualTo(2));
+  });
+
   test('无监听方时仍保留日志，重新订阅可看到全文', () async {
     final service = AgentDispatchRegistry.instance.forProject('p1');
     service.appendLog('批次开始');

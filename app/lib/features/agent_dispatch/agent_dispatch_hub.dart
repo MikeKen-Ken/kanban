@@ -73,6 +73,7 @@ class AgentDispatchHub extends StatelessWidget {
         processedCards: progress.processedCards,
         remainingQueue: countWorkQueueCards(currentBoard),
         hasActiveCard: hasIncompleteDoingCard(currentBoard),
+        drainAfterCurrent: progress.drainAfterCurrent,
       );
       if (liveTotal != progress.totalCards) {
         progress = progress.copyWith(totalCards: liveTotal);

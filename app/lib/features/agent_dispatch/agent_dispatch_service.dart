@@ -203,9 +203,21 @@ class AgentDispatchService {
     appendLog(message, level: level, source: source);
   }
 
+  void _markNoFurtherCards() {
+    final current = _progress;
+    if (!current.running) return;
+    _setProgress(
+      current.copyWith(
+        drainAfterCurrent: true,
+        totalCards: clampedTotalAfterStop(current),
+      ),
+    );
+  }
+
   /// 立即停止当前 Worker 及其 SDK/CLI 子进程，并阻止后续会话启动。
   Future<void> requestCancel() async {
     _cancelRequested = true;
+    _markNoFurtherCards();
     final worker = _activeWorker;
     if (worker != null) await worker.stop();
   }
@@ -213,6 +225,7 @@ class AgentDispatchService {
   /// 在当前 Skill 会话结束后停止批次，不中断进行中的会话。
   Future<void> requestDrainAfterCurrent() async {
     _drainAfterCurrentRequested = true;
+    _markNoFurtherCards();
     final worker = _activeWorker;
     if (worker != null) await worker.requestDrainAfterCurrent();
   }
