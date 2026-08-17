@@ -1,5 +1,5 @@
 // src/cli.ts
-import { readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { readFileSync as readFileSync5, writeFileSync as writeFileSync4 } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
@@ -541,7 +541,7 @@ import { spawn as spawn2 } from "node:child_process";
 import {
   existsSync as existsSync3,
   mkdtempSync as mkdtempSync2,
-  readFileSync,
+  readFileSync as readFileSync2,
   rmSync,
   writeFileSync as writeFileSync2
 } from "node:fs";
@@ -983,23 +983,86 @@ import {
   existsSync as existsSync2,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   statSync,
   writeFileSync
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+
+// src/codex_agent_config.ts
+var KANBAN_TABLE = "mcp_servers.kanbanMCP";
+function isKanbanMcpTable(name) {
+  const table = name.trim();
+  return table === KANBAN_TABLE || table.startsWith(`${KANBAN_TABLE}.`);
+}
+function stripKanbanMcpTables(source) {
+  const matches = [...source.matchAll(/^\[([^\]]+)\]/gm)];
+  if (matches.length === 0) return source;
+  const firstIndex = matches[0]?.index ?? 0;
+  let result = source.slice(0, firstIndex);
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const name = match[1] ?? "";
+    const start = match.index ?? 0;
+    const end = matches[index + 1]?.index ?? source.length;
+    if (isKanbanMcpTable(name)) continue;
+    result += source.slice(start, end);
+  }
+  return collapseBlankLines(result);
+}
+function ensureCodexRmcpClient(source) {
+  if (/^\s*rmcp_client\s*=\s*true\s*$/m.test(source)) return source;
+  const features = /^\[features\]\s*$/m.exec(source);
+  if (features == null || features.index == null) {
+    const trimmed = source.trimEnd();
+    const block = "[features]\nrmcp_client = true\n";
+    if (!trimmed) return block;
+    return `${trimmed}
+
+${block}`;
+  }
+  const insertAt = features.index + features[0].length;
+  return `${source.slice(0, insertAt)}
+rmcp_client = true${source.slice(insertAt)}`;
+}
+function buildCodexAgentConfigToml(mcpUrl, userConfig = "") {
+  const url = mcpUrl.trim();
+  const withoutKanban = stripKanbanMcpTables(userConfig);
+  const withFeatures = ensureCodexRmcpClient(withoutKanban);
+  const block = `[mcp_servers.kanbanMCP]
+url = "${url}"
+`;
+  const trimmed = withFeatures.trimEnd();
+  if (!trimmed) {
+    return `[features]
+rmcp_client = true
+
+${block}`;
+  }
+  return `${trimmed}
+
+${block}`;
+}
+function listCodexMcpServerNames(toml) {
+  const names = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const match of toml.matchAll(/^\[mcp_servers\.([^\].]+)\]/gm)) {
+    const name = match[1]?.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+function collapseBlankLines(source) {
+  return source.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "").trimEnd();
+}
+
+// src/codex_mcp.ts
 var AUTH_FILES = ["auth.json"];
 var USER_INSTRUCTION_FILES = ["AGENTS.md"];
 var USER_INSTRUCTION_DIRS = ["skills"];
-function buildCodexAgentConfigToml(mcpUrl) {
-  const url = mcpUrl.trim();
-  return `[features]
-rmcp_client = true
-
-[mcp_servers.kanbanMCP]
-url = "${url}"
-`;
-}
 function resolveUserCodexHome(env = process.env) {
   const override = env.CODEX_HOME?.trim();
   if (override) return override;
@@ -1012,11 +1075,10 @@ function createCodexAgentHome(options) {
   );
   const home = mkdtempSync(prefix);
   mkdirSync(home, { recursive: true });
-  writeFileSync(
-    join(home, "config.toml"),
-    buildCodexAgentConfigToml(options.mcpUrl),
-    "utf8"
-  );
+  const userConfigPath = join(options.userCodexHome, "config.toml");
+  const userConfig = existsSync2(userConfigPath) ? readFileSync(userConfigPath, "utf8") : "";
+  const config = buildCodexAgentConfigToml(options.mcpUrl, userConfig);
+  writeFileSync(join(home, "config.toml"), config, "utf8");
   for (const name of AUTH_FILES) {
     copyUserPath(
       join(options.userCodexHome, name),
@@ -1035,7 +1097,7 @@ function createCodexAgentHome(options) {
       join(home, name)
     );
   }
-  return { home };
+  return { home, mcpServerNames: listCodexMcpServerNames(config) };
 }
 function copyUserPath(from, to) {
   if (!existsSync2(from)) return;
@@ -1120,7 +1182,7 @@ async function runCodex(job, cancellation) {
       tempRoot: temp
     });
     workerLog(
-      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u590D\u5236\u7528\u6237 AGENTS.md \u4E0E skills\uFF1B\u4EC5\u6CE8\u5165\u7CBE\u7B80\u770B\u677F MCP\uFF08${mcpUrl}\uFF09\uFF0C\u4E0D\u4F7F\u7528\u7528\u6237 config.toml \u4E2D\u7684 MCP`
+      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u590D\u5236\u7528\u6237 AGENTS.md \u4E0E skills\uFF1B\u5408\u5E76\u7528\u6237 MCP\uFF08${agentHome.mcpServerNames.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${mcpUrl}\uFF09`
     );
     const args = buildCodexExecArgs({
       cwd: job.cwd,
@@ -1174,7 +1236,7 @@ async function runCodex(job, cancellation) {
         reject(new Error("Codex stdin \u4E0D\u53EF\u7528"));
         return;
       }
-      child.stdin.write(readFileSync(promptFile));
+      child.stdin.write(readFileSync2(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
         stdoutLines.flush();
@@ -1196,7 +1258,7 @@ async function runCodex(job, cancellation) {
     }
     let summary;
     try {
-      summary = readFileSync(lastMessageFile, "utf8").trim();
+      summary = readFileSync2(lastMessageFile, "utf8").trim();
     } catch {
       summary = void 0;
     }
@@ -1386,9 +1448,110 @@ async function withTimeout(operation, timeoutMs, work) {
 
 // src/run_cursor.ts
 import { mkdirSync as mkdirSync2 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join4 } from "node:path";
+import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
+
+// src/cursor_mcp_servers.ts
+import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join3 } from "node:path";
-import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
+var KANBAN_MCP_SERVER = "kanbanMCP";
+function scopedKanbanMcpServer(url) {
+  return { type: "http", url: url.trim() };
+}
+function mergeCursorMcpServers(options) {
+  const env = options.env ?? process.env;
+  const merged = {
+    ...parseMcpServers(options.userJson, env),
+    ...parseMcpServers(options.projectJson, env)
+  };
+  delete merged[KANBAN_MCP_SERVER];
+  merged[KANBAN_MCP_SERVER] = scopedKanbanMcpServer(options.scopedKanbanUrl);
+  return merged;
+}
+function loadCursorMcpServers(options) {
+  const home = options.homeDir ?? homedir2();
+  const servers = mergeCursorMcpServers({
+    userJson: readOptionalFile(join3(home, ".cursor", "mcp.json")),
+    projectJson: readOptionalFile(join3(options.cwd, ".cursor", "mcp.json")),
+    scopedKanbanUrl: options.scopedKanbanUrl
+  });
+  return { servers, names: Object.keys(servers) };
+}
+function parseMcpServers(raw, env) {
+  if (raw == null || raw.trim() === "") return {};
+  try {
+    const decoded = JSON.parse(raw);
+    if (!isRecord(decoded)) return {};
+    const servers = decoded.mcpServers;
+    if (!isRecord(servers)) return {};
+    const result = {};
+    for (const [name, value] of Object.entries(servers)) {
+      if (name === KANBAN_MCP_SERVER) continue;
+      const converted = toSdkServer(value, env);
+      if (converted != null) result[name] = converted;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+function toSdkServer(raw, env) {
+  if (!isRecord(raw)) return null;
+  if (typeof raw.url === "string" && raw.url.trim() !== "") {
+    const type = raw.type === "sse" ? "sse" : "http";
+    const server = {
+      type,
+      url: expandEnvTemplates(raw.url.trim(), env)
+    };
+    if (isRecord(raw.headers)) {
+      server.headers = expandStringRecord(raw.headers, env);
+    }
+    return server;
+  }
+  if (typeof raw.command === "string" && raw.command.trim() !== "") {
+    const server = {
+      command: expandEnvTemplates(raw.command.trim(), env)
+    };
+    if (Array.isArray(raw.args)) {
+      server.args = raw.args.filter((item) => typeof item === "string").map((item) => expandEnvTemplates(item, env));
+    }
+    if (isRecord(raw.env)) {
+      server.env = expandStringRecord(raw.env, env);
+    }
+    return server;
+  }
+  return null;
+}
+function expandStringRecord(record, env) {
+  const result = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (typeof value === "string") {
+      result[key] = expandEnvTemplates(value, env);
+    }
+  }
+  return result;
+}
+function expandEnvTemplates(value, env = process.env) {
+  return value.replace(/\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}/g, (original, name) => {
+    const resolved = env[name];
+    return resolved == null || resolved === "" ? original : resolved;
+  });
+}
+function readOptionalFile(path) {
+  if (!existsSync4(path)) return null;
+  try {
+    return readFileSync3(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// src/run_cursor.ts
 function logLine(line, source = "worker") {
   workerLog(line, source);
 }
@@ -1573,10 +1736,14 @@ async function runCursor(job, cancellation) {
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
-    const storeDir = join3(homedir2(), ".cursor", "kanban-agent-jsonl-store");
+    const storeDir = join4(homedir3(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync2(storeDir, { recursive: true });
+    const mcp = loadCursorMcpServers({
+      cwd: job.cwd,
+      scopedKanbanUrl: agentMcpUrl
+    });
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u6CE8\u5165\u770B\u677F\u7CBE\u7B80 MCP\uFF08${agentMcpUrl}\uFF09\uFF1BsettingSources=user,project\uFF08\u52A0\u8F7D\u672C\u673A\u4E0E\u4ED3\u5E93\u89C4\u5219 / Skill / Hooks\uFF09`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1BsettingSources=user,project\uFF08\u52A0\u8F7D\u672C\u673A\u4E0E\u4ED3\u5E93\u89C4\u5219 / Skill / Hooks\uFF09`
     );
     const agent = await Agent.create({
       apiKey,
@@ -1584,16 +1751,11 @@ async function runCursor(job, cancellation) {
         id: modelId,
         ...params ? { params } : {}
       },
-      mcpServers: {
-        kanbanMCP: {
-          type: "http",
-          url: agentMcpUrl
-        }
-      },
+      mcpServers: mcp.servers,
       local: {
         cwd: job.cwd,
         // 加载本机 ~/.cursor/rules、个人 Skill，以及目标仓库 .cursor/ 规则、Skill、Hooks。
-        // 内联看板 MCP 仍覆盖同名服务器；user/project 里其它 MCP 也可能进入会话。
+        // MCP 已在上面显式合并；kanbanMCP 始终覆盖为本卡 scoped 端点。
         settingSources: ["user", "project"],
         store: new JsonlLocalAgentStore(storeDir),
         autoReview: true,
@@ -1667,29 +1829,29 @@ async function runCursor(job, cancellation) {
 
 // src/session_context.ts
 import {
-  existsSync as existsSync4,
+  existsSync as existsSync5,
   mkdtempSync as mkdtempSync3,
-  readFileSync as readFileSync2,
+  readFileSync as readFileSync4,
   rmSync as rmSync2,
   writeFileSync as writeFileSync3
 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import { isAbsolute, join as join4 } from "node:path";
+import { isAbsolute, join as join5 } from "node:path";
 function readBatchArchitecture(cwd) {
-  const path = join4(cwd, "docs", "Architecture.md");
-  if (!existsSync4(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
-  return readFileSync2(path, "utf8");
+  const path = join5(cwd, "docs", "Architecture.md");
+  if (!existsSync5(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
+  return readFileSync4(path, "utf8");
 }
 function createSessionContext(options) {
   const tempDir = mkdtempSync3(
-    join4(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
+    join5(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
   );
   const attachmentPaths = [];
   const payload = structuredClone(options.claim.payload);
   const fileAttachments = Array.isArray(payload.fileAttachments) ? payload.fileAttachments : [];
   for (let index = 0; index < fileAttachments.length; index += 1) {
     const raw = fileAttachments[index];
-    if (!isRecord(raw)) continue;
+    if (!isRecord2(raw)) continue;
     const content = typeof raw.contentBase64 === "string" ? raw.contentBase64 : "";
     delete raw.contentBase64;
     if (!content || raw.included === false) continue;
@@ -1705,7 +1867,7 @@ function createSessionContext(options) {
   const imagePaths = [];
   for (let index = 0; index < options.claim.images.length; index += 1) {
     const image = options.claim.images[index];
-    const path = join4(
+    const path = join5(
       tempDir,
       `image-${index + 1}.${extensionForMime(image.mimeType)}`
     );
@@ -1748,7 +1910,7 @@ function createSessionContext(options) {
     }
   };
 }
-function isRecord(value) {
+function isRecord2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function safeFileName(value, fallback) {
@@ -1756,7 +1918,7 @@ function safeFileName(value, fallback) {
   return normalized || fallback;
 }
 function uniquePath(root, fileName) {
-  const path = join4(root, fileName);
+  const path = join5(root, fileName);
   if (!isAbsolute(path)) throw new Error("\u4E34\u65F6\u9644\u4EF6\u8DEF\u5F84\u4E0D\u662F\u7EDD\u5BF9\u8DEF\u5F84");
   return path;
 }
@@ -2314,7 +2476,7 @@ async function listModels(engine) {
 `);
 }
 async function runJob(jobPath) {
-  const job = JSON.parse(readFileSync3(jobPath, "utf8"));
+  const job = JSON.parse(readFileSync5(jobPath, "utf8"));
   if (!job.outPath) {
     throw new Error("job.outPath \u5FC5\u586B");
   }

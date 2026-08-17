@@ -81,6 +81,7 @@ void main() {
     expect(text, contains('禁止搜索'));
     expect(text, contains('ready_to_submit'));
     expect(text, contains('禁止调用 pick_next_card'));
+    expect(text, contains('其它已加载的 MCP 可按本卡需要使用'));
     expect(text, contains('验证必须在本会话内跑通后才能声明'));
     expect(text, contains('禁止把 verificationCommands 交给 Worker'));
     expect(text, contains('测试失败、卡住或超时不得当作通过'));

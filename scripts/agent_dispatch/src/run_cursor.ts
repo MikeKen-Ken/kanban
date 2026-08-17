@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
 import { settleWithin } from "./async_limit.ts";
 import type { WorkerCancellation } from "./cancellation.ts";
+import { loadCursorMcpServers } from "./cursor_mcp_servers.ts";
 import { formatSessionTokenLog } from "./cursor_token_usage.ts";
 import {
   resolveModelParams,
@@ -241,9 +242,14 @@ export async function runCursor(
     let toolCallCount = 0;
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
+    const mcp = loadCursorMcpServers({
+      cwd: job.cwd,
+      scopedKanbanUrl: agentMcpUrl,
+    });
     logLine(
       `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
-        `注入看板精简 MCP（${agentMcpUrl}）；` +
+        `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
+        `kanbanMCP 强制为 scoped（${agentMcpUrl}）；` +
         `settingSources=user,project（加载本机与仓库规则 / Skill / Hooks）`,
     );
     const agent = await Agent.create({
@@ -252,16 +258,11 @@ export async function runCursor(
         id: modelId,
         ...(params ? { params } : {}),
       },
-      mcpServers: {
-        kanbanMCP: {
-          type: "http",
-          url: agentMcpUrl,
-        },
-      },
+      mcpServers: mcp.servers,
       local: {
         cwd: job.cwd,
         // 加载本机 ~/.cursor/rules、个人 Skill，以及目标仓库 .cursor/ 规则、Skill、Hooks。
-        // 内联看板 MCP 仍覆盖同名服务器；user/project 里其它 MCP 也可能进入会话。
+        // MCP 已在上面显式合并；kanbanMCP 始终覆盖为本卡 scoped 端点。
         settingSources: ["user", "project"],
         store: new JsonlLocalAgentStore(storeDir),
         autoReview: true,

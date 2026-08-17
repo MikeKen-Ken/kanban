@@ -103,7 +103,8 @@ export async function runCodex(
     });
     workerLog(
       `Codex 使用隔离 CODEX_HOME，复制用户 AGENTS.md 与 skills；` +
-        `仅注入精简看板 MCP（${mcpUrl}），不使用用户 config.toml 中的 MCP`,
+        `合并用户 MCP（${agentHome.mcpServerNames.join(", ") || "无"}）；` +
+        `kanbanMCP 强制为 scoped（${mcpUrl}）`,
     );
 
     const args = buildCodexExecArgs({

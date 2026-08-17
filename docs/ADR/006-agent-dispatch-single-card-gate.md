@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-13
+- Updated: 2026-08-17
 
 ## 背景
 
@@ -37,7 +38,12 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
 
 - scoped MCP 与完整目录共用 `/mcp` 路径，靠每会话临时端口区分。临时端口启动失败时
   不得回退完整工具目录。
-- Cursor 会话只注入该精简端点。Codex 使用临时 `CODEX_HOME`（复制用户 `auth.json`、只写精简 `kanbanMCP`），避免加载用户全局 MCP。
+- Cursor 与 Codex 都可以加载用户/项目里的其它 MCP（Unity、Cocos 等）。`kanbanMCP`
+  必须覆盖为本轮 scoped 端点，不得使用常驻完整看板 MCP。
+- Cursor：`settingSources` 加载用户与项目规则；MCP 由 Worker 显式合并用户/项目
+  `mcp.json` 后再覆盖 `kanbanMCP`。
+- Codex：临时 `CODEX_HOME` 复制用户 `auth.json`、`AGENTS.md` 与 `skills`，合并用户
+  `config.toml` 中除看板外的 MCP，再写入 scoped `kanbanMCP`。
 - 调度中 `ready_to_submit` / `block_card` / `submit_consultation` 只能操作本轮领取的卡片。
 - 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、move、complete、delete、
   commitRef、checklist 或 feedback 契约。

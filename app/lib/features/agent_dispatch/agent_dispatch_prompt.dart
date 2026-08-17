@@ -19,9 +19,9 @@ String buildSkillDispatchPrompt({
 禁止搜索、glob、grep 或读取 SKILL.md / 技能目录来「确认流程」或「定位 Skill」。
 禁止读取 agent-transcripts 或任何历史对话。
 禁止执行 git commit、git reset、git checkout、git switch、git rebase 或任何会移动 HEAD 的命令。
-禁止为已列出的看板工具再拉取 schema；参数以 Skill 为准，直接调用。
+禁止为看板工具再拉取 schema；参数以 Skill 为准，直接调用。
 Worker 会在卡片上下文后附上已缓存的 Architecture.md；禁止重复读取。
-看板 MCP 已由 Worker 注入本卡专用工具集，不得确认、探测或列出 MCP。
+看板 MCP 已由 Worker 注入本卡专用工具集；禁止列出或探测看板工具，禁止调用 pick_next_card。其它已加载的 MCP 可按本卡需要使用。
 本轮卡片已由 Worker 原子领取；禁止调用 pick_next_card，也不要处理其它卡片。
 完成实施后必须以 ready_to_submit 收尾，显式列出本轮完成的 checklist/feedback id。
 验证必须在本会话内跑通后才能声明；禁止把 verificationCommands 交给 Worker（传入会失败）。

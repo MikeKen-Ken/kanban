@@ -4,25 +4,22 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  buildCodexAgentConfigToml,
+  listCodexMcpServerNames,
+} from "./codex_agent_config.ts";
 
 const AUTH_FILES = ["auth.json"];
 const USER_INSTRUCTION_FILES = ["AGENTS.md"];
 const USER_INSTRUCTION_DIRS = ["skills"];
 
-export function buildCodexAgentConfigToml(mcpUrl: string): string {
-  const url = mcpUrl.trim();
-  return `[features]
-rmcp_client = true
-
-[mcp_servers.kanbanMCP]
-url = "${url}"
-`;
-}
+export { buildCodexAgentConfigToml, listCodexMcpServerNames };
 
 export function resolveUserCodexHome(
   env: NodeJS.ProcessEnv = process.env,
@@ -36,18 +33,19 @@ export function createCodexAgentHome(options: {
   mcpUrl: string;
   userCodexHome: string;
   tempRoot?: string;
-}): { home: string } {
+}): { home: string; mcpServerNames: string[] } {
   const prefix = join(
     options.tempRoot ?? tmpdir(),
     "kanban-codex-home-",
   );
   const home = mkdtempSync(prefix);
   mkdirSync(home, { recursive: true });
-  writeFileSync(
-    join(home, "config.toml"),
-    buildCodexAgentConfigToml(options.mcpUrl),
-    "utf8",
-  );
+  const userConfigPath = join(options.userCodexHome, "config.toml");
+  const userConfig = existsSync(userConfigPath)
+    ? readFileSync(userConfigPath, "utf8")
+    : "";
+  const config = buildCodexAgentConfigToml(options.mcpUrl, userConfig);
+  writeFileSync(join(home, "config.toml"), config, "utf8");
   for (const name of AUTH_FILES) {
     copyUserPath(
       join(options.userCodexHome, name),
@@ -66,7 +64,7 @@ export function createCodexAgentHome(options: {
       join(home, name),
     );
   }
-  return { home };
+  return { home, mcpServerNames: listCodexMcpServerNames(config) };
 }
 
 function copyUserPath(from: string, to: string): void {
