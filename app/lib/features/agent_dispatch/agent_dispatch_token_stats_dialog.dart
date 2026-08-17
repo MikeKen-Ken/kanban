@@ -154,12 +154,6 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
         Text('输入 / 缓存 / 输出', style: textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
-          '口径与官网 Dashboard 一致：Total = Input + Cache Read + Cache Write + Output，'
-          '不把缓存再计入 Input。',
-          style: textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
           '输入 ${_formatCount(selected.totalInput)}'
           '（均 ${_formatCount(selected.averageInput?.round() ?? 0)}） · '
           '缓存读 ${_formatCount(selected.totalCacheRead)} · '
