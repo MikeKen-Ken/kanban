@@ -268,7 +268,8 @@ export async function runCursor(
         // MCP 已在上面显式合并；kanbanMCP 始终覆盖为本卡 scoped 端点。
         settingSources: ["user", "project"],
         store: new JsonlLocalAgentStore(storeDir),
-        autoReview: true,
+        // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
+        autoReview: false,
         sandboxOptions: { enabled: job.enableSandbox === true },
       },
     });

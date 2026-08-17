@@ -27,4 +27,25 @@ void main() {
 
     expect(tapped, isTrue);
   });
+
+  testWidgets('二级分类页展示分组内的导航项', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsCategoryScreen(
+          title: '当前项目',
+          children: const [
+            SettingsNavigationTile(title: '项目设置', onTap: _noop),
+            SettingsNavigationTile(title: '活动历史', onTap: _noop),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('当前项目'), findsWidgets);
+    expect(find.text('项目设置'), findsOneWidget);
+    expect(find.text('活动历史'), findsOneWidget);
+  });
 }
+
+void _noop() {}
+

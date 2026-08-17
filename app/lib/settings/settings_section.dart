@@ -217,6 +217,45 @@ class SettingsNavigationTile extends StatelessWidget {
   }
 }
 
+/// 设置页二级分类：一级入口点进去后展示该分组原来的内容
+class SettingsCategoryScreen extends StatelessWidget {
+  const SettingsCategoryScreen({
+    super.key,
+    required this.title,
+    required this.children,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerLow,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 设置页单层导航卡：整张卡片直接进入唯一子页面
 class SettingsNavigationCard extends StatelessWidget {
   const SettingsNavigationCard({
