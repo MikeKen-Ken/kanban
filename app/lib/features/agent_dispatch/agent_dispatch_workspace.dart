@@ -230,8 +230,8 @@ class AgentDispatchLogPane extends StatefulWidget {
   final TextEditingController controller;
   final bool running;
   final VoidCallback onClear;
-  final VoidCallback onExport;
-  final VoidCallback onCopy;
+  final ValueChanged<String> onExport;
+  final ValueChanged<String> onCopy;
   final AgentDispatchProgress progress;
 
   @override
@@ -242,11 +242,14 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   final _scrollController = ScrollController();
   AgentDispatchLogSource? _sourceFilter;
   AgentDispatchLogLevel? _levelFilter;
+  int? _taskFilter;
   var _pinToBottom = true;
   String? _cachedText;
   AgentDispatchLogSource? _cachedSourceFilter;
   AgentDispatchLogLevel? _cachedLevelFilter;
+  int? _cachedTaskFilter;
   List<String> _cachedLines = const [];
+  List<AgentDispatchLogTask> _cachedTasks = const [];
 
   static const _bottomThreshold = 48.0;
 
@@ -286,24 +289,32 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     final text = widget.controller.text;
     if (_cachedText == text &&
         _cachedSourceFilter == _sourceFilter &&
-        _cachedLevelFilter == _levelFilter) {
+        _cachedLevelFilter == _levelFilter &&
+        _cachedTaskFilter == _taskFilter) {
       return _cachedLines;
     }
     _cachedText = text;
     _cachedSourceFilter = _sourceFilter;
     _cachedLevelFilter = _levelFilter;
-    _cachedLines = text.split('\n').where((line) {
-      if (AgentDispatchLogEntry.isLowValue(line)) return false;
-      if (_sourceFilter != null &&
-          AgentDispatchLogEntry.sourceOf(line) != _sourceFilter) {
-        return false;
-      }
-      if (_levelFilter != null &&
-          AgentDispatchLogEntry.levelOf(line) != _levelFilter) {
-        return false;
-      }
-      return true;
-    }).toList();
+    _cachedTaskFilter = _taskFilter;
+    final lines = text.split('\n');
+    _cachedTasks = AgentDispatchLogTasks.parse(lines);
+    final taskFilter = _taskFilter != null &&
+            _cachedTasks.any((task) => task.ordinal == _taskFilter)
+        ? _taskFilter
+        : null;
+    _cachedLines = [
+      for (var i = 0; i < lines.length; i++)
+        if (!AgentDispatchLogEntry.isLowValue(lines[i]) &&
+            (taskFilter == null ||
+                AgentDispatchLogTasks.ordinalOfLine(_cachedTasks, i) ==
+                    taskFilter) &&
+            (_sourceFilter == null ||
+                AgentDispatchLogEntry.sourceOf(lines[i]) == _sourceFilter) &&
+            (_levelFilter == null ||
+                AgentDispatchLogEntry.levelOf(lines[i]) == _levelFilter))
+          lines[i],
+    ];
     return _cachedLines;
   }
 
@@ -374,6 +385,55 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     };
   }
 
+  Widget _taskFilterMenu(List<AgentDispatchLogTask> tasks, int? selectedTask) {
+    final label = selectedTask == null
+        ? '全部任务'
+        : tasks.firstWhere((task) => task.ordinal == selectedTask).label;
+    return PopupMenuButton<int?>(
+      key: const ValueKey('agent-dispatch-log-task-filter'),
+      tooltip: '按任务筛选日志',
+      initialValue: selectedTask,
+      onSelected: (value) {
+        setState(() {
+          _taskFilter = value;
+          _pinToBottom = true;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_scrollController.hasClients) return;
+          _scrollController.jumpTo(0);
+        });
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem<int?>(
+          value: null,
+          child: Text('全部任务'),
+        ),
+        for (final task in tasks)
+          PopupMenuItem<int?>(
+            key: ValueKey('agent-dispatch-log-task-${task.ordinal}'),
+            value: task.ordinal,
+            child: Text(task.label),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _sourceLegend(BuildContext context) {
     final style = Theme.of(context).textTheme.bodySmall;
     return Wrap(
@@ -387,6 +447,11 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
               onTap: () {
                 setState(() {
                   _sourceFilter = _sourceFilter == source ? null : source;
+                  _pinToBottom = true;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!_scrollController.hasClients) return;
+                  _scrollController.jumpTo(0);
                 });
               },
               child: Text(
@@ -426,9 +491,16 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
       borderRadius: BorderRadius.circular(8),
       onTap: filter == null
           ? null
-          : () => setState(() {
+          : () {
+              setState(() {
                 _levelFilter = selected ? null : filter;
-              }),
+                _pinToBottom = true;
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!_scrollController.hasClients) return;
+                _scrollController.jumpTo(0);
+              });
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
@@ -491,6 +563,16 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   Widget build(BuildContext context) {
     final hasLog = widget.controller.text.isNotEmpty;
     final lines = _visibleLines();
+    final tasks = _cachedTasks;
+    final selectedTask = _taskFilter != null &&
+            tasks.any((task) => task.ordinal == _taskFilter)
+        ? _taskFilter
+        : null;
+    final actionLog = AgentDispatchLogTasks.slice(
+      widget.controller.text,
+      selectedTask,
+    );
+    final canAct = actionLog.trim().isNotEmpty;
     final summary = _summary();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -498,19 +580,28 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         Row(
           children: [
             const Expanded(child: _PaneTitle(title: '运行日志')),
+            if (tasks.isNotEmpty) ...[
+              Flexible(child: Align(
+                alignment: Alignment.centerRight,
+                child: _taskFilterMenu(tasks, selectedTask),
+              )),
+              const SizedBox(width: 4),
+            ],
             IconButton(
               tooltip: '清空记录',
               onPressed: widget.running || !hasLog ? null : widget.onClear,
               icon: const Icon(Icons.delete_sweep_outlined, size: 20),
             ),
             IconButton(
+              key: const ValueKey('agent-dispatch-log-export'),
               tooltip: '导出记录',
-              onPressed: hasLog ? widget.onExport : null,
+              onPressed: canAct ? () => widget.onExport(actionLog) : null,
               icon: const Icon(Icons.file_download_outlined, size: 20),
             ),
             IconButton(
+              key: const ValueKey('agent-dispatch-log-copy'),
               tooltip: '复制记录',
-              onPressed: hasLog ? widget.onCopy : null,
+              onPressed: canAct ? () => widget.onCopy(actionLog) : null,
               icon: const Icon(Icons.copy_outlined, size: 20),
             ),
           ],

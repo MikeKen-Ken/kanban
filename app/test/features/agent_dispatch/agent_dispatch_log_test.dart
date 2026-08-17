@@ -96,4 +96,25 @@ void main() {
     final segments = AgentDispatchLogHighlight.segments('助手：正在处理任务');
     expect(segments, [(text: '助手：正在处理任务', emphasis: false)]);
   });
+
+  test('按单卡轮次切出第几个任务，复制只取该段', () {
+    final text = [
+      '[09:00:00] [系统] [信息] 启动批次',
+      '[09:00:01] [Worker] [信息] ──────── Worker 单卡轮次 1/2 ────────',
+      '[09:00:02] [系统] [信息] 当前卡片：任务甲',
+      '[09:00:03] [AI] [信息] 助手：完成甲',
+      '[09:00:04] [Worker] [信息] ──────── Worker 单卡轮次 2/2 ────────',
+      '[09:00:05] [系统] [信息] 当前卡片：任务乙',
+      '[09:00:06] [AI] [信息] 助手：完成乙',
+    ].join('\n');
+    final tasks = AgentDispatchLogTasks.parse(text.split('\n'));
+
+    expect(tasks, hasLength(2));
+    expect(tasks[0].label, '第 1 个任务 · 任务甲');
+    expect(tasks[1].label, '第 2 个任务 · 任务乙');
+    expect(AgentDispatchLogTasks.slice(text, null), text);
+    expect(AgentDispatchLogTasks.slice(text, 2), contains('完成乙'));
+    expect(AgentDispatchLogTasks.slice(text, 2), isNot(contains('完成甲')));
+    expect(AgentDispatchLogTasks.slice(text, 1), isNot(contains('启动批次')));
+  });
 }

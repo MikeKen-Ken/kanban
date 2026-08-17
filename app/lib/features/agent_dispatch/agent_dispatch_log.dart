@@ -196,3 +196,106 @@ class AgentDispatchLogHighlight {
     return result;
   }
 }
+
+/// 按 Worker 单卡轮次把日志切成「第几个任务」。
+class AgentDispatchLogTask {
+  const AgentDispatchLogTask({
+    required this.ordinal,
+    required this.roundIndex,
+    required this.roundTotal,
+    required this.title,
+    required this.start,
+    required this.end,
+  });
+
+  /// 日志中出现的第几个任务，从 1 起。
+  final int ordinal;
+  final int roundIndex;
+  final int roundTotal;
+  final String title;
+  final int start;
+  final int end;
+
+  String get label {
+    final head = '第 $ordinal 个任务';
+    if (title.isNotEmpty) return '$head · $title';
+    return '$head · $roundIndex/$roundTotal';
+  }
+}
+
+class AgentDispatchLogTasks {
+  AgentDispatchLogTasks._();
+
+  static final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)/(\d+)');
+  static final _titlePattern = RegExp(r'^当前卡片：(.+)$');
+
+  static List<AgentDispatchLogTask> parse(List<String> lines) {
+    final tasks = <AgentDispatchLogTask>[];
+    var ordinal = 0;
+    for (var i = 0; i < lines.length; i++) {
+      final message = AgentDispatchLogEntry.messageOf(lines[i]);
+      final round = _roundPattern.firstMatch(message);
+      if (round == null) {
+        if (tasks.isNotEmpty && tasks.last.title.isEmpty) {
+          final title = _titlePattern.firstMatch(message);
+          if (title != null) {
+            final last = tasks.removeLast();
+            tasks.add(
+              AgentDispatchLogTask(
+                ordinal: last.ordinal,
+                roundIndex: last.roundIndex,
+                roundTotal: last.roundTotal,
+                title: title.group(1)!.trim(),
+                start: last.start,
+                end: last.end,
+              ),
+            );
+          }
+        }
+        continue;
+      }
+      if (tasks.isNotEmpty) {
+        final last = tasks.removeLast();
+        tasks.add(
+          AgentDispatchLogTask(
+            ordinal: last.ordinal,
+            roundIndex: last.roundIndex,
+            roundTotal: last.roundTotal,
+            title: last.title,
+            start: last.start,
+            end: i,
+          ),
+        );
+      }
+      ordinal += 1;
+      tasks.add(
+        AgentDispatchLogTask(
+          ordinal: ordinal,
+          roundIndex: int.parse(round.group(1)!),
+          roundTotal: int.parse(round.group(2)!),
+          title: '',
+          start: i,
+          end: lines.length,
+        ),
+      );
+    }
+    return tasks;
+  }
+
+  /// [ordinal] 为空表示全部任务。
+  static String slice(String text, int? ordinal) {
+    if (ordinal == null) return text;
+    final lines = text.split('\n');
+    final task = parse(lines).where((item) => item.ordinal == ordinal);
+    if (task.isEmpty) return '';
+    final selected = task.first;
+    return lines.sublist(selected.start, selected.end).join('\n');
+  }
+
+  static int? ordinalOfLine(List<AgentDispatchLogTask> tasks, int lineIndex) {
+    for (final task in tasks) {
+      if (lineIndex >= task.start && lineIndex < task.end) return task.ordinal;
+    }
+    return null;
+  }
+}

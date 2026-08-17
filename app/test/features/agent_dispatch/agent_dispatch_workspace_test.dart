@@ -106,8 +106,8 @@ void main() {
               controller: controller,
               running: false,
               onClear: () {},
-              onExport: () {},
-              onCopy: () {},
+              onExport: (_) {},
+              onCopy: (_) {},
             ),
           ),
         ),
@@ -146,8 +146,8 @@ void main() {
               controller: controller,
               running: false,
               onClear: () {},
-              onExport: () {},
-              onCopy: () {},
+              onExport: (_) {},
+              onCopy: (_) {},
             ),
           ),
         ),
@@ -188,8 +188,8 @@ void main() {
               controller: controller,
               running: false,
               onClear: () {},
-              onExport: () {},
-              onCopy: () {},
+              onExport: (_) {},
+              onCopy: (_) {},
             ),
           ),
         ),
@@ -234,8 +234,8 @@ void main() {
                 phaseLabel: '测试',
               ),
               onClear: () {},
-              onExport: () {},
-              onCopy: () {},
+              onExport: (_) {},
+              onCopy: (_) {},
             ),
           ),
         ),
@@ -246,5 +246,62 @@ void main() {
     expect(find.text('测试'), findsOneWidget);
     expect(find.text('agent 工作台'), findsOneWidget);
     expect(find.text('显示进度与实时状态'), findsOneWidget);
+  });
+
+  testWidgets('可按第几个任务筛选日志，复制只包含该任务', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = TextEditingController(
+      text: [
+        '[09:00:00] [系统] [信息] 启动批次',
+        '[09:00:01] [Worker] [信息] ──────── Worker 单卡轮次 1/2 ────────',
+        '[09:00:02] [系统] [信息] 当前卡片：任务甲',
+        '[09:00:03] [AI] [信息] 助手：完成甲',
+        '[09:00:04] [Worker] [信息] ──────── Worker 单卡轮次 2/2 ────────',
+        '[09:00:05] [系统] [信息] 当前卡片：任务乙',
+        '[09:00:06] [AI] [信息] 助手：完成乙',
+      ].join('\n'),
+    );
+    addTearDown(controller.dispose);
+    String? copied;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 520,
+            height: 900,
+            child: AgentDispatchLogPane(
+              controller: controller,
+              running: false,
+              onClear: () {},
+              onExport: (_) {},
+              onCopy: (log) => copied = log,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('完成甲'), findsOneWidget);
+    expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-2')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('完成甲', skipOffstage: false), findsNothing);
+    expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-copy')));
+    await tester.pump();
+
+    expect(copied, contains('完成乙'));
+    expect(copied, isNot(contains('完成甲')));
+    expect(copied, isNot(contains('启动批次')));
   });
 }

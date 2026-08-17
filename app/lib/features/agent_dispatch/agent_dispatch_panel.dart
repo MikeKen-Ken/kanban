@@ -228,14 +228,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (mounted) setState(_syncLogFromService);
   }
 
-  Future<void> _exportLog() async {
-    final exported = await exportAgentDispatchLog(_logController.text);
+  Future<void> _exportLog(String log) async {
+    final exported = await exportAgentDispatchLog(log);
     if (!mounted) return;
     showAppSnackBar(context, message: exported ? '调度记录已导出' : '已取消导出');
   }
 
-  Future<void> _copyLog() async {
-    await Clipboard.setData(ClipboardData(text: _logController.text));
+  Future<void> _copyLog(String log) async {
+    await Clipboard.setData(ClipboardData(text: log));
     if (!mounted) return;
     showAppSnackBar(context, message: '调度记录已复制');
   }
