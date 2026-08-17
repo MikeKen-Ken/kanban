@@ -1,7 +1,7 @@
 name: kanban
 description: Cross-platform kanban board with automatic WebDAV sync.
 publish_to: "none"
-version: 1.0.100+0
+version: 1.0.101+0
 
 environment:
   sdk: ^3.5.0
