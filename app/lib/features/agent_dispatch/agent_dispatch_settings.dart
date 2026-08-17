@@ -78,6 +78,7 @@ class AgentDispatchSettings {
   /// 各平台上次配置；切换下拉框时恢复，不互相覆盖。
   final Map<String, AgentDispatchEngineProfile> engineProfiles;
 
+  /// 为 true 时忽略卡片覆盖。工作台文案为「允许使用卡片参数」，勾选对应本字段为 false。
   final bool ignoreCardParams;
 
   /// 工作台默认：关闭时脏工作区停止批次。

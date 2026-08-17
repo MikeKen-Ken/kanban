@@ -29,10 +29,10 @@ class AgentDispatchRunToggles extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _Toggle(
-          title: '禁止使用卡片参数',
-          value: ignoreCardParams,
+          title: '允许使用卡片参数',
+          value: !ignoreCardParams,
           enabled: enabled,
-          onChanged: onIgnoreCardParamsChanged,
+          onChanged: (allow) => onIgnoreCardParamsChanged(!allow),
         ),
         _Toggle(
           title: '允许脏工作区',
