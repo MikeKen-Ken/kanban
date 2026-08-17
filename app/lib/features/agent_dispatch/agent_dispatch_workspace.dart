@@ -5,7 +5,7 @@ import 'agent_dispatch_progress.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
-/// 宽窗口使用「调度配置 / Worker 与 Skill / 对话记录」三列布局；窄窗口则
+/// 宽窗口使用「调度配置 / Skill（含 Worker）/ 对话记录」三列布局；窄窗口则
 /// 回退为纵向滚动，避免字段被压缩到不可用。
 class AgentDispatchWorkspace extends StatelessWidget {
   const AgentDispatchWorkspace({
@@ -39,14 +39,7 @@ class AgentDispatchWorkspace extends StatelessWidget {
               const VerticalDivider(width: 25),
               Expanded(
                 flex: 9,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    worker,
-                    const Divider(height: 24),
-                    Expanded(child: skill),
-                  ],
-                ),
+                child: _SkillColumn(worker: worker, skill: skill),
               ),
               const VerticalDivider(width: 25),
               Expanded(flex: 12, child: log),
@@ -62,15 +55,37 @@ class AgentDispatchWorkspace extends StatelessWidget {
               const SizedBox(height: 12),
               settings,
               const Divider(height: 32),
-              worker,
-              const Divider(height: 32),
-              skill,
+              _SkillColumn(worker: worker, skill: skill, fillHeight: false),
               const Divider(height: 32),
               SizedBox(height: 400, child: log),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _SkillColumn extends StatelessWidget {
+  const _SkillColumn({
+    required this.worker,
+    required this.skill,
+    this.fillHeight = true,
+  });
+
+  final Widget worker;
+  final Widget skill;
+  final bool fillHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        worker,
+        const SizedBox(height: 8),
+        if (fillHeight) Expanded(child: skill) else skill,
+      ],
     );
   }
 }
@@ -130,7 +145,7 @@ class AgentDispatchSkillPane extends StatefulWidget {
 }
 
 class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
-  var _expanded = true;
+  var _expanded = false;
 
   @override
   Widget build(BuildContext context) {
