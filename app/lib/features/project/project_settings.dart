@@ -49,7 +49,7 @@ class ProjectSettings {
   /// 背景图上的半透明遮罩强度（0–[maxBackgroundOverlayOpacity]）
   final double backgroundOverlayOpacity;
 
-  /// 看板卡片表面不透明度（[minCardSurfaceOpacity]–[maxCardSurfaceOpacity]）；低于 1 时透过卡片看到壁纸
+  /// 看板卡片表面不透明度（[minCardSurfaceOpacity]–1）；低于 1 时透过卡片看到壁纸
   final double cardSurfaceOpacity;
 
   /// 各列卡片展示偏好（排序、置顶）
@@ -93,11 +93,10 @@ class ProjectSettings {
   }
 
   static const defaultDoneColumnName = '已完成';
-  static const defaultBackgroundOverlayOpacity = 0.0;
+  static const defaultBackgroundOverlayOpacity = 0.4;
   static const maxBackgroundOverlayOpacity = 0.7;
-  static const defaultCardSurfaceOpacity = 0.35;
-  static const minCardSurfaceOpacity = 0.0;
-  static const maxCardSurfaceOpacity = 1.0;
+  static const defaultCardSurfaceOpacity = 1.0;
+  static const minCardSurfaceOpacity = 0.35;
 
   /// 新项目默认每 10 秒从工作区壁纸库随机轮播；库为空时保持纯色。
   static ProjectSettings defaultsForNewProject(List<String> libraryWallpaperIds) {
@@ -181,7 +180,7 @@ class ProjectSettings {
       value.clamp(0.0, maxBackgroundOverlayOpacity).toDouble();
 
   static double clampCardSurfaceOpacity(double value) =>
-      value.clamp(minCardSurfaceOpacity, maxCardSurfaceOpacity).toDouble();
+      value.clamp(minCardSurfaceOpacity, defaultCardSurfaceOpacity).toDouble();
 
   static int clampWallpaperIntervalSeconds(int value) => value
       .clamp(minWallpaperIntervalSeconds, maxWallpaperIntervalSeconds)

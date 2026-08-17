@@ -210,7 +210,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     final cardOpacityValue =
         (_cardOpacityDraft ?? settings.cardSurfaceOpacity).clamp(
       ProjectSettings.minCardSurfaceOpacity,
-      ProjectSettings.maxCardSurfaceOpacity,
+      ProjectSettings.defaultCardSurfaceOpacity,
     );
 
     return Theme(
@@ -479,8 +479,8 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                       Slider(
                         value: cardOpacityValue,
                         min: ProjectSettings.minCardSurfaceOpacity,
-                        max: ProjectSettings.maxCardSurfaceOpacity,
-                        divisions: 20,
+                        max: ProjectSettings.defaultCardSurfaceOpacity,
+                        divisions: 13,
                         label: '${(cardOpacityValue * 100).round()}%',
                         onChanged: _backgroundBusy
                             ? null
