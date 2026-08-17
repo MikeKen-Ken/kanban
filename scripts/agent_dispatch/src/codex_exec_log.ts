@@ -436,9 +436,13 @@ function looksLikeDartNamedArgument(line: string): boolean {
 }
 
 function expandMultiline(prefix: string, body: string): string[] {
-  const trimmed = body.trimEnd();
-  if (!trimmed) return prefix.endsWith(" ") || prefix.endsWith("：") ? [] : [prefix];
-  const lines = trimmed.split(/\r?\n/);
+  const lines = body
+    .replace(/\s+$/, "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+  if (lines.length === 0) {
+    return prefix.endsWith(" ") || prefix.endsWith("：") ? [] : [prefix];
+  }
   const result = [`${prefix}${lines[0]}`];
   for (let i = 1; i < lines.length; i++) {
     result.push(`  │ ${lines[i]}`);

@@ -70,6 +70,7 @@ class AgentDispatchLogEntry {
   static bool isLowValue(String line) {
     final message = messageOf(line);
     if (message == '思考中…' || message == '思考中') return true;
+    if (RegExp(r'^│\s*$').hasMatch(message)) return true;
     if (RegExp(r'^工具：\S+$').hasMatch(message)) return true;
     if (RegExp(r'^工具结果：\S+$').hasMatch(message)) return true;
     if (RegExp(r'^命令：（空）$').hasMatch(message)) return true;

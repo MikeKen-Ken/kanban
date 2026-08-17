@@ -32,6 +32,20 @@ describe("recordsFromCodexEvent", () => {
     assert.equal(records[0]?.line, "思考：先定位玻璃层实现。");
   });
 
+  it("思考段落之间的空行不打成只有 │ 的续行", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "reasoning",
+        text: "正在处理重修卡片。\n\n发现下拉框仍显示密钥名。",
+      },
+    });
+    assert.deepEqual(
+      records.map((record) => record.line),
+      ["思考：正在处理重修卡片。", "  │ 发现下拉框仍显示密钥名。"],
+    );
+  });
+
   it("命令开始是命令来源；失败才是错误；输出里的 git warning 仍是警告", () => {
     const started = recordsFromCodexEvent({
       type: "item.started",

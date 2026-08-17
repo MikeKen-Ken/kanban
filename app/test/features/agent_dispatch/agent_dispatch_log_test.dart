@@ -77,6 +77,14 @@ void main() {
       isTrue,
     );
     expect(
+      AgentDispatchLogEntry.isLowValue('[09:08:07] [AI] [信息] │'),
+      isTrue,
+    );
+    expect(
+      AgentDispatchLogEntry.isLowValue('[09:08:07] [AI] [信息] │ 仍有正文'),
+      isFalse,
+    );
+    expect(
       AgentDispatchLogEntry.isLowValue('[09:08:07] [MCP] [信息] 工具：glob'),
       isTrue,
     );
