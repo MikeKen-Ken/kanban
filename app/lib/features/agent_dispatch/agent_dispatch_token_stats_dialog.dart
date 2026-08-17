@@ -154,12 +154,10 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
         Text('输入 / 缓存 / 输出', style: textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
-          '输入 ${_formatCount(selected.totalInput)}'
-          '（均 ${_formatCount(selected.averageInput?.round() ?? 0)}） · '
+          '输入 ${_formatCount(selected.totalInput)} · '
           '缓存读 ${_formatCount(selected.totalCacheRead)} · '
           '缓存写 ${_formatCount(selected.totalCacheWrite)} · '
-          '输出 ${_formatCount(selected.totalOutput)}'
-          '（均 ${_formatCount(selected.averageOutput?.round() ?? 0)}）',
+          '输出 ${_formatCount(selected.totalOutput)}',
           style: textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
