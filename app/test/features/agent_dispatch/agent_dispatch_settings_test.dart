@@ -81,6 +81,8 @@ void main() {
     expect(text, contains('禁止搜索'));
     expect(text, contains('ready_to_submit'));
     expect(text, contains('禁止调用 pick_next_card'));
+    expect(text, contains('开发前必读'));
+    expect(text, contains('禁止再读取该文件'));
     expect(text, contains('其它已加载的 MCP 可按本卡需要使用'));
     expect(text, contains('验证必须在本会话内跑通后才能声明'));
     expect(text, contains('禁止把 verificationCommands 交给 Worker'));
@@ -110,6 +112,19 @@ disable-model-invocation: true
     expect(text, contains('取卡。'));
     expect(text, isNot(contains('name: kanban-complete-tasks')));
     expect(text, isNot(contains('disable-model-invocation')));
+  });
+
+  test('buildSkillDispatchPrompt 保留 Skill 正文中的架构已注入说明', () {
+    final text = buildSkillDispatchPrompt(
+      skillMarkdown: '''
+# 看板：完成 Worker 注入的单卡
+
+- 已注入的 `docs/Architecture.md` 已满足先读架构；不要再读。
+''',
+      projectId: 'proj-1',
+    );
+    expect(text, contains('docs/Architecture.md'));
+    expect(text, contains('不要再读'));
   });
 
   test('调用正文始终钉死项目 UUID，不再回退到界面当前项目', () {

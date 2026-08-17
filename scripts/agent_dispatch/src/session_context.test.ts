@@ -43,6 +43,7 @@ describe("session_context", () => {
       assert.equal(context.prompt.includes(base64), false);
       assert.match(context.prompt, /完成 A/);
       assert.match(context.prompt, /已缓存的 docs\/Architecture\.md/);
+      assert.match(context.prompt, /开发前必读 Architecture\.md/);
       assert.equal(
         readFileSync(context.attachmentPaths[0]!, "utf8"),
         "附件内容",

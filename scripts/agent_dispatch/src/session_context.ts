@@ -95,7 +95,7 @@ export function createSessionContext(options: {
     "",
     options.architecture.trim(),
     "",
-    "Worker 已在批次开始时读取以上架构文档，本轮不要重复读取。",
+    "以上正文已满足用户规则 / AGENTS.md 中的「开发前必读 Architecture.md」。禁止再打开该文件。ADR、docs/Systems、CONTEXT.md 需要时仍可读。",
   ].join("\n");
 
   return {

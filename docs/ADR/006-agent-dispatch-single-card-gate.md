@@ -42,8 +42,12 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
   必须覆盖为本轮 scoped 端点，不得使用常驻完整看板 MCP。
 - Cursor：`settingSources` 加载用户与项目规则；MCP 由 Worker 显式合并用户/项目
   `mcp.json` 后再覆盖 `kanbanMCP`。
-- Codex：临时 `CODEX_HOME` 复制用户 `auth.json`、`AGENTS.md` 与 `skills`，合并用户
-  `config.toml` 中除看板外的 MCP，再写入 scoped `kanbanMCP`。
+- `kanban-complete-tasks` 仅供 Worker 注入，不用于对话手动或自动调用。Skill 正文假定
+  Architecture 已注入，禁止再打开该文件。Worker 只剥 YAML frontmatter 写入 prompt，
+  不改写磁盘上的 Skill，也不再过滤正文中的 Architecture 行。
+- Codex：临时 `CODEX_HOME` 复制用户 `auth.json` 与 `skills`，合并用户
+  `config.toml` 中除看板外的 MCP，再写入 scoped `kanbanMCP`。复制 `AGENTS.md` 时覆盖
+  「必须再打开 Architecture.md」：Worker 已注入全文，视为已读；不改用户磁盘上的原文。
 - 调度中 `ready_to_submit` / `block_card` / `submit_consultation` 只能操作本轮领取的卡片。
 - 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、move、complete、delete、
   commitRef、checklist 或 feedback 契约。

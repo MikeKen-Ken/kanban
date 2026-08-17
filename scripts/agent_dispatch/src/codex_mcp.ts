@@ -14,9 +14,9 @@ import {
   buildCodexAgentConfigToml,
   listCodexMcpServerNames,
 } from "./codex_agent_config.ts";
+import { applyDispatchArchitectureOverride } from "./dispatch_agents_overlay.ts";
 
 const AUTH_FILES = ["auth.json"];
-const USER_INSTRUCTION_FILES = ["AGENTS.md"];
 const USER_INSTRUCTION_DIRS = ["skills"];
 
 export { buildCodexAgentConfigToml, listCodexMcpServerNames };
@@ -52,12 +52,7 @@ export function createCodexAgentHome(options: {
       join(home, name),
     );
   }
-  for (const name of USER_INSTRUCTION_FILES) {
-    copyUserPath(
-      join(options.userCodexHome, name),
-      join(home, name),
-    );
-  }
+  writeOverlayAgentsMarkdown(options.userCodexHome, home);
   for (const name of USER_INSTRUCTION_DIRS) {
     copyUserPath(
       join(options.userCodexHome, name),
@@ -65,6 +60,14 @@ export function createCodexAgentHome(options: {
     );
   }
   return { home, mcpServerNames: listCodexMcpServerNames(config) };
+}
+
+function writeOverlayAgentsMarkdown(userHome: string, destHome: string): void {
+  const from = join(userHome, "AGENTS.md");
+  const source = existsSync(from) ? readFileSync(from, "utf8") : "";
+  const overlay = applyDispatchArchitectureOverride(source);
+  writeFileSync(join(destHome, "AGENTS.md"), overlay, "utf8");
+  writeFileSync(join(destHome, "AGENTS.override.md"), overlay, "utf8");
 }
 
 function copyUserPath(from: string, to: string): void {

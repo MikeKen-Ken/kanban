@@ -1059,9 +1059,36 @@ function collapseBlankLines(source) {
   return source.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "").trimEnd();
 }
 
+// src/dispatch_agents_overlay.ts
+var DISPATCH_ARCHITECTURE_OVERRIDE = `# \u672C\u4F1A\u8BDD\u8986\u76D6\uFF08\u4EC5\u770B\u677F Agent \u8C03\u5EA6\uFF09
+
+Worker \u5DF2\u6CE8\u5165\u76EE\u6807\u4ED3\u5E93 \`docs/Architecture.md\` \u5168\u6587\u3002\u7528\u6237\u89C4\u5219 / \`AGENTS.md\` \u91CC\u7684\u300C\u5F00\u53D1\u524D\u5FC5\u8BFB Architecture.md\u300D\u5728\u672C\u8F6E\u89C6\u4E3A\u5DF2\u6EE1\u8DB3\u3002
+\u7981\u6B62\u518D\u641C\u7D22\u3001glob\u3001grep \u6216\u8BFB\u53D6 \`docs/Architecture.md\`\u3002ADR\u3001\`docs/Systems/\`\u3001\`CONTEXT.md\` \u4ECD\u6309\u539F\u6587\uFF0C\u9700\u8981\u65F6\u518D\u8BFB\u3002
+`;
+function applyDispatchArchitectureOverride(source) {
+  const body = rewriteArchitectureFileReads(source.replaceAll("\r\n", "\n").trim());
+  return `${DISPATCH_ARCHITECTURE_OVERRIDE.trim()}
+
+${body}`.trim() + "\n";
+}
+function rewriteArchitectureFileReads(source) {
+  if (!source) return "";
+  return source.split("\n").filter((line) => !isArchitectureFileReadBullet(line)).join("\n").replace(
+    /动手写代码[^\n]*MUST 先阅读：/,
+    "\u52A8\u624B\u5199\u4EE3\u7801\u3001\u6539\u6A21\u5757\u8FB9\u754C\u6216\u8BBE\u8BA1\u65B9\u6848\u524D\uFF0C`docs/Architecture.md` \u5DF2\u7531 Worker \u6CE8\u5165\uFF0C\u89C6\u4E3A\u5DF2\u8BFB\uFF1B\u7981\u6B62\u518D\u6253\u5F00\u8BE5\u6587\u4EF6\u3002"
+  ).replace(
+    /MUST NOT 在未读 `Architecture\.md`（若存在）的情况下/,
+    "MUST NOT \u5728\u672A\u9075\u5B88\u5DF2\u6CE8\u5165 Architecture.md \u7684\u60C5\u51B5\u4E0B"
+  );
+}
+function isArchitectureFileReadBullet(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("-") && !trimmed.startsWith("*")) return false;
+  return trimmed.includes("docs/Architecture.md");
+}
+
 // src/codex_mcp.ts
 var AUTH_FILES = ["auth.json"];
-var USER_INSTRUCTION_FILES = ["AGENTS.md"];
 var USER_INSTRUCTION_DIRS = ["skills"];
 function resolveUserCodexHome(env = process.env) {
   const override = env.CODEX_HOME?.trim();
@@ -1085,12 +1112,7 @@ function createCodexAgentHome(options) {
       join(home, name)
     );
   }
-  for (const name of USER_INSTRUCTION_FILES) {
-    copyUserPath(
-      join(options.userCodexHome, name),
-      join(home, name)
-    );
-  }
+  writeOverlayAgentsMarkdown(options.userCodexHome, home);
   for (const name of USER_INSTRUCTION_DIRS) {
     copyUserPath(
       join(options.userCodexHome, name),
@@ -1098,6 +1120,13 @@ function createCodexAgentHome(options) {
     );
   }
   return { home, mcpServerNames: listCodexMcpServerNames(config) };
+}
+function writeOverlayAgentsMarkdown(userHome, destHome) {
+  const from = join(userHome, "AGENTS.md");
+  const source = existsSync2(from) ? readFileSync(from, "utf8") : "";
+  const overlay = applyDispatchArchitectureOverride(source);
+  writeFileSync(join(destHome, "AGENTS.md"), overlay, "utf8");
+  writeFileSync(join(destHome, "AGENTS.override.md"), overlay, "utf8");
 }
 function copyUserPath(from, to) {
   if (!existsSync2(from)) return;
@@ -1182,7 +1211,7 @@ async function runCodex(job, cancellation) {
       tempRoot: temp
     });
     workerLog(
-      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u590D\u5236\u7528\u6237 AGENTS.md \u4E0E skills\uFF1B\u5408\u5E76\u7528\u6237 MCP\uFF08${agentHome.mcpServerNames.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${mcpUrl}\uFF09`
+      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u590D\u5236\u7528\u6237 AGENTS.md\uFF08\u8986\u76D6\u5148\u8BFB Architecture\uFF09\u4E0E skills\uFF1B\u5408\u5E76\u7528\u6237 MCP\uFF08${agentHome.mcpServerNames.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${mcpUrl}\uFF09`
     );
     const args = buildCodexExecArgs({
       cwd: job.cwd,
@@ -1898,7 +1927,7 @@ function createSessionContext(options) {
     "",
     options.architecture.trim(),
     "",
-    "Worker \u5DF2\u5728\u6279\u6B21\u5F00\u59CB\u65F6\u8BFB\u53D6\u4EE5\u4E0A\u67B6\u6784\u6587\u6863\uFF0C\u672C\u8F6E\u4E0D\u8981\u91CD\u590D\u8BFB\u53D6\u3002"
+    "\u4EE5\u4E0A\u6B63\u6587\u5DF2\u6EE1\u8DB3\u7528\u6237\u89C4\u5219 / AGENTS.md \u4E2D\u7684\u300C\u5F00\u53D1\u524D\u5FC5\u8BFB Architecture.md\u300D\u3002\u7981\u6B62\u518D\u6253\u5F00\u8BE5\u6587\u4EF6\u3002ADR\u3001docs/Systems\u3001CONTEXT.md \u9700\u8981\u65F6\u4ECD\u53EF\u8BFB\u3002"
   ].join("\n");
   return {
     prompt,

@@ -25,7 +25,16 @@ describe("codex_mcp", () => {
       mkdirSync(userHome);
       mkdirSync(join(userHome, "skills", "demo"), { recursive: true });
       writeFileSync(join(userHome, "auth.json"), '{"ok":true}', "utf8");
-      writeFileSync(join(userHome, "AGENTS.md"), "# 用户指令\n", "utf8");
+      writeFileSync(
+        join(userHome, "AGENTS.md"),
+        `# 用户指令
+
+动手写代码、改模块边界或设计方案前，MUST 先阅读：
+
+- [\`docs/Architecture.md\`](docs/Architecture.md) — 系统分层
+`,
+        "utf8",
+      );
       writeFileSync(
         join(userHome, "skills", "demo", "SKILL.md"),
         "# demo\n",
@@ -54,7 +63,13 @@ url = "http://127.0.0.1:18765/mcp"
         "utf8",
       );
       assert.equal(auth, '{"ok":true}');
-      assert.equal(agents, "# 用户指令\n");
+      assert.match(agents, /本会话覆盖/);
+      assert.match(agents, /# 用户指令/);
+      assert.equal(agents.includes("MUST 先阅读"), false);
+      assert.equal(
+        readFileSync(join(created.home, "AGENTS.override.md"), "utf8"),
+        agents,
+      );
       assert.equal(skill, "# demo\n");
       assert.match(config, /mcp_servers\.other/);
       assert.match(config, /url = "http:\/\/127\.0\.0\.1:19000\/mcp"/);

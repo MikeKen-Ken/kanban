@@ -20,7 +20,7 @@ String buildSkillDispatchPrompt({
 禁止读取 agent-transcripts 或任何历史对话。
 禁止执行 git commit、git reset、git checkout、git switch、git rebase 或任何会移动 HEAD 的命令。
 禁止为看板工具再拉取 schema；参数以 Skill 为准，直接调用。
-Worker 会在卡片上下文后附上已缓存的 Architecture.md；禁止重复读取。
+Worker 已注入 Architecture.md 全文，用户规则 / AGENTS.md 中的「开发前必读」已满足；禁止再读取该文件。
 看板 MCP 已由 Worker 注入本卡专用工具集；禁止列出或探测看板工具，禁止调用 pick_next_card。其它已加载的 MCP 可按本卡需要使用。
 本轮卡片已由 Worker 原子领取；禁止调用 pick_next_card，也不要处理其它卡片。
 完成实施后必须以 ready_to_submit 收尾，显式列出本轮完成的 checklist/feedback id。
@@ -42,21 +42,7 @@ ${architecture == null || architecture.isEmpty ? '' : '\nbatchArchitecture:\n$ar
 /// 去掉 SKILL.md 开头的 YAML frontmatter，只保留正文。
 String stripSkillFrontmatter(String markdown) {
   final text = markdown.trim();
-  final body = text.startsWith('---')
-      ? (() {
-          final match =
-              RegExp(r'^---\r?\n[\s\S]*?\r?\n---\r?\n?').firstMatch(text);
-          return match == null ? text : text.substring(match.end).trim();
-        })()
-      : text;
-  return body
-      .split(RegExp(r'\r?\n'))
-      .where((line) => !_isArchitectureReadInstruction(line))
-      .join('\n')
-      .trim();
-}
-
-bool _isArchitectureReadInstruction(String line) {
-  if (!line.contains('docs/Architecture.md')) return false;
-  return line.contains('若存在') || line.contains('修改代码前读取');
+  if (!text.startsWith('---')) return text;
+  final match = RegExp(r'^---\r?\n[\s\S]*?\r?\n---\r?\n?').firstMatch(text);
+  return (match == null ? text : text.substring(match.end)).trim();
 }
