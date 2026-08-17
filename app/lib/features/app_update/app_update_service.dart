@@ -82,10 +82,25 @@ class AppUpdateService {
       updateAvailable: updateAvailable,
       message: updateAvailable
           ? (newer
-              ? '发现新版本 ${release.versionLabel}'
-              : '发现同版本更新包（构建已刷新）')
-          : '已是最新版本',
+              ? '发现新版本 ${_versionWithDate(release, asset)}'
+              : '发现同版本更新包（构建已刷新${_optionalDateSuffix(asset.updatedAt ?? release.displayDate)}）')
+          : '已是最新版本${_optionalDateSuffix(release.displayDate)}',
     );
+  }
+
+  static String _versionWithDate(
+    GithubReleaseInfo release,
+    GithubReleaseAsset asset,
+  ) {
+    final date = formatAppUpdateDate(release.displayDate ?? asset.updatedAt);
+    if (date.isEmpty) return release.versionLabel;
+    return '${release.versionLabel}（$date）';
+  }
+
+  static String _optionalDateSuffix(DateTime? value) {
+    final date = formatAppUpdateDate(value);
+    if (date.isEmpty) return '';
+    return '（$date）';
   }
 
   Future<bool> _isSameVersionNewerAsset(
@@ -109,10 +124,27 @@ class AppUpdateService {
     return updatedAt.isAfter(last);
   }
 
-  Future<void> markAssetInstalled(GithubReleaseAsset asset) async {
+  Future<void> markAssetInstalled(
+    GithubReleaseAsset asset, {
+    DateTime? publishedAt,
+  }) async {
     final prefs = await _prefsLoader();
     final stamp = (asset.updatedAt ?? DateTime.now().toUtc()).toIso8601String();
     await prefs.setString(AppUpdateConstants.prefsLastAssetUpdatedAt, stamp);
+    final published = publishedAt ?? asset.updatedAt;
+    if (published != null) {
+      await prefs.setString(
+        AppUpdateConstants.prefsLastReleasePublishedAt,
+        published.toUtc().toIso8601String(),
+      );
+    }
+  }
+
+  Future<DateTime?> installedReleasePublishedAt() async {
+    final prefs = await _prefsLoader();
+    final raw = prefs.getString(AppUpdateConstants.prefsLastReleasePublishedAt);
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
   }
 
   Future<void> skipVersion(String version) async {
@@ -150,13 +182,13 @@ class AppUpdateService {
 
     if (!kIsWeb && Platform.isAndroid) {
       await _installer.installAndroidApk(file);
-      await markAssetInstalled(asset);
+      await markAssetInstalled(asset, publishedAt: release.publishedAt);
       return;
     }
 
     if (!kIsWeb && Platform.isWindows) {
       final extracted = await _installer.extractZip(file);
-      await markAssetInstalled(asset);
+      await markAssetInstalled(asset, publishedAt: release.publishedAt);
       // 不会返回：进程退出
       await _installer.applyWindowsZipUpdate(extracted);
       return;

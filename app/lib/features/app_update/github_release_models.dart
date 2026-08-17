@@ -1,4 +1,12 @@
+import 'package:intl/intl.dart';
+
 import 'release_notes_plain_text.dart';
+
+/// 将 GitHub 时间转为本地可读日期；无值时返回空串。
+String formatAppUpdateDate(DateTime? value) {
+  if (value == null) return '';
+  return DateFormat('yyyy-MM-dd HH:mm').format(value.toLocal());
+}
 
 /// GitHub Release 摘要（仅更新所需字段）。
 class GithubReleaseInfo {
@@ -29,6 +37,15 @@ class GithubReleaseInfo {
       return tag.substring(1);
     }
     return tag;
+  }
+
+  /// 用于展示的发布时间：Release `published_at`，否则取资源 `updated_at`。
+  DateTime? get displayDate {
+    if (publishedAt != null) return publishedAt;
+    for (final asset in assets) {
+      if (asset.updatedAt != null) return asset.updatedAt;
+    }
+    return null;
   }
 
   factory GithubReleaseInfo.fromJson(Map<String, dynamic> json) {

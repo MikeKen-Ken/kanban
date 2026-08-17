@@ -79,8 +79,21 @@ void main() {
         ],
       });
       expect(info.versionLabel, '1.2.0');
+      expect(info.publishedAt, DateTime.parse('2026-08-05T00:00:00Z'));
+      expect(info.displayDate, DateTime.parse('2026-08-05T00:00:00Z'));
       expect(info.assets, hasLength(1));
       expect(info.assets.first.name, 'app.apk');
+      expect(
+        info.assets.first.updatedAt,
+        DateTime.parse('2026-08-05T01:00:00Z'),
+      );
+    });
+
+    test('formatAppUpdateDate 输出本地可读日期', () {
+      final utc = DateTime.utc(2026, 8, 5, 1, 0);
+      expect(formatAppUpdateDate(utc), isNotEmpty);
+      expect(formatAppUpdateDate(utc), contains('2026-08-05'));
+      expect(formatAppUpdateDate(null), isEmpty);
     });
   });
 
@@ -143,6 +156,7 @@ void main() {
       expect(list, hasLength(1));
       expect(list.first.tagName, 'v1.0.1');
       expect(list.first.versionLabel, '1.0.1');
+      expect(list.first.publishedAt, DateTime.parse('2026-08-04T23:07:50Z'));
       expect(list.first.body, isNot(contains('<')));
       expect(list.first.body, contains('更新内容'));
       expect(list.first.body, contains('- 功能：新增更新 (40e7ff9)'));

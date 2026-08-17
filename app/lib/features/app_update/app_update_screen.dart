@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../settings/settings_section.dart';
 import 'app_update_service.dart';
 import 'github_release_models.dart';
+import 'version_compare.dart';
 import '../../common/app_snack_bar.dart';
 
 /// 检查并安装来自 GitHub Release 的更新。
@@ -22,6 +23,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
   late final AppUpdateService _service;
   late final bool _ownsService;
   PackageInfo? _info;
+  DateTime? _installedPublishedAt;
   AppUpdateCheckResult? _check;
   String? _error;
   bool _busy = false;
@@ -43,8 +45,12 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
 
   Future<void> _load() async {
     final info = await PackageInfo.fromPlatform();
+    final installedAt = await _service.installedReleasePublishedAt();
     if (!mounted) return;
-    setState(() => _info = info);
+    setState(() {
+      _info = info;
+      _installedPublishedAt = installedAt;
+    });
     await _checkUpdate();
   }
 
@@ -102,9 +108,27 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
   Widget build(BuildContext context) {
     final info = _info;
     final check = _check;
+    final currentDate = _currentVersionDate(check);
+    final currentDateText = formatAppUpdateDate(currentDate);
     final versionLabel = info == null
         ? '读取中…'
-        : '${info.version}（${info.buildNumber}）';
+        : currentDateText.isEmpty
+            ? '${info.version}（${info.buildNumber}）'
+            : '${info.version}（${info.buildNumber}）\n发布于 $currentDateText';
+    final remote = check?.release;
+    final remoteDateText = formatAppUpdateDate(
+      remote?.displayDate ?? check?.asset?.updatedAt,
+    );
+    final remoteTitle = remote == null
+        ? ''
+        : '远端 ${remote.versionLabel}（${remote.tagName}）';
+    final remoteSubtitleParts = <String>[
+      if (remoteDateText.isNotEmpty) '发布于 $remoteDateText',
+      if (check?.updateAvailable == true)
+        (check?.message?.contains('同版本') == true ? '同版本安装包已刷新' : '有可用更新')
+      else
+        '已是最新',
+    ];
 
     return Scaffold(
       appBar: AppBar(title: const Text('检查更新')),
@@ -121,14 +145,11 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                 title: const Text('当前版本'),
                 subtitle: Text(versionLabel),
               ),
-              if (check?.release != null)
+              if (remote != null)
                 ListTile(
                   leading: const Icon(Icons.new_releases_outlined),
-                  title: Text('远端 ${check!.release!.versionLabel}'),
-                  subtitle: Text(
-                    check.message ??
-                        (check.updateAvailable ? '有可用更新' : '已是最新'),
-                  ),
+                  title: Text(remoteTitle),
+                  subtitle: Text(remoteSubtitleParts.join('\n')),
                 ),
               if (_progress != null) ...[
                 Padding(
@@ -204,6 +225,17 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
       ),
     );
   }
+
+  DateTime? _currentVersionDate(AppUpdateCheckResult? check) {
+    if (_installedPublishedAt != null) return _installedPublishedAt;
+    final info = _info;
+    final release = check?.release;
+    if (info == null || release == null) return null;
+    if (VersionCompare.compare(release.versionLabel, info.version) != 0) {
+      return null;
+    }
+    return release.displayDate ?? check?.asset?.updatedAt;
+  }
 }
 
 /// 启动时若有更新则提示（可跳过该版本）。
@@ -225,7 +257,7 @@ Future<void> maybePromptAppUpdate(BuildContext context) async {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('发现新版本 ${result.release!.versionLabel}'),
-        content: Text(result.message ?? '是否前往更新？'),
+        content: Text(_startupPromptBody(result)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, 'skip'),
@@ -258,4 +290,14 @@ Future<void> maybePromptAppUpdate(BuildContext context) async {
   } finally {
     service.dispose();
   }
+}
+
+String _startupPromptBody(AppUpdateCheckResult result) {
+  final date = formatAppUpdateDate(
+    result.release?.displayDate ?? result.asset?.updatedAt,
+  );
+  final message = result.message ?? '是否前往更新？';
+  if (date.isEmpty) return message;
+  if (message.contains(date)) return message;
+  return '$message\n发布于 $date';
 }
