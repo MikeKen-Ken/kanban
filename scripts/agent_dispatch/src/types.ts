@@ -20,10 +20,12 @@ export type DispatchJob = {
   projectId?: string;
   cardLimit: number;
   workerToken: string;
-  /** 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区开关，只用工作台默认。 */
+  /** 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区 / 沙箱开关，只用工作台默认。 */
   ignoreCardParams?: boolean;
   /** 为 true 时工作区有未提交改动仍可领取；默认 false。 */
   allowDirtyWorkspace?: boolean;
+  /** 为 true 时开启 Cursor SDK 沙箱；默认 false。 */
+  enableSandbox?: boolean;
   /** @deprecated 旧字段，兼容 */
   effort?: string;
   /** Dart 侧 touch 此文件以请求立即停止 */
@@ -178,6 +180,8 @@ export function mergeJobWithCardOverrides(
     modelParams: [...byId.values()],
     allowDirtyWorkspace: job.allowDirtyWorkspace === true ||
       isTrueFlag(claim.agentAllowDirtyWorkspace),
+    enableSandbox: job.enableSandbox === true ||
+      isTrueFlag(claim.agentEnableSandbox),
   };
 }
 

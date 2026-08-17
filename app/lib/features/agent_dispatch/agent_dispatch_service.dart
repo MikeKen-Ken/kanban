@@ -438,6 +438,7 @@ class AgentDispatchService {
         engineDefaults: options.engineDefaultsJobJson(),
         ignoreCardParams: options.ignoreCardParams,
         allowDirtyWorkspace: options.allowDirtyWorkspace,
+        enableSandbox: options.enableSandbox,
         cursorApiKey: cursorApiKey,
         workerScriptPath: workerScriptPath,
         onProcessStarted: (worker) {

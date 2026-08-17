@@ -815,12 +815,16 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               AgentDispatchRunToggles(
                 ignoreCardParams: _settings.ignoreCardParams,
                 allowDirtyWorkspace: _settings.allowDirtyWorkspace,
+                enableSandbox: _settings.enableSandbox,
                 enabled: !_running && !_busy,
                 onIgnoreCardParamsChanged: (value) => _persist(
                   _settings.copyWith(ignoreCardParams: value),
                 ),
                 onAllowDirtyWorkspaceChanged: (value) => _persist(
                   _settings.copyWith(allowDirtyWorkspace: value),
+                ),
+                onEnableSandboxChanged: (value) => _persist(
+                  _settings.copyWith(enableSandbox: value),
                 ),
               ),
               if (_modelCatalogMessage != null)

@@ -54,6 +54,7 @@ List<CardReference> buildCardReferences({
             agentModelId: card.agentModelId,
             agentModelParamValues: card.agentModelParamValues,
             agentAllowDirtyWorkspace: card.agentAllowDirtyWorkspace,
+            agentEnableSandbox: card.agentEnableSandbox,
             links: [
               for (final link in card.sortedLinks)
                 {

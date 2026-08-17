@@ -121,7 +121,8 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       a.agentEngine == b.agentEngine &&
       a.agentModelId == b.agentModelId &&
       _stringMapEq(a.agentModelParamValues, b.agentModelParamValues) &&
-      a.agentAllowDirtyWorkspace == b.agentAllowDirtyWorkspace;
+      a.agentAllowDirtyWorkspace == b.agentAllowDirtyWorkspace &&
+      a.agentEnableSandbox == b.agentEnableSandbox;
 }
 
 KanbanCard stripConflict(KanbanCard card) {
@@ -256,7 +257,8 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
         local.agentModelParamValues,
         remote.agentModelParamValues,
       ) ||
-      local.agentAllowDirtyWorkspace != remote.agentAllowDirtyWorkspace;
+      local.agentAllowDirtyWorkspace != remote.agentAllowDirtyWorkspace ||
+      local.agentEnableSandbox != remote.agentEnableSandbox;
 }
 
 KanbanCard _mergeFieldsAuto(KanbanCard local, KanbanCard remote) {
@@ -480,6 +482,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.agentAllowDirtyWorkspace,
     eq: (a, b) => a == b,
   );
+  final agentEnableSandboxConflict = _fieldConflict(
+    base: base.card.agentEnableSandbox,
+    local: loc.card.agentEnableSandbox,
+    remote: rem.card.agentEnableSandbox,
+    eq: (a, b) => a == b,
+  );
   final columnConflict = _fieldConflict(
     base: base.columnId,
     local: loc.columnId,
@@ -511,6 +519,7 @@ CardMergeResult mergeCardThreeWay({
       agentModelIdConflict ||
       agentModelParamConflict ||
       agentAllowDirtyWorkspaceConflict ||
+      agentEnableSandboxConflict ||
       columnConflict;
 
   if (anyConflict) {
@@ -660,6 +669,11 @@ CardMergeResult mergeCardThreeWay({
     local: loc.card.agentAllowDirtyWorkspace,
     remote: rem.card.agentAllowDirtyWorkspace,
   );
+  final mergedAgentEnableSandbox = _threeWayValue(
+    base: base.card.agentEnableSandbox,
+    local: loc.card.agentEnableSandbox,
+    remote: rem.card.agentEnableSandbox,
+  );
   final columnId = _threeWayValue(
     base: base.columnId,
     local: loc.columnId,
@@ -701,6 +715,7 @@ CardMergeResult mergeCardThreeWay({
     agentModelId: mergedAgentModelId,
     agentModelParamValues: mergedAgentModelParamValues,
     agentAllowDirtyWorkspace: mergedAgentAllowDirtyWorkspace,
+    agentEnableSandbox: mergedAgentEnableSandbox,
     colorValue: mergedColor,
   );
 

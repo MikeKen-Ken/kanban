@@ -29,6 +29,7 @@ class CardReference {
     this.agentModelId,
     this.agentModelParamValues,
     this.agentAllowDirtyWorkspace,
+    this.agentEnableSandbox,
     this.source,
   });
 
@@ -57,6 +58,7 @@ class CardReference {
   final String? agentModelId;
   final Map<String, String>? agentModelParamValues;
   final bool? agentAllowDirtyWorkspace;
+  final bool? agentEnableSandbox;
 
   /// 外链摘要：`{id, url, title?}`
   final List<Map<String, dynamic>> links;
@@ -94,6 +96,8 @@ class CardReference {
           'agentModelParamValues': agentModelParamValues,
         if (agentAllowDirtyWorkspace != null)
           'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
+        if (agentEnableSandbox != null)
+          'agentEnableSandbox': agentEnableSandbox,
         if (links.isNotEmpty) 'links': links,
       };
 
@@ -131,6 +135,9 @@ class CardReference {
       agentModelParamValues: _stringMap(json['agentModelParamValues']),
       agentAllowDirtyWorkspace: json['agentAllowDirtyWorkspace'] is bool
           ? json['agentAllowDirtyWorkspace'] as bool
+          : null,
+      agentEnableSandbox: json['agentEnableSandbox'] is bool
+          ? json['agentEnableSandbox'] as bool
           : null,
       links: _linkMaps(json['links']),
     );

@@ -58,12 +58,27 @@ describe("mergeJobWithCardOverrides", () => {
     assert.equal(merged.allowDirtyWorkspace, true);
   });
 
+  it("卡片开沙箱时覆盖工作台默认", () => {
+    const merged = mergeJobWithCardOverrides(job, {
+      agentEnableSandbox: true,
+    });
+    assert.equal(merged.enableSandbox, true);
+  });
+
   it("禁止使用卡片参数时忽略卡片脏工作区开关", () => {
     const merged = mergeJobWithCardOverrides(
       { ...job, ignoreCardParams: true },
       { agentAllowDirtyWorkspace: true },
     );
     assert.equal(merged.allowDirtyWorkspace, undefined);
+  });
+
+  it("禁止使用卡片参数时忽略卡片沙箱开关", () => {
+    const merged = mergeJobWithCardOverrides(
+      { ...job, ignoreCardParams: true },
+      { agentEnableSandbox: true },
+    );
+    assert.equal(merged.enableSandbox, undefined);
   });
 
   it("禁止使用卡片参数时只用工作台默认", () => {

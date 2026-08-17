@@ -236,6 +236,8 @@ extension BoardControllerCards on BoardController {
     bool clearAgentModelParamValues = false,
     bool? agentAllowDirtyWorkspace,
     bool clearAgentAllowDirtyWorkspace = false,
+    bool? agentEnableSandbox,
+    bool clearAgentEnableSandbox = false,
     int? colorValue,
     bool clearColor = false,
   }) async {
@@ -298,6 +300,9 @@ extension BoardControllerCards on BoardController {
             agentAllowDirtyWorkspace: clearAgentAllowDirtyWorkspace
                 ? null
                 : (agentAllowDirtyWorkspace ?? card.agentAllowDirtyWorkspace),
+            agentEnableSandbox: clearAgentEnableSandbox
+                ? null
+                : (agentEnableSandbox ?? card.agentEnableSandbox),
             colorValue: clearColor ? null : (colorValue ?? card.colorValue),
             updatedAt: now,
           );
@@ -345,6 +350,9 @@ extension BoardControllerCards on BoardController {
         final restoredAgentAllowDirtyWorkspace = clearAgentAllowDirtyWorkspace
             ? null
             : (agentAllowDirtyWorkspace ?? original.agentAllowDirtyWorkspace);
+        final restoredAgentEnableSandbox = clearAgentEnableSandbox
+            ? null
+            : (agentEnableSandbox ?? original.agentEnableSandbox);
         final restoredColor =
             clearColor ? null : (colorValue ?? original.colorValue);
         _pushUndo(
@@ -383,6 +391,8 @@ extension BoardControllerCards on BoardController {
               agentAllowDirtyWorkspace: original.agentAllowDirtyWorkspace,
               clearAgentAllowDirtyWorkspace:
                   original.agentAllowDirtyWorkspace == null,
+              agentEnableSandbox: original.agentEnableSandbox,
+              clearAgentEnableSandbox: original.agentEnableSandbox == null,
               colorValue: original.colorValue,
               clearColor: original.colorValue == null,
             );
@@ -422,6 +432,8 @@ extension BoardControllerCards on BoardController {
               agentAllowDirtyWorkspace: restoredAgentAllowDirtyWorkspace,
               clearAgentAllowDirtyWorkspace:
                   restoredAgentAllowDirtyWorkspace == null,
+              agentEnableSandbox: restoredAgentEnableSandbox,
+              clearAgentEnableSandbox: restoredAgentEnableSandbox == null,
               colorValue: restoredColor,
               clearColor: restoredColor == null,
             );

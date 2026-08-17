@@ -313,7 +313,8 @@ function mergeJobWithCardOverrides(job, claim) {
     engine,
     model,
     modelParams: [...byId.values()],
-    allowDirtyWorkspace: job.allowDirtyWorkspace === true || isTrueFlag(claim.agentAllowDirtyWorkspace)
+    allowDirtyWorkspace: job.allowDirtyWorkspace === true || isTrueFlag(claim.agentAllowDirtyWorkspace),
+    enableSandbox: job.enableSandbox === true || isTrueFlag(claim.agentEnableSandbox)
   };
 }
 function isTrueFlag(raw) {
@@ -1551,7 +1552,7 @@ async function runCursor(job, cancellation) {
     const storeDir = join3(homedir2(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync2(storeDir, { recursive: true });
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1\u5173\u95ED\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F\u7CBE\u7B80 MCP\uFF08${agentMcpUrl}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP\uFF1BsettingSources \u4E3A\u7A7A\uFF08\u4E0D\u6CE8\u5165\u9879\u76EE\u89C4\u5219\u4E0E\u4E2A\u4EBA Skill\uFF09`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u4EC5\u6CE8\u5165\u770B\u677F\u7CBE\u7B80 MCP\uFF08${agentMcpUrl}\uFF09\uFF0C\u4E0D\u52A0\u8F7D\u7528\u6237\u7EA7 MCP\uFF1BsettingSources \u4E3A\u7A7A\uFF08\u4E0D\u6CE8\u5165\u9879\u76EE\u89C4\u5219\u4E0E\u4E2A\u4EBA Skill\uFF09`
     );
     const agent = await Agent.create({
       apiKey,
@@ -1572,7 +1573,7 @@ async function runCursor(job, cancellation) {
         settingSources: [],
         store: new JsonlLocalAgentStore(storeDir),
         autoReview: true,
-        sandboxOptions: { enabled: false }
+        sandboxOptions: { enabled: job.enableSandbox === true }
       }
     });
     try {
@@ -1779,12 +1780,29 @@ function resolveWindowsExecutable(command, env = process.env) {
     return resolveWithPathext(trimmed, env);
   }
   const pathValue = env.Path ?? env.PATH ?? "";
-  for (const dir of pathValue.split(delimiter)) {
+  const dirs = [
+    ...flutterSdkBinDirs(env),
+    ...pathValue.split(delimiter)
+  ];
+  for (const dir of dirs) {
     if (!dir.trim()) continue;
     const found = resolveWithPathext(join5(dir, trimmed), env);
     if (found) return found;
   }
   return void 0;
+}
+function flutterSdkBinDirs(env = process.env) {
+  const dirs = [];
+  const root = (env.FLUTTER_ROOT ?? "").trim();
+  if (root) dirs.push(join5(root, "bin"));
+  const localAppData = (env.LOCALAPPDATA ?? "").trim();
+  if (localAppData) dirs.push(join5(localAppData, "flutter", "bin"));
+  const home = (env.USERPROFILE ?? env.HOME ?? "").trim();
+  if (home) {
+    dirs.push(join5(home, "flutter", "bin"));
+    dirs.push(join5(home, "fvm", "default", "bin"));
+  }
+  return dirs;
 }
 function buildWindowsCmdInvocation(executable, args) {
   const inner = [quoteCmdArg(executable), ...args.map(quoteCmdArg)].join(" ");
@@ -1838,21 +1856,25 @@ async function runVerificationCommand(item, repoRoot) {
   const expectedExitCode = Number.isInteger(item.expectedExitCode) ? item.expectedExitCode : 0;
   const commandCwd = item.cwd?.trim() || ".";
   const commandSummary = summarizeCommand(item.executable, item.args);
+  const failedLaunch = (output) => ({
+    commandSummary,
+    executable: item.executable,
+    args: [...item.args],
+    cwd: commandCwd,
+    exitCode: -1,
+    durationMs: Date.now() - startedAt,
+    output,
+    timedOut: false,
+    passed: false
+  });
   let resolvedCwd;
   try {
     resolvedCwd = resolveCommandCwd(repoRoot, commandCwd);
   } catch (error) {
-    return {
-      commandSummary,
-      executable: item.executable,
-      args: [...item.args],
-      cwd: commandCwd,
-      exitCode: -1,
-      durationMs: Date.now() - startedAt,
-      output: error instanceof Error ? error.message : String(error),
-      timedOut: false,
-      passed: false
-    };
+    return failedLaunch(error instanceof Error ? error.message : String(error));
+  }
+  if (process.platform === "win32" && !resolveWindowsExecutable(item.executable)) {
+    return failedLaunch(describeMissingExecutable(item.executable));
   }
   return new Promise((resolvePromise) => {
     let stdout = "";
@@ -1869,17 +1891,7 @@ async function runVerificationCommand(item, repoRoot) {
     try {
       child = spawnUnexpanded(item.executable, item.args, spawnOptions);
     } catch (error) {
-      resolvePromise({
-        commandSummary,
-        executable: item.executable,
-        args: [...item.args],
-        cwd: commandCwd,
-        exitCode: -1,
-        durationMs: Date.now() - startedAt,
-        output: error instanceof Error ? error.message : String(error),
-        timedOut: false,
-        passed: false
-      });
+      resolvePromise(failedLaunch(describeLaunchError(item.executable, error)));
       return;
     }
     child.stdout?.on("data", (chunk) => {
@@ -1907,7 +1919,7 @@ async function runVerificationCommand(item, repoRoot) {
       });
     };
     child.on("error", (error) => {
-      stderr = appendTruncated(stderr, error.message);
+      stderr = appendTruncated(stderr, describeLaunchError(item.executable, error));
       finish(-1);
     });
     child.on("close", (code) => finish(timedOut ? 124 : code ?? -1));
@@ -1929,6 +1941,29 @@ async function runVerificationCommands(commands, cwd) {
     if (!result.passed) break;
   }
   return results;
+}
+var SKIPPED_OUTPUT = "\u56E0\u524D\u5E8F\u9A8C\u8BC1\u5931\u8D25\u672A\u6267\u884C";
+function fillSkippedVerificationResults(commands, results) {
+  if (results.length >= commands.length) {
+    return results.slice(0, commands.length);
+  }
+  const filled = results.slice();
+  for (let index = results.length; index < commands.length; index += 1) {
+    const command = commands[index];
+    const cwd = command.cwd?.trim() || ".";
+    filled.push({
+      commandSummary: summarizeCommand(command.executable, command.args),
+      executable: command.executable,
+      args: [...command.args],
+      cwd,
+      exitCode: -1,
+      durationMs: 0,
+      output: SKIPPED_OUTPUT,
+      timedOut: false,
+      passed: false
+    });
+  }
+  return filled;
 }
 function formatVerificationFailure(failed) {
   if (failed.timedOut) {
@@ -1995,6 +2030,70 @@ function resolveCommandCwd(repoRoot, cwd) {
 }
 function summarizeCommand(executable, args) {
   return [executable, ...args].map((part) => /\s|"/.test(part) ? JSON.stringify(part) : part).join(" ");
+}
+function describeMissingExecutable(executable) {
+  const name = executable.trim() || "(\u7A7A)";
+  return `\u672A\u627E\u5230\u53EF\u6267\u884C\u6587\u4EF6 ${name}\uFF08ENOENT\uFF09\u3002Worker \u7EE7\u627F\u770B\u677F\u8FDB\u7A0B\u7684 PATH\uFF1B\u4ECE\u5F00\u59CB\u83DC\u5355\u6216\u5FEB\u6377\u65B9\u5F0F\u542F\u52A8\u65F6\uFF0C\u5F80\u5F80\u4E0D\u542B\u7EC8\u7AEF\u91CC\u624D\u6709\u7684 Flutter\u3002\u8BF7\u628A Flutter \u7684 bin \u76EE\u5F55\u5199\u5165\u7CFB\u7EDF PATH \u540E\u91CD\u542F\u770B\u677F\uFF0C\u6216\u4ECE\u5DF2\u914D\u7F6E PATH \u7684\u7EC8\u7AEF\u542F\u52A8\u770B\u677F\u3002`;
+}
+function describeLaunchError(executable, error) {
+  if (isExecutableNotFoundError(error)) {
+    return describeMissingExecutable(executable);
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+function isExecutableNotFoundError(error) {
+  if (!error || typeof error !== "object") return false;
+  return error.code === "ENOENT";
+}
+
+// src/verification_log.ts
+var LOG_OUTPUT_CHARS = 4e3;
+function logVerificationPlan(commands) {
+  workerLog(`\u5F00\u59CB Worker \u9A8C\u8BC1\uFF1A\u5171 ${commands.length} \u6761`);
+  for (let index = 0; index < commands.length; index += 1) {
+    const command = commands[index];
+    workerLog(
+      `\u9A8C\u8BC1\u547D\u4EE4 ${index + 1}/${commands.length}\uFF1A${summarizeCommand(command.executable, command.args)} cwd=${command.cwd?.trim() || "."}`
+    );
+  }
+}
+function logVerificationResults(results) {
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
+    const ordinal = `${index + 1}/${results.length}`;
+    if (result.output.trim() === "\u56E0\u524D\u5E8F\u9A8C\u8BC1\u5931\u8D25\u672A\u6267\u884C") {
+      workerLog(
+        `\u9A8C\u8BC1\u8DF3\u8FC7 ${ordinal}\uFF1A${result.commandSummary}\uFF08\u56E0\u524D\u5E8F\u9A8C\u8BC1\u5931\u8D25\u672A\u6267\u884C\uFF09`,
+        "worker",
+        "warning"
+      );
+      continue;
+    }
+    if (result.passed) {
+      workerLog(
+        `\u9A8C\u8BC1\u901A\u8FC7 ${ordinal}\uFF1A${result.commandSummary} \u8017\u65F6=${result.durationMs}ms`,
+        "worker",
+        "success"
+      );
+      continue;
+    }
+    workerLog(
+      `\u9A8C\u8BC1\u5931\u8D25 ${ordinal}\uFF1A${formatVerificationFailure(result)} \u8017\u65F6=${result.durationMs}ms`,
+      "worker",
+      "error"
+    );
+    const output = result.output.trim();
+    if (!output) {
+      workerLog("\u9A8C\u8BC1\u65E0\u8F93\u51FA\uFF08\u8FDB\u7A0B\u53EF\u80FD\u672A\u80FD\u542F\u52A8\uFF09", "shell", "warning");
+      continue;
+    }
+    workerLog(truncateLogOutput(output), "shell", "error");
+  }
+}
+function truncateLogOutput(output) {
+  if (output.length <= LOG_OUTPUT_CHARS) return output;
+  return `${output.slice(0, LOG_OUTPUT_CHARS)}
+\u2026\uFF08\u65E5\u5FD7\u5DF2\u622A\u65AD\uFF0C\u5B8C\u6574\u8F93\u51FA\u5199\u5165\u9A8C\u8BC1\u7ED3\u679C\uFF09`;
 }
 
 // src/run_batch.ts
@@ -2084,6 +2183,7 @@ ${tree.output}`);
       let context;
       let terminalRecorded = false;
       let allowDirtyWorkspace = preview.allowDirtyWorkspace === true;
+      let postAgent = false;
       try {
         scoped = await dependencies.connectMcp(agentEndpointUrl);
         const tools = await scoped.listTools();
@@ -2164,6 +2264,7 @@ ${afterSkip.output}`,
             processedCards
           };
         }
+        postAgent = true;
         const status = await mcp.callJson("dispatch_agent_session_status", {
           workerToken: job.workerToken
         });
@@ -2228,7 +2329,7 @@ ${afterSkip.output}`,
           return cancellation.isCancelled ? cancelledResult() : drainedResult();
         }
       } catch (error) {
-        const reason = error instanceof WorkerCancelledError ? "\u7528\u6237\u53D6\u6D88\u5F53\u524D Agent \u4F1A\u8BDD" : `Agent \u4F1A\u8BDD\u5F02\u5E38\uFF1A${error instanceof Error ? error.message : String(error)}`;
+        const reason = error instanceof WorkerCancelledError ? "\u7528\u6237\u53D6\u6D88\u5F53\u524D Agent \u4F1A\u8BDD" : `${postAgent ? "Worker \u6536\u5C3E\u5931\u8D25" : "Agent \u4F1A\u8BDD\u5F02\u5E38"}\uFF1A${error instanceof Error ? error.message : String(error)}`;
         if (!terminalRecorded) {
           await recordRoundFailure(
             mcp,
@@ -2239,7 +2340,7 @@ ${afterSkip.output}`,
           );
         }
         const tree2 = dependencies.inspectGit(job.cwd);
-        const dirtySuffix = allowDirtyWorkspace ? "" : tree2.kind === "dirty" ? `
+        const dirtySuffix = allowDirtyWorkspace || postAgent ? "" : tree2.kind === "dirty" ? `
 \u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
 ${tree2.output}` : tree2.kind === "unknown" ? `
 \u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A${tree2.output}` : "";
@@ -2288,6 +2389,10 @@ async function recoverPendingSessions(mcp, job, dependencies) {
   }
   return { ok: true, processedCards };
 }
+async function runAndLogVerification(dependencies, commands, cwd) {
+  logVerificationPlan(commands);
+  return dependencies.runVerification(commands, cwd);
+}
 async function validateAndFinalize(mcp, job, pending, dependencies) {
   const sessionId = requiredString(pending, "sessionId");
   const cardId = requiredString(pending, "cardId");
@@ -2295,35 +2400,45 @@ async function validateAndFinalize(mcp, job, pending, dependencies) {
   if (status === "declared") {
     const manualReason = String(pending.manualVerificationReason ?? "").trim();
     const commands = parseVerificationCommands(pending.verificationCommands);
-    const results = manualReason ? [] : await dependencies.runVerification(commands, job.cwd);
+    const results = manualReason ? [] : fillSkippedVerificationResults(
+      commands,
+      await runAndLogVerification(dependencies, commands, job.cwd)
+    );
     const failed = results.find((item) => !item.passed);
-    const recorded = await mcp.callJson("dispatch_record_validation_results", {
-      workerToken: job.workerToken,
-      sessionId,
-      results: results.map(({
-        commandSummary,
-        executable,
-        args,
-        cwd,
-        exitCode,
-        durationMs,
-        timedOut,
-        output
-      }) => ({
-        commandSummary,
-        executable,
-        args,
-        cwd,
-        exitCode,
-        durationMs,
-        timedOut,
-        output
-      }))
-    });
+    logVerificationResults(results);
+    let recorded;
+    try {
+      recorded = await mcp.callJson("dispatch_record_validation_results", {
+        workerToken: job.workerToken,
+        sessionId,
+        results: results.map(({
+          commandSummary,
+          executable,
+          args,
+          cwd,
+          exitCode,
+          durationMs,
+          timedOut,
+          output
+        }) => ({
+          commandSummary,
+          executable,
+          args,
+          cwd,
+          exitCode,
+          durationMs,
+          timedOut,
+          output
+        }))
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const extra = failed ? `\uFF1B\u5F53\u65F6\u9A8C\u8BC1\u7ED3\u679C\uFF1A${formatVerificationFailure(failed)}` : "";
+      throw new Error(`${message}${extra}`);
+    }
     status = String(recorded.status ?? "");
-    if (failed) {
-      if (failed.output.trim()) workerLog(failed.output);
-      const reason = formatVerificationFailure(failed);
+    if (failed || status === "failed") {
+      const reason = failed ? formatVerificationFailure(failed) : String(recorded.error ?? "\u9A8C\u8BC1\u5931\u8D25");
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,

@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
 
-/// 工作台运行开关：卡片覆盖与脏工作区策略。
+/// 工作台运行开关：卡片覆盖、脏工作区与沙箱策略。
 class AgentDispatchRunToggles extends StatelessWidget {
   const AgentDispatchRunToggles({
     super.key,
     required this.ignoreCardParams,
     required this.allowDirtyWorkspace,
+    required this.enableSandbox,
     required this.enabled,
     required this.onIgnoreCardParamsChanged,
     required this.onAllowDirtyWorkspaceChanged,
+    required this.onEnableSandboxChanged,
   });
 
   final bool ignoreCardParams;
   final bool allowDirtyWorkspace;
+  final bool enableSandbox;
   final bool enabled;
   final ValueChanged<bool> onIgnoreCardParamsChanged;
   final ValueChanged<bool> onAllowDirtyWorkspaceChanged;
+  final ValueChanged<bool> onEnableSandboxChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,12 @@ class AgentDispatchRunToggles extends StatelessWidget {
           value: allowDirtyWorkspace,
           enabled: enabled,
           onChanged: onAllowDirtyWorkspaceChanged,
+        ),
+        _ToggleRow(
+          title: '开沙箱',
+          value: enableSandbox,
+          enabled: enabled,
+          onChanged: onEnableSandboxChanged,
         ),
       ],
     );

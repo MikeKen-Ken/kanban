@@ -13,6 +13,7 @@ class CardDetailAgentModelSection extends StatefulWidget {
     required this.agentModelId,
     required this.agentModelParamValues,
     required this.agentAllowDirtyWorkspace,
+    required this.agentEnableSandbox,
     required this.onChanged,
   });
 
@@ -20,11 +21,13 @@ class CardDetailAgentModelSection extends StatefulWidget {
   final String? agentModelId;
   final Map<String, String> agentModelParamValues;
   final bool? agentAllowDirtyWorkspace;
+  final bool? agentEnableSandbox;
   final void Function({
     String? agentEngine,
     String? agentModelId,
     Map<String, String> agentModelParamValues,
     bool? agentAllowDirtyWorkspace,
+    bool? agentEnableSandbox,
   }) onChanged;
 
   @override
@@ -139,6 +142,7 @@ class _CardDetailAgentModelSectionState
     Object? agentModelId = _omit,
     Map<String, String>? agentModelParamValues,
     Object? agentAllowDirtyWorkspace = _omit,
+    Object? agentEnableSandbox = _omit,
   }) {
     widget.onChanged(
       agentEngine: identical(agentEngine, _omit)
@@ -152,6 +156,9 @@ class _CardDetailAgentModelSectionState
       agentAllowDirtyWorkspace: identical(agentAllowDirtyWorkspace, _omit)
           ? widget.agentAllowDirtyWorkspace
           : agentAllowDirtyWorkspace as bool?,
+      agentEnableSandbox: identical(agentEnableSandbox, _omit)
+          ? widget.agentEnableSandbox
+          : agentEnableSandbox as bool?,
     );
   }
 
@@ -310,6 +317,20 @@ class _CardDetailAgentModelSectionState
             value: widget.agentAllowDirtyWorkspace == true,
             onChanged: (value) => _emit(
               agentAllowDirtyWorkspace: value ? true : null,
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('开沙箱'),
+            subtitle: Text(
+              widget.agentEnableSandbox == true
+                  ? '已覆盖工作台。本卡运行 Cursor SDK 时启用沙箱。'
+                  : '关闭则沿用工作台（默认关闭沙箱）。打开后仅本卡启用沙箱。',
+            ),
+            value: widget.agentEnableSandbox == true,
+            onChanged: (value) => _emit(
+              agentEnableSandbox: value ? true : null,
             ),
           ),
         ],

@@ -41,6 +41,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   Map<String, dynamic> engineDefaults = const {},
   bool ignoreCardParams = false,
   bool allowDirtyWorkspace = false,
+  bool enableSandbox = false,
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,

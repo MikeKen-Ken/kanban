@@ -480,6 +480,7 @@ class KanbanCard {
     this.agentModelId,
     this.agentModelParamValues,
     this.agentAllowDirtyWorkspace,
+    this.agentEnableSandbox,
     this.colorValue,
     this.conflictSide,
     this.conflictColumnId,
@@ -536,6 +537,9 @@ class KanbanCard {
 
   /// 本卡是否允许在未提交改动的工作区领取；null 表示沿用工作台（默认失败）。
   final bool? agentAllowDirtyWorkspace;
+
+  /// 本卡是否开启 Agent 沙箱；null 表示沿用工作台（默认关闭）。
+  final bool? agentEnableSandbox;
 
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
@@ -622,6 +626,7 @@ class KanbanCard {
     Object? agentModelId = _sentinel,
     Object? agentModelParamValues = _sentinel,
     Object? agentAllowDirtyWorkspace = _sentinel,
+    Object? agentEnableSandbox = _sentinel,
     Object? colorValue = _sentinel,
     Object? conflictSide = _sentinel,
     Object? conflictColumnId = _sentinel,
@@ -671,6 +676,9 @@ class KanbanCard {
       agentAllowDirtyWorkspace: agentAllowDirtyWorkspace == _sentinel
           ? this.agentAllowDirtyWorkspace
           : agentAllowDirtyWorkspace as bool?,
+      agentEnableSandbox: agentEnableSandbox == _sentinel
+          ? this.agentEnableSandbox
+          : agentEnableSandbox as bool?,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
       conflictSide: clearConflict
@@ -731,6 +739,8 @@ class KanbanCard {
         'agentModelParamValues': agentModelParamValues,
       if (agentAllowDirtyWorkspace != null)
         'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
+      if (agentEnableSandbox != null)
+        'agentEnableSandbox': agentEnableSandbox,
       if (colorValue != null) 'color': colorValue,
     };
     if (includeConflict) {
@@ -794,6 +804,7 @@ class KanbanCard {
       agentModelId: json['agentModelId'] as String?,
       agentModelParamValues: _stringMap(json['agentModelParamValues']),
       agentAllowDirtyWorkspace: json['agentAllowDirtyWorkspace'] as bool?,
+      agentEnableSandbox: json['agentEnableSandbox'] as bool?,
       colorValue: json['color'] as int?,
       conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
       conflictColumnId: json['conflictColumnId'] as String?,
@@ -844,6 +855,8 @@ class KanbanCard {
           'agentModelParamValues': agentModelParamValues,
         if (agentAllowDirtyWorkspace != null)
           'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
+        if (agentEnableSandbox != null)
+          'agentEnableSandbox': agentEnableSandbox,
       };
 }
 

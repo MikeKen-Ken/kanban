@@ -45,6 +45,7 @@ class AgentDispatchSettings {
     this.engineProfiles = const {},
     this.ignoreCardParams = false,
     this.allowDirtyWorkspace = false,
+    this.enableSandbox = false,
     this.cardLimitMax = true,
     this.cardLimitCount = 1,
     this.afterQueue = const [],
@@ -82,6 +83,9 @@ class AgentDispatchSettings {
   /// 工作台默认：关闭时脏工作区停止批次。
   final bool allowDirtyWorkspace;
 
+  /// 工作台默认：关闭时 Cursor SDK 不启用沙箱。
+  final bool enableSandbox;
+
   final bool cardLimitMax;
   final int cardLimitCount;
 
@@ -106,6 +110,7 @@ class AgentDispatchSettings {
     Map<String, AgentDispatchEngineProfile>? engineProfiles,
     bool? ignoreCardParams,
     bool? allowDirtyWorkspace,
+    bool? enableSandbox,
     bool? cardLimitMax,
     int? cardLimitCount,
     List<AgentDispatchAfterStep>? afterQueue,
@@ -125,6 +130,7 @@ class AgentDispatchSettings {
       engineProfiles: engineProfiles ?? this.engineProfiles,
       ignoreCardParams: ignoreCardParams ?? this.ignoreCardParams,
       allowDirtyWorkspace: allowDirtyWorkspace ?? this.allowDirtyWorkspace,
+      enableSandbox: enableSandbox ?? this.enableSandbox,
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       afterQueue: afterQueue ?? this.afterQueue,
@@ -224,6 +230,7 @@ class AgentDispatchSettings {
       engineDefaults: engineDefaults,
       ignoreCardParams: ignoreCardParams,
       allowDirtyWorkspace: allowDirtyWorkspace,
+      enableSandbox: enableSandbox,
       cardLimit: cardLimitMax
           ? AgentDispatchCardLimit.max
           : AgentDispatchCardLimit.count(cardLimitCount),
@@ -244,6 +251,7 @@ class AgentDispatchSettings {
           },
         'ignoreCardParams': ignoreCardParams,
         'allowDirtyWorkspace': allowDirtyWorkspace,
+        'enableSandbox': enableSandbox,
         'cardLimitMax': cardLimitMax,
         'cardLimitCount': cardLimitCount,
         if (afterQueue.isNotEmpty)
@@ -314,6 +322,7 @@ class AgentDispatchSettings {
       engineProfiles: engineProfiles,
       ignoreCardParams: json['ignoreCardParams'] as bool? ?? false,
       allowDirtyWorkspace: json['allowDirtyWorkspace'] as bool? ?? false,
+      enableSandbox: json['enableSandbox'] as bool? ?? false,
       cardLimitMax: json['cardLimitMax'] as bool? ?? true,
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
           (json['maxCards'] as num?)?.toInt() ??

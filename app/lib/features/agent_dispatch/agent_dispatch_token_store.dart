@@ -53,4 +53,8 @@ extension AgentDispatchTokenStore on SharedPreferences {
     final next = [...loadAgentDispatchTokens(projectId: projectId), record];
     return saveAgentDispatchTokens(next, projectId: projectId);
   }
+
+  Future<void> clearAgentDispatchTokens({String? projectId}) {
+    return remove(_storageKey(projectId));
+  }
 }

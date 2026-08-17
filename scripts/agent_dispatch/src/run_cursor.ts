@@ -242,7 +242,7 @@ export async function runCursor(
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
     logLine(
-      `本地运行：JSONL 存储=${storeDir}；沙箱关闭；` +
+      `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
         `仅注入看板精简 MCP（${agentMcpUrl}），不加载用户级 MCP；` +
         `settingSources 为空（不注入项目规则与个人 Skill）`,
     );
@@ -265,7 +265,7 @@ export async function runCursor(
         settingSources: [],
         store: new JsonlLocalAgentStore(storeDir),
         autoReview: true,
-        sandboxOptions: { enabled: false },
+        sandboxOptions: { enabled: job.enableSandbox === true },
       },
     });
     try {

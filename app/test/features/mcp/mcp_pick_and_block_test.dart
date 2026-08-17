@@ -104,6 +104,7 @@ void main() {
       agentEngine: 'cursor',
       agentModelId: 'composer-2.5',
       agentAllowDirtyWorkspace: true,
+      agentEnableSandbox: true,
       agentModelParamValues: const {'fast': 'true'},
     );
 
@@ -115,6 +116,7 @@ void main() {
     expect(payload['agentModelId'], 'composer-2.5');
     expect(payload['agentModelParamValues'], {'fast': 'true'});
     expect(payload['agentAllowDirtyWorkspace'], isTrue);
+    expect(payload['agentEnableSandbox'], isTrue);
   });
 
   test('pick_next_card includeWorkItems=false 时不含 workItems', () async {

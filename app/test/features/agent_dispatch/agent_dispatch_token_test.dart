@@ -168,6 +168,11 @@ void main() {
     await prefs.appendAgentDispatchToken(record, projectId: 'p1');
     expect(prefs.loadAgentDispatchTokens(projectId: 'p1').single.totalTokens, 30);
     expect(prefs.loadAgentDispatchTokens(projectId: 'p2'), isEmpty);
+
+    await prefs.appendAgentDispatchToken(record, projectId: 'p2');
+    await prefs.clearAgentDispatchTokens(projectId: 'p1');
+    expect(prefs.loadAgentDispatchTokens(projectId: 'p1'), isEmpty);
+    expect(prefs.loadAgentDispatchTokens(projectId: 'p2').single.totalTokens, 30);
   });
 
   test('加载旧项目历史时纠正重复累计后再汇总', () async {

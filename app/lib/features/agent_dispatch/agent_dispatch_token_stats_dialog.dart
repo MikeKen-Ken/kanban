@@ -65,6 +65,31 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
     });
   }
 
+  Future<void> _confirmClear() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清空 Token 统计？'),
+        content: const Text('将删除本机当前项目的全部会话用量记录，且不会同步到其他设备。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clearAgentDispatchTokens(projectId: widget.projectId);
+    if (!mounted) return;
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final stats = _stats;
@@ -84,6 +109,14 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
 
     return ListView(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _confirmClear,
+            icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+            label: const Text('清空统计'),
+          ),
+        ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
