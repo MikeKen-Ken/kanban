@@ -144,6 +144,84 @@ void main() {
     expect(pickNextWorkCard(board), isNull);
   });
 
+  test('待办空时领取进行中滞留卡，避免 Max 误判队列已空', () {
+    final board = _board([
+      KanbanColumn(
+        id: 'todo',
+        title: '待办',
+        order: 0,
+        cards: const [],
+      ),
+      KanbanColumn(
+        id: 'doing',
+        title: '进行中',
+        order: 1,
+        cards: [
+          _card(id: 'd-old', title: '旧滞留', updatedAt: 4),
+          _card(id: 'd-new', title: '新滞留', updatedAt: 9),
+          _card(id: 'd-done', title: '完成', updatedAt: 99, completed: true),
+        ],
+      ),
+    ]);
+
+    final picked = pickNextWorkCard(board);
+    expect(picked, isNotNull);
+    expect(picked!.sourceColumn, '进行中');
+    expect(picked.card.id, 'd-new');
+  });
+
+  test('待返工仍优先于进行中滞留卡，进行中优先于待办', () {
+    final board = _board([
+      KanbanColumn(
+        id: 'todo',
+        title: '待办',
+        order: 0,
+        cards: [
+          _card(id: 't1', title: '待办卡', updatedAt: 50),
+        ],
+      ),
+      KanbanColumn(
+        id: 'doing',
+        title: '进行中',
+        order: 1,
+        cards: [
+          _card(id: 'd1', title: '滞留', updatedAt: 40),
+        ],
+      ),
+      KanbanColumn(
+        id: 'rework',
+        title: '待返工',
+        order: 2,
+        cards: [
+          _card(id: 'r1', title: '返工', updatedAt: 1),
+        ],
+      ),
+    ]);
+
+    expect(pickNextWorkCard(board)!.card.id, 'r1');
+
+    final withoutRework = _board([
+      KanbanColumn(
+        id: 'todo',
+        title: '待办',
+        order: 0,
+        cards: [
+          _card(id: 't1', title: '待办卡', updatedAt: 50),
+        ],
+      ),
+      KanbanColumn(
+        id: 'doing',
+        title: '进行中',
+        order: 1,
+        cards: [
+          _card(id: 'd1', title: '滞留', updatedAt: 4),
+        ],
+      ),
+    ]);
+    expect(pickNextWorkCard(withoutRework)!.card.id, 'd1');
+    expect(pickNextWorkCard(withoutRework)!.sourceColumn, '进行中');
+  });
+
   test('updatedAt 相同时取 createdAt 更新的', () {
     final newer = pickLatestIncompleteCard([
       _card(id: 'old', title: '早建', updatedAt: 10, createdAt: 1),
@@ -209,7 +287,7 @@ void main() {
     expect(buildCardWorkScope(card)['workMode'], 'normal');
   });
 
-  test('countWorkQueueCards 统计待返工与待办未完成卡', () {
+  test('countWorkQueueCards 统计待返工、待办与进行中未完成卡', () {
     final board = _board([
       KanbanColumn(
         id: 'todo',
@@ -233,10 +311,19 @@ void main() {
         title: '进行中',
         order: 2,
         cards: [
-          _card(id: 'd1', title: '进行中不计入', updatedAt: 4),
+          _card(id: 'd1', title: '滞留', updatedAt: 4),
+          _card(id: 'd2', title: '进行中已完成', updatedAt: 5, completed: true),
         ],
       ),
     ]);
-    expect(countWorkQueueCards(board), 2);
+    expect(countWorkQueueCards(board), 3);
+    expect(
+      countRemainingDispatchQueue(board, hasActiveCard: true),
+      2,
+    );
+    expect(
+      countRemainingDispatchQueue(board, hasActiveCard: false),
+      3,
+    );
   });
 }

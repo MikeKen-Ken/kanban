@@ -33,7 +33,7 @@ Future<CallToolResult> mcpPeekNextCard(
 
 /// 取下一条可实施卡，并自动移入「进行中」。
 ///
-/// 选取规则与 [pickNextWorkCard] 一致：优先「待返工」最新未完成卡，否则「待办」。
+/// 选取规则与 [pickNextWorkCard] 一致：待返工，其次进行中滞留卡，最后待办。
 /// 默认 [includeWorkItems]=true，一次返回实施范围与附件内容；仅 peek 时可传 false。
 Future<CallToolResult> mcpPickNextCard(
   BoardController controller, {
@@ -92,7 +92,7 @@ Future<CallToolResult> mcpPickNextCard(
       return mcpJsonResult({
         'found': false,
         'projectId': resolvedProjectId,
-        'reason': '待办与待返工均无未完成卡片',
+        'reason': '待办、待返工与进行中均无未完成卡片',
       });
     }
 

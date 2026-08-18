@@ -1,5 +1,6 @@
 import '../../models/kanban_models.dart';
 import 'move_to_rework_on_new_feedback.dart';
+import 'verify_column.dart';
 
 /// 默认「待办」列标题（与 [KanbanBoard.empty] 一致）。
 const defaultTodoColumnTitle = '待办';
@@ -39,7 +40,10 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
   return best;
 }
 
-/// 「待返工」最新未完成卡；若无则「待办」最新未完成卡。
+/// 「待返工」优先，其次「进行中」滞留卡，最后「待办」。
+///
+/// 领取后卡会停在「进行中」。会话失败、崩溃或未声明完成时，Max 必须仍能领到这些卡，
+/// 否则 Worker 会把空待办当成批次结束，看板里留下无 Agent 的进行中卡片。
 ({KanbanColumn column, KanbanCard card, String sourceColumn})? pickNextWorkCard(
   KanbanBoard board,
 ) {
@@ -55,6 +59,18 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
     }
   }
 
+  final doing = findDoingColumn(board.columns);
+  if (doing != null) {
+    final card = pickLatestIncompleteCard(doing.cards);
+    if (card != null) {
+      return (
+        column: doing,
+        card: card,
+        sourceColumn: defaultDoingColumnTitle,
+      );
+    }
+  }
+
   final todo = findTodoColumn(board.columns);
   if (todo != null) {
     final card = pickLatestIncompleteCard(todo.cards);
@@ -66,22 +82,30 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
   return null;
 }
 
-/// 待返工与待办中未完成卡片数，供调度进度分母估算。
-int countWorkQueueCards(KanbanBoard board) {
+int _countIncompleteCards(KanbanColumn? column) {
+  if (column == null) return 0;
   var count = 0;
-  final rework = findReworkColumn(board.columns);
-  if (rework != null) {
-    for (final card in rework.cards) {
-      if (!card.completed) count += 1;
-    }
-  }
-  final todo = findTodoColumn(board.columns);
-  if (todo != null) {
-    for (final card in todo.cards) {
-      if (!card.completed) count += 1;
-    }
+  for (final card in column.cards) {
+    if (!card.completed) count += 1;
   }
   return count;
+}
+
+/// 待返工、进行中与待办中未完成卡片数，供调度进度分母估算。
+int countWorkQueueCards(KanbanBoard board) {
+  return _countIncompleteCards(findReworkColumn(board.columns)) +
+      _countIncompleteCards(findDoingColumn(board.columns)) +
+      _countIncompleteCards(findTodoColumn(board.columns));
+}
+
+/// 实时进度用剩余队列：不含当前正在实施的那张进行中卡。
+int countRemainingDispatchQueue(
+  KanbanBoard board, {
+  required bool hasActiveCard,
+}) {
+  final total = countWorkQueueCards(board);
+  if (!hasActiveCard || total <= 0) return total;
+  return total - 1;
 }
 
 /// 本轮实施范围（仅文本；附件由 MCP 层内联二进制）。

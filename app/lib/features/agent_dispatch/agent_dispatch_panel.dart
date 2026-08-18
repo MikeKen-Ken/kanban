@@ -113,10 +113,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (currentBoard == null || currentBoard.id != widget.projectId) {
       return progress;
     }
+    final hasActiveCard = hasIncompleteDoingCard(currentBoard);
     return applyLiveBoardQueue(
       progress,
-      remainingQueue: countWorkQueueCards(currentBoard),
-      hasActiveCard: hasIncompleteDoingCard(currentBoard),
+      remainingQueue: countRemainingDispatchQueue(
+        currentBoard,
+        hasActiveCard: hasActiveCard,
+      ),
+      hasActiveCard: hasActiveCard,
     );
   }
 

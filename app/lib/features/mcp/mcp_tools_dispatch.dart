@@ -14,7 +14,7 @@ void registerKanbanMcpDispatchTools(
 }) {
   server.registerTool(
     'peek_next_card',
-    description: '只读判断是否还有待办或待返工卡片；不领取、不移动卡片。',
+    description: '只读判断是否还有待办、待返工或进行中未完成卡片；不领取、不移动卡片。',
     inputSchema: JsonSchema.object(properties: {
       'projectId': JsonSchema.string(description: '项目 UUID'),
     }),

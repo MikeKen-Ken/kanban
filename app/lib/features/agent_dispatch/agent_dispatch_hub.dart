@@ -67,10 +67,14 @@ class AgentDispatchHub extends StatelessWidget {
     if (progress.running &&
         currentBoard != null &&
         currentBoard.id == project.id) {
+      final hasActiveCard = hasIncompleteDoingCard(currentBoard);
       progress = applyLiveBoardQueue(
         progress,
-        remainingQueue: countWorkQueueCards(currentBoard),
-        hasActiveCard: hasIncompleteDoingCard(currentBoard),
+        remainingQueue: countRemainingDispatchQueue(
+          currentBoard,
+          hasActiveCard: hasActiveCard,
+        ),
+        hasActiveCard: hasActiveCard,
       );
     }
     return AgentDispatchHubItem(

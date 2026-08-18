@@ -13,7 +13,7 @@ import 'mcp_tool_results.dart';
 void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'pick_next_card',
-    description: '取下一条可实施卡并移入「进行中」：优先「待返工」最新未完成卡，否则「待办」。'
+    description: '取下一条可实施卡并移入「进行中」：优先「待返工」，其次「进行中」滞留卡，否则「待办」。'
         '默认返回 workItems；有图片/文件时内联内容，无需再 list/read。'
         'projectId 传项目 UUID。',
     inputSchema: JsonSchema.object(

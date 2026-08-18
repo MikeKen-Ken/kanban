@@ -251,6 +251,32 @@ void main() {
     expect(rework.cards.any((card) => card.id == cardId), isTrue);
   });
 
+  test('待办空时 peek/pick 领取进行中滞留卡且不重复移列', () async {
+    final doingColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'doing');
+    final cardId = await controller.addCard(doingColumn.id, '滞留卡');
+    expect(cardId, isNotNull);
+
+    final peek = await mcpPeekNextCard(controller);
+    final peekPayload = jsonDecode(_textOf(peek)) as Map<String, dynamic>;
+    expect(peekPayload['found'], isTrue);
+    expect(peekPayload['cardId'], cardId);
+    expect(peekPayload['sourceColumn'], '进行中');
+
+    final pick = await mcpPickNextCard(controller);
+    expect(pick.isError, isNot(true));
+    final pickPayload = jsonDecode(_textOf(pick)) as Map<String, dynamic>;
+    expect(pickPayload['found'], isTrue);
+    expect(pickPayload['cardId'], cardId);
+    expect(pickPayload['sourceColumn'], '进行中');
+    expect(pickPayload['fromColumnId'], 'doing');
+    expect(pickPayload['columnId'], 'doing');
+    expect(pickPayload['movedToDoing'], isFalse);
+
+    final doing = findDoingColumn(controller.board!.columns)!;
+    expect(doing.cards.where((card) => card.id == cardId).length, 1);
+  });
+
   test('block_card 将卡片移入阻塞中', () async {
     final doingColumn =
         controller.board!.columns.firstWhere((c) => c.id == 'doing');
