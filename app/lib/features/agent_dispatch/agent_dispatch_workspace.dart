@@ -5,18 +5,18 @@ import 'agent_dispatch_progress.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
-/// 宽窗口使用「调度配置 / 批次配置 / Skill / 运行日志」四列；窄窗口回退为
+/// 宽窗口使用「调度配置 / Worker（含 Skill） / 运行日志」三列；窄窗口回退为
 /// 纵向滚动，避免字段被压缩到不可用。
 class AgentDispatchWorkspace extends StatelessWidget {
   const AgentDispatchWorkspace({
-    required this.batch,
+    required this.worker,
     required this.skill,
     required this.settings,
     required this.log,
     super.key,
   });
 
-  final Widget batch;
+  final Widget worker;
   final Widget skill;
   final Widget settings;
   final Widget log;
@@ -39,13 +39,15 @@ class AgentDispatchWorkspace extends StatelessWidget {
               const VerticalDivider(width: 20),
               Expanded(
                 flex: 8,
-                child: _ScrollablePane(
-                  title: '批次配置',
-                  child: batch,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    worker,
+                    const SizedBox(height: 12),
+                    Expanded(child: skill),
+                  ],
                 ),
               ),
-              const VerticalDivider(width: 20),
-              Expanded(flex: 7, child: skill),
               const VerticalDivider(width: 20),
               Expanded(flex: 12, child: log),
             ],
@@ -60,10 +62,8 @@ class AgentDispatchWorkspace extends StatelessWidget {
               const SizedBox(height: 12),
               settings,
               const Divider(height: 32),
-              const _PaneTitle(title: '批次配置'),
+              worker,
               const SizedBox(height: 12),
-              batch,
-              const Divider(height: 32),
               skill,
               const Divider(height: 32),
               SizedBox(height: 400, child: log),

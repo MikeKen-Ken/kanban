@@ -846,38 +846,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   _settings.copyWith(enableSandbox: value),
                 ),
               ),
-              if (_modelCatalogMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: Text(
-                    _modelCatalogMessage!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              if (_models.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    '尚未加载模型目录；请点击「刷新」手动拉取',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              if (_selectedModel != null && modelParameters.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Cursor API 未为此模型提供可调参数',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-            ],
-          ),
-          batch: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+              const SizedBox(height: 12),
               DropdownButtonFormField<AgentDispatchEngine>(
                 key: ValueKey('default-engine-${_settings.defaultEngine}'),
                 initialValue: _settings.defaultEngine,
@@ -928,13 +897,39 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   );
                 },
               ),
-              const SizedBox(height: 12),
-              AgentDispatchWorkerPane(
-                workerStatus: _workerStatus,
-                enabled: !_running && !_busy,
-                onFixWorker: _fixWorker,
-              ),
+              if (_modelCatalogMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: Text(
+                    _modelCatalogMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              if (_models.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '尚未加载模型目录；请点击「刷新」手动拉取',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              if (_selectedModel != null && modelParameters.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Cursor API 未为此模型提供可调参数',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
             ],
+          ),
+          worker: AgentDispatchWorkerPane(
+            workerStatus: _workerStatus,
+            enabled: !_running && !_busy,
+            onFixWorker: _fixWorker,
           ),
           skill: AgentDispatchSkillPane(
             skillPath: skillPath,
