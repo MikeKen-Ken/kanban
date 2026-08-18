@@ -28,11 +28,21 @@ const RETRYABLE_ERROR_CODES = new Set([
 ]);
 const RETRYABLE_MESSAGE_PARTS = [
   "connect timeout",
+  "connection closed",
+  "connection error",
+  "connection failed",
+  "connection lost",
   "connection reset",
   "fetch failed",
+  "gateway timeout",
+  "internal server error",
   "network",
+  "overloaded",
+  "remote host closed",
+  "server error",
   "service unavailable",
   "socket hang up",
+  "temporarily unavailable",
   "timed out",
   "timeout",
 ];

@@ -429,7 +429,8 @@ export async function runCursor(
       return {
         ok: false,
         error: `Cursor 启动失败：${err.message}（retryable=${err.isRetryable}）`,
-        retryable: err.isRetryable,
+        // SDK 偶尔会把连接中断标为不可重试，保留本地网络错误兜底。
+        retryable: err.isRetryable || isRetryableError(err),
       };
     }
     return {

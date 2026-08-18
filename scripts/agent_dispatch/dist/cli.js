@@ -567,11 +567,21 @@ var RETRYABLE_ERROR_CODES = /* @__PURE__ */ new Set([
 ]);
 var RETRYABLE_MESSAGE_PARTS = [
   "connect timeout",
+  "connection closed",
+  "connection error",
+  "connection failed",
+  "connection lost",
   "connection reset",
   "fetch failed",
+  "gateway timeout",
+  "internal server error",
   "network",
+  "overloaded",
+  "remote host closed",
+  "server error",
   "service unavailable",
   "socket hang up",
+  "temporarily unavailable",
   "timed out",
   "timeout"
 ];
@@ -2453,7 +2463,8 @@ async function runCursor(job, cancellation) {
       return {
         ok: false,
         error: `Cursor \u542F\u52A8\u5931\u8D25\uFF1A${err.message}\uFF08retryable=${err.isRetryable}\uFF09`,
-        retryable: err.isRetryable
+        // SDK 偶尔会把连接中断标为不可重试，保留本地网络错误兜底。
+        retryable: err.isRetryable || isRetryableError(err)
       };
     }
     return {
@@ -2465,7 +2476,7 @@ async function runCursor(job, cancellation) {
 }
 
 // src/run_agent_with_retry.ts
-var MAX_AGENT_ATTEMPTS = 3;
+var MAX_AGENT_ATTEMPTS = 5;
 var BASE_RETRY_DELAY_MS = 1e3;
 async function runAgentWithRetry(runAgent, job, cancellation, wait = sleep) {
   for (let attempt = 1; attempt <= MAX_AGENT_ATTEMPTS; attempt += 1) {

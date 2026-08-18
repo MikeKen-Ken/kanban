@@ -56,9 +56,8 @@ class AgentDispatchProgress {
   double? get fraction {
     final total = _liveDenominator;
     if (!running || total <= 0) return null;
-    final completed = currentRound > processedCards
-        ? currentRound - 1
-        : processedCards;
+    final completed =
+        currentRound > processedCards ? currentRound - 1 : processedCards;
     final value = completed / total;
     if (value < 0) return 0;
     if (value > 1) return 1;
@@ -182,8 +181,7 @@ AgentDispatchProgress applyWorkerProgressLog(
   if (round != null) {
     final roundIndex = int.parse(round.group(1)!);
     final roundTotalRaw = round.group(2);
-    final roundTotal =
-        roundTotalRaw == null ? null : int.parse(roundTotalRaw);
+    final roundTotal = roundTotalRaw == null ? null : int.parse(roundTotalRaw);
     return current.copyWith(
       currentRound: roundIndex,
       totalCards: _totalAfterRoundLog(
@@ -223,6 +221,9 @@ AgentDispatchProgress applyWorkerProgressLog(
 }
 
 String? _phaseFromLog(String message) {
+  if (message.contains('Agent 会话暂时失败') && message.contains('自动重试')) {
+    return '重试';
+  }
   if (message.contains('Worker 正在实施')) return '实施';
   if (message.contains('验证已由 Agent 会话完成') ||
       message.contains('Worker 正在提交') ||
@@ -237,9 +238,9 @@ String? _phaseFromLog(String message) {
   return null;
 }
 
-AgentDispatchProgress _withProcessed(AgentDispatchProgress current, int processed) {
-  final total =
-      current.totalCards > processed ? current.totalCards : processed;
+AgentDispatchProgress _withProcessed(
+    AgentDispatchProgress current, int processed) {
+  final total = current.totalCards > processed ? current.totalCards : processed;
   return current.copyWith(processedCards: processed, totalCards: total);
 }
 
@@ -248,7 +249,8 @@ int _totalAfterRoundLog(
   required int roundIndex,
   required int? roundTotal,
 }) {
-  final keep = roundIndex > current.totalCards ? roundIndex : current.totalCards;
+  final keep =
+      roundIndex > current.totalCards ? roundIndex : current.totalCards;
   if (current.drainAfterCurrent) return keep;
   // Max 把 Worker 上限写成 999，那是哨兵不是队列长度。
   if (current.cardLimitMax || roundTotal == null) {

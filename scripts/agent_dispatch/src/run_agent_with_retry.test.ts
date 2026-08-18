@@ -45,7 +45,7 @@ describe("run_agent_with_retry", () => {
     assert.deepEqual(delays, [1000, 2000]);
   });
 
-  it("三次暂时故障后中断并保留最后错误", async () => {
+  it("五次暂时故障后中断并保留最后错误", async () => {
     let attempts = 0;
 
     const result = await runAgentWithRetry(
@@ -60,7 +60,30 @@ describe("run_agent_with_retry", () => {
 
     assert.equal(result.ok, false);
     assert.equal(result.error, "ETIMEDOUT");
-    assert.equal(attempts, 3);
+    assert.equal(attempts, 5);
+  });
+
+  it("较长网络波动后仍能在当前卡片内恢复", async () => {
+    let attempts = 0;
+    const delays: number[] = [];
+
+    const result = await runAgentWithRetry(
+      async () => {
+        attempts += 1;
+        return attempts < 5
+          ? { ok: false, error: "connection lost", retryable: true }
+          : { ok: true, summary: "恢复并完成" };
+      },
+      job,
+      undefined,
+      async (ms) => {
+        delays.push(ms);
+      },
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(attempts, 5);
+    assert.deepEqual(delays, [1000, 2000, 4000, 8000]);
   });
 
   it("不可重试错误立即返回", async () => {

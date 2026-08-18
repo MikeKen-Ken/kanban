@@ -13,6 +13,14 @@ describe("retry", () => {
       true,
     );
     assert.equal(isRetryableError({ status: 503, message: "不可用" }), true);
+    assert.equal(
+      isRetryableError({
+        isRetryable: false,
+        message: "connection closed before response completed",
+      }),
+      true,
+    );
+    assert.equal(isRetryableError("server overloaded, retry later"), true);
   });
 
   it("不重试鉴权和配置错误", () => {

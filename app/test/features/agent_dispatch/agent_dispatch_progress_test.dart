@@ -56,7 +56,8 @@ void main() {
 
   test('从日志解析当前卡片内容与实时阶段', () {
     var progress = const AgentDispatchProgress(running: true, totalCards: 12);
-    progress = applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/12 ────────');
+    progress =
+        applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/12 ────────');
     expect(progress.liveCardLabel, '1/12');
     expect(progress.phaseLabel, '领取');
     progress = applyWorkerProgressLog(progress, '当前卡片：agent 工作台');
@@ -68,7 +69,13 @@ void main() {
     expect(progress.currentDetail, contains('实时状态'));
     progress = applyWorkerProgressLog(progress, 'Worker 正在实施当前卡片');
     expect(progress.phaseLabel, '实施');
-    progress = applyWorkerProgressLog(progress, '验证已由 Agent 会话完成，Worker 不再复跑测试');
+    progress = applyWorkerProgressLog(
+      progress,
+      'Agent 会话暂时失败（第 2/5 次）：connection lost；2000ms 后自动重试',
+    );
+    expect(progress.phaseLabel, '重试');
+    progress =
+        applyWorkerProgressLog(progress, '验证已由 Agent 会话完成，Worker 不再复跑测试');
     expect(progress.phaseLabel, '提交');
     progress = applyWorkerProgressLog(progress, 'Worker 正在提交并送交验证');
     expect(progress.phaseLabel, '提交');
@@ -157,7 +164,8 @@ void main() {
       totalCards: 4,
       cardLimitMax: true,
     );
-    progress = applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/999 ────────');
+    progress =
+        applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/999 ────────');
     expect(progress.currentRound, 1);
     expect(progress.liveCardLabel, '1/4');
     expect(progress.totalCards, 4);
@@ -170,7 +178,8 @@ void main() {
       totalCards: 4,
       cardLimitMax: true,
     );
-    progress = applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1 ────────');
+    progress =
+        applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1 ────────');
     expect(progress.liveCardLabel, '1/4');
   });
 

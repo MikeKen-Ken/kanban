@@ -3,7 +3,8 @@ import { isRetryableError, sleep } from "./retry.ts";
 import type { DispatchResult, RoundDispatchJob } from "./types.ts";
 import { workerLog } from "./worker_log.ts";
 
-const MAX_AGENT_ATTEMPTS = 3;
+// 给短时断网留出 15 秒恢复窗口（1s + 2s + 4s + 8s），同时保持有限重试。
+const MAX_AGENT_ATTEMPTS = 5;
 const BASE_RETRY_DELAY_MS = 1000;
 
 export async function runAgentWithRetry(
