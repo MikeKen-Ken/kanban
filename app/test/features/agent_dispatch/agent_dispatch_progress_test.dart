@@ -245,4 +245,35 @@ void main() {
     expect(registry.progressOf('a').fractionLabel, '3/10');
     expect(registry.progressOf('b').running, isFalse);
   });
+
+  test('轮次日志记下本卡开始时间，覆盖日志更新引擎与模型', () {
+    final started = DateTime(2026, 8, 18, 18, 0, 0);
+    var progress = AgentDispatchProgress(
+      running: true,
+      totalCards: 3,
+      engine: 'codex',
+      model: 'gpt-5',
+      batchStartedAt: started,
+    );
+    progress = applyWorkerProgressLog(
+      progress,
+      'Worker 单卡轮次 1/3',
+      now: started.add(const Duration(minutes: 2)),
+    );
+    expect(progress.cardStartedAt, started.add(const Duration(minutes: 2)));
+    progress = applyWorkerProgressLog(
+      progress,
+      '本卡覆盖：engine=cursor model=composer-2.5 params=[] cardId=abc',
+    );
+    expect(progress.engine, 'cursor');
+    expect(progress.model, 'composer-2.5');
+    expect(
+      progress.batchElapsedSeconds(now: started.add(const Duration(minutes: 5))),
+      5 * 60,
+    );
+    expect(
+      progress.cardElapsedSeconds(now: started.add(const Duration(minutes: 5))),
+      3 * 60,
+    );
+  });
 }

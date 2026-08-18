@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,6 +9,7 @@ import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import '../project/project_list_preferences.dart';
 import '../project/projects_manifest.dart';
+import 'agent_dispatch_hub_overview.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_registry.dart';
 import 'agent_dispatch_window.dart';
@@ -19,6 +22,12 @@ class AgentDispatchHubItem {
     this.isCurrent = false,
     this.progressLabel,
     this.progressFraction,
+    this.currentTitle,
+    this.phaseLabel,
+    this.engine,
+    this.model,
+    this.batchStartedAt,
+    this.cardStartedAt,
   });
 
   final String projectId;
@@ -27,6 +36,12 @@ class AgentDispatchHubItem {
   final bool isCurrent;
   final String? progressLabel;
   final double? progressFraction;
+  final String? currentTitle;
+  final String? phaseLabel;
+  final String? engine;
+  final String? model;
+  final DateTime? batchStartedAt;
+  final DateTime? cardStartedAt;
 }
 
 List<AgentDispatchHubItem> orderAgentDispatchHubItems(
@@ -117,11 +132,17 @@ class AgentDispatchHub extends StatelessWidget {
       isCurrent: project.id == currentId,
       progressLabel: progress.running ? progress.liveCardLabel : null,
       progressFraction: progress.fraction,
+      currentTitle: progress.currentTitle,
+      phaseLabel: progress.phaseLabel,
+      engine: progress.engine,
+      model: progress.model,
+      batchStartedAt: progress.batchStartedAt,
+      cardStartedAt: progress.cardStartedAt,
     );
   }
 }
 
-class AgentDispatchHubView extends StatelessWidget {
+class AgentDispatchHubView extends StatefulWidget {
   const AgentDispatchHubView({
     required this.items,
     required this.onClose,
@@ -134,11 +155,47 @@ class AgentDispatchHubView extends StatelessWidget {
   final void Function(String projectId) onOpenProject;
 
   @override
+  State<AgentDispatchHubView> createState() => _AgentDispatchHubViewState();
+}
+
+class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant AgentDispatchHubView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final wasRunning = oldWidget.items.any((item) => item.running);
+    final isRunning = widget.items.any((item) => item.running);
+    if (wasRunning != isRunning) _syncTicker();
+  }
+
+  void _syncTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (!widget.items.any((item) => item.running)) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final viewport = MediaQuery.sizeOf(context);
     final dialogWidth = (viewport.width - 96).clamp(480.0, 720.0).toDouble();
     final dialogHeight = (viewport.height - 180).clamp(360.0, 640.0).toDouble();
-    final runningCount = items.where((item) => item.running).length;
+    final runningCount = widget.items.where((item) => item.running).length;
     return AlertDialog(
       insetPadding: const EdgeInsets.all(24),
       title: Text(
@@ -149,22 +206,22 @@ class AgentDispatchHubView extends StatelessWidget {
       content: SizedBox(
         width: dialogWidth,
         height: dialogHeight,
-        child: items.isEmpty
+        child: widget.items.isEmpty
             ? const Center(child: Text('还没有看板项目'))
             : ListView.separated(
-                itemCount: items.length,
+                itemCount: widget.items.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, index) {
-                  final item = items[index];
+                  final item = widget.items[index];
                   return _HubProjectTile(
                     item: item,
-                    onOpen: () => onOpenProject(item.projectId),
+                    onOpen: () => widget.onOpenProject(item.projectId),
                   );
                 },
               ),
       ),
       actions: [
-        TextButton(onPressed: onClose, child: const Text('关闭')),
+        TextButton(onPressed: widget.onClose, child: const Text('关闭')),
       ],
     );
   }
@@ -179,9 +236,18 @@ class _HubProjectTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = item.running
-        ? (item.progressLabel == null ? '运行中' : '运行中 · ${item.progressLabel}')
-        : '未运行';
+    final overview = item.running
+        ? AgentDispatchHubOverview.running(
+            liveCardLabel: item.progressLabel ?? '',
+            currentTitle: item.currentTitle ?? '',
+            phaseLabel: item.phaseLabel ?? '',
+            engine: item.engine ?? '',
+            model: item.model ?? '',
+            batchStartedAt: item.batchStartedAt,
+            cardStartedAt: item.cardStartedAt,
+          )
+        : null;
+    final status = overview?.statusLine ?? '未运行';
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       leading: Icon(
@@ -214,6 +280,34 @@ class _HubProjectTile extends StatelessWidget {
         children: [
           const SizedBox(height: 4),
           Text(status),
+          if (overview != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              overview.cardTitle,
+              key: ValueKey('agent-dispatch-hub-card-${item.projectId}'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              overview.engineModelLabel,
+              key: ValueKey('agent-dispatch-hub-model-${item.projectId}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+            if (overview.elapsedLabel.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                overview.elapsedLabel,
+                key: ValueKey('agent-dispatch-hub-elapsed-${item.projectId}'),
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
           if (item.running) ...[
             const SizedBox(height: 8),
             LinearProgressIndicator(value: item.progressFraction),

@@ -11,6 +11,10 @@ class AgentDispatchProgress {
     this.currentDetail = '',
     this.phaseLabel = '',
     this.drainAfterCurrent = false,
+    this.engine = '',
+    this.model = '',
+    this.batchStartedAt,
+    this.cardStartedAt,
   });
 
   static const idle = AgentDispatchProgress();
@@ -27,6 +31,18 @@ class AgentDispatchProgress {
 
   /// 当前会话后停止或立即停止后，不再把队列剩余计入分母。
   final bool drainAfterCurrent;
+
+  /// 批次默认或本卡覆盖后的引擎名（cursor / codex）。
+  final String engine;
+
+  /// 批次默认或本卡覆盖后的模型 id。
+  final String model;
+
+  /// 本批次开始时刻，供总览展示总体已运行时间。
+  final DateTime? batchStartedAt;
+
+  /// 当前卡片领取时刻，供总览展示本卡运行时间。
+  final DateTime? cardStartedAt;
 
   String get fractionLabel {
     if (totalCards <= 0) return '$processedCards/…';
@@ -64,6 +80,12 @@ class AgentDispatchProgress {
     return value;
   }
 
+  int? batchElapsedSeconds({DateTime? now}) =>
+      elapsedSecondsSince(batchStartedAt, now: now);
+
+  int? cardElapsedSeconds({DateTime? now}) =>
+      elapsedSecondsSince(cardStartedAt, now: now);
+
   AgentDispatchProgress copyWith({
     bool? running,
     int? processedCards,
@@ -75,6 +97,10 @@ class AgentDispatchProgress {
     String? currentDetail,
     String? phaseLabel,
     bool? drainAfterCurrent,
+    String? engine,
+    String? model,
+    DateTime? batchStartedAt,
+    DateTime? cardStartedAt,
   }) {
     return AgentDispatchProgress(
       running: running ?? this.running,
@@ -87,8 +113,18 @@ class AgentDispatchProgress {
       currentDetail: currentDetail ?? this.currentDetail,
       phaseLabel: phaseLabel ?? this.phaseLabel,
       drainAfterCurrent: drainAfterCurrent ?? this.drainAfterCurrent,
+      engine: engine ?? this.engine,
+      model: model ?? this.model,
+      batchStartedAt: batchStartedAt ?? this.batchStartedAt,
+      cardStartedAt: cardStartedAt ?? this.cardStartedAt,
     );
   }
+}
+
+int? elapsedSecondsSince(DateTime? start, {DateTime? now}) {
+  if (start == null) return null;
+  final seconds = (now ?? DateTime.now()).difference(start).inSeconds;
+  return seconds < 0 ? 0 : seconds;
 }
 
 int plannedDispatchTotal({
@@ -171,12 +207,17 @@ final _processedPattern = RegExp(r'已处理 (\d+) 张');
 final _currentTitlePattern = RegExp(r'^当前卡片：(.+)$', multiLine: true);
 final _currentDetailPattern = RegExp(r'^当前任务：([\s\S]+)$', multiLine: true);
 final _afterQueuePattern = RegExp(r'完成后队列：开始「(.+)」');
+final _cardOverridePattern =
+    RegExp(r'本卡覆盖：engine=(\w+) model=([^\s]+)');
+final _cursorModelPattern = RegExp(r'Cursor 模型=([^\s]+)');
 
 /// 从 Worker 日志行更新进度；无法识别的行原样返回。
 AgentDispatchProgress applyWorkerProgressLog(
   AgentDispatchProgress current,
-  String message,
-) {
+  String message, {
+  DateTime? now,
+}) {
+  final clock = now ?? DateTime.now();
   final round = _roundPattern.firstMatch(message);
   if (round != null) {
     final roundIndex = int.parse(round.group(1)!);
@@ -192,6 +233,7 @@ AgentDispatchProgress applyWorkerProgressLog(
       currentTitle: '',
       currentDetail: '',
       phaseLabel: '领取',
+      cardStartedAt: clock,
     );
   }
   final title = _currentTitlePattern.firstMatch(message);
@@ -199,7 +241,19 @@ AgentDispatchProgress applyWorkerProgressLog(
     return current.copyWith(
       currentTitle: title.group(1)!.trim(),
       phaseLabel: current.phaseLabel.isEmpty ? '领取' : current.phaseLabel,
+      cardStartedAt: current.cardStartedAt ?? clock,
     );
+  }
+  final override = _cardOverridePattern.firstMatch(message);
+  if (override != null) {
+    return current.copyWith(
+      engine: override.group(1)!.trim(),
+      model: override.group(2)!.trim(),
+    );
+  }
+  final cursorModel = _cursorModelPattern.firstMatch(message);
+  if (cursorModel != null) {
+    return current.copyWith(model: cursorModel.group(1)!.trim());
   }
   final detail = _currentDetailPattern.firstMatch(message);
   if (detail != null) {

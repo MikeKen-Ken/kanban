@@ -172,7 +172,7 @@ class AgentDispatchService {
     _logHydrated = true;
     _notifyLog(AgentDispatchLogEntry(message, level: level, source: source));
     if (_isRunning) {
-      final next = applyWorkerProgressLog(_progress, message);
+      final next = applyWorkerProgressLog(_progress, message, now: now);
       if (next != _progress) _setProgress(next);
     }
     _scheduleLogPersist();
@@ -315,6 +315,9 @@ class AgentDispatchService {
           cardLimitCount: cardLimitCount,
           queueSize: queueSize,
         ),
+        engine: options.engine.name,
+        model: options.modelId?.trim() ?? '',
+        batchStartedAt: DateTime.now(),
       ),
     );
     _setRunning(true);

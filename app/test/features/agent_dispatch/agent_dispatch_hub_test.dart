@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_hub.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_hub_overview.dart';
 import 'package:kanban/features/project/project_list_preferences.dart';
 import 'package:kanban/features/project/projects_manifest.dart';
 
@@ -78,5 +79,57 @@ void main() {
     expect(find.text('当前'), findsOneWidget);
     expect(find.text('查看'), findsOneWidget);
     expect(find.text('打开'), findsOneWidget);
+  });
+
+  test('总览文案包含标题、模型与批次/本卡耗时', () {
+    final overview = AgentDispatchHubOverview.running(
+      liveCardLabel: '2/5',
+      currentTitle: 'Agent 调度总览可以显示更多的信息',
+      phaseLabel: '实施',
+      engine: 'cursor',
+      model: 'composer-2.5',
+      batchStartedAt: DateTime(2026, 8, 18, 18, 0, 0),
+      cardStartedAt: DateTime(2026, 8, 18, 18, 10, 0),
+      now: DateTime(2026, 8, 18, 18, 12, 30),
+    );
+
+    expect(overview.statusLine, '运行中 · 实施 · 2/5');
+    expect(overview.cardTitle, 'Agent 调度总览可以显示更多的信息');
+    expect(overview.engineModelLabel, 'Cursor SDK · composer-2.5');
+    expect(overview.elapsedLabel, '批次 12分30秒 · 本卡 2分30秒');
+  });
+
+  testWidgets('总览列出当前卡片标题、模型与运行时间', (tester) async {
+    final batchStarted = DateTime.now().subtract(const Duration(minutes: 12));
+    final cardStarted = DateTime.now().subtract(const Duration(minutes: 2));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AgentDispatchHubView(
+          items: [
+            AgentDispatchHubItem(
+              projectId: 'a',
+              title: '项目甲',
+              running: true,
+              progressLabel: '1/3',
+              progressFraction: 0.0,
+              currentTitle: 'Agent 调度总览可以显示更多的信息',
+              phaseLabel: '实施',
+              engine: 'cursor',
+              model: 'composer-2.5',
+              batchStartedAt: batchStarted,
+              cardStartedAt: cardStarted,
+            ),
+          ],
+          onClose: () {},
+          onOpenProject: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('运行中 · 实施 · 1/3'), findsOneWidget);
+    expect(find.text('Agent 调度总览可以显示更多的信息'), findsOneWidget);
+    expect(find.text('Cursor SDK · composer-2.5'), findsOneWidget);
+    expect(find.textContaining('批次'), findsOneWidget);
+    expect(find.textContaining('本卡'), findsOneWidget);
   });
 }
