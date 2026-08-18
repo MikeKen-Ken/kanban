@@ -189,10 +189,9 @@ FilterSpec parseMcpFilterSpec(
       : _parseCompletion(completionRaw, fallback: defaultCompletion);
 
   return FilterSpec(
-    keyword: ((source['keyword'] as String?) ??
-            (source['query'] as String?) ??
-            '')
-        .trim(),
+    keyword:
+        ((source['keyword'] as String?) ?? (source['query'] as String?) ?? '')
+            .trim(),
     projectIds: projectIds,
     columnIds: columnIds,
     labelIds: labelIds,
@@ -210,9 +209,19 @@ FilterSpec parseMcpFilterSpec(
 }
 
 String? mcpTrimmedString(Object? value) {
-  final text = (value as String?)?.trim();
-  if (text == null || text.isEmpty) return null;
+  if (value is! String) return null;
+  final text = value.trim();
+  if (text.isEmpty) return null;
   return text;
+}
+
+/// 按候选键取第一个非空字符串；不把 Map/List 转成 toString。
+String? mcpFirstString(Map<String, dynamic> args, List<String> keys) {
+  for (final key in keys) {
+    final text = mcpTrimmedString(args[key]);
+    if (text != null) return text;
+  }
+  return null;
 }
 
 int mcpLimit(Object? raw, {int fallback = 30, int max = 100}) {

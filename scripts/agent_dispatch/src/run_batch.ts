@@ -9,6 +9,7 @@ import {
   type KanbanMcpConnection,
   type ParsedClaimResult,
 } from "./mcp_client.ts";
+import { toShellSpanReportPayload } from "./cursor_shell_spans.ts";
 import { runCodex } from "./run_codex.ts";
 import { runCursor } from "./run_cursor.ts";
 import { runAgentWithRetry } from "./run_agent_with_retry.ts";
@@ -180,19 +181,14 @@ export async function runBatch(
             attachmentPaths: context.attachmentPaths,
             projectMcpTags: parseProjectMcpTags(claim.payload),
             reportShellSpan: async (span) => {
-              await mcp.callJson("dispatch_report_shell_span", {
-                workerToken: job.workerToken,
-                sessionId,
-                callId: span.callId,
-                command: span.command,
-                phase: span.phase,
-                startedAtMs: span.startedAtMs,
-                ...(span.endedAtMs != null ? { endedAtMs: span.endedAtMs } : {}),
-                ...(span.executionTimeMs != null
-                  ? { executionTimeMs: span.executionTimeMs }
-                  : {}),
-                ...(span.exitCode != null ? { exitCode: span.exitCode } : {}),
-              });
+              await mcp.callJson(
+                "dispatch_report_shell_span",
+                toShellSpanReportPayload({
+                  workerToken: job.workerToken,
+                  sessionId,
+                  span,
+                }),
+              );
             },
           },
         };

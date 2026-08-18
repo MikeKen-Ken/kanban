@@ -263,25 +263,40 @@ void registerDispatchPrivateTools(
       openWorldHint: false,
     ),
     callback: (args, extra) {
-      final token = mcpTrimmedString(args['workerToken']);
-      final callId = mcpTrimmedString(args['callId']);
-      final command = mcpTrimmedString(args['command']) ?? '';
-      final phase = mcpTrimmedString(args['phase']);
-      if (token == null || callId == null || phase == null) {
+      final token = mcpFirstString(args, const ['workerToken', 'worker_token']);
+      final callId = normalizeDispatchCallId(
+        mcpFirstString(args, const ['callId', 'call_id']),
+      );
+      final command = mcpFirstString(args, const ['command', 'cmd']) ?? '';
+      final phase = mcpFirstString(args, const ['phase'])?.toLowerCase();
+      final missing = [
+        if (token == null) 'workerToken',
+        if (callId.isEmpty) 'callId',
+        if (phase == null) 'phase',
+      ];
+      if (token == null || callId.isEmpty || phase == null) {
+        final keys = args.keys.join(',');
         return Future.value(
-          mcpErrorResult('workerToken、callId、phase 不能为空'),
+          mcpErrorResult(
+            '${missing.join('、')} 不能为空'
+            '${keys.isEmpty ? '' : '（收到字段：$keys）'}',
+          ),
         );
       }
       return dispatchReportShellSpan(
         workerToken: token,
-        sessionId: mcpTrimmedString(args['sessionId']),
+        sessionId: mcpFirstString(args, const ['sessionId', 'session_id']),
         callId: callId,
         command: command,
         phase: phase,
-        startedAtMs: (args['startedAtMs'] as num?)?.toInt(),
-        endedAtMs: (args['endedAtMs'] as num?)?.toInt(),
-        executionTimeMs: (args['executionTimeMs'] as num?)?.toInt(),
-        exitCode: (args['exitCode'] as num?)?.toInt(),
+        startedAtMs: (args['startedAtMs'] as num?)?.toInt() ??
+            (args['started_at_ms'] as num?)?.toInt(),
+        endedAtMs: (args['endedAtMs'] as num?)?.toInt() ??
+            (args['ended_at_ms'] as num?)?.toInt(),
+        executionTimeMs: (args['executionTimeMs'] as num?)?.toInt() ??
+            (args['execution_time_ms'] as num?)?.toInt(),
+        exitCode: (args['exitCode'] as num?)?.toInt() ??
+            (args['exit_code'] as num?)?.toInt(),
       );
     },
   );

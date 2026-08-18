@@ -16,7 +16,10 @@ import {
 } from "./cursor_disallowed_tools.ts";
 import { installCursorSdkScanLogTap } from "./cursor_sdk_scan_log.ts";
 import { formatSessionTokenLog } from "./cursor_token_usage.ts";
-import { CursorShellSpanEmitter } from "./cursor_shell_spans.ts";
+import {
+  CursorShellSpanEmitter,
+  isShellSpanEvent,
+} from "./cursor_shell_spans.ts";
 import {
   AgentRunDiagnostics,
   formatAgentRunDiagnostics,
@@ -352,7 +355,7 @@ export async function runCursor(
           }
           try {
             const event = shellSpans.observe(step, Date.now());
-            if (event && "phase" in event) {
+            if (isShellSpanEvent(event)) {
               await job.round.reportShellSpan?.(event);
             }
           } catch (err) {

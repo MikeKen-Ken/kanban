@@ -32,13 +32,19 @@ class DispatchShellSpan {
   }
 }
 
-/// 识别会作为本卡验收依据的测试命令。
+/// 识别会作为本卡验收依据的测试 / 静态检查命令。
+///
+/// 与 `scripts/agent_dispatch/src/verification_ready_gate.ts` 保持一致。
 bool isDispatchVerificationCommand(String command) {
   final text = command.toLowerCase();
   const markers = [
     'flutter test',
+    'flutter analyze',
     'dart test',
+    'dart analyze',
     'dotnet test',
+    'node --test',
+    'node.exe --test',
     'npm test',
     'npx test',
     'pnpm test',
@@ -54,6 +60,15 @@ bool isDispatchVerificationCommand(String command) {
     'jest',
   ];
   return markers.any(text.contains);
+}
+
+/// SDK 的 call_id 经常是 `call_…\nfc_…` 两行；MCP JSON 与字符串闸门都需要单行 id。
+String normalizeDispatchCallId(String? callId) {
+  final parts = (callId ?? '')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty);
+  return parts.join('_');
 }
 
 /// 以 SDK 可能提前发出的 completed 为准：结束时间取

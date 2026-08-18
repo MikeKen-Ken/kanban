@@ -20,8 +20,28 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        isDispatchVerificationCommand(
+          'dart format a.dart; flutter analyze',
+        ),
+        isTrue,
+      );
+      expect(
+        isDispatchVerificationCommand(
+          'node --test src/retry.test.ts',
+        ),
+        isTrue,
+      );
       expect(isDispatchVerificationCommand('git status --short'), isFalse);
       expect(isDispatchVerificationCommand('dart format a.dart'), isFalse);
+    });
+
+    test('SDK 换行 call_id 规范成单行', () {
+      expect(
+        normalizeDispatchCallId('call_abc\nfc_xyz'),
+        'call_abc_fc_xyz',
+      );
+      expect(normalizeDispatchCallId('  '), '');
     });
 
     test('SDK 提前 completed 时用 startedAt+executionTime', () {
@@ -41,6 +61,21 @@ void main() {
       expect(
         dispatchReadyBlockedByShells([span], nowMs: 1000 + 13639),
         isNull,
+      );
+    });
+
+    test('node --test 未按其 executionTime 结束时拒绝', () {
+      const span = DispatchShellSpan(
+        callId: 'call_abc_fc_xyz',
+        command: 'node --test src/retry.test.ts',
+        startedAtMs: 1000,
+        endedAtMs: 1200,
+        executionTimeMs: 40000,
+        exitCode: 0,
+      );
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 1000 + 5000),
+        contains('仍在执行'),
       );
     });
 

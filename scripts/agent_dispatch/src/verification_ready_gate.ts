@@ -9,10 +9,15 @@ export type ShellSpan = {
   exitCode?: number;
 };
 
+/** 与 Dart `dispatch_shell_spans.dart` 保持一致。 */
 const VERIFICATION_MARKERS = [
   "flutter test",
+  "flutter analyze",
   "dart test",
+  "dart analyze",
   "dotnet test",
+  "node --test",
+  "node.exe --test",
   "npm test",
   "npx test",
   "pnpm test",

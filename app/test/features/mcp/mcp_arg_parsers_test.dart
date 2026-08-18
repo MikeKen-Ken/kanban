@@ -22,7 +22,8 @@ void main() {
         fieldName: 'dueDate',
       );
       expect(result.error, isNull);
-      expect(result.value, DateTime.parse('2026-08-04T12:00:00.000Z').millisecondsSinceEpoch);
+      expect(result.value,
+          DateTime.parse('2026-08-04T12:00:00.000Z').millisecondsSinceEpoch);
     });
 
     test('非法字符串报错', () {
@@ -192,6 +193,14 @@ void main() {
       expect(mcpTrimmedString(null), isNull);
       expect(mcpTrimmedString('  '), isNull);
       expect(mcpTrimmedString(' p1 '), 'p1');
+      expect(mcpTrimmedString(1), isNull);
+      expect(
+        mcpFirstString(
+          {'worker_token': ' tok '},
+          const ['workerToken', 'worker_token'],
+        ),
+        'tok',
+      );
       expect(mcpLimit(null), 30);
       expect(mcpLimit(0), 1);
       expect(mcpLimit(200), 100);

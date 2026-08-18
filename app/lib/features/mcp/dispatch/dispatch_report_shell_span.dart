@@ -18,7 +18,7 @@ Future<CallToolResult> dispatchReportShellSpan({
   McpDispatchCardGate? gate,
 }) async {
   final token = workerToken.trim();
-  final id = callId.trim();
+  final id = normalizeDispatchCallId(callId);
   final cmd = command.trim();
   final step = phase.trim().toLowerCase();
   if (token.isEmpty) return mcpErrorResult('workerToken 不能为空');

@@ -1651,6 +1651,160 @@ async function withTimeout(operation, timeoutMs, work) {
   }
 }
 
+// src/cursor_shell_spans.ts
+function asRecord3(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function pickString2(record, ...keys) {
+  if (!record) return "";
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+function pickNumber(record, ...keys) {
+  if (!record) return void 0;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+  }
+  return void 0;
+}
+function isShellName(name) {
+  return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
+}
+function normalizeDispatchCallId(callId) {
+  return (callId ?? "").trim().split(/\s+/).filter((part) => part.length > 0).join("_");
+}
+function toolPayload(step) {
+  return asRecord3(step.message) ?? asRecord3(step.toolCall) ?? asRecord3(step.call) ?? asRecord3(step.tool) ?? asRecord3(asRecord3(step.message)?.toolCall) ?? asRecord3(asRecord3(step.message)?.call);
+}
+function extractCommand(message) {
+  const nested = asRecord3(message.args) ?? asRecord3(message.arguments) ?? asRecord3(message.input) ?? asRecord3(message.params);
+  return pickString2(message, "command", "cmd", "shellCommand") || pickString2(nested, "command", "cmd", "shellCommand");
+}
+function extractResult(message) {
+  const result = asRecord3(message.result) ?? asRecord3(message.output) ?? asRecord3(message.value);
+  if (!result) return void 0;
+  const value = asRecord3(result.value) ?? result;
+  const executionTimeMs = pickNumber(
+    value,
+    "executionTime",
+    "executionTimeMs",
+    "execution_time_ms"
+  );
+  const exitCode = pickNumber(value, "exitCode", "exit_code");
+  if (executionTimeMs == null && exitCode == null && asRecord3(message.result) == null) {
+    return void 0;
+  }
+  return { executionTimeMs, exitCode };
+}
+function extractCallId(record, message) {
+  return normalizeDispatchCallId(
+    pickString2(message, "call_id", "callId", "id") || pickString2(record, "call_id", "callId")
+  );
+}
+function isReadyToSubmitStep(step) {
+  const record = asRecord3(step);
+  if (!record) return false;
+  const message = toolPayload(record);
+  const nested = asRecord3(message?.args) ?? asRecord3(message?.arguments);
+  const toolName = pickString2(message, "toolName", "name") || pickString2(nested, "toolName", "name");
+  const type = pickString2(message, "type") || pickString2(record, "type");
+  if (toolName === "ready_to_submit") return true;
+  return type === "mcp" && pickString2(nested, "toolName") === "ready_to_submit";
+}
+function isShellSpanEvent(event) {
+  if (!event || !("phase" in event)) return false;
+  return (event.phase === "start" || event.phase === "end") && normalizeDispatchCallId(event.callId).length > 0;
+}
+function toShellSpanReportPayload(input) {
+  const workerToken = input.workerToken.trim();
+  const sessionId = input.sessionId.trim();
+  const callId = normalizeDispatchCallId(input.span.callId);
+  const phase = input.span.phase;
+  const missing = [
+    !workerToken ? "workerToken" : "",
+    !sessionId ? "sessionId" : "",
+    !callId ? "callId" : "",
+    phase !== "start" && phase !== "end" ? "phase" : ""
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new Error(`\u4E0A\u62A5 Shell \u65F6\u95F4\u7EBF\u7F3A\u5C11 ${missing.join("\u3001")}`);
+  }
+  return {
+    workerToken,
+    sessionId,
+    callId,
+    command: input.span.command ?? "",
+    phase,
+    startedAtMs: input.span.startedAtMs,
+    ...input.span.endedAtMs != null ? { endedAtMs: input.span.endedAtMs } : {},
+    ...input.span.executionTimeMs != null ? { executionTimeMs: input.span.executionTimeMs } : {},
+    ...input.span.exitCode != null ? { exitCode: input.span.exitCode } : {}
+  };
+}
+var CursorShellSpanEmitter = class {
+  open = /* @__PURE__ */ new Map();
+  spans = /* @__PURE__ */ new Map();
+  seq = 0;
+  lastReadyAtMs;
+  observe(step, nowMs) {
+    const record = asRecord3(step);
+    if (!record) return void 0;
+    if (isReadyToSubmitStep(record)) {
+      const message2 = toolPayload(record);
+      const hasResult = asRecord3(message2?.result) != null;
+      if (!hasResult) this.lastReadyAtMs = nowMs;
+      return { kind: "ready", startedAtMs: nowMs };
+    }
+    const message = toolPayload(record);
+    if (!message) return void 0;
+    const name = pickString2(message, "name", "toolName", "functionName", "type") || pickString2(record, "name", "toolName");
+    const type = pickString2(record, "type") || pickString2(message, "type");
+    if (!isShellName(name) && type !== "shell" && pickString2(message, "type") !== "shell") {
+      return void 0;
+    }
+    const command = extractCommand(message);
+    const callId = extractCallId(record, message);
+    const result = extractResult(message);
+    const isEnd = result != null || type === "toolResult";
+    if (isEnd) {
+      const open = (callId ? this.open.get(callId) : void 0) ?? [...this.open.values()].find((item) => item.command === command) ?? [...this.open.values()].at(-1);
+      if (open) this.open.delete(open.callId);
+      const span2 = {
+        callId: open?.callId || callId || `end-${this.seq++}`,
+        command: command || open?.command || "",
+        startedAtMs: open?.startedAtMs ?? nowMs,
+        endedAtMs: nowMs,
+        executionTimeMs: result?.executionTimeMs,
+        exitCode: result?.exitCode
+      };
+      this.spans.set(span2.callId, span2);
+      return { ...span2, phase: "end" };
+    }
+    const id = callId || `shell-${this.seq++}`;
+    const span = {
+      callId: id,
+      command,
+      startedAtMs: nowMs
+    };
+    this.open.set(id, span);
+    this.spans.set(id, span);
+    return { ...span, phase: "start" };
+  }
+  snapshot() {
+    return [...this.spans.values()];
+  }
+  lastReadyStartedAtMs() {
+    return this.lastReadyAtMs;
+  }
+};
+
 // src/run_cursor.ts
 import { mkdirSync as mkdirSync2 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
@@ -1855,112 +2009,6 @@ function wrapWriteStream(stream, buffer) {
   };
 }
 
-// src/cursor_shell_spans.ts
-function asRecord3(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
-function pickString2(record, ...keys) {
-  if (!record) return "";
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
-}
-function pickNumber(record, ...keys) {
-  if (!record) return void 0;
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return Math.trunc(value);
-    }
-  }
-  return void 0;
-}
-function isShellName(name) {
-  return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
-}
-function toolMessage(step) {
-  return asRecord3(step.message) ?? asRecord3(step.toolCall) ?? asRecord3(step.call);
-}
-function extractCommand(message) {
-  const nested = asRecord3(message.args) ?? asRecord3(message.arguments) ?? asRecord3(message.input);
-  return pickString2(message, "command", "cmd", "shellCommand") || pickString2(nested, "command", "cmd", "shellCommand");
-}
-function extractResult(message) {
-  const result = asRecord3(message.result);
-  if (!result) return void 0;
-  const value = asRecord3(result.value) ?? result;
-  return {
-    executionTimeMs: pickNumber(value, "executionTime", "executionTimeMs"),
-    exitCode: pickNumber(value, "exitCode")
-  };
-}
-function isReadyToSubmitStep(step) {
-  const record = asRecord3(step);
-  if (!record) return false;
-  const message = toolMessage(record);
-  const nested = asRecord3(message?.args) ?? asRecord3(message?.arguments);
-  const toolName = pickString2(message, "toolName", "name") || pickString2(nested, "toolName", "name");
-  const type = pickString2(message, "type") || pickString2(record, "type");
-  if (toolName === "ready_to_submit") return true;
-  return type === "mcp" && pickString2(nested, "toolName") === "ready_to_submit";
-}
-var CursorShellSpanEmitter = class {
-  open = /* @__PURE__ */ new Map();
-  spans = /* @__PURE__ */ new Map();
-  seq = 0;
-  lastReadyAtMs;
-  observe(step, nowMs) {
-    const record = asRecord3(step);
-    if (!record) return void 0;
-    if (isReadyToSubmitStep(record)) {
-      const message2 = toolMessage(record);
-      const hasResult = asRecord3(message2?.result) != null;
-      if (!hasResult) this.lastReadyAtMs = nowMs;
-      return { kind: "ready", startedAtMs: nowMs };
-    }
-    const message = toolMessage(record);
-    if (!message) return void 0;
-    const name = pickString2(message, "name", "toolName", "type") || pickString2(record, "name", "toolName");
-    if (!isShellName(name) && pickString2(message, "type") !== "shell") {
-      return void 0;
-    }
-    const command = extractCommand(message);
-    const callId = pickString2(message, "call_id", "callId", "id") || pickString2(record, "call_id", "callId") || "";
-    const result = extractResult(message);
-    if (result) {
-      const open = (callId ? this.open.get(callId) : void 0) ?? [...this.open.values()].find((item) => item.command === command) ?? [...this.open.values()].at(-1);
-      if (open) this.open.delete(open.callId);
-      const span2 = {
-        callId: open?.callId ?? callId ?? `end-${this.seq++}`,
-        command: command || open?.command || "",
-        startedAtMs: open?.startedAtMs ?? nowMs,
-        endedAtMs: nowMs,
-        executionTimeMs: result.executionTimeMs,
-        exitCode: result.exitCode
-      };
-      this.spans.set(span2.callId, span2);
-      return { ...span2, phase: "end" };
-    }
-    const id = callId || `shell-${this.seq++}`;
-    const span = {
-      callId: id,
-      command,
-      startedAtMs: nowMs
-    };
-    this.open.set(id, span);
-    this.spans.set(id, span);
-    return { ...span, phase: "start" };
-  }
-  snapshot() {
-    return [...this.spans.values()];
-  }
-  lastReadyStartedAtMs() {
-    return this.lastReadyAtMs;
-  }
-};
-
 // src/run_diagnostics.ts
 var AgentRunDiagnostics = class {
   steps = 0;
@@ -2017,8 +2065,12 @@ function readPath(detail) {
 // src/verification_ready_gate.ts
 var VERIFICATION_MARKERS = [
   "flutter test",
+  "flutter analyze",
   "dart test",
+  "dart analyze",
   "dotnet test",
+  "node --test",
+  "node.exe --test",
   "npm test",
   "npx test",
   "pnpm test",
@@ -2120,7 +2172,7 @@ function usefulJson2(value, max = 4e3) {
   if (!text || text === "{}" || text === "[]" || text === "null") return "";
   return text;
 }
-function toolPayload(step) {
+function toolPayload2(step) {
   return asRecord4(step.message) ?? asRecord4(step.toolCall) ?? asRecord4(step.call) ?? asRecord4(step.tool) ?? asRecord4(asRecord4(step.message)?.toolCall) ?? asRecord4(asRecord4(step.message)?.call);
 }
 function extractToolDetail(payload) {
@@ -2168,7 +2220,7 @@ function isShellTool(name) {
 function describeStep(step) {
   const record = asRecord4(step) ?? {};
   const type = String(record.type ?? "unknown");
-  const message = toolPayload(record);
+  const message = toolPayload2(record);
   switch (type) {
     case "assistantMessage":
       return {
@@ -2335,7 +2387,7 @@ async function runCursor(job, cancellation) {
           }
           try {
             const event = shellSpans.observe(step, Date.now());
-            if (event && "phase" in event) {
+            if (isShellSpanEvent(event)) {
               await job.round.reportShellSpan?.(event);
             }
           } catch (err) {
@@ -2803,17 +2855,14 @@ ${tree.output}`);
             attachmentPaths: context.attachmentPaths,
             projectMcpTags: parseProjectMcpTags(claim.payload),
             reportShellSpan: async (span) => {
-              await mcp.callJson("dispatch_report_shell_span", {
-                workerToken: job.workerToken,
-                sessionId,
-                callId: span.callId,
-                command: span.command,
-                phase: span.phase,
-                startedAtMs: span.startedAtMs,
-                ...span.endedAtMs != null ? { endedAtMs: span.endedAtMs } : {},
-                ...span.executionTimeMs != null ? { executionTimeMs: span.executionTimeMs } : {},
-                ...span.exitCode != null ? { exitCode: span.exitCode } : {}
-              });
+              await mcp.callJson(
+                "dispatch_report_shell_span",
+                toShellSpanReportPayload({
+                  workerToken: job.workerToken,
+                  sessionId,
+                  span
+                })
+              );
             }
           }
         };
