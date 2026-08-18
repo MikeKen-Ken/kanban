@@ -22,6 +22,7 @@ import {
   type DispatchResult,
   type RoundDispatchJob,
 } from "./types.ts";
+import { isRetryableError } from "./retry.ts";
 import { workerLog, workerLogRecords } from "./worker_log.ts";
 
 export function resolveCodexCommand(): {
@@ -196,7 +197,24 @@ export async function runCodex(
     if (code === 0) {
       return { ok: true, summary: summary || "Codex 会话完成" };
     }
-    return { ok: false, error: `Codex 退出码 ${code}`, summary };
+    return {
+      ok: false,
+      error: `Codex 退出码 ${code}`,
+      summary,
+      retryable: isRetryableError(summary),
+    };
+  } catch (error) {
+    if (cancellation?.isSkipRequested) {
+      return { ok: false, error: "已跳过" };
+    }
+    if (cancellation?.isCancelled) {
+      return { ok: false, error: "已取消" };
+    }
+    return {
+      ok: false,
+      error: `Codex 会话异常：${error instanceof Error ? error.message : String(error)}`,
+      retryable: isRetryableError(error),
+    };
   } finally {
     try {
       rmSync(temp, { recursive: true, force: true });

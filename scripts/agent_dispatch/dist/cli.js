@@ -549,6 +549,78 @@ var AppServerClient = class {
   }
 };
 
+// src/retry.ts
+var RETRYABLE_STATUS_CODES = /* @__PURE__ */ new Set([408, 425, 429, 500, 502, 503, 504]);
+var RETRYABLE_ERROR_CODES = /* @__PURE__ */ new Set([
+  "deadline_exceeded",
+  "econnaborted",
+  "econnrefused",
+  "econnreset",
+  "enetdown",
+  "enetreset",
+  "enetunreach",
+  "etimedout",
+  "resource_exhausted",
+  "socket_closed",
+  "und_err_connect_timeout",
+  "unavailable"
+]);
+var RETRYABLE_MESSAGE_PARTS = [
+  "connect timeout",
+  "connection reset",
+  "fetch failed",
+  "network",
+  "service unavailable",
+  "socket hang up",
+  "timed out",
+  "timeout"
+];
+function sleep(ms) {
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+function isRetryableError(error) {
+  if (error == null) return false;
+  if (typeof error === "string") return retryableText(error);
+  if (typeof error !== "object") return false;
+  const record = error;
+  if (record.isRetryable === true) return true;
+  const status = Number(record.status ?? record.statusCode);
+  if (Number.isFinite(status) && RETRYABLE_STATUS_CODES.has(status)) return true;
+  const code = String(record.code ?? "").trim().toLowerCase();
+  if (RETRYABLE_ERROR_CODES.has(code)) return true;
+  const message = error instanceof Error ? error.message : String(record.message ?? "");
+  if (retryableText(message)) return true;
+  return "cause" in record && record.cause != null ? isRetryableError(record.cause) : false;
+}
+async function withRetry(operation, fn, options = {}) {
+  const maxAttempts = Math.max(1, Math.trunc(options.maxAttempts ?? 3));
+  const baseDelayMs = Math.max(0, Math.trunc(options.baseDelayMs ?? 1e3));
+  const wait = options.sleep ?? sleep;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !isRetryableError(error)) throw error;
+      const delayMs = baseDelayMs * 2 ** (attempt - 1);
+      options.onRetry?.({
+        operation,
+        attempt,
+        maxAttempts,
+        delayMs,
+        error
+      });
+      await wait(delayMs);
+    }
+  }
+  throw lastError;
+}
+function retryableText(value) {
+  const lower = value.toLowerCase();
+  return RETRYABLE_MESSAGE_PARTS.some((part) => lower.includes(part)) || [...RETRYABLE_ERROR_CODES].some((code) => lower.includes(code));
+}
+
 // src/run_codex.ts
 import { spawn as spawn2 } from "node:child_process";
 import {
@@ -1382,7 +1454,24 @@ async function runCodex(job, cancellation) {
     if (code === 0) {
       return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
     }
-    return { ok: false, error: `Codex \u9000\u51FA\u7801 ${code}`, summary };
+    return {
+      ok: false,
+      error: `Codex \u9000\u51FA\u7801 ${code}`,
+      summary,
+      retryable: isRetryableError(summary)
+    };
+  } catch (error) {
+    if (cancellation?.isSkipRequested) {
+      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+    }
+    if (cancellation?.isCancelled) {
+      return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+    }
+    return {
+      ok: false,
+      error: `Codex \u4F1A\u8BDD\u5F02\u5E38\uFF1A${error instanceof Error ? error.message : String(error)}`,
+      retryable: isRetryableError(error)
+    };
   } finally {
     try {
       rmSync(temp, { recursive: true, force: true });
@@ -1682,6 +1771,196 @@ function fallbackDisallowedTools(err) {
   return CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK;
 }
 
+// src/cursor_sdk_scan_log.ts
+function parseCursorSdkScanLog(line) {
+  const text = line.trim();
+  if (text.includes("AgentSkillsCursorRulesService load completed")) {
+    return {
+      kind: "skills",
+      ruleCount: readMetaCount(text, "ruleCount"),
+      skillCount: readMetaCount(text, "skillCount")
+    };
+  }
+  if (text.includes("LocalCursorRulesService load completed")) {
+    return {
+      kind: "rules",
+      ruleCount: readMetaCount(text, "ruleCount")
+    };
+  }
+  return void 0;
+}
+function formatCursorSdkScanNote(scan) {
+  if (scan.kind === "skills") {
+    const count2 = formatCount(scan.skillCount ?? scan.ruleCount);
+    return `SDK \u626B\u63CF Skill\uFF1A${count2}\uFF08\u542B\u672C\u673A ~/.cursor/skills-cursor \u5185\u7F6E\uFF09\uFF0C\u8FD9\u662F\u8FC7\u6EE4\u524D\u7684\u626B\u63CF\u6570\uFF1BsettingSources=project \u53EA\u6CE8\u5165\u4ED3\u5E93\u5185 Skill`;
+  }
+  const count = formatCount(scan.ruleCount);
+  return `SDK \u626B\u63CF Rule\uFF1A${count}\uFF0C\u8FD9\u662F\u8FC7\u6EE4\u524D\u7684\u626B\u63CF\u6570\uFF1BsettingSources=project \u53EA\u6CE8\u5165\u4ED3\u5E93\u5185\u89C4\u5219\uFF08\u7528\u6237 Rule \u5DF2\u7531 Worker \u5199\u5165 prompt\uFF09`;
+}
+function createCursorSdkScanLogBuffer(onNote) {
+  let pending = "";
+  const emit = (line) => {
+    const scan = parseCursorSdkScanLog(line);
+    if (scan) onNote(formatCursorSdkScanNote(scan));
+  };
+  return {
+    push(chunk) {
+      pending += chunk.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+      let index = pending.indexOf("\n");
+      while (index >= 0) {
+        emit(pending.slice(0, index));
+        pending = pending.slice(index + 1);
+        index = pending.indexOf("\n");
+      }
+    },
+    flush() {
+      if (!pending) return;
+      emit(pending);
+      pending = "";
+    }
+  };
+}
+function installCursorSdkScanLogTap(log = (line) => workerLog(line)) {
+  const buffer = createCursorSdkScanLogBuffer(log);
+  const restoreStdout = wrapWriteStream(process.stdout, buffer);
+  const restoreStderr = wrapWriteStream(process.stderr, buffer);
+  return () => {
+    buffer.flush();
+    restoreStdout();
+    restoreStderr();
+  };
+}
+function readMetaCount(text, key) {
+  const match = new RegExp(`${key}\\s*[:=]\\s*(\\d+)`).exec(text);
+  if (!match) return void 0;
+  return Number.parseInt(match[1] ?? "", 10);
+}
+function formatCount(value) {
+  return value == null || !Number.isFinite(value) ? "\u82E5\u5E72" : `${value} \u4E2A`;
+}
+function wrapWriteStream(stream, buffer) {
+  const original = stream.write.bind(stream);
+  const wrapped = ((chunk, encoding, callback) => {
+    const encodingName = typeof encoding === "string" ? encoding : "utf8";
+    const text = Buffer.isBuffer(chunk) ? chunk.toString(encodingName) : typeof chunk === "string" ? chunk : String(chunk ?? "");
+    buffer.push(text);
+    if (typeof encoding === "function") {
+      return original(chunk, encoding);
+    }
+    return original(chunk, encoding, callback);
+  });
+  stream.write = wrapped;
+  return () => {
+    stream.write = original;
+  };
+}
+
+// src/cursor_shell_spans.ts
+function asRecord3(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function pickString2(record, ...keys) {
+  if (!record) return "";
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+function pickNumber(record, ...keys) {
+  if (!record) return void 0;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+  }
+  return void 0;
+}
+function isShellName(name) {
+  return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
+}
+function toolMessage(step) {
+  return asRecord3(step.message) ?? asRecord3(step.toolCall) ?? asRecord3(step.call);
+}
+function extractCommand(message) {
+  const nested = asRecord3(message.args) ?? asRecord3(message.arguments) ?? asRecord3(message.input);
+  return pickString2(message, "command", "cmd", "shellCommand") || pickString2(nested, "command", "cmd", "shellCommand");
+}
+function extractResult(message) {
+  const result = asRecord3(message.result);
+  if (!result) return void 0;
+  const value = asRecord3(result.value) ?? result;
+  return {
+    executionTimeMs: pickNumber(value, "executionTime", "executionTimeMs"),
+    exitCode: pickNumber(value, "exitCode")
+  };
+}
+function isReadyToSubmitStep(step) {
+  const record = asRecord3(step);
+  if (!record) return false;
+  const message = toolMessage(record);
+  const nested = asRecord3(message?.args) ?? asRecord3(message?.arguments);
+  const toolName = pickString2(message, "toolName", "name") || pickString2(nested, "toolName", "name");
+  const type = pickString2(message, "type") || pickString2(record, "type");
+  if (toolName === "ready_to_submit") return true;
+  return type === "mcp" && pickString2(nested, "toolName") === "ready_to_submit";
+}
+var CursorShellSpanEmitter = class {
+  open = /* @__PURE__ */ new Map();
+  spans = /* @__PURE__ */ new Map();
+  seq = 0;
+  lastReadyAtMs;
+  observe(step, nowMs) {
+    const record = asRecord3(step);
+    if (!record) return void 0;
+    if (isReadyToSubmitStep(record)) {
+      const message2 = toolMessage(record);
+      const hasResult = asRecord3(message2?.result) != null;
+      if (!hasResult) this.lastReadyAtMs = nowMs;
+      return { kind: "ready", startedAtMs: nowMs };
+    }
+    const message = toolMessage(record);
+    if (!message) return void 0;
+    const name = pickString2(message, "name", "toolName", "type") || pickString2(record, "name", "toolName");
+    if (!isShellName(name) && pickString2(message, "type") !== "shell") {
+      return void 0;
+    }
+    const command = extractCommand(message);
+    const callId = pickString2(message, "call_id", "callId", "id") || pickString2(record, "call_id", "callId") || "";
+    const result = extractResult(message);
+    if (result) {
+      const open = (callId ? this.open.get(callId) : void 0) ?? [...this.open.values()].find((item) => item.command === command) ?? [...this.open.values()].at(-1);
+      if (open) this.open.delete(open.callId);
+      const span2 = {
+        callId: open?.callId ?? callId ?? `end-${this.seq++}`,
+        command: command || open?.command || "",
+        startedAtMs: open?.startedAtMs ?? nowMs,
+        endedAtMs: nowMs,
+        executionTimeMs: result.executionTimeMs,
+        exitCode: result.exitCode
+      };
+      this.spans.set(span2.callId, span2);
+      return { ...span2, phase: "end" };
+    }
+    const id = callId || `shell-${this.seq++}`;
+    const span = {
+      callId: id,
+      command,
+      startedAtMs: nowMs
+    };
+    this.open.set(id, span);
+    this.spans.set(id, span);
+    return { ...span, phase: "start" };
+  }
+  snapshot() {
+    return [...this.spans.values()];
+  }
+  lastReadyStartedAtMs() {
+    return this.lastReadyAtMs;
+  }
+};
+
 // src/run_diagnostics.ts
 var AgentRunDiagnostics = class {
   steps = 0;
@@ -1735,6 +2014,56 @@ function readPath(detail) {
   return raw && !raw.startsWith("{") ? raw.replaceAll("\\", "/").toLowerCase() : void 0;
 }
 
+// src/verification_ready_gate.ts
+var VERIFICATION_MARKERS = [
+  "flutter test",
+  "dart test",
+  "dotnet test",
+  "npm test",
+  "npx test",
+  "pnpm test",
+  "yarn test",
+  "pytest",
+  "cargo test",
+  "go test",
+  "mvn test",
+  "gradle test",
+  "gradlew test",
+  "ctest",
+  "vitest",
+  "jest"
+];
+function isVerificationCommand(command) {
+  const text = command.toLowerCase();
+  return VERIFICATION_MARKERS.some((marker) => text.includes(marker));
+}
+function shellEffectiveEndMs(span) {
+  const ended = span.endedAtMs;
+  if (ended == null) return Number.MAX_SAFE_INTEGER;
+  const exec = span.executionTimeMs ?? 0;
+  const started = span.startedAtMs;
+  return ended > started + exec ? ended : started + exec;
+}
+function readyBlockedByShells(spans, nowMs) {
+  let lastVerification;
+  for (const span of spans) {
+    if (!isVerificationCommand(span.command)) continue;
+    lastVerification = span;
+    if (nowMs < shellEffectiveEndMs(span)) {
+      return `\u9A8C\u8BC1\u547D\u4EE4\u4ECD\u5728\u6267\u884C\uFF1A${clip2(span.command)}\u3002\u8BF7\u7B49\u5F85\u6D4B\u8BD5\u5B8C\u6210\u540E\u518D\u8C03\u7528 ready_to_submit\uFF0C\u4E0D\u8981\u4E0E Shell \u5E76\u884C\u3002`;
+    }
+  }
+  const failed = lastVerification;
+  if (failed && failed.exitCode != null && failed.exitCode !== 0) {
+    return `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${failed.exitCode}\uFF09\uFF1A${clip2(failed.command)}\u3002\u8BF7\u4FEE\u590D\u540E\u91CD\u8DD1\u6D4B\u8BD5\uFF0C\u518D\u8C03\u7528 ready_to_submit\u3002`;
+  }
+  return void 0;
+}
+function clip2(command) {
+  const text = command.trim();
+  return text.length <= 180 ? text : `${text.slice(0, 179)}\u2026`;
+}
+
 // src/run_cursor.ts
 function logLine(line, source = "worker") {
   workerLog(line, source);
@@ -1763,10 +2092,10 @@ function expandMultiline2(prefix, body) {
   }
   return result;
 }
-function asRecord3(value) {
+function asRecord4(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-function pickString2(message, ...keys) {
+function pickString3(message, ...keys) {
   if (!message) return "";
   for (const key of keys) {
     const value = message[key];
@@ -1779,7 +2108,7 @@ function parseJsonRecord(value) {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return void 0;
   try {
-    return asRecord3(JSON.parse(trimmed));
+    return asRecord4(JSON.parse(trimmed));
   } catch {
     return void 0;
   }
@@ -1792,12 +2121,12 @@ function usefulJson2(value, max = 4e3) {
   return text;
 }
 function toolPayload(step) {
-  return asRecord3(step.message) ?? asRecord3(step.toolCall) ?? asRecord3(step.call) ?? asRecord3(step.tool) ?? asRecord3(asRecord3(step.message)?.toolCall) ?? asRecord3(asRecord3(step.message)?.call);
+  return asRecord4(step.message) ?? asRecord4(step.toolCall) ?? asRecord4(step.call) ?? asRecord4(step.tool) ?? asRecord4(asRecord4(step.message)?.toolCall) ?? asRecord4(asRecord4(step.message)?.call);
 }
 function extractToolDetail(payload) {
   if (!payload) return "";
-  const nested = asRecord3(payload.args) ?? asRecord3(payload.arguments) ?? asRecord3(payload.input) ?? asRecord3(payload.params) ?? asRecord3(asRecord3(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord3(payload.function)?.arguments);
-  const command = pickString2(
+  const nested = asRecord4(payload.args) ?? asRecord4(payload.arguments) ?? asRecord4(payload.input) ?? asRecord4(payload.params) ?? asRecord4(asRecord4(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord4(payload.function)?.arguments);
+  const command = pickString3(
     payload,
     "command",
     "cmd",
@@ -1809,7 +2138,7 @@ function extractToolDetail(payload) {
   );
   if (command) return command;
   if (nested) {
-    const nestedCommand = pickString2(
+    const nestedCommand = pickString3(
       nested,
       "command",
       "cmd",
@@ -1837,7 +2166,7 @@ function isShellTool(name) {
   return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
 }
 function describeStep(step) {
-  const record = asRecord3(step) ?? {};
+  const record = asRecord4(step) ?? {};
   const type = String(record.type ?? "unknown");
   const message = toolPayload(record);
   switch (type) {
@@ -1847,14 +2176,14 @@ function describeStep(step) {
         source: "ai"
       };
     case "thinkingMessage": {
-      const text = pickString2(message, "text", "thinking", "content");
+      const text = pickString3(message, "text", "thinking", "content");
       return {
         lines: text ? expandMultiline2("\u601D\u8003\uFF1A", text) : [],
         source: "ai"
       };
     }
     case "toolCall": {
-      const toolName = pickString2(message, "name", "toolName", "functionName", "type") || pickString2(record, "name", "toolName") || "tool";
+      const toolName = pickString3(message, "name", "toolName", "functionName", "type") || pickString3(record, "name", "toolName") || "tool";
       const detail = extractToolDetail(message);
       if (!detail) {
         return {
@@ -1879,7 +2208,7 @@ function describeStep(step) {
       };
     }
     case "toolResult": {
-      const toolName = pickString2(message, "name", "toolName", "type") || "tool";
+      const toolName = pickString3(message, "name", "toolName", "type") || "tool";
       const result = message?.result ?? message?.output ?? message?.content ?? message?.text;
       if (result === void 0) {
         return { lines: [], source: "mcp" };
@@ -1893,7 +2222,7 @@ function describeStep(step) {
     }
     case "shellConversationTurn":
     case "shell": {
-      const command = extractToolDetail(message) || pickString2(message, "command", "text");
+      const command = extractToolDetail(message) || pickString3(message, "command", "text");
       if (!command) return { lines: [], source: "shell" };
       return {
         lines: expandMultiline2("\u547D\u4EE4\uFF1A", command),
@@ -1931,6 +2260,7 @@ async function runCursor(job, cancellation) {
     let stepCount = 0;
     let toolCallCount = 0;
     const diagnostics = new AgentRunDiagnostics();
+    const shellSpans = new CursorShellSpanEmitter();
     const storeDir = join4(homedir3(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync2(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -1940,9 +2270,9 @@ async function runCursor(job, cancellation) {
     });
     const localOptions = {
       cwd: job.cwd,
-      // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
-      // 避免把所有个人 Skill 一并加入每个单卡会话。
-      // 不含 user，避免 ~/.cursor/mcp.json 全量进会话。
+      // 用户 Rule 已由 Worker 完整注入。settingSources=project 仍会扫描
+      // 用户主目录，但按仓库路径过滤后再注入；不含 user，避免用户 Skill
+      // 与 ~/.cursor/mcp.json 进入模型。
       settingSources: ["project"],
       store: new JsonlLocalAgentStore(storeDir),
       // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
@@ -1960,31 +2290,32 @@ async function runCursor(job, cancellation) {
     };
     let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
     let agent;
+    const stopScanLog = installCursorSdkScanLogTap();
     try {
-      agent = await Agent.create({
-        ...createOptions,
-        disallowedTools
-      });
-    } catch (err) {
-      const fallback = fallbackDisallowedTools(err);
-      if (fallback == null) throw err;
-      disallowedTools = fallback;
-      agent = await Agent.create({
-        ...createOptions,
-        disallowedTools
-      });
-    }
-    logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project\uFF08\u7528\u6237 Rule \u5DF2\u5B8C\u6574\u6CE8\u5165\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
-    );
-    try {
+      try {
+        agent = await Agent.create({
+          ...createOptions,
+          disallowedTools
+        });
+      } catch (err) {
+        const fallback = fallbackDisallowedTools(err);
+        if (fallback == null) throw err;
+        disallowedTools = fallback;
+        agent = await Agent.create({
+          ...createOptions,
+          disallowedTools
+        });
+      }
+      logLine(
+        `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project\uFF08SDK \u626B\u63CF\u7528\u6237\u4E3B\u76EE\u5F55\u540E\u6309\u4ED3\u5E93\u8DEF\u5F84\u8FC7\u6EE4\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u6CE8\u5165\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
+      );
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
       const run = await agent.send({
         text: job.prompt,
         images: job.round.images
       }, {
         mcpServers: mcp.servers,
-        onStep: ({ step }) => {
+        onStep: async ({ step }) => {
           try {
             stepCount += 1;
             if (step.type === "toolCall") toolCallCount += 1;
@@ -2001,6 +2332,16 @@ async function runCursor(job, cancellation) {
             }
           } catch {
             logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
+          }
+          try {
+            const event = shellSpans.observe(step, Date.now());
+            if (event && "phase" in event) {
+              await job.round.reportShellSpan?.(event);
+            }
+          } catch (err) {
+            logLine(
+              `\u4E0A\u62A5 Shell \u65F6\u95F4\u7EBF\u5931\u8D25\uFF1A${err instanceof Error ? err.message : String(err)}`
+            );
           }
         }
       });
@@ -2031,23 +2372,83 @@ async function runCursor(job, cancellation) {
         return {
           ok: false,
           error: `Cursor run \u5931\u8D25\uFF1A${result.error?.message ?? result.id}`,
-          summary: typeof result.result === "string" ? result.result : void 0
+          summary: typeof result.result === "string" ? result.result : void 0,
+          retryable: isRetryableError(result.error)
         };
+      }
+      const readyAt = shellSpans.lastReadyStartedAtMs();
+      if (readyAt != null) {
+        const blocked = readyBlockedByShells(shellSpans.snapshot(), readyAt);
+        if (blocked) {
+          logLine(blocked);
+          return { ok: false, error: blocked };
+        }
       }
       const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor \u4F1A\u8BDD\u5B8C\u6210" : `Cursor \u72B6\u6001\uFF1A${result.status}`;
       return { ok: result.status === "finished", summary };
     } finally {
-      await settleWithin(8e3, agent[Symbol.asyncDispose]());
+      stopScanLog();
+      if (agent) await settleWithin(8e3, agent[Symbol.asyncDispose]());
     }
   } catch (err) {
+    if (cancellation?.isSkipRequested) {
+      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+    }
+    if (cancellation?.isCancelled) {
+      return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+    }
     if (err instanceof CursorAgentError) {
       return {
         ok: false,
-        error: `Cursor \u542F\u52A8\u5931\u8D25\uFF1A${err.message}\uFF08retryable=${err.isRetryable}\uFF09`
+        error: `Cursor \u542F\u52A8\u5931\u8D25\uFF1A${err.message}\uFF08retryable=${err.isRetryable}\uFF09`,
+        retryable: err.isRetryable
       };
     }
-    throw err;
+    return {
+      ok: false,
+      error: `Cursor \u4F1A\u8BDD\u5F02\u5E38\uFF1A${err instanceof Error ? err.message : String(err)}`,
+      retryable: isRetryableError(err)
+    };
   }
+}
+
+// src/run_agent_with_retry.ts
+var MAX_AGENT_ATTEMPTS = 3;
+var BASE_RETRY_DELAY_MS = 1e3;
+async function runAgentWithRetry(runAgent, job, cancellation, wait = sleep) {
+  for (let attempt = 1; attempt <= MAX_AGENT_ATTEMPTS; attempt += 1) {
+    cancellation?.throwIfCancelled();
+    try {
+      const result = await runAgent(job, cancellation);
+      if (result.ok || cancellation?.isCancelled || cancellation?.isSkipRequested || result.error === "\u5DF2\u53D6\u6D88" || result.error === "\u5DF2\u8DF3\u8FC7" || !isRetryableAgentResult(result) || attempt >= MAX_AGENT_ATTEMPTS) {
+        return result;
+      }
+      await waitBeforeRetry(attempt, result.error ?? "Agent \u4F1A\u8BDD\u5931\u8D25", wait);
+    } catch (error) {
+      if (!isRetryableError(error) || attempt >= MAX_AGENT_ATTEMPTS) throw error;
+      await waitBeforeRetry(
+        attempt,
+        error instanceof Error ? error.message : String(error),
+        wait
+      );
+    }
+    if (cancellation?.isSkipRequested) {
+      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+    }
+  }
+  return { ok: false, error: "Agent \u4F1A\u8BDD\u91CD\u8BD5\u6B21\u6570\u5DF2\u8017\u5C3D" };
+}
+function isRetryableAgentResult(result) {
+  return result.retryable === true || result.retryable !== false && isRetryableError(result.error);
+}
+async function waitBeforeRetry(attempt, reason, wait) {
+  const delayMs = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
+  workerLog(
+    `Agent \u4F1A\u8BDD\u6682\u65F6\u5931\u8D25\uFF08\u7B2C ${attempt}/${MAX_AGENT_ATTEMPTS} \u6B21\uFF09\uFF1A${reason}\uFF1B${delayMs}ms \u540E\u81EA\u52A8\u91CD\u8BD5`,
+    "worker",
+    "warning"
+  );
+  await wait(delayMs);
 }
 
 // src/session_context.ts
@@ -2074,6 +2475,7 @@ function formatScopedKanbanToolPrompt(cardId) {
     "",
     "scoped `kanbanMCP` \u53EA\u6CE8\u518C\u4E0B\u9762\u4E09\u4E2A\u5DE5\u5177\u3002\u7981\u6B62 `GetMcpTools`\u3001`tools/list` \u6216\u62C9\u53D6\u5176\u5B83\u770B\u677F\u5DE5\u5177\u76EE\u5F55\u3002",
     "Cursor\uFF1A\u76F4\u63A5 `CallMcpTool`\uFF1BCodex\uFF1A\u76F4\u63A5\u8C03\u7528\u540C\u540D MCP \u5DE5\u5177\u3002`cardId` \u5FC5\u987B\u662F\u6CE8\u5165\u503C\u3002",
+    "\u7981\u6B62\u628A ready_to_submit \u4E0E Shell\uFF08\u5C24\u5176\u662F\u6D4B\u8BD5\uFF09\u653E\u5728\u540C\u4E00\u6279\u5E76\u884C\u5DE5\u5177\u91CC\u3002\u5FC5\u987B\u7B49\u6D4B\u8BD5\u547D\u4EE4\u8FD4\u56DE exitCode=0 \u4E4B\u540E\uFF0C\u518D\u5355\u72EC\u8C03\u7528 ready_to_submit\u3002",
     "",
     "```json",
     JSON.stringify(
@@ -2118,6 +2520,14 @@ function formatScopedKanbanToolPrompt(cardId) {
     ),
     "```"
   ].join("\n");
+}
+
+// src/user_rule_canary.ts
+var WORKER_USER_RULES_BEGIN = "KANBAN_WORKER_USER_RULES_BEGIN";
+var WORKER_USER_RULES_END = "KANBAN_WORKER_USER_RULES_END";
+function wrapWorkerUserRules(text) {
+  const body = text.trim() || "\u672A\u53D1\u73B0\u7528\u6237 ~/.cursor/rules\u3002";
+  return [WORKER_USER_RULES_BEGIN, body, WORKER_USER_RULES_END].join("\n");
 }
 
 // src/session_context.ts
@@ -2182,7 +2592,7 @@ function createSessionContext(options) {
     "",
     "## \u5B8C\u6574\u7528\u6237 Rule",
     "",
-    options.userRules?.trim() || "\u672A\u53D1\u73B0\u7528\u6237 ~/.cursor/rules\u3002",
+    wrapWorkerUserRules(options.userRules ?? ""),
     "",
     "## \u5DF2\u7F13\u5B58\u7684 docs/Architecture.md",
     "",
@@ -2299,7 +2709,7 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
   let processedCards = 0;
   workerLog(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
   workerLog(
-    `\u7528\u6237 Rule \u6CE8\u5165\uFF1A${userRules.count} \u4E2A\uFF0C${userRules.bytes} bytes\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill`
+    `\u7528\u6237 Rule \u6CE8\u5165\uFF1A${userRules.count} \u4E2A\uFF0C${userRules.bytes} bytes\uFF1B\u7528\u6237 Skill \u4E0D\u5199\u5165 prompt`
   );
   const cancelledResult = () => ({
     ok: false,
@@ -2391,13 +2801,31 @@ ${tree.output}`);
             agentEndpointUrl,
             images: context.images,
             attachmentPaths: context.attachmentPaths,
-            projectMcpTags: parseProjectMcpTags(claim.payload)
+            projectMcpTags: parseProjectMcpTags(claim.payload),
+            reportShellSpan: async (span) => {
+              await mcp.callJson("dispatch_report_shell_span", {
+                workerToken: job.workerToken,
+                sessionId,
+                callId: span.callId,
+                command: span.command,
+                phase: span.phase,
+                startedAtMs: span.startedAtMs,
+                ...span.endedAtMs != null ? { endedAtMs: span.endedAtMs } : {},
+                ...span.executionTimeMs != null ? { executionTimeMs: span.executionTimeMs } : {},
+                ...span.exitCode != null ? { exitCode: span.exitCode } : {}
+              });
+            }
           }
         };
         logModelOverride(liveJob, roundJob, cardId);
         logClaimedCard(claim.payload);
         workerLog("Worker \u6B63\u5728\u5B9E\u65BD\u5F53\u524D\u5361\u7247");
-        const agentResult = await dependencies.runAgent(roundJob, cancellation);
+        const agentResult = await runAgentWithRetry(
+          dependencies.runAgent,
+          roundJob,
+          cancellation,
+          dependencies.sleep
+        );
         if (cancellation?.isSkipRequested || agentResult.error === "\u5DF2\u8DF3\u8FC7") {
           cancellation?.clearSkipRequest();
           await mcp.callJson("dispatch_skip_agent_session", {
@@ -2463,7 +2891,7 @@ ${afterSkip.output}`,
           ...projectId ? { projectId } : {}
         });
         const state = cardState(latest);
-        const pending = asRecord4(status.pending);
+        const pending = asRecord5(status.pending);
         if (state === "blocked") {
           return {
             ok: false,
@@ -2556,7 +2984,7 @@ async function recoverPendingSessions(mcp, job) {
   const pending = Array.isArray(listed.pending) ? listed.pending : [];
   let processedCards = 0;
   for (const raw of pending) {
-    const record = asRecord4(raw);
+    const record = asRecord5(raw);
     if (!record) continue;
     const sessionId = requiredString(record, "sessionId");
     const recovered = await mcp.callJson("dispatch_recover", {
@@ -2661,7 +3089,7 @@ function requiredString(record, key) {
   if (!value) throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${key} \u4E0D\u80FD\u4E3A\u7A7A`);
   return value;
 }
-function asRecord4(value) {
+function asRecord5(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function completedResult(processedCards, reason) {
@@ -2677,7 +3105,7 @@ function logClaimedCard(payload) {
   let title = "";
   const details = [];
   for (const raw of items) {
-    const record = asRecord4(raw);
+    const record = asRecord5(raw);
     if (!record) continue;
     const kind = String(record.kind ?? "");
     const text = String(record.text ?? "").trim();
@@ -2710,52 +3138,12 @@ function logModelOverride(original, round, cardId) {
 }
 
 // src/cli.ts
-function sleep(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, ms));
-}
-function isRetryableError(err) {
-  if (err && typeof err === "object") {
-    if ("isRetryable" in err && err.isRetryable) {
-      return true;
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    const lower = message.toLowerCase();
-    if (lower.includes("network") || lower.includes("fetch failed") || lower.includes("connect timeout") || lower.includes("econnreset") || lower.includes("etimedout") || lower.includes("und_err_connect_timeout")) {
-      return true;
-    }
-    if ("cause" in err && err.cause) {
-      return isRetryableError(err.cause);
-    }
-  }
-  return false;
-}
 function formatListModelsError(err) {
   if (err && typeof err === "object" && "message" in err) {
     const message = String(err.message).trim();
     if (message) return `Cursor.models.list \u5931\u8D25\uFF1A${message}`;
   }
   return `Cursor.models.list \u5931\u8D25\uFF1A${String(err)}`;
-}
-async function withRetry(operation, fn, options) {
-  const maxAttempts = options?.maxAttempts ?? 3;
-  const baseDelayMs = options?.baseDelayMs ?? 1e3;
-  let lastError;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      if (attempt >= maxAttempts || !isRetryableError(err)) {
-        throw err;
-      }
-      const delayMs = baseDelayMs * 2 ** (attempt - 1);
-      console.error(
-        `${operation} \u5931\u8D25\uFF08\u7B2C ${attempt}/${maxAttempts} \u6B21\uFF09\uFF0C${delayMs}ms \u540E\u91CD\u8BD5\u2026`
-      );
-      await sleep(delayMs);
-    }
-  }
-  throw lastError;
 }
 function writeResult(outPath, result) {
   writeFileSync4(outPath, JSON.stringify(result, null, 2), "utf8");
@@ -2800,7 +3188,17 @@ async function listModels(engine) {
   }
   let models;
   try {
-    models = await withRetry("\u62C9\u53D6\u6A21\u578B\u5217\u8868", () => Cursor2.models.list({ apiKey }));
+    models = await withRetry(
+      "\u62C9\u53D6\u6A21\u578B\u5217\u8868",
+      () => Cursor2.models.list({ apiKey }),
+      {
+        onRetry: ({ operation, attempt, maxAttempts, delayMs }) => {
+          console.error(
+            `${operation} \u5931\u8D25\uFF08\u7B2C ${attempt}/${maxAttempts} \u6B21\uFF09\uFF0C${delayMs}ms \u540E\u91CD\u8BD5\u2026`
+          );
+        }
+      }
+    );
   } catch (err) {
     console.error(formatListModelsError(err));
     process.exitCode = 2;

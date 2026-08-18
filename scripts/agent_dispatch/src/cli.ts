@@ -7,6 +7,7 @@ import {
 } from "./cancellation.ts";
 import { printCursorUsage } from "./cursor_usage.ts";
 import { listCodexModels } from "./codex_models.ts";
+import { withRetry } from "./retry.ts";
 import { resolveCodexCommand } from "./run_codex.ts";
 import { runBatch } from "./run_batch.ts";
 import {
@@ -16,66 +17,12 @@ import {
   type DispatchResult,
 } from "./types.ts";
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isRetryableError(err: unknown): boolean {
-  if (err && typeof err === "object") {
-    if ("isRetryable" in err && (err as { isRetryable?: boolean }).isRetryable) {
-      return true;
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    const lower = message.toLowerCase();
-    if (
-      lower.includes("network") ||
-      lower.includes("fetch failed") ||
-      lower.includes("connect timeout") ||
-      lower.includes("econnreset") ||
-      lower.includes("etimedout") ||
-      lower.includes("und_err_connect_timeout")
-    ) {
-      return true;
-    }
-    if ("cause" in err && err.cause) {
-      return isRetryableError(err.cause);
-    }
-  }
-  return false;
-}
-
 function formatListModelsError(err: unknown): string {
   if (err && typeof err === "object" && "message" in err) {
     const message = String((err as { message?: unknown }).message).trim();
     if (message) return `Cursor.models.list 失败：${message}`;
   }
   return `Cursor.models.list 失败：${String(err)}`;
-}
-
-async function withRetry<T>(
-  operation: string,
-  fn: () => Promise<T>,
-  options?: { maxAttempts?: number; baseDelayMs?: number },
-): Promise<T> {
-  const maxAttempts = options?.maxAttempts ?? 3;
-  const baseDelayMs = options?.baseDelayMs ?? 1000;
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      if (attempt >= maxAttempts || !isRetryableError(err)) {
-        throw err;
-      }
-      const delayMs = baseDelayMs * 2 ** (attempt - 1);
-      console.error(
-        `${operation} 失败（第 ${attempt}/${maxAttempts} 次），${delayMs}ms 后重试…`,
-      );
-      await sleep(delayMs);
-    }
-  }
-  throw lastError;
 }
 
 function writeResult(outPath: string, result: DispatchResult): void {
@@ -134,7 +81,17 @@ async function listModels(engine: "cursor" | "codex"): Promise<void> {
   }
   let models;
   try {
-    models = await withRetry("拉取模型列表", () => Cursor.models.list({ apiKey }));
+    models = await withRetry(
+      "拉取模型列表",
+      () => Cursor.models.list({ apiKey }),
+      {
+        onRetry: ({ operation, attempt, maxAttempts, delayMs }) => {
+          console.error(
+            `${operation} 失败（第 ${attempt}/${maxAttempts} 次），${delayMs}ms 后重试…`,
+          );
+        },
+      },
+    );
   } catch (err) {
     console.error(formatListModelsError(err));
     process.exitCode = 2;

@@ -11,6 +11,7 @@ import {
 } from "./mcp_client.ts";
 import { runCodex } from "./run_codex.ts";
 import { runCursor } from "./run_cursor.ts";
+import { runAgentWithRetry } from "./run_agent_with_retry.ts";
 import {
   createSessionContext,
   readBatchArchitecture,
@@ -44,6 +45,7 @@ export type RunBatchDependencies = {
     job: RoundDispatchJob,
     cancellation?: WorkerCancellation,
   ): Promise<DispatchResult>;
+  sleep?: (ms: number) => Promise<void>;
 };
 
 const defaultDependencies: RunBatchDependencies = {
@@ -198,7 +200,12 @@ export async function runBatch(
         logClaimedCard(claim.payload);
         workerLog("Worker 正在实施当前卡片");
 
-        const agentResult = await dependencies.runAgent(roundJob, cancellation);
+        const agentResult = await runAgentWithRetry(
+          dependencies.runAgent,
+          roundJob,
+          cancellation,
+          dependencies.sleep,
+        );
         if (cancellation?.isSkipRequested || agentResult.error === "已跳过") {
           cancellation?.clearSkipRequest();
           await mcp.callJson("dispatch_skip_agent_session", {

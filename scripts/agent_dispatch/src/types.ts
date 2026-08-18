@@ -98,6 +98,8 @@ export type DispatchResult = {
   ok: boolean;
   summary?: string;
   error?: string;
+  /** 仅表示暂时性网络或服务故障，Worker 可安全地有限次数重试当前卡片。 */
+  retryable?: boolean;
   processedCards?: number;
   /** 为 true 时不要把 pending 标成 failed，供清理工作区后恢复。 */
   preservePending?: boolean;

@@ -21,6 +21,7 @@ import {
   AgentRunDiagnostics,
   formatAgentRunDiagnostics,
 } from "./run_diagnostics.ts";
+import { isRetryableError } from "./retry.ts";
 import { readyBlockedByShells } from "./verification_ready_gate.ts";
 import {
   resolveModelParams,
@@ -389,6 +390,7 @@ export async function runCursor(
           ok: false,
           error: `Cursor run 失败：${result.error?.message ?? result.id}`,
           summary: typeof result.result === "string" ? result.result : undefined,
+          retryable: isRetryableError(result.error),
         };
       }
 
@@ -414,12 +416,23 @@ export async function runCursor(
       if (agent) await settleWithin(8000, agent[Symbol.asyncDispose]());
     }
   } catch (err) {
+    if (cancellation?.isSkipRequested) {
+      return { ok: false, error: "已跳过" };
+    }
+    if (cancellation?.isCancelled) {
+      return { ok: false, error: "已取消" };
+    }
     if (err instanceof CursorAgentError) {
       return {
         ok: false,
         error: `Cursor 启动失败：${err.message}（retryable=${err.isRetryable}）`,
+        retryable: err.isRetryable,
       };
     }
-    throw err;
+    return {
+      ok: false,
+      error: `Cursor 会话异常：${err instanceof Error ? err.message : String(err)}`,
+      retryable: isRetryableError(err),
+    };
   }
 }
