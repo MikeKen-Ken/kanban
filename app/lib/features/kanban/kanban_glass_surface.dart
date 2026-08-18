@@ -2,6 +2,15 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+/// 看板磨砂共用模糊：钳制边缘采样，避免列表贴到屏幕左右时采到透明像素。
+ImageFilter kanbanGlassBlur(double sigma) {
+  return ImageFilter.blur(
+    sigmaX: sigma,
+    sigmaY: sigma,
+    tileMode: TileMode.clamp,
+  );
+}
+
 /// 接近 iOS 液态玻璃的磨砂层：背景模糊、低密度着色与高光描边。
 class KanbanGlassSurface extends StatelessWidget {
   const KanbanGlassSurface({
@@ -39,7 +48,7 @@ class KanbanGlassSurface extends StatelessWidget {
     return ClipRRect(
       borderRadius: borderRadius,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+        filter: kanbanGlassBlur(blurSigma),
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: borderRadius,

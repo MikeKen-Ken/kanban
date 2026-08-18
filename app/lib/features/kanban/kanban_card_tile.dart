@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +21,7 @@ import 'card_drag.dart';
 import 'kanban_card_context_menu.dart';
 import 'card_tile_meta.dart';
 import 'confirm_delete_card.dart';
+import 'kanban_glass_surface.dart';
 import 'kanban_labels.dart';
 import 'markdown_plain_text.dart';
 import 'transfer_card_sheet.dart';
@@ -411,7 +410,7 @@ class _CardContent extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: kanbanGlassBlur(18),
           child: Card(
       // 拖拽反馈去掉列间距 margin；间距由外层 Padding 承担
       margin: EdgeInsets.zero,
