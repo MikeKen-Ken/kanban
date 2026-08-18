@@ -5,6 +5,7 @@ import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
+import '../project/project_list_preferences.dart';
 import '../project/projects_manifest.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_registry.dart';
@@ -28,6 +29,35 @@ class AgentDispatchHubItem {
   final double? progressFraction;
 }
 
+List<AgentDispatchHubItem> orderAgentDispatchHubItems(
+  Iterable<AgentDispatchHubItem> items,
+) {
+  final running = <AgentDispatchHubItem>[];
+  final idle = <AgentDispatchHubItem>[];
+  for (final item in items) {
+    if (item.running) {
+      running.add(item);
+    } else {
+      idle.add(item);
+    }
+  }
+  return [...running, ...idle];
+}
+
+List<ProjectEntry> orderAgentDispatchHubProjects(
+  Iterable<ProjectEntry> projects, {
+  required ProjectSortMode sortMode,
+  required List<String> pinnedProjectIds,
+  required Map<String, int> lastUsedAtByProjectId,
+}) {
+  return sortProjectEntries(
+    projects.toList(),
+    sortMode: sortMode,
+    pinnedProjectIds: pinnedProjectIds,
+    lastUsedAtByProjectId: lastUsedAtByProjectId,
+  );
+}
+
 /// Agent 调度总览：列出各项目是否在跑及进度。
 class AgentDispatchHub extends StatelessWidget {
   const AgentDispatchHub({super.key});
@@ -41,13 +71,16 @@ class AgentDispatchHub extends StatelessWidget {
         final registry = AgentDispatchRegistry.instance;
         final currentId = board.uiActiveProjectId ?? board.activeProjectId;
         final currentBoard = board.board;
-        final items = [
-          for (final project in board.manifest?.projects ?? const <ProjectEntry>[])
+        final orderedProjects = orderAgentDispatchHubProjects(
+          board.manifest?.projects ?? const <ProjectEntry>[],
+          sortMode: board.appSettings.projectSortMode,
+          pinnedProjectIds: board.appSettings.pinnedProjectIds,
+          lastUsedAtByProjectId: board.appSettings.projectLastUsedAt,
+        );
+        final items = orderAgentDispatchHubItems([
+          for (final project in orderedProjects)
             _itemFor(registry, project, currentId, currentBoard),
-        ]..sort((a, b) {
-            if (a.running != b.running) return a.running ? -1 : 1;
-            return a.title.compareTo(b.title);
-          });
+        ]);
         return AgentDispatchHubView(
           items: items,
           onClose: AgentDispatchWindow.hide,
@@ -147,9 +180,7 @@ class _HubProjectTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = item.running
-        ? (item.progressLabel == null
-            ? '运行中'
-            : '运行中 · ${item.progressLabel}')
+        ? (item.progressLabel == null ? '运行中' : '运行中 · ${item.progressLabel}')
         : '未运行';
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
