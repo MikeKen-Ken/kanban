@@ -5,6 +5,7 @@ import '../../controllers/board_controller.dart';
 import '../../common/app_snack_bar.dart';
 import '../../models/kanban_models.dart';
 import '../../widgets/kanban_column_widget.dart';
+import 'board_horizontal_scroll.dart';
 import 'swimlane.dart';
 
 /// 按泳道横向排列各列的看板主体。
@@ -92,77 +93,79 @@ class _SwimlaneRow extends StatelessWidget {
           ),
           SizedBox(
             height: height,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: board.columns.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final column = board.columns[index];
-                final laneCardIds = column.cards
-                    .where(
-                      (card) =>
-                          visibleCardIds.contains(card.id) &&
-                          service.cardMatches(card, bucket, mode),
-                    )
-                    .map((card) => card.id)
-                    .toSet();
-                return DragTarget<KanbanCard>(
-                  onWillAcceptWithDetails: (_) => true,
-                  onAcceptWithDetails: (details) async {
-                    final card = details.data;
-                    String? fromColumnId;
-                    for (final col in board.columns) {
-                      if (col.cards.any((c) => c.id == card.id)) {
-                        fromColumnId = col.id;
-                        break;
+            child: KanbanHorizontalScrollConfiguration(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: board.columns.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final column = board.columns[index];
+                  final laneCardIds = column.cards
+                      .where(
+                        (card) =>
+                            visibleCardIds.contains(card.id) &&
+                            service.cardMatches(card, bucket, mode),
+                      )
+                      .map((card) => card.id)
+                      .toSet();
+                  return DragTarget<KanbanCard>(
+                    onWillAcceptWithDetails: (_) => true,
+                    onAcceptWithDetails: (details) async {
+                      final card = details.data;
+                      String? fromColumnId;
+                      for (final col in board.columns) {
+                        if (col.cards.any((c) => c.id == card.id)) {
+                          fromColumnId = col.id;
+                          break;
+                        }
                       }
-                    }
-                    if (fromColumnId == null) return;
-                    final updated = service.applyBucket(card, bucket, mode);
-                    if (updated.priority != card.priority ||
-                        !_sameLabels(updated.labels, card.labels)) {
-                      await controller.updateCardFull(
-                        fromColumnId,
-                        card.id,
-                        priority: updated.priority,
-                        labels: updated.labels,
-                      );
-                    }
-                    if (fromColumnId != column.id) {
-                      final error = await controller.moveCard(
-                        cardId: card.id,
-                        fromColumnId: fromColumnId,
-                        toColumnId: column.id,
-                        toDisplayIndex: column.cards.length,
-                      );
-                      if (error != null && context.mounted) {
-                        showAppSnackBar(context, message: error);
+                      if (fromColumnId == null) return;
+                      final updated = service.applyBucket(card, bucket, mode);
+                      if (updated.priority != card.priority ||
+                          !_sameLabels(updated.labels, card.labels)) {
+                        await controller.updateCardFull(
+                          fromColumnId,
+                          card.id,
+                          priority: updated.priority,
+                          labels: updated.labels,
+                        );
                       }
-                    }
-                  },
-                  builder: (context, candidate, _) {
-                    return DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: candidate.isNotEmpty
-                            ? Border.all(
-                                color: theme.colorScheme.primary,
-                                width: 2,
-                              )
-                            : null,
-                      ),
-                      child: KanbanColumnWidget(
-                        column: column,
-                        columnIndex: index,
-                        visibleCardIds: laneCardIds,
-                        width: compact
-                            ? MediaQuery.sizeOf(context).width - 48
-                            : 280,
-                      ),
-                    );
-                  },
-                );
-              },
+                      if (fromColumnId != column.id) {
+                        final error = await controller.moveCard(
+                          cardId: card.id,
+                          fromColumnId: fromColumnId,
+                          toColumnId: column.id,
+                          toDisplayIndex: column.cards.length,
+                        );
+                        if (error != null && context.mounted) {
+                          showAppSnackBar(context, message: error);
+                        }
+                      }
+                    },
+                    builder: (context, candidate, _) {
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: candidate.isNotEmpty
+                              ? Border.all(
+                                  color: theme.colorScheme.primary,
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                        child: KanbanColumnWidget(
+                          column: column,
+                          columnIndex: index,
+                          visibleCardIds: laneCardIds,
+                          width: compact
+                              ? MediaQuery.sizeOf(context).width - 48
+                              : 280,
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],

@@ -52,6 +52,29 @@ void main() {
     });
   });
 
+  testWidgets('Android 看板横向列表不构建拉伸式边缘效果', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: const Scaffold(
+          body: SizedBox(
+            width: 320,
+            height: 200,
+            child: KanbanHorizontalScrollConfiguration(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(width: 800, height: 200),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(StretchingOverscrollIndicator), findsNothing);
+    expect(find.byType(GlowingOverscrollIndicator), findsNothing);
+  });
+
   group('shouldClaimBoardHorizontalWheel', () {
     test('Ctrl 按下时认领（与输入焦点无关）', () {
       expect(
