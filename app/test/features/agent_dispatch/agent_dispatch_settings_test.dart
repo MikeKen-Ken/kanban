@@ -296,6 +296,65 @@ disable-model-invocation: true
     });
   });
 
+  test('更换某项目仓库不改写其它项目绑定或全局回退路径', () {
+    const settings = AgentDispatchSettings(
+      repoPath: '/legacy',
+      repoPaths: ['/legacy', '/a', '/b'],
+      repoPathByProject: {
+        'a': '/a',
+        'b': '/b',
+      },
+    );
+
+    final next = settings.bindRepoToProject('a', '/a2');
+
+    expect(next.repoPath, '/legacy');
+    expect(next.repoPathFor('a'), '/a2');
+    expect(next.repoPathFor('b'), '/b');
+    expect(next.repoPathFor('unbound'), '/legacy');
+    expect(next.repoPaths.first, '/a2');
+  });
+
+  test('toRunOptions 使用当前项目绑定的仓库，而不是全局 repoPath', () {
+    const settings = AgentDispatchSettings(
+      useProject: true,
+      projectId: 'p1',
+      repoPath: '/global',
+      repoPathByProject: {
+        'p1': '/p1',
+        'p2': '/p2',
+      },
+    );
+
+    expect(
+      settings.toRunOptions(projectTitleOf: (_) => null).repoPath,
+      '/p1',
+    );
+    expect(
+      settings
+          .copyWith(projectId: 'p2')
+          .toRunOptions(projectTitleOf: (_) => null)
+          .repoPath,
+      '/p2',
+    );
+  });
+
+  test('清空某项目仓库绑定不影响其它项目', () {
+    const settings = AgentDispatchSettings(
+      repoPath: '/legacy',
+      repoPathByProject: {
+        'a': '/a',
+        'b': '/b',
+      },
+    );
+
+    final next = settings.bindRepoToProject('a', '  ');
+
+    expect(next.repoPathFor('a'), '/legacy');
+    expect(next.repoPathFor('b'), '/b');
+    expect(next.repoPath, '/legacy');
+  });
+
   test('旧版单一模型参数迁移到参数映射', () {
     final settings = AgentDispatchSettings.fromJson({
       'effortParamId': 'reasoning_effort',

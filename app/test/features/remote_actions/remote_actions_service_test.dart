@@ -21,6 +21,30 @@ void main() {
     );
   });
 
+  test('更换某项目仓库后其它项目仍用各自绑定或旧回退', () {
+    const settings = AgentDispatchSettings(
+      repoPath: 'C:\\fallback',
+      repoPathByProject: {
+        'p1': 'C:\\project-repo',
+        'p2': 'C:\\other-repo',
+      },
+    );
+    final next = settings.bindRepoToProject('p1', 'C:\\project-repo-2');
+
+    expect(
+      repoPathForRemoteActions(settings: next, projectId: 'p1'),
+      'C:\\project-repo-2',
+    );
+    expect(
+      repoPathForRemoteActions(settings: next, projectId: 'p2'),
+      'C:\\other-repo',
+    );
+    expect(
+      repoPathForRemoteActions(settings: next, projectId: 'p3'),
+      'C:\\fallback',
+    );
+  });
+
   test('从 origin 读取远端并打开 Actions', () async {
     final result = await openRemoteActionsPage(
       projectId: 'p1',

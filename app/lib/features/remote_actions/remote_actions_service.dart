@@ -28,13 +28,7 @@ String? repoPathForRemoteActions({
   required AgentDispatchSettings settings,
   required String? projectId,
 }) {
-  final mapped = projectId == null
-      ? null
-      : settings.repoPathByProject[projectId]?.trim();
-  if (mapped != null && mapped.isNotEmpty) return mapped;
-  final fallback = settings.repoPath?.trim();
-  if (fallback != null && fallback.isNotEmpty) return fallback;
-  return null;
+  return settings.repoPathFor(projectId);
 }
 
 Future<String?> readGitRemoteUrl(

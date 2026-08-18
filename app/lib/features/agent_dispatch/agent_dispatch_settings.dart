@@ -152,6 +152,40 @@ class AgentDispatchSettings {
     );
   }
 
+  /// 解析某项目的代码仓库：优先项目绑定，未绑定时才回退旧的全局路径。
+  String? repoPathFor(String? projectId) {
+    final mapped = projectId == null
+        ? null
+        : repoPathByProject[projectId]?.trim();
+    if (mapped != null && mapped.isNotEmpty) return mapped;
+    final fallback = repoPath?.trim();
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+    return null;
+  }
+
+  /// 把仓库绑到指定项目，并记入历史；不改写其它项目或全局 [repoPath]。
+  AgentDispatchSettings bindRepoToProject(String projectId, String path) {
+    final trimmed = path.trim();
+    final map = Map<String, String>.from(repoPathByProject);
+    if (trimmed.isEmpty) {
+      map.remove(projectId);
+      return copyWith(repoPathByProject: map);
+    }
+    map[projectId] = trimmed;
+    return copyWith(repoPathByProject: map).rememberRepoPath(trimmed);
+  }
+
+  AgentDispatchSettings rememberRepoPath(String path) {
+    final normalized = path.trim();
+    if (normalized.isEmpty) return this;
+    return copyWith(
+      repoPaths: [
+        normalized,
+        ...repoPaths.where((item) => item != normalized),
+      ],
+    );
+  }
+
   /// 从本机历史中忘记一个仓库，并移除引用它的项目默认值。
   AgentDispatchSettings forgetRepoPath(String path) {
     final normalized = path.trim();
@@ -231,7 +265,7 @@ class AgentDispatchSettings {
       engine: defaultEngine,
       projectId: useProject ? projectId : null,
       projectTitle: useProject ? title : null,
-      repoPath: repoPath?.trim() ?? '',
+      repoPath: repoPathFor(useProject ? projectId : null) ?? '',
       modelId: defaultProfile?.modelId,
       modelParams: _runParams(defaultProfile?.modelParamValues ?? const {}),
       engineDefaults: engineDefaults,

@@ -171,9 +171,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     setState(() {
       _settings = normalized;
       _models = cachedModels;
-      _repoController.text = normalized.repoPathByProject[widget.projectId] ??
-          normalized.repoPath ??
-          '';
+      _repoController.text = normalized.repoPathFor(widget.projectId) ?? '';
       _countController.text = '${normalized.cardLimitCount}';
     });
     await _service.hydrateLog();
@@ -295,27 +293,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final path = await pickBackupDirectory();
     if (path == null || !mounted) return;
     _repoController.text = path;
-    final projectId = widget.projectId;
-    var next = _rememberRepo(_settings.copyWith(repoPath: path), path);
-    final map = Map<String, String>.from(next.repoPathByProject)
-      ..[projectId] = path;
-    next = next.copyWith(repoPathByProject: map);
-    await _persist(next);
+    await _persist(_settings.bindRepoToProject(widget.projectId, path));
     if (!mounted) return;
     setState(() => _repoErrorText = null);
-  }
-
-  AgentDispatchSettings _rememberRepo(
-    AgentDispatchSettings settings,
-    String path,
-  ) {
-    final normalized = path.trim();
-    if (normalized.isEmpty) return settings;
-    final paths = [
-      normalized,
-      ...settings.repoPaths.where((item) => item != normalized),
-    ];
-    return settings.copyWith(repoPaths: paths);
   }
 
   Future<void> _deleteRepoPath(String path) async {
@@ -550,17 +530,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (repo.isEmpty || projectMissing || countInvalid) {
       return;
     }
-    var next = _rememberRepo(
-        _settings.copyWith(
+    final next = _settings
+        .copyWith(
           useProject: true,
           projectId: projectId,
-          repoPath: repo,
           cardLimitCount: count!,
-        ),
-        repo);
-    final map = Map<String, String>.from(next.repoPathByProject)
-      ..[projectId] = repo;
-    next = next.copyWith(repoPathByProject: map);
+        )
+        .bindRepoToProject(projectId, repo);
     await _persist(next);
 
     final conflict = AgentDispatchRegistry.instance.runningWithRepo(
@@ -732,9 +708,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 enabled: !_running && !_busy,
                 errorText: _repoErrorText,
                 onChanged: (value) {
-                  final trimmed = value.trim();
                   setState(() {
-                    _settings = _settings.copyWith(repoPath: trimmed);
+                    _settings =
+                        _settings.bindRepoToProject(widget.projectId, value);
                     _repoErrorText = null;
                   });
                 },
