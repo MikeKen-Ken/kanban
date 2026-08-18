@@ -167,10 +167,9 @@ disable-model-invocation: true
     expect(opts.engineDefaults['codex']?.modelId, isNull);
   });
 
-  test('toRunOptions 使用默认平台，而不是当前正在编辑的平台', () {
+  test('toRunOptions 使用当前选择的 AI 平台作为默认平台', () {
     const settings = AgentDispatchSettings(
       engine: AgentDispatchEngine.codex,
-      defaultEngine: AgentDispatchEngine.cursor,
       modelId: 'gpt-5',
       modelParamValues: {'model_reasoning_effort': 'low'},
       engineProfiles: {
@@ -183,22 +182,21 @@ disable-model-invocation: true
 
     final opts = settings.toRunOptions(projectTitleOf: (_) => null);
 
-    expect(opts.engine, AgentDispatchEngine.cursor);
-    expect(opts.modelId, 'composer-2.5');
+    expect(opts.engine, AgentDispatchEngine.codex);
+    expect(opts.modelId, 'gpt-5');
     expect(opts.modelParams, [
-      (id: 'fast', value: 'false'),
-      (id: 'reasoning_effort', value: 'high'),
+      (id: 'model_reasoning_effort', value: 'low'),
     ]);
-    expect(opts.engineDefaults['codex']?.modelId, 'gpt-5');
+    expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
   });
 
-  test('旧设置把当前引擎当作默认平台', () {
+  test('旧设置忽略已废弃的独立默认平台字段', () {
     final settings = AgentDispatchSettings.fromJson({
       'engine': 'codex',
+      'defaultEngine': 'cursor',
       'modelId': 'gpt-5',
     });
 
-    expect(settings.defaultEngine, AgentDispatchEngine.codex);
     expect(
       settings.toRunOptions(projectTitleOf: (_) => null).engine,
       AgentDispatchEngine.codex,

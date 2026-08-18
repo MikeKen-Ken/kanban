@@ -37,7 +37,6 @@ class AgentDispatchEngineProfile {
 class AgentDispatchSettings {
   const AgentDispatchSettings({
     this.engine = AgentDispatchEngine.cursor,
-    this.defaultEngine = AgentDispatchEngine.cursor,
     this.useProject = false,
     this.projectId,
     this.repoPath,
@@ -68,9 +67,6 @@ class AgentDispatchSettings {
   };
 
   final AgentDispatchEngine engine;
-
-  /// 未指定平台的卡片使用的默认引擎；与 [engine]（当前正在编辑的平台）分离。
-  final AgentDispatchEngine defaultEngine;
   final bool useProject;
   final String? projectId;
   final String? repoPath;
@@ -107,7 +103,6 @@ class AgentDispatchSettings {
 
   AgentDispatchSettings copyWith({
     AgentDispatchEngine? engine,
-    AgentDispatchEngine? defaultEngine,
     bool? useProject,
     Object? projectId = _sentinel,
     Object? repoPath = _sentinel,
@@ -128,7 +123,6 @@ class AgentDispatchSettings {
   }) {
     return AgentDispatchSettings(
       engine: engine ?? this.engine,
-      defaultEngine: defaultEngine ?? this.defaultEngine,
       useProject: useProject ?? this.useProject,
       projectId: projectId == _sentinel ? this.projectId : projectId as String?,
       repoPath: repoPath == _sentinel ? this.repoPath : repoPath as String?,
@@ -154,9 +148,8 @@ class AgentDispatchSettings {
 
   /// 解析某项目的代码仓库：优先项目绑定，未绑定时才回退旧的全局路径。
   String? repoPathFor(String? projectId) {
-    final mapped = projectId == null
-        ? null
-        : repoPathByProject[projectId]?.trim();
+    final mapped =
+        projectId == null ? null : repoPathByProject[projectId]?.trim();
     if (mapped != null && mapped.isNotEmpty) return mapped;
     final fallback = repoPath?.trim();
     if (fallback != null && fallback.isNotEmpty) return fallback;
@@ -250,7 +243,7 @@ class AgentDispatchSettings {
     final title =
         useProject && projectId != null ? projectTitleOf(projectId!) : null;
     final profiles = resolvedEngineProfiles();
-    final defaultProfile = profiles[defaultEngine.name];
+    final defaultProfile = profiles[engine.name];
     final engineDefaults = <String, AgentDispatchEngineRunDefaults>{
       for (final item in AgentDispatchEngine.values)
         item.name: AgentDispatchEngineRunDefaults(
@@ -262,7 +255,7 @@ class AgentDispatchSettings {
         ),
     };
     return AgentDispatchRunOptions(
-      engine: defaultEngine,
+      engine: engine,
       projectId: useProject ? projectId : null,
       projectTitle: useProject ? title : null,
       repoPath: repoPathFor(useProject ? projectId : null) ?? '',
@@ -280,7 +273,6 @@ class AgentDispatchSettings {
 
   Map<String, dynamic> toJson() => {
         'engine': engine.name,
-        'defaultEngine': defaultEngine.name,
         'useProject': useProject,
         if (projectId != null) 'projectId': projectId,
         if (repoPath != null) 'repoPath': repoPath,
@@ -356,9 +348,6 @@ class AgentDispatchSettings {
     }
     return AgentDispatchSettings(
       engine: engine,
-      defaultEngine: AgentDispatchEngine.fromName(
-        json['defaultEngine'] as String? ?? engine.name,
-      ),
       useProject: json['useProject'] as bool? ?? false,
       projectId: json['projectId'] as String?,
       repoPath: repoPath,

@@ -677,11 +677,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               DropdownButtonFormField<AgentDispatchEngine>(
                 key: ValueKey('engine-${_settings.engine}'),
                 initialValue: _settings.engine,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'AI 平台',
-                  helperText: _settings.engine == _settings.defaultEngine
-                      ? '当前正在编辑默认平台'
-                      : '仅编辑此平台配置，不改变本批次默认',
+                  helperText: '未指定平台的卡片使用此项',
                 ),
                 items: [
                   for (final e in AgentDispatchEngine.values)
@@ -845,25 +843,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 onEnableSandboxChanged: (value) => _persist(
                   _settings.copyWith(enableSandbox: value),
                 ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<AgentDispatchEngine>(
-                key: ValueKey('default-engine-${_settings.defaultEngine}'),
-                initialValue: _settings.defaultEngine,
-                decoration: const InputDecoration(
-                  labelText: '默认 AI 平台',
-                  helperText: '未指定平台的卡片使用此项',
-                ),
-                items: [
-                  for (final e in AgentDispatchEngine.values)
-                    DropdownMenuItem(value: e, child: Text(e.label)),
-                ],
-                onChanged: _busy
-                    ? null
-                    : (next) {
-                        if (next == null) return;
-                        _persist(_settings.copyWith(defaultEngine: next));
-                      },
               ),
               const SizedBox(height: 12),
               AgentDispatchCardLimitField(
