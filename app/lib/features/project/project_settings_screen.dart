@@ -296,7 +296,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             SettingsSection(
               icon: Icons.memory_outlined,
               title: 'Agent MCP',
-              subtitle: 'Worker 默认只注入 scoped 看板 MCP；这里按主题附加其它 MCP（含可选 Hub）'
+              subtitle: 'Worker 默认只注入 scoped 看板 MCP；这里按主题附加其它 MCP（含可选 Hub）',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
