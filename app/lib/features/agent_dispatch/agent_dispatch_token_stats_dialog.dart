@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'agent_dispatch_token.dart';
@@ -11,19 +12,30 @@ Future<void> showAgentDispatchTokenStatsDialog({
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Token 统计'),
-      content: SizedBox(
-        width: 640,
-        height: 560,
-        child: _TokenStatsBody(projectId: projectId),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('关闭'),
+    builder: (context) => Focus(
+      autofocus: true,
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          Navigator.of(context).pop();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: AlertDialog(
+        title: const Text('Token 统计'),
+        content: SizedBox(
+          width: 640,
+          height: 560,
+          child: _TokenStatsBody(projectId: projectId),
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
     ),
   );
 }
