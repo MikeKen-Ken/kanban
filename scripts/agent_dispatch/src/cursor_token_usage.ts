@@ -16,6 +16,13 @@ export type DashboardTokenUsage = {
   totalTokens: number;
 };
 
+export type SessionDiagnostics = {
+  steps: number;
+  toolCalls: number;
+  repeatedToolCalls: number;
+  repeatedReads: number;
+};
+
 function asCount(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.trunc(value));
@@ -63,11 +70,19 @@ export function toDashboardTokenUsage(
   };
 }
 
-export function formatSessionTokenLog(raw: CursorTokenUsage): string {
+export function formatSessionTokenLog(
+  raw: CursorTokenUsage,
+  diagnostics?: SessionDiagnostics,
+): string {
   const usage = toDashboardTokenUsage(raw);
   return (
     `本会话 token：input=${usage.inputTokens} output=${usage.outputTokens}` +
     ` cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens}` +
-    ` total=${usage.totalTokens}`
+    ` total=${usage.totalTokens}` +
+    (diagnostics
+      ? ` steps=${diagnostics.steps} tools=${diagnostics.toolCalls}` +
+        ` repeatedToolCalls=${diagnostics.repeatedToolCalls}` +
+        ` repeatedReads=${diagnostics.repeatedReads}`
+      : "")
   );
 }

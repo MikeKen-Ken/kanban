@@ -18,6 +18,7 @@ describe("session_context", () => {
     const context = createSessionContext({
       basePrompt: "执行任务",
       architecture: "# 架构",
+      userRules: "# 所有用户规则\n\n必须使用简体中文。",
       tempRoot: root,
       claim: {
         payload: {
@@ -43,6 +44,8 @@ describe("session_context", () => {
       assert.equal(context.prompt.includes(base64), false);
       assert.match(context.prompt, /完成 A/);
       assert.match(context.prompt, /已缓存的 docs\/Architecture\.md/);
+      assert.match(context.prompt, /完整用户 Rule/);
+      assert.match(context.prompt, /必须使用简体中文/);
       assert.match(context.prompt, /开发前必读 Architecture\.md/);
       assert.equal(
         readFileSync(context.attachmentPaths[0]!, "utf8"),

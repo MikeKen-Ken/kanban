@@ -1,5 +1,5 @@
 // src/cli.ts
-import { readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
+import { readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
@@ -598,9 +598,9 @@ function toDashboardTokenUsage(raw) {
     totalTokens: input + output + cacheSum
   };
 }
-function formatSessionTokenLog(raw) {
+function formatSessionTokenLog(raw, diagnostics) {
   const usage = toDashboardTokenUsage(raw);
-  return `\u672C\u4F1A\u8BDD token\uFF1Ainput=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}`;
+  return `\u672C\u4F1A\u8BDD token\uFF1Ainput=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}` + (diagnostics ? ` steps=${diagnostics.steps} tools=${diagnostics.toolCalls} repeatedToolCalls=${diagnostics.repeatedToolCalls} repeatedReads=${diagnostics.repeatedReads}` : "");
 }
 
 // src/codex_exec_log.ts
@@ -1668,6 +1668,75 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+// src/run_diagnostics.ts
+var DEFAULT_AGENT_RUN_BUDGET = {
+  maxSteps: 60,
+  maxToolCalls: 40
+};
+var AgentRunDiagnostics = class {
+  steps = 0;
+  toolCalls = 0;
+  repeatedToolCalls = 0;
+  signatures = /* @__PURE__ */ new Map();
+  reads = /* @__PURE__ */ new Map();
+  budget;
+  constructor(budget = DEFAULT_AGENT_RUN_BUDGET) {
+    this.budget = budget;
+  }
+  recordStep(input) {
+    this.steps += 1;
+    if (input.type === "toolCall") {
+      this.toolCalls += 1;
+      const name = input.toolName?.trim() || "tool";
+      const detail = input.detail?.trim() || "";
+      const signature = `${name.toLowerCase()}\0${detail}`;
+      const seen = this.signatures.get(signature) ?? 0;
+      if (seen > 0) this.repeatedToolCalls += 1;
+      this.signatures.set(signature, seen + 1);
+      if (name.toLowerCase() === "read") {
+        const path = readPath(detail);
+        if (path) this.reads.set(path, (this.reads.get(path) ?? 0) + 1);
+      }
+    }
+    if (this.steps > this.budget.maxSteps) {
+      return `\u6B65\u9AA4\u6570\u8D85\u8FC7\u4E0A\u9650 ${this.budget.maxSteps}`;
+    }
+    if (this.toolCalls > this.budget.maxToolCalls) {
+      return `\u5DE5\u5177\u8C03\u7528\u8D85\u8FC7\u4E0A\u9650 ${this.budget.maxToolCalls}`;
+    }
+    return void 0;
+  }
+  snapshot() {
+    const repeatedReads = [...this.reads.values()].reduce(
+      (sum, count) => sum + Math.max(0, count - 1),
+      0
+    );
+    const topReads = [...this.reads.entries()].filter(([, count]) => count > 1).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3).map(([path, count]) => `${path}\xD7${count}`);
+    return {
+      steps: this.steps,
+      toolCalls: this.toolCalls,
+      repeatedToolCalls: this.repeatedToolCalls,
+      repeatedReads,
+      topReads
+    };
+  }
+};
+function formatAgentRunDiagnostics(metrics) {
+  return `\u4F1A\u8BDD\u8BCA\u65AD\uFF1Asteps=${metrics.steps} tools=${metrics.toolCalls} repeatedToolCalls=${metrics.repeatedToolCalls} repeatedReads=${metrics.repeatedReads}` + (metrics.topReads.length > 0 ? ` topReads=${metrics.topReads.join(",")}` : "");
+}
+function readPath(detail) {
+  try {
+    const parsed = JSON.parse(detail);
+    const value = parsed.path ?? parsed.filePath ?? parsed.file_path;
+    if (typeof value === "string" && value.trim()) {
+      return value.trim().replaceAll("\\", "/").toLowerCase();
+    }
+  } catch {
+  }
+  const raw = detail.trim();
+  return raw && !raw.startsWith("{") ? raw.replaceAll("\\", "/").toLowerCase() : void 0;
+}
+
 // src/run_cursor.ts
 function logLine(line, source = "worker") {
   workerLog(line, source);
@@ -1790,14 +1859,25 @@ function describeStep(step) {
       const toolName = pickString2(message, "name", "toolName", "functionName", "type") || pickString2(record, "name", "toolName") || "tool";
       const detail = extractToolDetail(message);
       if (!detail) {
-        return { lines: [], source: isShellTool(toolName) ? "shell" : "mcp" };
+        return {
+          lines: [],
+          source: isShellTool(toolName) ? "shell" : "mcp",
+          toolName
+        };
       }
       if (isShellTool(toolName)) {
-        return { lines: expandMultiline2("\u547D\u4EE4\uFF1A", detail), source: "shell" };
+        return {
+          lines: expandMultiline2("\u547D\u4EE4\uFF1A", detail),
+          source: "shell",
+          toolName,
+          detail
+        };
       }
       return {
         lines: expandMultiline2(`\u5DE5\u5177\uFF1A${toolName} `, detail),
-        source: "mcp"
+        source: "mcp",
+        toolName,
+        detail
       };
     }
     case "toolResult": {
@@ -1852,6 +1932,9 @@ async function runCursor(job, cancellation) {
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
+    const diagnostics = new AgentRunDiagnostics(DEFAULT_AGENT_RUN_BUDGET);
+    let budgetError;
+    let activeRun;
     const storeDir = join4(homedir3(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync2(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -1859,8 +1942,15 @@ async function runCursor(job, cancellation) {
       scopedKanbanUrl: agentMcpUrl,
       projectMcpTags: job.round.projectMcpTags
     });
+    const hasProjectWebMcp = job.round.projectMcpTags.some(
+      (tag) => tag === "tavily" || tag === "chrome-devtools"
+    );
+    const disallowedTools = [
+      "task",
+      ...hasProjectWebMcp ? ["webSearch", "webFetch"] : []
+    ];
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1BsettingSources=user,project\uFF08\u52A0\u8F7D\u672C\u673A\u4E0E\u4ED3\u5E93\u89C4\u5219 / Skill / Hooks\uFF09`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",")}\uFF1BsettingSources=project\uFF08\u7528\u6237 Rule \u5DF2\u5B8C\u6574\u6CE8\u5165\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
     );
     const agent = await Agent.create({
       apiKey,
@@ -1869,11 +1959,12 @@ async function runCursor(job, cancellation) {
         ...params ? { params } : {}
       },
       mcpServers: mcp.servers,
+      disallowedTools,
       local: {
         cwd: job.cwd,
-        // 加载本机 ~/.cursor/rules、个人 Skill，以及目标仓库 .cursor/ 规则、Skill、Hooks。
-        // MCP 已在上面显式合并；kanbanMCP 始终覆盖为本卡 scoped 端点。
-        settingSources: ["user", "project"],
+        // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
+        // 避免把所有个人 Skill 一并加入每个单卡会话。
+        settingSources: ["project"],
         store: new JsonlLocalAgentStore(storeDir),
         // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
         autoReview: false,
@@ -1893,6 +1984,16 @@ async function runCursor(job, cancellation) {
             const described = describeStep(
               step
             );
+            const exceeded = diagnostics.recordStep({
+              type: String(step.type),
+              toolName: described.toolName,
+              detail: described.detail
+            });
+            if (exceeded && !budgetError) {
+              budgetError = exceeded;
+              logLine(`Agent \u9884\u7B97\u8D85\u9650\uFF1A${exceeded}\uFF0C\u6B63\u5728\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD`);
+              void activeRun?.cancel().catch(() => void 0);
+            }
             if (described.lines.length > 0) {
               logLines(described.lines, described.source);
             }
@@ -1901,6 +2002,8 @@ async function runCursor(job, cancellation) {
           }
         }
       });
+      activeRun = run;
+      if (budgetError) await run.cancel().catch(() => void 0);
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => void 0);
       });
@@ -1908,6 +2011,17 @@ async function runCursor(job, cancellation) {
         await run.cancel().catch(() => void 0);
       }
       const result = await run.wait();
+      const metrics = diagnostics.snapshot();
+      logLine(formatAgentRunDiagnostics(metrics));
+      logLine(
+        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
+      );
+      if (result.usage) {
+        logLine(formatSessionTokenLog(result.usage, metrics));
+      }
+      if (budgetError) {
+        return { ok: false, error: `Agent \u9884\u7B97\u8D85\u9650\uFF1A${budgetError}` };
+      }
       if (cancellation?.isSkipRequested) {
         logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u8DF3\u8FC7", "worker");
         return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
@@ -1915,12 +2029,6 @@ async function runCursor(job, cancellation) {
       if (cancellation?.isCancelled || result.status === "cancelled") {
         logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u505C\u6B62", "worker");
         return { ok: false, error: "\u5DF2\u53D6\u6D88" };
-      }
-      logLine(
-        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
-      );
-      if (result.usage) {
-        logLine(formatSessionTokenLog(result.usage));
       }
       if (result.status === "error") {
         return {
@@ -2012,6 +2120,10 @@ function createSessionContext(options) {
     "",
     "\u8FD9\u4E9B\u8DEF\u5F84\u4F4D\u4E8E\u7CFB\u7EDF\u4E34\u65F6\u4F1A\u8BDD\u76EE\u5F55\uFF0C\u53EA\u5728\u672C\u8F6E\u6709\u6548\uFF1B\u4E0D\u8981\u590D\u5236\u5230\u4ED3\u5E93\u3002",
     "",
+    "## \u5B8C\u6574\u7528\u6237 Rule",
+    "",
+    options.userRules?.trim() || "\u672A\u53D1\u73B0\u7528\u6237 ~/.cursor/rules\u3002",
+    "",
     "## \u5DF2\u7F13\u5B58\u7684 docs/Architecture.md",
     "",
     options.architecture.trim(),
@@ -2053,8 +2165,52 @@ function extensionForMime(mimeType) {
   }
 }
 
+// src/user_rules.ts
+import {
+  existsSync as existsSync6,
+  readFileSync as readFileSync5,
+  readdirSync,
+  statSync as statSync2
+} from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { join as join6, relative } from "node:path";
+var RULE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".mdc"]);
+function readUserCursorRules(root = join6(homedir4(), ".cursor", "rules")) {
+  if (!existsSync6(root)) return { text: "", count: 0, bytes: 0 };
+  const paths = collectRulePaths(root).sort((a, b) => a.localeCompare(b));
+  const sections = [];
+  let bytes = 0;
+  for (const path of paths) {
+    const content = readFileSync5(path, "utf8");
+    bytes += Buffer.byteLength(content, "utf8");
+    sections.push(
+      [`## \u7528\u6237 Rule\uFF1A${relative(root, path).replaceAll("\\", "/")}`, "", content].join("\n")
+    );
+  }
+  return {
+    text: sections.join("\n\n"),
+    count: paths.length,
+    bytes
+  };
+}
+function collectRulePaths(root) {
+  const result = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = join6(root, entry.name);
+    if (entry.isDirectory()) {
+      result.push(...collectRulePaths(path));
+      continue;
+    }
+    if (!entry.isFile() || !statSync2(path).isFile()) continue;
+    const dot = entry.name.lastIndexOf(".");
+    const extension = dot < 0 ? "" : entry.name.slice(dot).toLowerCase();
+    if (RULE_EXTENSIONS.has(extension)) result.push(path);
+  }
+  return result;
+}
+
 // src/run_batch.ts
-import { readFileSync as readFileSync5 } from "node:fs";
+import { readFileSync as readFileSync6 } from "node:fs";
 var SCOPED_TOOL_NAMES = [
   "block_card",
   "ready_to_submit",
@@ -2068,15 +2224,24 @@ var defaultDependencies = {
   },
   inspectGit: inspectGitWorkingTree,
   readArchitecture: readBatchArchitecture,
+  readUserRules: readUserCursorRules,
   createContext: createSessionContext,
   runAgent: (roundJob, cancellation) => roundJob.engine === "codex" ? runCodex(roundJob, cancellation) : runCursor(roundJob, cancellation)
 };
 async function runBatch(job, cancellation, dependencies = defaultDependencies) {
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
   const architecture = dependencies.readArchitecture(job.cwd);
+  const userRules = dependencies.readUserRules?.() ?? {
+    text: "",
+    count: 0,
+    bytes: 0
+  };
   const mcp = await dependencies.connectMcp(job.mcpEndpoint);
   let processedCards = 0;
   workerLog(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
+  workerLog(
+    `\u7528\u6237 Rule \u6CE8\u5165\uFF1A${userRules.count} \u4E2A\uFF0C${userRules.bytes} bytes\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill`
+  );
   const cancelledResult = () => ({
     ok: false,
     error: "\u5DF2\u53D6\u6D88",
@@ -2153,6 +2318,7 @@ ${tree.output}`);
         context = dependencies.createContext({
           basePrompt: job.prompt,
           architecture,
+          userRules: userRules.text,
           claim
         });
         const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
@@ -2469,7 +2635,7 @@ function logClaimedCard(payload) {
 function readLiveJob(job) {
   if (!job.liveFile) return job;
   try {
-    const raw = JSON.parse(readFileSync5(job.liveFile, "utf8"));
+    const raw = JSON.parse(readFileSync6(job.liveFile, "utf8"));
     return applyLiveJobOverlay(job, raw);
   } catch {
     return job;
@@ -2607,7 +2773,7 @@ async function listModels(engine) {
 `);
 }
 async function runJob(jobPath) {
-  const job = JSON.parse(readFileSync6(jobPath, "utf8"));
+  const job = JSON.parse(readFileSync7(jobPath, "utf8"));
   if (!job.outPath) {
     throw new Error("job.outPath \u5FC5\u586B");
   }

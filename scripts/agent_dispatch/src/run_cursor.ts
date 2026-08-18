@@ -7,6 +7,11 @@ import type { WorkerCancellation } from "./cancellation.ts";
 import { loadCursorMcpServers } from "./cursor_mcp_servers.ts";
 import { formatSessionTokenLog } from "./cursor_token_usage.ts";
 import {
+  AgentRunDiagnostics,
+  DEFAULT_AGENT_RUN_BUDGET,
+  formatAgentRunDiagnostics,
+} from "./run_diagnostics.ts";
+import {
   resolveModelParams,
   type DispatchResult,
   type RoundDispatchJob,
@@ -147,6 +152,8 @@ function isShellTool(name: string): boolean {
 function describeStep(step: { type?: unknown; message?: unknown }): {
   lines: string[];
   source: WorkerLogSource;
+  toolName?: string;
+  detail?: string;
 } {
   const record = asRecord(step) ?? {};
   const type = String(record.type ?? "unknown");
@@ -171,14 +178,25 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
         "tool";
       const detail = extractToolDetail(message);
       if (!detail) {
-        return { lines: [], source: isShellTool(toolName) ? "shell" : "mcp" };
+        return {
+          lines: [],
+          source: isShellTool(toolName) ? "shell" : "mcp",
+          toolName,
+        };
       }
       if (isShellTool(toolName)) {
-        return { lines: expandMultiline("命令：", detail), source: "shell" };
+        return {
+          lines: expandMultiline("命令：", detail),
+          source: "shell",
+          toolName,
+          detail,
+        };
       }
       return {
         lines: expandMultiline(`工具：${toolName} `, detail),
         source: "mcp",
+        toolName,
+        detail,
       };
     }
     case "toolResult": {
@@ -242,6 +260,9 @@ export async function runCursor(
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
+    const diagnostics = new AgentRunDiagnostics(DEFAULT_AGENT_RUN_BUDGET);
+    let budgetError: string | undefined;
+    let activeRun: { cancel(): Promise<void> } | undefined;
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -249,11 +270,19 @@ export async function runCursor(
       scopedKanbanUrl: agentMcpUrl,
       projectMcpTags: job.round.projectMcpTags,
     });
+    const hasProjectWebMcp = job.round.projectMcpTags.some(
+      (tag) => tag === "tavily" || tag === "chrome-devtools",
+    );
+    const disallowedTools: Array<"task" | "webSearch" | "webFetch"> = [
+      "task",
+      ...(hasProjectWebMcp ? ["webSearch" as const, "webFetch" as const] : []),
+    ];
     logLine(
       `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
         `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
         `kanbanMCP 强制为 scoped（${agentMcpUrl}）；` +
-        `settingSources=user,project（加载本机与仓库规则 / Skill / Hooks）`,
+        `禁用工具=${disallowedTools.join(",")}；` +
+        `settingSources=project（用户 Rule 已完整注入；不加载用户 Skill；保留项目规则 / Skill / Hooks）`,
     );
     const agent = await Agent.create({
       apiKey,
@@ -262,11 +291,12 @@ export async function runCursor(
         ...(params ? { params } : {}),
       },
       mcpServers: mcp.servers,
+      disallowedTools,
       local: {
         cwd: job.cwd,
-        // 加载本机 ~/.cursor/rules、个人 Skill，以及目标仓库 .cursor/ 规则、Skill、Hooks。
-        // MCP 已在上面显式合并；kanbanMCP 始终覆盖为本卡 scoped 端点。
-        settingSources: ["user", "project"],
+        // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
+        // 避免把所有个人 Skill 一并加入每个单卡会话。
+        settingSources: ["project"],
         store: new JsonlLocalAgentStore(storeDir),
         // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
         autoReview: false,
@@ -286,6 +316,16 @@ export async function runCursor(
             const described = describeStep(
               step as { type?: unknown; message?: unknown },
             );
+            const exceeded = diagnostics.recordStep({
+              type: String(step.type),
+              toolName: described.toolName,
+              detail: described.detail,
+            });
+            if (exceeded && !budgetError) {
+              budgetError = exceeded;
+              logLine(`Agent 预算超限：${exceeded}，正在终止当前会话`);
+              void activeRun?.cancel().catch(() => undefined);
+            }
             if (described.lines.length > 0) {
               logLines(described.lines, described.source);
             }
@@ -294,6 +334,8 @@ export async function runCursor(
           }
         },
       });
+      activeRun = run;
+      if (budgetError) await run.cancel().catch(() => undefined);
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => undefined);
       });
@@ -301,6 +343,17 @@ export async function runCursor(
         await run.cancel().catch(() => undefined);
       }
       const result = await run.wait();
+      const metrics = diagnostics.snapshot();
+      logLine(formatAgentRunDiagnostics(metrics));
+      logLine(
+        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
+      );
+      if (result.usage) {
+        logLine(formatSessionTokenLog(result.usage, metrics));
+      }
+      if (budgetError) {
+        return { ok: false, error: `Agent 预算超限：${budgetError}` };
+      }
       if (cancellation?.isSkipRequested) {
         logLine("Cursor 会话已由用户跳过", "worker");
         return { ok: false, error: "已跳过" };
@@ -309,13 +362,6 @@ export async function runCursor(
         logLine("Cursor 会话已由用户停止", "worker");
         return { ok: false, error: "已取消" };
       }
-      logLine(
-        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
-      );
-      if (result.usage) {
-        logLine(formatSessionTokenLog(result.usage));
-      }
-
       if (result.status === "error") {
         return {
           ok: false,

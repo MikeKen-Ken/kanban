@@ -104,7 +104,9 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
 
     final selected = _selectedStats(stats);
     final dailyDays = _dailyDays;
-    final daily = dailyDays == null ? const <AgentDispatchDailyToken>[] : stats.daily(dailyDays);
+    final daily = dailyDays == null
+        ? const <AgentDispatchDailyToken>[]
+        : stats.daily(dailyDays);
     final textTheme = Theme.of(context).textTheme;
 
     return ListView(
@@ -202,7 +204,8 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
             title: const Text('最近一次'),
             subtitle: Text(
               '${_formatCount(selected.lastSession!.totalTokens)} token · '
-              '${_formatStamp(selected.lastSession!.at)}',
+              '${_formatStamp(selected.lastSession!.at)}'
+              '${selected.lastSession!.steps <= 0 ? '' : '\n${selected.lastSession!.steps} 步 · ${selected.lastSession!.toolCalls} 次工具 · 重复读取 ${selected.lastSession!.repeatedReads} 次'}',
             ),
           ),
       ],
@@ -328,7 +331,8 @@ class _DailyBars extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxValue = values.fold<int>(
       1,
-      (maximum, item) => item.totalTokens > maximum ? item.totalTokens : maximum,
+      (maximum, item) =>
+          item.totalTokens > maximum ? item.totalTokens : maximum,
     );
     return SizedBox(
       height: 140,

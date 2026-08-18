@@ -28,6 +28,23 @@ void main() {
     expect(record.totalTokens, 242863);
   });
 
+  test('解析并持久化会话执行诊断', () {
+    final record = AgentDispatchTokenRecord.tryParse(
+      '本会话 token：input=10 output=2 cacheRead=30 cacheWrite=0 total=42 '
+      'steps=18 tools=9 repeatedToolCalls=2 repeatedReads=3',
+      at: DateTime(2026, 8, 18, 8),
+    );
+    expect(record, isNotNull);
+    expect(record!.steps, 18);
+    expect(record.toolCalls, 9);
+    expect(record.repeatedToolCalls, 2);
+    expect(record.repeatedReads, 3);
+
+    final restored = AgentDispatchTokenRecord.fromJson(record.toJson());
+    expect(restored.steps, 18);
+    expect(restored.repeatedReads, 3);
+  });
+
   test('纠正 SDK 把 Cache Read 同时计入 input 与 total 的重复累计', () {
     final record = AgentDispatchTokenRecord.fromUsage(
       at: DateTime(2026, 8, 14, 16),
@@ -166,13 +183,15 @@ void main() {
     );
 
     await prefs.appendAgentDispatchToken(record, projectId: 'p1');
-    expect(prefs.loadAgentDispatchTokens(projectId: 'p1').single.totalTokens, 30);
+    expect(
+        prefs.loadAgentDispatchTokens(projectId: 'p1').single.totalTokens, 30);
     expect(prefs.loadAgentDispatchTokens(projectId: 'p2'), isEmpty);
 
     await prefs.appendAgentDispatchToken(record, projectId: 'p2');
     await prefs.clearAgentDispatchTokens(projectId: 'p1');
     expect(prefs.loadAgentDispatchTokens(projectId: 'p1'), isEmpty);
-    expect(prefs.loadAgentDispatchTokens(projectId: 'p2').single.totalTokens, 30);
+    expect(
+        prefs.loadAgentDispatchTokens(projectId: 'p2').single.totalTokens, 30);
   });
 
   test('加载旧项目历史时纠正重复累计后再汇总', () async {

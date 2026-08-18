@@ -26,6 +26,7 @@ export function readBatchArchitecture(cwd: string): string {
 export function createSessionContext(options: {
   basePrompt: string;
   architecture: string;
+  userRules?: string;
   claim: ParsedClaimResult;
   tempRoot?: string;
 }): SessionContext {
@@ -90,6 +91,10 @@ export function createSessionContext(options: {
       : imagePaths.map((path) => `- 图片：${path}`)),
     "",
     "这些路径位于系统临时会话目录，只在本轮有效；不要复制到仓库。",
+    "",
+    "## 完整用户 Rule",
+    "",
+    options.userRules?.trim() || "未发现用户 ~/.cursor/rules。",
     "",
     "## 已缓存的 docs/Architecture.md",
     "",

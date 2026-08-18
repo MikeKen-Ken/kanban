@@ -16,6 +16,7 @@ import {
   readBatchArchitecture,
   type SessionContext,
 } from "./session_context.ts";
+import { readUserCursorRules, type UserRuleBundle } from "./user_rules.ts";
 import { parseProjectMcpTags } from "./dispatch_mcp_allowlist.ts";
 import {
   applyLiveJobOverlay,
@@ -37,9 +38,11 @@ export type RunBatchDependencies = {
   connectMcp(endpoint: string): Promise<KanbanMcpConnection>;
   inspectGit(cwd: string): GitWorkingTree;
   readArchitecture(cwd: string): string;
+  readUserRules?(): UserRuleBundle;
   createContext(options: {
     basePrompt: string;
     architecture: string;
+    userRules?: string;
     claim: ParsedClaimResult;
   }): SessionContext;
   runAgent(
@@ -56,6 +59,7 @@ const defaultDependencies: RunBatchDependencies = {
   },
   inspectGit: inspectGitWorkingTree,
   readArchitecture: readBatchArchitecture,
+  readUserRules: readUserCursorRules,
   createContext: createSessionContext,
   runAgent: (roundJob, cancellation) =>
     roundJob.engine === "codex"
@@ -70,9 +74,17 @@ export async function runBatch(
 ): Promise<DispatchResult> {
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
   const architecture = dependencies.readArchitecture(job.cwd);
+  const userRules = dependencies.readUserRules?.() ?? {
+    text: "",
+    count: 0,
+    bytes: 0,
+  };
   const mcp = await dependencies.connectMcp(job.mcpEndpoint);
   let processedCards = 0;
   workerLog(`Worker 批次启动：endpoint=${job.mcpEndpoint} limit=${limit}`);
+  workerLog(
+    `用户 Rule 注入：${userRules.count} 个，${userRules.bytes} bytes；不加载用户 Skill`,
+  );
 
   const cancelledResult = (): DispatchResult => ({
     ok: false,
@@ -155,6 +167,7 @@ export async function runBatch(
         context = dependencies.createContext({
           basePrompt: job.prompt,
           architecture,
+          userRules: userRules.text,
           claim,
         });
         const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);

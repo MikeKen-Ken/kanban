@@ -29,7 +29,8 @@ class AgentDispatchLogEntry {
   static AgentDispatchLogEntry parseWorkerLine(String raw) {
     var line = raw.trimLeft();
     var level = AgentDispatchLogLevel.info;
-    final levelMatch = RegExp(r'^\[(success|warning|error|err)\]\s*').firstMatch(line);
+    final levelMatch =
+        RegExp(r'^\[(success|warning|error|err)\]\s*').firstMatch(line);
     if (levelMatch != null) {
       level = switch (levelMatch.group(1)) {
         'success' => AgentDispatchLogLevel.success,
@@ -169,6 +170,8 @@ class AgentDispatchLogHighlight {
     r'本会话 token|'
     r'\b(?:input|output|cacheRead|cacheWrite|total)=\d+|'
     r'\b(?:steps|tools|elapsedMs)=\d+|'
+    r'\b(?:repeatedToolCalls|repeatedReads)=\d+|'
+    r'会话诊断|Agent 预算超限|用户 Rule 注入|'
     r'批次 id：\S+|'
     r'Cursor run id=\S+|'
     r'已处理 \d+ 张|'
@@ -186,7 +189,8 @@ class AgentDispatchLogHighlight {
     var cursor = 0;
     for (final match in matches) {
       if (match.start > cursor) {
-        result.add((text: line.substring(cursor, match.start), emphasis: false));
+        result
+            .add((text: line.substring(cursor, match.start), emphasis: false));
       }
       result.add((text: match.group(0)!, emphasis: true));
       cursor = match.end;
