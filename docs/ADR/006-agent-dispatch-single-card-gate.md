@@ -43,8 +43,9 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
   Aseprite、Chrome DevTools、Tavily、Unity、Cocos、Node REPL 等）仅当当前项目在
   `ProjectSettings.agentMcpTags` 中配置对应标签时才合并；`kanbanMCP` 必须覆盖为本轮
   scoped 端点，不得使用常驻完整看板 MCP。
-- Worker 把三个 scoped 工具的参数 schema 写入本轮 prompt；Cursor 会话禁用 `task` 与
-  `GetMcpTools`（若 SDK 不认后者则回退为只禁 `task`），空参工具调用仍要打日志。
+- Worker 把三个 scoped 工具的参数 schema 写入本轮 prompt；Cursor 会话禁用
+  `GetMcpTools`（若 SDK 不认该名称则不禁任何内置工具）。空参工具调用仍要打日志。不禁
+  `task`。
 - Cursor：Worker 递归读取并完整注入用户 `~/.cursor/rules` 下的全部 `.md` / `.mdc`
   Rule；SDK 的 `settingSources` 只加载 `project`，继续保留项目规则、Skill 与 Hooks，
   避免把所有用户 Skill 注入每张卡，也不加载用户 `mcp.json`。MCP 由 Worker 按当前项目

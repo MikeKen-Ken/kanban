@@ -316,7 +316,7 @@ export async function runCursor(
       `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
         `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
         `kanbanMCP 强制为 scoped（${agentMcpUrl}）；` +
-        `禁用工具=${disallowedTools.join(",")}；` +
+        `禁用工具=${disallowedTools.join(",") || "无"}；` +
         `settingSources=project（用户 Rule 已完整注入；不加载用户 Skill；保留项目规则 / Skill / Hooks）`,
     );
     try {

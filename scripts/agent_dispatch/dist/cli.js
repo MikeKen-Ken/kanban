@@ -1674,11 +1674,8 @@ function isRecord(value) {
 }
 
 // src/cursor_disallowed_tools.ts
-var CURSOR_WORKER_DISALLOWED_TOOLS = [
-  "task",
-  "GetMcpTools"
-];
-var CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK = ["task"];
+var CURSOR_WORKER_DISALLOWED_TOOLS = ["GetMcpTools"];
+var CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK = [];
 function fallbackDisallowedTools(err) {
   const message = err instanceof Error ? err.message : String(err);
   if (!/GetMcpTools/i.test(message)) return null;
@@ -1978,7 +1975,7 @@ async function runCursor(job, cancellation) {
       });
     }
     logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",")}\uFF1BsettingSources=project\uFF08\u7528\u6237 Rule \u5DF2\u5B8C\u6574\u6CE8\u5165\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project\uFF08\u7528\u6237 Rule \u5DF2\u5B8C\u6574\u6CE8\u5165\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
     );
     try {
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");

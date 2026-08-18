@@ -1,12 +1,9 @@
 import type { ToolName } from "@cursor/sdk";
 
-/** Worker 默认禁用：子 Agent，以及会把 MCP 全表 schema 拉进上下文的发现工具。 */
-export const CURSOR_WORKER_DISALLOWED_TOOLS: ToolName[] = [
-  "task",
-  "GetMcpTools",
-];
+/** Worker 禁用 MCP 目录发现，避免整表 schema 进上下文。不禁 task。 */
+export const CURSOR_WORKER_DISALLOWED_TOOLS: ToolName[] = ["GetMcpTools"];
 
-export const CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK: ToolName[] = ["task"];
+export const CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK: ToolName[] = [];
 
 export function fallbackDisallowedTools(err: unknown): ToolName[] | null {
   const message = err instanceof Error ? err.message : String(err);

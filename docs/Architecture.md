@@ -88,7 +88,7 @@
 - `undo/`：可撤销命令与本机撤销栈
 - `templates/`：卡片模板与复制
 - `reminders/`：提醒、重复规则和平台调度
-- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）。本地会话加载用户与项目规则 / Skill / Hooks。默认只注入本卡 scoped `kanbanMCP`；Hub / Aseprite / Chrome DevTools / Tavily / Unity / Cocos / Node REPL 等附加 MCP 由当前项目的 `ProjectSettings.agentMcpTags` 决定，按项目主题合并用户对应 MCP，不再使用卡片标签开关。Worker 向会话注入 scoped 收尾工具 schema，并禁用 `GetMcpTools` / `task`，避免模型再拉取 MCP 目录。`kanban-complete-tasks` 仅供 Worker 注入（不改磁盘原文，prompt 只剥 YAML frontmatter）。Codex 隔离 home 会改写用户 `AGENTS.md` 副本，使「先读 Architecture.md」视为已由注入满足。
+- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）。本地会话加载用户与项目规则 / Skill / Hooks。默认只注入本卡 scoped `kanbanMCP`；Hub / Aseprite / Chrome DevTools / Tavily / Unity / Cocos / Node REPL 等附加 MCP 由当前项目的 `ProjectSettings.agentMcpTags` 决定，按项目主题合并用户对应 MCP，不再使用卡片标签开关。Worker 向会话注入 scoped 收尾工具 schema，并禁用 `GetMcpTools`，避免模型再拉取 MCP 目录。`kanban-complete-tasks` 仅供 Worker 注入（不改磁盘原文，prompt 只剥 YAML frontmatter）。Codex 隔离 home 会改写用户 `AGENTS.md` 副本，使「先读 Architecture.md」视为已由注入满足。
 - `mcp/`：Windows 内嵌 MCP 与 Cursor/Codex 一键配置（仅本机）
 - `statistics/`：只读统计
 - `wip/`：列上限策略
