@@ -78,7 +78,7 @@ export async function runBatch(
   let processedCards = 0;
   workerLog(`Worker 批次启动：endpoint=${job.mcpEndpoint} limit=${limit}`);
   workerLog(
-    `用户 Rule 注入：${userRules.count} 个，${userRules.bytes} bytes；不加载用户 Skill`,
+    `用户 Rule 注入：${userRules.count} 个，${userRules.bytes} bytes；用户 Skill 不写入 prompt`,
   );
 
   const cancelledResult = (): DispatchResult => ({

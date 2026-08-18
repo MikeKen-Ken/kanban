@@ -14,6 +14,7 @@ import {
   CURSOR_WORKER_DISALLOWED_TOOLS,
   fallbackDisallowedTools,
 } from "./cursor_disallowed_tools.ts";
+import { installCursorSdkScanLogTap } from "./cursor_sdk_scan_log.ts";
 import { formatSessionTokenLog } from "./cursor_token_usage.ts";
 import {
   AgentRunDiagnostics,
@@ -278,9 +279,9 @@ export async function runCursor(
     });
     const localOptions: LocalAgentOptions = {
       cwd: job.cwd,
-      // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
-      // 避免把所有个人 Skill 一并加入每个单卡会话。
-      // 不含 user，避免 ~/.cursor/mcp.json 全量进会话。
+      // 用户 Rule 已由 Worker 完整注入。settingSources=project 仍会扫描
+      // 用户主目录，但按仓库路径过滤后再注入；不含 user，避免用户 Skill
+      // 与 ~/.cursor/mcp.json 进入模型。
       settingSources: ["project"],
       store: new JsonlLocalAgentStore(storeDir),
       // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
@@ -298,28 +299,29 @@ export async function runCursor(
     };
     let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
     let agent;
+    const stopScanLog = installCursorSdkScanLogTap();
     try {
-      agent = await Agent.create({
-        ...createOptions,
-        disallowedTools,
-      });
-    } catch (err) {
-      const fallback = fallbackDisallowedTools(err);
-      if (fallback == null) throw err;
-      disallowedTools = fallback;
-      agent = await Agent.create({
-        ...createOptions,
-        disallowedTools,
-      });
-    }
-    logLine(
-      `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
-        `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
-        `kanbanMCP 强制为 scoped（${agentMcpUrl}）；` +
-        `禁用工具=${disallowedTools.join(",") || "无"}；` +
-        `settingSources=project（用户 Rule 已完整注入；不加载用户 Skill；保留项目规则 / Skill / Hooks）`,
-    );
-    try {
+      try {
+        agent = await Agent.create({
+          ...createOptions,
+          disallowedTools,
+        });
+      } catch (err) {
+        const fallback = fallbackDisallowedTools(err);
+        if (fallback == null) throw err;
+        disallowedTools = fallback;
+        agent = await Agent.create({
+          ...createOptions,
+          disallowedTools,
+        });
+      }
+      logLine(
+        `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
+          `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
+          `kanbanMCP 强制为 scoped（${agentMcpUrl}）；` +
+          `禁用工具=${disallowedTools.join(",") || "无"}；` +
+          `settingSources=project（SDK 扫描用户主目录后按仓库路径过滤；用户 Rule 已由 Worker 注入；保留项目规则 / Skill / Hooks）`,
+      );
       logLine("本地会话已创建，开始执行…");
       const run = await agent.send({
         text: job.prompt,
@@ -386,7 +388,8 @@ export async function runCursor(
 
       return { ok: result.status === "finished", summary };
     } finally {
-      await settleWithin(8000, agent[Symbol.asyncDispose]());
+      stopScanLog();
+      if (agent) await settleWithin(8000, agent[Symbol.asyncDispose]());
     }
   } catch (err) {
     if (err instanceof CursorAgentError) {

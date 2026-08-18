@@ -47,9 +47,12 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
   `GetMcpTools`（若 SDK 不认该名称则不禁任何内置工具）。空参工具调用仍要打日志。不禁
   `task`。
 - Cursor：Worker 递归读取并完整注入用户 `~/.cursor/rules` 下的全部 `.md` / `.mdc`
-  Rule；SDK 的 `settingSources` 只加载 `project`，继续保留项目规则、Skill 与 Hooks，
-  避免把所有用户 Skill 注入每张卡，也不加载用户 `mcp.json`。MCP 由 Worker 按当前项目
-  MCP 标签从用户/项目 `mcp.json` 筛选后再覆盖 `kanbanMCP`。
+  Rule；SDK 的 `settingSources` 只加载 `project`，继续保留项目规则、Skill 与 Hooks。
+  SDK 仍会扫描用户主目录（含内置 `~/.cursor/skills-cursor`）；日志里的
+  `skillCount` / `ruleCount` 是过滤前扫描数。`project` 以仓库路径为 allowedRoots，
+  过滤后再注入，因此用户 Skill 与用户 Rule 不会作为 SDK 层进入模型，也不加载用户
+  `mcp.json`。MCP 由 Worker 按当前项目 MCP 标签从用户/项目 `mcp.json` 筛选后再覆盖
+  `kanbanMCP`。
 - `kanban-complete-tasks` 仅供 Worker 注入，不用于对话手动或自动调用。Skill 正文假定
   Architecture 已注入，禁止再打开该文件。Worker 只剥 YAML frontmatter 写入 prompt，
   不改写磁盘上的 Skill，也不再过滤正文中的 Architecture 行。

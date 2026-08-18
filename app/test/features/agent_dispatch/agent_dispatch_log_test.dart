@@ -49,7 +49,9 @@ void main() {
     final segments = AgentDispatchLogHighlight.segments(line);
 
     expect(
-      segments.where((segment) => segment.emphasis).map((segment) => segment.text),
+      segments
+          .where((segment) => segment.emphasis)
+          .map((segment) => segment.text),
       ['本会话 token', 'input=12', 'output=34', 'total=46'],
     );
   });
@@ -59,7 +61,9 @@ void main() {
         '[09:08:07] [Worker] [信息] 本会话 token：input=1 output=2 cacheRead=3 cacheWrite=0 total=6';
     final segments = AgentDispatchLogHighlight.segments(line);
     expect(
-      segments.where((segment) => segment.emphasis).map((segment) => segment.text),
+      segments
+          .where((segment) => segment.emphasis)
+          .map((segment) => segment.text),
       [
         '本会话 token',
         'input=1',
@@ -97,6 +101,18 @@ void main() {
     expect(
       AgentDispatchLogEntry.isLowValue('[09:08:07] [命令] [信息] 命令：git status'),
       isFalse,
+    );
+  });
+
+  test('SDK 扫描说明行拆出重点着色片段', () {
+    final line =
+        '[09:08:07] [Worker] [信息] SDK 扫描 Skill：24 个（含本机 ~/.cursor/skills-cursor 内置），这是过滤前的扫描数；settingSources=project 只注入仓库内 Skill';
+    final segments = AgentDispatchLogHighlight.segments(line);
+    expect(
+      segments
+          .where((segment) => segment.emphasis)
+          .map((segment) => segment.text),
+      ['SDK 扫描'],
     );
   });
 
