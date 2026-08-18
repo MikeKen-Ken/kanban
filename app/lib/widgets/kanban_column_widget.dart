@@ -454,13 +454,18 @@ class KanbanColumnWidget extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: KanbanColumnList(
-                columnId: column.id,
-                cards: cards,
-                allColumns: allColumns,
-                searchQuery: searchQuery,
-                sortMode: columnPrefs.sortMode,
-                pinnedCardIds: columnPrefs.pinnedCardIds,
+              child: KanbanGlassSurface(
+                borderRadius: BorderRadius.circular(8),
+                tint: colorScheme.surface,
+                blurSigma: 28,
+                child: KanbanColumnList(
+                  columnId: column.id,
+                  cards: cards,
+                  allColumns: allColumns,
+                  searchQuery: searchQuery,
+                  sortMode: columnPrefs.sortMode,
+                  pinnedCardIds: columnPrefs.pinnedCardIds,
+                ),
               ),
             ),
           ),
