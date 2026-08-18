@@ -15,7 +15,10 @@ import {
   fallbackDisallowedTools,
 } from "./cursor_disallowed_tools.ts";
 import { installCursorSdkScanLogTap } from "./cursor_sdk_scan_log.ts";
-import { formatSessionTokenLog } from "./cursor_token_usage.ts";
+import {
+  formatSessionTokenLog,
+  toDashboardTokenUsage,
+} from "./cursor_token_usage.ts";
 import {
   CursorShellSpanEmitter,
   isShellSpanEvent,
@@ -377,7 +380,7 @@ export async function runCursor(
       logLine(
         `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
       );
-      if (result.usage) {
+      if (result.usage && toDashboardTokenUsage(result.usage).totalTokens > 0) {
         logLine(formatSessionTokenLog(result.usage, metrics));
       }
       if (cancellation?.isSkipRequested) {

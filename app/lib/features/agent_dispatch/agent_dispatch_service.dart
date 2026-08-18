@@ -177,7 +177,7 @@ class AgentDispatchService {
     }
     _scheduleLogPersist();
     final usage = AgentDispatchTokenRecord.tryParse(message, at: now);
-    if (usage != null) {
+    if (usage != null && usage.totalTokens > 0) {
       _logSaveQueue = _logSaveQueue.then((_) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.appendAgentDispatchToken(usage, projectId: projectId);

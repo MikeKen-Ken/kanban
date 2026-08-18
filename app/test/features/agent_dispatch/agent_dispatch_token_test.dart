@@ -172,6 +172,31 @@ void main() {
     );
   });
 
+  test('零用量记录不会计入会话数或拉低平均用量', () {
+    final stats = AgentDispatchTokenStats(
+      now: DateTime(2026, 8, 14, 18),
+      records: [
+        AgentDispatchTokenRecord(
+          at: DateTime(2026, 8, 14, 10),
+          inputTokens: 600,
+          outputTokens: 400,
+          totalTokens: 1000,
+        ),
+        AgentDispatchTokenRecord(
+          at: DateTime(2026, 8, 14, 11),
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+        ),
+      ],
+    );
+
+    expect(stats.sessionCount, 1);
+    expect(stats.totalTokens, 1000);
+    expect(stats.averageTotal, 1000);
+    expect(stats.daily(1).single.sessions, 1);
+  });
+
   test('token 历史按项目持久化且与日志分离', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

@@ -148,20 +148,26 @@ class AgentDispatchTokenStats {
   final List<AgentDispatchTokenRecord> records;
   final DateTime now;
 
-  int get sessionCount => records.length;
+  /// 只统计实际产生 token 的会话，兼容旧版本可能写入的零用量记录。
+  Iterable<AgentDispatchTokenRecord> get _recordsWithUsage =>
+      records.where((item) => item.totalTokens > 0);
 
-  int get totalInput => records.fold(0, (sum, item) => sum + item.inputTokens);
+  int get sessionCount => _recordsWithUsage.length;
+
+  int get totalInput =>
+      _recordsWithUsage.fold(0, (sum, item) => sum + item.inputTokens);
 
   int get totalCacheRead =>
-      records.fold(0, (sum, item) => sum + item.cacheReadTokens);
+      _recordsWithUsage.fold(0, (sum, item) => sum + item.cacheReadTokens);
 
   int get totalCacheWrite =>
-      records.fold(0, (sum, item) => sum + item.cacheWriteTokens);
+      _recordsWithUsage.fold(0, (sum, item) => sum + item.cacheWriteTokens);
 
   int get totalOutput =>
-      records.fold(0, (sum, item) => sum + item.outputTokens);
+      _recordsWithUsage.fold(0, (sum, item) => sum + item.outputTokens);
 
-  int get totalTokens => records.fold(0, (sum, item) => sum + item.totalTokens);
+  int get totalTokens =>
+      _recordsWithUsage.fold(0, (sum, item) => sum + item.totalTokens);
 
   double? get averageInput =>
       sessionCount == 0 ? null : totalInput / sessionCount;
@@ -173,11 +179,11 @@ class AgentDispatchTokenStats {
       sessionCount == 0 ? null : totalTokens / sessionCount;
 
   AgentDispatchTokenRecord? get lastSession =>
-      records.isEmpty ? null : records.last;
+      _recordsWithUsage.isEmpty ? null : _recordsWithUsage.last;
 
   AgentDispatchTokenRecord? get peakSession {
-    if (records.isEmpty) return null;
-    return records.reduce(
+    if (_recordsWithUsage.isEmpty) return null;
+    return _recordsWithUsage.reduce(
       (best, item) => item.totalTokens > best.totalTokens ? item : best,
     );
   }
@@ -223,7 +229,7 @@ class AgentDispatchTokenStats {
     for (var i = days - 1; i >= 0; i--) {
       buckets[todayStart.subtract(Duration(days: i))] = [];
     }
-    for (final record in records) {
+    for (final record in _recordsWithUsage) {
       final day = DateTime(record.at.year, record.at.month, record.at.day);
       final bucket = buckets[day];
       if (bucket != null) bucket.add(record);
