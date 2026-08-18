@@ -144,27 +144,25 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final cachedModelId = cachedModels.isEmpty
         ? loaded.modelId
         : resolveAgentDispatchModelId(cachedModels, loaded.modelId);
-    var normalized = cachedModelId == loaded.modelId
-        ? loaded
-        : loaded.copyWith(
-            modelId: cachedModelId,
-            modelParamValues: const {},
-          );
-    if (_isStockModelParams(normalized.modelParamValues)) {
-      AgentDispatchModelInfo? selected;
+    final modelChanged = cachedModelId != loaded.modelId;
+    AgentDispatchModelInfo? selected;
+    if (modelChanged) {
       for (final model in cachedModels) {
-        if (model.id == (normalized.modelId ?? cachedModelId)) {
+        if (model.id == cachedModelId) {
           selected = model;
           break;
         }
       }
-      normalized = normalized.copyWith(
-        modelParamValues: preferredAgentDispatchModelParamValues(
-          selected?.parameters ?? const [],
-        ),
-      );
     }
-    if (normalized != loaded) {
+    final normalized = modelChanged
+        ? loaded.copyWith(
+            modelId: cachedModelId,
+            modelParamValues: preferredAgentDispatchModelParamValues(
+              selected?.parameters ?? const [],
+            ),
+          )
+        : loaded;
+    if (modelChanged) {
       await prefs.saveAgentDispatchSettings(normalized);
     }
     if (!mounted) return;
