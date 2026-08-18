@@ -36,17 +36,30 @@ class AgentDispatchProgress {
   /// 工作台展示「当前第几张 / 计划总数」，进行中时用轮次而不是已完成数。
   String get liveCardLabel {
     if (!running) return fractionLabel;
-    final current = currentRound > 0 ? currentRound : processedCards + 1;
-    if (totalCards <= 0) return '$current/…';
-    return '$current/$totalCards';
+    final current = _liveCurrentIndex;
+    final total = _liveDenominator;
+    if (total <= 0) return '$current/…';
+    return '$current/$total';
+  }
+
+  int get _liveCurrentIndex =>
+      currentRound > 0 ? currentRound : processedCards + 1;
+
+  /// 进行中分母不得低于当前张序号，避免总览出现 4/2。
+  int get _liveDenominator {
+    if (totalCards <= 0) return totalCards;
+    if (!running) return totalCards;
+    final floor = _liveCurrentIndex;
+    return totalCards < floor ? floor : totalCards;
   }
 
   double? get fraction {
-    if (!running || totalCards <= 0) return null;
+    final total = _liveDenominator;
+    if (!running || total <= 0) return null;
     final completed = currentRound > processedCards
         ? currentRound - 1
         : processedCards;
-    final value = completed / totalCards;
+    final value = completed / total;
     if (value < 0) return 0;
     if (value > 1) return 1;
     return value;
@@ -89,6 +102,17 @@ int plannedDispatchTotal({
   return cardLimitCount < queueSize ? cardLimitCount : queueSize;
 }
 
+/// 进行中当前张序号（1-based），供分母下限与展示共用。
+int dispatchProgressFloor({
+  required int processedCards,
+  required int currentRound,
+  required bool hasActiveCard,
+}) {
+  final fromRound = currentRound > 0 ? currentRound : 0;
+  final fromProcessed = processedCards + (hasActiveCard ? 1 : 0);
+  return fromRound > fromProcessed ? fromRound : fromProcessed;
+}
+
 /// 已处理张数 + 队列剩余 + 进行中的当前卡，再套用启动时的上限规则。
 int liveDispatchTotal({
   required bool cardLimitMax,
@@ -96,16 +120,23 @@ int liveDispatchTotal({
   required int processedCards,
   required int remainingQueue,
   required bool hasActiveCard,
+  int currentRound = 0,
   bool drainAfterCurrent = false,
 }) {
   final remainingWork = drainAfterCurrent
       ? (hasActiveCard ? 1 : 0)
       : remainingQueue + (hasActiveCard ? 1 : 0);
-  return plannedDispatchTotal(
+  final planned = plannedDispatchTotal(
     cardLimitMax: cardLimitMax,
     cardLimitCount: cardLimitCount,
     queueSize: processedCards + remainingWork,
   );
+  final floor = dispatchProgressFloor(
+    processedCards: processedCards,
+    currentRound: currentRound,
+    hasActiveCard: hasActiveCard,
+  );
+  return planned < floor ? floor : planned;
 }
 
 /// 停止后续卡片后，分母收成当前这张（或已处理张数）。
@@ -128,6 +159,7 @@ AgentDispatchProgress applyLiveBoardQueue(
     processedCards: progress.processedCards,
     remainingQueue: remainingQueue,
     hasActiveCard: hasActiveCard,
+    currentRound: progress.currentRound,
     drainAfterCurrent: progress.drainAfterCurrent,
   );
   if (liveTotal == progress.totalCards) return progress;

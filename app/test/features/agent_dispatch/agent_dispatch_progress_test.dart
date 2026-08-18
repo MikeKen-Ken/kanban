@@ -190,6 +190,36 @@ void main() {
     expect(live.liveCardLabel, '1/4');
   });
 
+  test('固定张数校正时分母不低于当前轮次，避免 4/2', () {
+    const progress = AgentDispatchProgress(
+      running: true,
+      processedCards: 3,
+      totalCards: 4,
+      currentRound: 4,
+      cardLimitMax: false,
+      cardLimitCount: 2,
+    );
+    final live = applyLiveBoardQueue(
+      progress,
+      remainingQueue: 0,
+      hasActiveCard: true,
+    );
+    expect(live.liveCardLabel, '4/4');
+    expect(live.totalCards, 4);
+    expect(live.fraction, 0.75);
+  });
+
+  test('轮次超前时分母在展示层同步抬升', () {
+    const progress = AgentDispatchProgress(
+      running: true,
+      processedCards: 1,
+      totalCards: 2,
+      currentRound: 4,
+    );
+    expect(progress.liveCardLabel, '4/4');
+    expect(progress.fraction, 0.75);
+  });
+
   test('总览能读到各项目运行进度', () {
     final registry = AgentDispatchRegistry.instance;
     addTearDown(registry.debugReset);
