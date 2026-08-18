@@ -1,0 +1,180 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/controllers/board_controller.dart';
+import 'package:kanban/features/mcp/dispatch/dispatch_ready_to_submit.dart';
+import 'package:kanban/features/mcp/dispatch/dispatch_report_shell_span.dart';
+import 'package:kanban/features/mcp/dispatch/dispatch_shell_spans.dart';
+import 'package:kanban/features/mcp/mcp_dispatch_card_gate.dart';
+import 'package:kanban/features/mcp/mcp_submission_snapshot_store.dart';
+import 'package:kanban/storage/board_storage.dart';
+import 'package:mcp_dart/mcp_dart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  group('验证命令识别与结束时间', () {
+    test('flutter test 与夹在 format 后的测试都算验证', () {
+      expect(
+        isDispatchVerificationCommand(
+          'dart format a.dart; flutter test test/a_test.dart',
+        ),
+        isTrue,
+      );
+      expect(isDispatchVerificationCommand('git status --short'), isFalse);
+      expect(isDispatchVerificationCommand('dart format a.dart'), isFalse);
+    });
+
+    test('SDK 提前 completed 时用 startedAt+executionTime', () {
+      const span = DispatchShellSpan(
+        callId: 'shell-1',
+        command: 'flutter test a_test.dart',
+        startedAtMs: 1000,
+        endedAtMs: 1331,
+        executionTimeMs: 13639,
+        exitCode: 0,
+      );
+      expect(dispatchShellEffectiveEndMs(span), 1000 + 13639);
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 1000 + 1845),
+        contains('仍在执行'),
+      );
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 1000 + 13639),
+        isNull,
+      );
+    });
+
+    test('测试失败后即使已结束也拒绝', () {
+      const span = DispatchShellSpan(
+        callId: 'shell-1',
+        command: 'flutter test a_test.dart',
+        startedAtMs: 0,
+        endedAtMs: 20000,
+        executionTimeMs: 20000,
+        exitCode: 1,
+      );
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 21000),
+        contains('exitCode=1'),
+      );
+    });
+  });
+
+  group('ready_to_submit 门禁', () {
+    final gate = McpDispatchCardGate.instance;
+    late Directory tempDir;
+    late BoardController controller;
+
+    setUp(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      gate.debugReset();
+      DispatchShellSpanStore.debugReset();
+      SharedPreferences.setMockInitialValues({});
+      tempDir = await Directory.systemTemp.createTemp('kanban_shell_span_');
+      final prefs = await SharedPreferences.getInstance();
+      controller = await BoardController.createForTest(
+        prefs: prefs,
+        storage: BoardStorage(baseDirectory: tempDir, prefs: prefs),
+      );
+    });
+
+    tearDown(() async {
+      gate.debugReset();
+      DispatchShellSpanStore.debugReset();
+      controller.dispose();
+      await Future<void>.delayed(Duration.zero);
+      try {
+        if (await tempDir.exists()) await tempDir.delete(recursive: true);
+      } on FileSystemException {
+        // 测试收尾删目录失败可忽略。
+      }
+    });
+
+    test('Worker 上报未结束的 flutter test 时拒绝 ready_to_submit', () async {
+      final clock = <int>[1000];
+      final spans = DispatchShellSpanStore(nowMs: () => clock.first);
+      final projectId = controller.activeProjectId!;
+      final todo =
+          controller.board!.columns.firstWhere((item) => item.id == 'todo');
+      final cardId = (await controller.addCard(todo.id, '竞态卡'))!;
+
+      gate.beginBatch('worker-a', projectId: projectId);
+      expect(
+          gate.beginAgentSession('worker-a', sessionId: 'session-a'), isTrue);
+      expect(
+        gate.authorizePick(projectId, workerToken: 'worker-a'),
+        McpDispatchPickPermission.allowed,
+      );
+      gate.recordPickedCard(
+        projectId: projectId,
+        cardId: cardId,
+        workerToken: 'worker-a',
+      );
+
+      await McpSubmissionSnapshotStore().write(
+        McpSubmissionSnapshot(
+          projectId: projectId,
+          cardId: cardId,
+          workMode: 'normal',
+          suggestedCommitMessage: '竞态卡',
+          capturedAt: 1,
+        ),
+      );
+
+      final command =
+          'dart format a.dart; if (\$LASTEXITCODE -eq 0) { flutter test a_test.dart }';
+      final reported = await dispatchReportShellSpan(
+        workerToken: 'worker-a',
+        sessionId: 'session-a',
+        callId: 'call-test',
+        command: command,
+        phase: 'start',
+        startedAtMs: 1000,
+        store: spans,
+      );
+      expect(reported.isError, isNot(true));
+
+      final ended = await dispatchReportShellSpan(
+        workerToken: 'worker-a',
+        sessionId: 'session-a',
+        callId: 'call-test',
+        command: command,
+        phase: 'end',
+        startedAtMs: 1000,
+        endedAtMs: 1331,
+        executionTimeMs: 13639,
+        exitCode: 0,
+        store: spans,
+      );
+      expect(ended.isError, isNot(true));
+
+      clock[0] = 1000 + 1845;
+      final ready = await dispatchReadyToSubmit(
+        controller,
+        workerToken: 'worker-a',
+        cardId: cardId,
+        completedChecklistIds: const [],
+        completedFeedbackIds: const [],
+        verificationCommands: const [],
+        shellSpans: spans,
+      );
+      expect(ready.isError, isTrue);
+      expect(
+        ready.content.whereType<TextContent>().first.text,
+        contains('仍在执行'),
+      );
+
+      clock[0] = 1000 + 13639;
+      final accepted = await dispatchReadyToSubmit(
+        controller,
+        workerToken: 'worker-a',
+        cardId: cardId,
+        completedChecklistIds: const [],
+        completedFeedbackIds: const [],
+        verificationCommands: const [],
+        shellSpans: spans,
+      );
+      expect(accepted.isError, isNot(true));
+    });
+  });
+}

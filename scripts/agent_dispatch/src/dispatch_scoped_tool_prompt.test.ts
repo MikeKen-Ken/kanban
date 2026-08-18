@@ -20,5 +20,6 @@ describe("dispatch_scoped_tool_prompt", () => {
     assert.match(text, /card-z/);
     assert.match(text, /ready_to_submit/);
     assert.match(text, /CallMcpTool/);
+    assert.match(text, /不要与 Shell 并行|禁止把 ready_to_submit 与 Shell/);
   });
 });

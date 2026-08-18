@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { formatScopedKanbanToolPrompt } from "./dispatch_scoped_tool_prompt.ts";
 import type { ParsedClaimResult } from "./mcp_client.ts";
+import { wrapWorkerUserRules } from "./user_rule_canary.ts";
 
 export type SessionContext = {
   prompt: string;
@@ -97,7 +98,7 @@ export function createSessionContext(options: {
     "",
     "## 完整用户 Rule",
     "",
-    options.userRules?.trim() || "未发现用户 ~/.cursor/rules。",
+    wrapWorkerUserRules(options.userRules ?? ""),
     "",
     "## 已缓存的 docs/Architecture.md",
     "",

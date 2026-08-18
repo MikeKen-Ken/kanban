@@ -177,6 +177,21 @@ export async function runBatch(
             images: context.images,
             attachmentPaths: context.attachmentPaths,
             projectMcpTags: parseProjectMcpTags(claim.payload),
+            reportShellSpan: async (span) => {
+              await mcp.callJson("dispatch_report_shell_span", {
+                workerToken: job.workerToken,
+                sessionId,
+                callId: span.callId,
+                command: span.command,
+                phase: span.phase,
+                startedAtMs: span.startedAtMs,
+                ...(span.endedAtMs != null ? { endedAtMs: span.endedAtMs } : {}),
+                ...(span.executionTimeMs != null
+                  ? { executionTimeMs: span.executionTimeMs }
+                  : {}),
+                ...(span.exitCode != null ? { exitCode: span.exitCode } : {}),
+              });
+            },
           },
         };
         logModelOverride(liveJob, roundJob, cardId);

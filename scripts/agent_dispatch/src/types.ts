@@ -77,6 +77,16 @@ export type RoundContext = {
   attachmentPaths: string[];
   /** 项目级 MCP 标签 key，用于按需注入用户 MCP；无标签时只挂 scoped 看板 MCP。 */
   projectMcpTags: string[];
+  /** Worker 把 Shell 起止报到完整 MCP，供 ready_to_submit 拒绝未完成测试。 */
+  reportShellSpan?: (span: {
+    callId: string;
+    command: string;
+    phase: "start" | "end";
+    startedAtMs: number;
+    endedAtMs?: number;
+    executionTimeMs?: number;
+    exitCode?: number;
+  }) => Promise<void>;
 };
 
 export type RoundDispatchJob = DispatchJob & {

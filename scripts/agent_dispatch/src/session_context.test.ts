@@ -10,6 +10,10 @@ import { tmpdir } from "node:os";
 import { describe, it } from "node:test";
 import type { CallToolResult } from "@modelcontextprotocol/client";
 import { createSessionContext } from "./session_context.ts";
+import {
+  WORKER_USER_RULES_BEGIN,
+  WORKER_USER_RULES_END,
+} from "./user_rule_canary.ts";
 
 describe("session_context", () => {
   it("附件只写系统临时目录且 prompt 不含 base64", () => {
@@ -45,6 +49,11 @@ describe("session_context", () => {
       assert.match(context.prompt, /完成 A/);
       assert.match(context.prompt, /已缓存的 docs\/Architecture\.md/);
       assert.match(context.prompt, /完整用户 Rule/);
+      assert.equal(
+        context.prompt.split(WORKER_USER_RULES_BEGIN).length - 1,
+        1,
+      );
+      assert.equal(context.prompt.split(WORKER_USER_RULES_END).length - 1, 1);
       assert.match(context.prompt, /必须使用简体中文/);
       assert.match(context.prompt, /看板 MCP 收尾工具/);
       assert.match(context.prompt, /GetMcpTools/);

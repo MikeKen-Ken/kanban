@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-16
-- Updated: 2026-08-17
+- Updated: 2026-08-18
 
 ## 背景
 
@@ -21,7 +21,10 @@ Agent 直接提交 Git 并移动卡片会把“声明完成、验证、提交、
    `committed`、`finalized`、`failed`。它不进入工作区 JSON、备份或 WebDAV。
 4. Worker 通过私有 dispatch 工具记录空验证结果（会话内已验证或人工原因）并驱动
    finalize，不再 spawn 测试命令。finalize 必须检查 HEAD 仍等于 claim baseline；
-   Agent 自行移动 HEAD 时直接拒绝。
+   Agent 自行移动 HEAD 时直接拒绝。Worker 把会话内 Shell 起止报到
+   `dispatch_report_shell_span`。`ready_to_submit` 若发现验证命令尚未按其
+   `executionTime` 结束（含 SDK 提前发出 completed），或最后一次测试 exitCode≠0，
+   必须拒绝；Agent 应等待或重跑测试后再声明。
 5. 提交前读取 Git 变更清单。发现 `.env`、凭据、私钥或同类敏感文件时直接拒绝，不能仅
    依赖 pathspec 排除后继续提交。
 6. Git 提交必须带稳定的 session/card trailers。commit 后必须确认工作区 clean，再写入

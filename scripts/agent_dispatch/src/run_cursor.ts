@@ -16,10 +16,12 @@ import {
 } from "./cursor_disallowed_tools.ts";
 import { installCursorSdkScanLogTap } from "./cursor_sdk_scan_log.ts";
 import { formatSessionTokenLog } from "./cursor_token_usage.ts";
+import { CursorShellSpanEmitter } from "./cursor_shell_spans.ts";
 import {
   AgentRunDiagnostics,
   formatAgentRunDiagnostics,
 } from "./run_diagnostics.ts";
+import { readyBlockedByShells } from "./verification_ready_gate.ts";
 import {
   resolveModelParams,
   type DispatchResult,
@@ -270,6 +272,7 @@ export async function runCursor(
     let stepCount = 0;
     let toolCallCount = 0;
     const diagnostics = new AgentRunDiagnostics();
+    const shellSpans = new CursorShellSpanEmitter();
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -328,7 +331,7 @@ export async function runCursor(
         images: job.round.images,
       }, {
         mcpServers: mcp.servers,
-        onStep: ({ step }) => {
+        onStep: async ({ step }) => {
           try {
             stepCount += 1;
             if (step.type === "toolCall") toolCallCount += 1;
@@ -345,6 +348,16 @@ export async function runCursor(
             }
           } catch {
             logLine("收到一步进度");
+          }
+          try {
+            const event = shellSpans.observe(step, Date.now());
+            if (event && "phase" in event) {
+              await job.round.reportShellSpan?.(event);
+            }
+          } catch (err) {
+            logLine(
+              `上报 Shell 时间线失败：${err instanceof Error ? err.message : String(err)}`,
+            );
           }
         },
       });
@@ -377,6 +390,15 @@ export async function runCursor(
           error: `Cursor run 失败：${result.error?.message ?? result.id}`,
           summary: typeof result.result === "string" ? result.result : undefined,
         };
+      }
+
+      const readyAt = shellSpans.lastReadyStartedAtMs();
+      if (readyAt != null) {
+        const blocked = readyBlockedByShells(shellSpans.snapshot(), readyAt);
+        if (blocked) {
+          logLine(blocked);
+          return { ok: false, error: blocked };
+        }
       }
 
       const summary =

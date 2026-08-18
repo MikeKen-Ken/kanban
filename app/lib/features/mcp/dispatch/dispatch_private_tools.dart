@@ -9,7 +9,9 @@ import 'dispatch_claim_next_card.dart';
 import 'dispatch_finalizer.dart';
 import 'dispatch_pending_store.dart';
 import 'dispatch_recovery.dart';
+import 'dispatch_report_shell_span.dart';
 import 'dispatch_session_end.dart';
+import 'dispatch_shell_spans.dart';
 import 'dispatch_validation_shape.dart';
 
 typedef DispatchScopedEndpointCloser = Future<void> Function(
@@ -239,6 +241,52 @@ void registerDispatchPrivateTools(
   }
 
   server.registerTool(
+    'dispatch_report_shell_span',
+    description: 'Worker 私有工具：上报会话内 Shell 起止，供 ready_to_submit 拒绝未完成的测试。',
+    inputSchema: JsonSchema.object(
+      properties: {
+        'workerToken': JsonSchema.string(),
+        'sessionId': JsonSchema.string(),
+        'callId': JsonSchema.string(),
+        'command': JsonSchema.string(),
+        'phase': JsonSchema.string(description: 'start 或 end'),
+        'startedAtMs': JsonSchema.number(),
+        'endedAtMs': JsonSchema.number(),
+        'executionTimeMs': JsonSchema.number(),
+        'exitCode': JsonSchema.number(),
+      },
+      required: ['workerToken', 'callId', 'command', 'phase'],
+    ),
+    annotations: const ToolAnnotations(
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    ),
+    callback: (args, extra) {
+      final token = mcpTrimmedString(args['workerToken']);
+      final callId = mcpTrimmedString(args['callId']);
+      final command = mcpTrimmedString(args['command']) ?? '';
+      final phase = mcpTrimmedString(args['phase']);
+      if (token == null || callId == null || phase == null) {
+        return Future.value(
+          mcpErrorResult('workerToken、callId、phase 不能为空'),
+        );
+      }
+      return dispatchReportShellSpan(
+        workerToken: token,
+        sessionId: mcpTrimmedString(args['sessionId']),
+        callId: callId,
+        command: command,
+        phase: phase,
+        startedAtMs: (args['startedAtMs'] as num?)?.toInt(),
+        endedAtMs: (args['endedAtMs'] as num?)?.toInt(),
+        executionTimeMs: (args['executionTimeMs'] as num?)?.toInt(),
+        exitCode: (args['exitCode'] as num?)?.toInt(),
+      );
+    },
+  );
+
+  server.registerTool(
     'dispatch_close_agent_session',
     description: 'Worker 私有工具：关闭本轮临时 MCP 端点。',
     inputSchema: JsonSchema.object(
@@ -253,8 +301,12 @@ void registerDispatchPrivateTools(
     callback: (args, extra) async {
       final token = mcpTrimmedString(args['workerToken']);
       if (token == null) return mcpErrorResult('workerToken 不能为空');
+      final sessionId = McpDispatchCardGate.instance.sessionIdForToken(token);
       if (closeScopedEndpoint != null) await closeScopedEndpoint(token);
       McpDispatchCardGate.instance.closeAgentSession(token);
+      if (sessionId != null) {
+        DispatchShellSpanStore.instance.clearSession(sessionId);
+      }
       return mcpJsonResult({'ok': true});
     },
   );
