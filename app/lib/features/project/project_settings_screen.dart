@@ -207,6 +207,10 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     final controller = context.watch<BoardController>();
     final projectTitle = controller.activeProject?.title ?? '项目';
     final settings = controller.projectSettings;
+    final rotationWallpaperCount =
+        settings.wallpaperPlaybackMode == WallpaperPlaybackMode.random
+            ? controller.wallpapers.length
+            : settings.wallpaperIds.length;
     final overlayValue = (_overlayDraft ?? settings.backgroundOverlayOpacity)
         .clamp(0.0, ProjectSettings.maxBackgroundOverlayOpacity);
     final cardOpacityValue =
@@ -416,11 +420,11 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                       if (settings.hasBackgroundImage) ...[
                         if (settings.wallpaperPlaybackMode ==
                                 WallpaperPlaybackMode.random &&
-                            settings.wallpaperIds.length > 1)
+                            rotationWallpaperCount > 1)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Text(
-                              '随机轮播 ${settings.wallpaperIds.length} 张，每 '
+                              '随机轮播 $rotationWallpaperCount 张，每 '
                               '${settings.wallpaperIntervalSeconds} 秒切换',
                             ),
                           ),

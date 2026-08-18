@@ -29,7 +29,9 @@ extension BoardControllerWallpapers on BoardController {
 
   /// 根据项目设置与本地缓存，刷新可渲染的壁纸 id 列表。
   Future<void> refreshDisplayableWallpapers() async {
-    final candidates = projectSettings.effectiveWallpaperIds;
+    final candidates = projectSettings.wallpaperRotationCandidateIds(
+      sharedContent.wallpapers.map((item) => item.id),
+    );
     if (candidates.isEmpty) {
       displayableWallpaperIds = const [];
       return;

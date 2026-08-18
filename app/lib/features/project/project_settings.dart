@@ -83,6 +83,19 @@ class ProjectSettings {
           ? const <String>[]
           : <String>[backgroundAttachmentId]);
 
+  /// 随机轮播时使用工作区壁纸库全集；固定模式使用 [wallpaperIds] 或旧版附件。
+  List<String> wallpaperRotationCandidateIds(
+    Iterable<String> libraryWallpaperIds,
+  ) {
+    if (wallpaperPlaybackMode == WallpaperPlaybackMode.random) {
+      final library = libraryWallpaperIds
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false);
+      if (library.isNotEmpty) return library;
+    }
+    return effectiveWallpaperIds;
+  }
+
   String activeWallpaperIdFor(List<String> displayableIds) {
     if (displayableIds.isEmpty) return '';
     if (wallpaperActiveId.isNotEmpty &&
