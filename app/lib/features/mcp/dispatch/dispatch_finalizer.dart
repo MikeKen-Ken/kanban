@@ -38,6 +38,8 @@ Future<CallToolResult> dispatchFinalize(
     return mcpErrorResult('尚未记录验证结果');
   }
 
+  await refreshMcpGitAuthorIdentity();
+
   final repo = record.repoPath?.trim();
   if (repo != null && repo.isNotEmpty) {
     if (record.status == DispatchPendingStatus.committing) {

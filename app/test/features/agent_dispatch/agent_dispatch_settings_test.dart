@@ -71,6 +71,22 @@ void main() {
     expect(loaded.cardLimitCount, 7);
   });
 
+  test('保存设置时保留 Git 提交作者身份', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    const settings = AgentDispatchSettings(
+      gitAuthorName: '张三',
+      gitAuthorEmail: 'zhangsan@example.com',
+    );
+
+    await prefs.saveAgentDispatchSettings(settings);
+    final loaded = prefs.loadAgentDispatchSettings();
+
+    expect(loaded.gitAuthorName, '张三');
+    expect(loaded.gitAuthorEmail, 'zhangsan@example.com');
+  });
+
   test('buildSkillDispatchPrompt 只注入 skill 与 projectId', () {
     final text = buildSkillDispatchPrompt(
       skillMarkdown: '# 看板：做最新一条\n\n## 流程\n',

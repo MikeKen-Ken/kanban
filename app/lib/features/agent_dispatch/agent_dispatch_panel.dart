@@ -17,6 +17,7 @@ import 'agent_dispatch_config.dart';
 import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
+import 'agent_dispatch_git_author_fields.dart';
 import 'agent_dispatch_log_exporter.dart';
 import 'agent_dispatch_log.dart';
 import 'agent_dispatch_log_refresh_scheduler.dart';
@@ -50,6 +51,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   static const _credentials = AgentDispatchCredentials();
   AgentDispatchSettings _settings = const AgentDispatchSettings();
   final _repoController = TextEditingController();
+  final _gitAuthorNameController = TextEditingController();
+  final _gitAuthorEmailController = TextEditingController();
   final _countController = TextEditingController(text: '1');
   final _logController = TextEditingController();
   late final AgentDispatchService _service;
@@ -170,6 +173,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       _settings = normalized;
       _models = cachedModels;
       _repoController.text = normalized.repoPathFor(widget.projectId) ?? '';
+      _gitAuthorNameController.text = normalized.gitAuthorName ?? '';
+      _gitAuthorEmailController.text = normalized.gitAuthorEmail ?? '';
       _countController.text = '${normalized.cardLimitCount}';
     });
     await _service.hydrateLog();
@@ -642,6 +647,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     _service.removeProgressListener(_onServiceProgressChanged);
     _stopHeartbeat();
     _repoController.dispose();
+    _gitAuthorNameController.dispose();
+    _gitAuthorEmailController.dispose();
     _countController.dispose();
     _logController.dispose();
     super.dispose();
@@ -712,6 +719,20 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 },
                 onPickDirectory: _pickRepo,
                 onDeletePath: _deleteRepoPath,
+              ),
+              const SizedBox(height: 12),
+              Text('Git 提交身份', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              AgentDispatchGitAuthorFields(
+                nameController: _gitAuthorNameController,
+                emailController: _gitAuthorEmailController,
+                enabled: !_running && !_busy,
+                onNameChanged: (value) => _persist(
+                  _settings.copyWith(gitAuthorName: value),
+                ),
+                onEmailChanged: (value) => _persist(
+                  _settings.copyWith(gitAuthorEmail: value),
+                ),
               ),
               const SizedBox(height: 12),
               if (_settings.engine == AgentDispatchEngine.cursor) ...[

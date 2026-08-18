@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../common/git_commit_ref.dart';
 
@@ -55,14 +56,70 @@ class McpGitRevertOutcome {
   final String? error;
 }
 
-const _gitEnv = {
-  'GIT_TERMINAL_PROMPT': '0',
-  'GCM_INTERACTIVE': 'Never',
-  'GIT_AUTHOR_NAME': 'Kanban Agent',
-  'GIT_AUTHOR_EMAIL': 'kanban-agent@local',
-  'GIT_COMMITTER_NAME': 'Kanban Agent',
-  'GIT_COMMITTER_EMAIL': 'kanban-agent@local',
-};
+const defaultMcpGitAuthorName = 'Kanban Agent';
+const defaultMcpGitAuthorEmail = 'kanban-agent@local';
+const mcpGitAuthorNamePrefKey = 'mcp_git_author_name';
+const mcpGitAuthorEmailPrefKey = 'mcp_git_author_email';
+
+String _gitAuthorName = defaultMcpGitAuthorName;
+String _gitAuthorEmail = defaultMcpGitAuthorEmail;
+
+String resolveMcpGitAuthorName(String? name) {
+  final trimmed = name?.trim() ?? '';
+  return trimmed.isEmpty ? defaultMcpGitAuthorName : trimmed;
+}
+
+String resolveMcpGitAuthorEmail(String? email) {
+  final trimmed = email?.trim() ?? '';
+  return trimmed.isEmpty ? defaultMcpGitAuthorEmail : trimmed;
+}
+
+/// 更新本进程 Git 作者身份；空值回退默认。
+void applyMcpGitAuthorIdentity({String? name, String? email}) {
+  _gitAuthorName = resolveMcpGitAuthorName(name);
+  _gitAuthorEmail = resolveMcpGitAuthorEmail(email);
+}
+
+Future<void> persistMcpGitAuthorIdentity({
+  String? name,
+  String? email,
+  SharedPreferences? prefs,
+}) async {
+  final store = prefs ?? await SharedPreferences.getInstance();
+  final resolvedName = name?.trim() ?? '';
+  final resolvedEmail = email?.trim() ?? '';
+  if (resolvedName.isEmpty) {
+    await store.remove(mcpGitAuthorNamePrefKey);
+  } else {
+    await store.setString(mcpGitAuthorNamePrefKey, resolvedName);
+  }
+  if (resolvedEmail.isEmpty) {
+    await store.remove(mcpGitAuthorEmailPrefKey);
+  } else {
+    await store.setString(mcpGitAuthorEmailPrefKey, resolvedEmail);
+  }
+  applyMcpGitAuthorIdentity(name: resolvedName, email: resolvedEmail);
+}
+
+Future<void> refreshMcpGitAuthorIdentity({
+  SharedPreferences? prefs,
+}) async {
+  final store = prefs ?? await SharedPreferences.getInstance();
+  var name = store.getString(mcpGitAuthorNamePrefKey);
+  var email = store.getString(mcpGitAuthorEmailPrefKey);
+  if ((name == null || name.trim().isEmpty) ||
+      (email == null || email.trim().isEmpty)) {
+    final raw = store.getString('agent_dispatch_settings');
+    if (raw != null) {
+      try {
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        name ??= json['gitAuthorName'] as String?;
+        email ??= json['gitAuthorEmail'] as String?;
+      } catch (_) {}
+    }
+  }
+  applyMcpGitAuthorIdentity(name: name, email: email);
+}
 
 /// `git add -A` 时排除凭据类未跟踪文件，避免写入提交。
 const mcpGitAddPathspecs = [
@@ -78,10 +135,25 @@ const mcpGitAddPathspecs = [
   ':(exclude)**/id_rsa.pub',
 ];
 
-Map<String, String> mcpGitEnvironment() => {
-      ...Platform.environment,
-      ..._gitEnv,
-    };
+Map<String, String> mcpGitEnvironment({
+  String? authorName,
+  String? authorEmail,
+}) {
+  final name =
+      authorName == null ? _gitAuthorName : resolveMcpGitAuthorName(authorName);
+  final email = authorEmail == null
+      ? _gitAuthorEmail
+      : resolveMcpGitAuthorEmail(authorEmail);
+  return {
+    ...Platform.environment,
+    'GIT_TERMINAL_PROMPT': '0',
+    'GCM_INTERACTIVE': 'Never',
+    'GIT_AUTHOR_NAME': name,
+    'GIT_AUTHOR_EMAIL': email,
+    'GIT_COMMITTER_NAME': name,
+    'GIT_COMMITTER_EMAIL': email,
+  };
+}
 
 Future<ProcessResult> _defaultGitRunner(
   String executable,
@@ -369,4 +441,3 @@ Future<String?> mcpGitHeadHash(
   final value = '${hash.stdout}'.trim();
   return value.isEmpty ? null : value;
 }
-

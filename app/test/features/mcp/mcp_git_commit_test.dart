@@ -17,6 +17,21 @@ Future<void> _git(String repo, List<String> args) async {
 }
 
 void main() {
+  test('mcpGitEnvironment 使用配置的提交作者身份', () {
+    applyMcpGitAuthorIdentity(
+      name: '张三',
+      email: 'zhangsan@example.com',
+    );
+    addTearDown(applyMcpGitAuthorIdentity);
+
+    final environment = mcpGitEnvironment();
+
+    expect(environment['GIT_AUTHOR_NAME'], '张三');
+    expect(environment['GIT_AUTHOR_EMAIL'], 'zhangsan@example.com');
+    expect(environment['GIT_COMMITTER_NAME'], '张三');
+    expect(environment['GIT_COMMITTER_EMAIL'], 'zhangsan@example.com');
+  });
+
   test('inspectMcpGitTree 能区分干净、脏与非仓库', () async {
     final temp = await Directory.systemTemp.createTemp('kanban_git_tree_');
     addTearDown(() async {

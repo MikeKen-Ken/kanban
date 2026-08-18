@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../mcp/mcp_git_commit.dart';
 import 'agent_dispatch_after_queue.dart';
 import 'agent_dispatch_config.dart';
 
@@ -54,6 +55,8 @@ class AgentDispatchSettings {
     this.skillPath,
     this.repoPathByProject = const {},
     this.repoPaths = const [],
+    this.gitAuthorName,
+    this.gitAuthorEmail,
   });
 
   /// 新建调度设置的默认模型。
@@ -101,6 +104,12 @@ class AgentDispatchSettings {
   final Map<String, String> repoPathByProject;
   final List<String> repoPaths;
 
+  /// 提交 / rebase 推送使用的作者名；空则回退默认。
+  final String? gitAuthorName;
+
+  /// 提交 / rebase 推送使用的作者邮箱；空则回退默认。
+  final String? gitAuthorEmail;
+
   AgentDispatchSettings copyWith({
     AgentDispatchEngine? engine,
     bool? useProject,
@@ -120,6 +129,8 @@ class AgentDispatchSettings {
     Object? skillPath = _sentinel,
     Map<String, String>? repoPathByProject,
     List<String>? repoPaths,
+    Object? gitAuthorName = _sentinel,
+    Object? gitAuthorEmail = _sentinel,
   }) {
     return AgentDispatchSettings(
       engine: engine ?? this.engine,
@@ -143,6 +154,12 @@ class AgentDispatchSettings {
       skillPath: skillPath == _sentinel ? this.skillPath : skillPath as String?,
       repoPathByProject: repoPathByProject ?? this.repoPathByProject,
       repoPaths: repoPaths ?? this.repoPaths,
+      gitAuthorName: gitAuthorName == _sentinel
+          ? this.gitAuthorName
+          : gitAuthorName as String?,
+      gitAuthorEmail: gitAuthorEmail == _sentinel
+          ? this.gitAuthorEmail
+          : gitAuthorEmail as String?,
     );
   }
 
@@ -296,6 +313,10 @@ class AgentDispatchSettings {
         if (repoPathByProject.isNotEmpty)
           'repoPathByProject': repoPathByProject,
         if (repoPaths.isNotEmpty) 'repoPaths': repoPaths,
+        if (gitAuthorName != null && gitAuthorName!.trim().isNotEmpty)
+          'gitAuthorName': gitAuthorName,
+        if (gitAuthorEmail != null && gitAuthorEmail!.trim().isNotEmpty)
+          'gitAuthorEmail': gitAuthorEmail,
       };
 
   factory AgentDispatchSettings.fromJson(Map<String, dynamic> json) {
@@ -376,6 +397,8 @@ class AgentDispatchSettings {
               .where((path) => path.isNotEmpty)
               .toSet()
               .toList(),
+      gitAuthorName: json['gitAuthorName'] as String?,
+      gitAuthorEmail: json['gitAuthorEmail'] as String?,
     );
   }
 
@@ -411,20 +434,34 @@ extension AgentDispatchSettingsStore on SharedPreferences {
 
   AgentDispatchSettings loadAgentDispatchSettings() {
     final raw = getString(_key);
-    if (raw == null) return const AgentDispatchSettings();
+    if (raw == null) {
+      applyMcpGitAuthorIdentity();
+      return const AgentDispatchSettings();
+    }
     try {
-      return AgentDispatchSettings.fromJson(
+      final settings = AgentDispatchSettings.fromJson(
         jsonDecode(raw) as Map<String, dynamic>,
       );
+      applyMcpGitAuthorIdentity(
+        name: settings.gitAuthorName,
+        email: settings.gitAuthorEmail,
+      );
+      return settings;
     } catch (_) {
+      applyMcpGitAuthorIdentity();
       return const AgentDispatchSettings();
     }
   }
 
-  Future<void> saveAgentDispatchSettings(AgentDispatchSettings settings) {
-    return setString(
+  Future<void> saveAgentDispatchSettings(AgentDispatchSettings settings) async {
+    await setString(
       _key,
       jsonEncode(settings.toJson()),
+    );
+    await persistMcpGitAuthorIdentity(
+      name: settings.gitAuthorName,
+      email: settings.gitAuthorEmail,
+      prefs: this,
     );
   }
 }

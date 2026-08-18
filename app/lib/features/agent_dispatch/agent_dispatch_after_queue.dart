@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../mcp/mcp_git_commit.dart';
+
 /// 批次全部完成后按顺序执行的动作。
 enum AgentDispatchAfterStep {
   webdavUpload,
@@ -217,6 +219,7 @@ Future<void> gitPushWithRebase({
   if (repo.isEmpty) {
     throw Exception('未填写代码仓库路径，无法推送');
   }
+  await refreshMcpGitAuthorIdentity();
 
   Future<ProcessResult> git(List<String> arguments) {
     if (_gitArgHasForce(arguments)) {
@@ -226,11 +229,7 @@ Future<void> gitPushWithRebase({
       'git',
       arguments,
       workingDirectory: repo,
-      environment: {
-        ...Platform.environment,
-        'GIT_TERMINAL_PROMPT': '0',
-        'GCM_INTERACTIVE': 'Never',
-      },
+      environment: mcpGitEnvironment(),
     );
   }
 
@@ -250,7 +249,11 @@ Future<void> gitPushWithRebase({
     throw Exception('工作区不干净，已中止推送（不会自动提交或 force push）');
   }
 
-  for (final marker in const ['REBASE_HEAD', 'MERGE_HEAD', 'CHERRY_PICK_HEAD']) {
+  for (final marker in const [
+    'REBASE_HEAD',
+    'MERGE_HEAD',
+    'CHERRY_PICK_HEAD'
+  ]) {
     final inProgress = await git(['rev-parse', '-q', '--verify', marker]);
     if (inProgress.exitCode == 0) {
       throw Exception('已有 $marker 进行中，已中止以免破坏现有状态');
