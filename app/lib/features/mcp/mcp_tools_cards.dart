@@ -247,7 +247,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
         'colorValue': JsonSchema.number(),
         'clearColor': JsonSchema.boolean(),
         'commitRef': JsonSchema.string(
-          description: '完成该任务对应的 Git 提交号（完整或短 hash）',
+          description: '完成该任务对应的 Git 提交号（完整 hash 会收成 7 位短哈希）',
         ),
         'clearCommitRef': JsonSchema.boolean(),
       },
@@ -455,7 +455,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
           description: '可选；只勾选指定验证反馈 id（与另两种反馈参数互斥）',
         ),
         'commitRef': JsonSchema.string(
-          description: '可选；git commit 后写入卡片提交号（完整或短 hash）。'
+          description: '可选；git commit 后写入卡片提交号（完整 hash 会收成 7 位短哈希）。'
               '卡片已在待验证列时也可单独传此项补写。',
         ),
       },
@@ -625,7 +625,7 @@ void registerKanbanMcpCardTools(McpServer server, BoardController controller) {
 
   server.registerTool(
     'set_card_commit_ref',
-    description: '写入卡片「提交号」（Git commit hash，完整或短均可）。'
+    description: '写入卡片「提交号」（Git 短哈希，默认 7 位；完整 hash 会自动缩短）。'
         '只需 cardId 与 commitRef；省略 projectId 时按 cardId 跨项目定位。'
         '传 clearCommitRef=true 可清除。',
     inputSchema: JsonSchema.object(

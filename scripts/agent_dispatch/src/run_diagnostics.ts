@@ -1,19 +1,9 @@
-export type AgentRunBudget = {
-  maxSteps: number;
-  maxToolCalls: number;
-};
-
 export type AgentRunMetrics = {
   steps: number;
   toolCalls: number;
   repeatedToolCalls: number;
   repeatedReads: number;
   topReads: string[];
-};
-
-export const DEFAULT_AGENT_RUN_BUDGET: AgentRunBudget = {
-  maxSteps: 60,
-  maxToolCalls: 40,
 };
 
 /** 只统计模型步骤；不读取工具结果正文，避免诊断本身放大上下文。 */
@@ -23,40 +13,27 @@ export class AgentRunDiagnostics {
   private repeatedToolCalls = 0;
   private readonly signatures = new Map<string, number>();
   private readonly reads = new Map<string, number>();
-  private readonly budget: AgentRunBudget;
-
-  constructor(budget: AgentRunBudget = DEFAULT_AGENT_RUN_BUDGET) {
-    this.budget = budget;
-  }
 
   recordStep(input: {
     type: string;
     toolName?: string;
     detail?: string;
-  }): string | undefined {
+  }): void {
     this.steps += 1;
-    if (input.type === "toolCall") {
-      this.toolCalls += 1;
-      const name = input.toolName?.trim() || "tool";
-      const detail = input.detail?.trim() || "";
-      const signature = `${name.toLowerCase()}\u0000${detail}`;
-      const seen = this.signatures.get(signature) ?? 0;
-      if (seen > 0) this.repeatedToolCalls += 1;
-      this.signatures.set(signature, seen + 1);
+    if (input.type !== "toolCall") return;
 
-      if (name.toLowerCase() === "read") {
-        const path = readPath(detail);
-        if (path) this.reads.set(path, (this.reads.get(path) ?? 0) + 1);
-      }
-    }
+    this.toolCalls += 1;
+    const name = input.toolName?.trim() || "tool";
+    const detail = input.detail?.trim() || "";
+    const signature = `${name.toLowerCase()}\u0000${detail}`;
+    const seen = this.signatures.get(signature) ?? 0;
+    if (seen > 0) this.repeatedToolCalls += 1;
+    this.signatures.set(signature, seen + 1);
 
-    if (this.steps > this.budget.maxSteps) {
-      return `步骤数超过上限 ${this.budget.maxSteps}`;
+    if (name.toLowerCase() === "read") {
+      const path = readPath(detail);
+      if (path) this.reads.set(path, (this.reads.get(path) ?? 0) + 1);
     }
-    if (this.toolCalls > this.budget.maxToolCalls) {
-      return `工具调用超过上限 ${this.budget.maxToolCalls}`;
-    }
-    return undefined;
   }
 
   snapshot(): AgentRunMetrics {

@@ -1,5 +1,6 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
+import '../../common/git_commit_ref.dart';
 import '../../controllers/board_controller.dart';
 import 'mcp_arg_parsers.dart';
 import 'mcp_tool_results.dart';
@@ -17,15 +18,17 @@ Future<({String? value, String? error})> applyCardCommitRef(
   if (!shouldClear && normalized == null) {
     return (value: null, error: 'commitRef 不能为空（或传 clearCommitRef=true 清除）');
   }
+  final stored =
+      shouldClear ? null : abbreviateGitCommitRef(normalized!);
 
   final updateError = await controller.updateCardFull(
     columnId,
     cardId,
-    commitRef: shouldClear ? null : normalized,
+    commitRef: stored,
     clearCommitRef: shouldClear,
   );
   if (updateError != null) return (value: null, error: updateError);
-  return (value: shouldClear ? null : normalized, error: null);
+  return (value: stored, error: null);
 }
 
 /// 写入或清除卡片上的 Git 提交号。

@@ -23,7 +23,7 @@ class CardDetailCommitRefSection extends StatelessWidget {
           controller: controller,
           onChanged: (_) => onChanged(),
           decoration: const InputDecoration(
-            hintText: 'Git 提交 hash（完整或短均可）',
+            hintText: 'Git 短哈希（7 位；完整 hash 保存时会自动缩短）',
             isDense: true,
             border: OutlineInputBorder(),
           ),

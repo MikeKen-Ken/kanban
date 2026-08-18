@@ -6,7 +6,7 @@ import {
 } from "./cursor_mcp_servers.ts";
 
 describe("cursor_mcp_servers", () => {
-  it("无项目标签时注入 hubMCP 与 scoped 看板 MCP", () => {
+  it("无项目标签时只注入 scoped 看板 MCP", () => {
     const servers = mergeCursorMcpServers({
       userJson: JSON.stringify({
         mcpServers: {
@@ -28,8 +28,8 @@ describe("cursor_mcp_servers", () => {
       scopedKanbanUrl: "http://127.0.0.1:19000/mcp",
       env: { TAVILY_API_KEY: "from-env" },
     });
-    assert.deepEqual(Object.keys(servers), ["hubMCP", "kanbanMCP"]);
-    assert.ok(servers.hubMCP && "command" in servers.hubMCP);
+    assert.deepEqual(Object.keys(servers), ["kanbanMCP"]);
+    assert.equal(servers.hubMCP, undefined);
     const kanban = servers.kanbanMCP;
     assert.ok(kanban && "url" in kanban);
     assert.equal(kanban.url, "http://127.0.0.1:19000/mcp");
@@ -59,7 +59,7 @@ describe("cursor_mcp_servers", () => {
       projectMcpTags: ["unity", "tavily"],
       env: { TAVILY_API_KEY: "from-env" },
     });
-    assert.ok(servers.hubMCP && "command" in servers.hubMCP);
+    assert.equal(servers.hubMCP, undefined);
     const unity = servers.unityMCP;
     const kanban = servers.kanbanMCP;
     const tavily = servers.tavily;

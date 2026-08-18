@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../../common/git_commit_ref.dart';
+
 /// 调度收尾用的 Git 探测与提交；不 push。
 typedef McpGitRunner = Future<ProcessResult> Function(
   String executable,
@@ -136,7 +138,7 @@ Future<McpGitTree> inspectMcpGitTree(
   return McpGitTree(kind: McpGitTreeKind.dirty, output: output);
 }
 
-/// `git add -A` 后用临时文件提交，返回完整 hash。
+/// `git add -A` 后用临时文件提交，返回 7 位短哈希。
 Future<McpGitCommitOutcome> commitMcpWorkingTree({
   required String repoPath,
   required String message,
@@ -214,7 +216,7 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
         '无法读取提交号：${_combinedOutput(hash)}',
       );
     }
-    return McpGitCommitOutcome.success(commitRef);
+    return McpGitCommitOutcome.success(abbreviateGitCommitRef(commitRef));
   } finally {
     if (await messageFile.exists()) {
       await messageFile.delete();
@@ -348,7 +350,7 @@ Future<String?> findMcpCommitByDispatchTrailers({
   );
   if (result.exitCode != 0) return null;
   final value = '${result.stdout}'.trim();
-  return value.isEmpty ? null : value;
+  return value.isEmpty ? null : abbreviateGitCommitRef(value);
 }
 
 /// 读取当前 HEAD 的完整提交哈希，与 `git log` / Git 客户端显示一致。

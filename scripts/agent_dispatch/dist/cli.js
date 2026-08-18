@@ -1009,12 +1009,13 @@ var MCP_LABEL_SERVERS = {
   aseprite: ["aseprite"],
   "chrome-devtools": ["chrome-devtools"],
   chrome: ["chrome-devtools"],
+  hub: ["hubMCP"],
+  hubMCP: ["hubMCP"],
   tavily: ["tavily"],
   unity: ["unitymcp", "unityMCP"],
   cocos: ["cocos-creator"],
   node_repl: ["node_repl"]
 };
-var ALWAYS_ENABLED_MCP_SERVERS = ["hubMCP"];
 function parseProjectMcpTags(payload) {
   const raw = payload.projectMcpTags;
   if (!Array.isArray(raw)) return [];
@@ -1030,7 +1031,7 @@ function parseProjectMcpTags(payload) {
   return result;
 }
 function allowedMcpServerNames(labels) {
-  const allowed = new Set(ALWAYS_ENABLED_MCP_SERVERS);
+  const allowed = /* @__PURE__ */ new Set();
   for (const raw of labels) {
     const key = raw.trim();
     if (!key) continue;
@@ -1565,7 +1566,11 @@ async function withTimeout(operation, timeoutMs, work) {
 import { mkdirSync as mkdirSync2 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join4 } from "node:path";
-import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
+import {
+  Agent,
+  CursorAgentError,
+  JsonlLocalAgentStore
+} from "@cursor/sdk";
 
 // src/cursor_mcp_servers.ts
 import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
@@ -1668,43 +1673,39 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+// src/cursor_disallowed_tools.ts
+var CURSOR_WORKER_DISALLOWED_TOOLS = [
+  "task",
+  "GetMcpTools"
+];
+var CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK = ["task"];
+function fallbackDisallowedTools(err) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!/GetMcpTools/i.test(message)) return null;
+  return CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK;
+}
+
 // src/run_diagnostics.ts
-var DEFAULT_AGENT_RUN_BUDGET = {
-  maxSteps: 60,
-  maxToolCalls: 40
-};
 var AgentRunDiagnostics = class {
   steps = 0;
   toolCalls = 0;
   repeatedToolCalls = 0;
   signatures = /* @__PURE__ */ new Map();
   reads = /* @__PURE__ */ new Map();
-  budget;
-  constructor(budget = DEFAULT_AGENT_RUN_BUDGET) {
-    this.budget = budget;
-  }
   recordStep(input) {
     this.steps += 1;
-    if (input.type === "toolCall") {
-      this.toolCalls += 1;
-      const name = input.toolName?.trim() || "tool";
-      const detail = input.detail?.trim() || "";
-      const signature = `${name.toLowerCase()}\0${detail}`;
-      const seen = this.signatures.get(signature) ?? 0;
-      if (seen > 0) this.repeatedToolCalls += 1;
-      this.signatures.set(signature, seen + 1);
-      if (name.toLowerCase() === "read") {
-        const path = readPath(detail);
-        if (path) this.reads.set(path, (this.reads.get(path) ?? 0) + 1);
-      }
+    if (input.type !== "toolCall") return;
+    this.toolCalls += 1;
+    const name = input.toolName?.trim() || "tool";
+    const detail = input.detail?.trim() || "";
+    const signature = `${name.toLowerCase()}\0${detail}`;
+    const seen = this.signatures.get(signature) ?? 0;
+    if (seen > 0) this.repeatedToolCalls += 1;
+    this.signatures.set(signature, seen + 1);
+    if (name.toLowerCase() === "read") {
+      const path = readPath(detail);
+      if (path) this.reads.set(path, (this.reads.get(path) ?? 0) + 1);
     }
-    if (this.steps > this.budget.maxSteps) {
-      return `\u6B65\u9AA4\u6570\u8D85\u8FC7\u4E0A\u9650 ${this.budget.maxSteps}`;
-    }
-    if (this.toolCalls > this.budget.maxToolCalls) {
-      return `\u5DE5\u5177\u8C03\u7528\u8D85\u8FC7\u4E0A\u9650 ${this.budget.maxToolCalls}`;
-    }
-    return void 0;
   }
   snapshot() {
     const repeatedReads = [...this.reads.values()].reduce(
@@ -1860,7 +1861,7 @@ function describeStep(step) {
       const detail = extractToolDetail(message);
       if (!detail) {
         return {
-          lines: [],
+          lines: [`\u5DE5\u5177\uFF1A${toolName}`],
           source: isShellTool(toolName) ? "shell" : "mcp",
           toolName
         };
@@ -1932,9 +1933,7 @@ async function runCursor(job, cancellation) {
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
-    const diagnostics = new AgentRunDiagnostics(DEFAULT_AGENT_RUN_BUDGET);
-    let budgetError;
-    let activeRun;
+    const diagnostics = new AgentRunDiagnostics();
     const storeDir = join4(homedir3(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync2(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -1942,41 +1941,52 @@ async function runCursor(job, cancellation) {
       scopedKanbanUrl: agentMcpUrl,
       projectMcpTags: job.round.projectMcpTags
     });
-    const hasProjectWebMcp = job.round.projectMcpTags.some(
-      (tag) => tag === "tavily" || tag === "chrome-devtools"
-    );
-    const disallowedTools = [
-      "task",
-      ...hasProjectWebMcp ? ["webSearch", "webFetch"] : []
-    ];
-    logLine(
-      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",")}\uFF1BsettingSources=project\uFF08\u7528\u6237 Rule \u5DF2\u5B8C\u6574\u6CE8\u5165\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
-    );
-    const agent = await Agent.create({
+    const localOptions = {
+      cwd: job.cwd,
+      // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
+      // 避免把所有个人 Skill 一并加入每个单卡会话。
+      // 不含 user，避免 ~/.cursor/mcp.json 全量进会话。
+      settingSources: ["project"],
+      store: new JsonlLocalAgentStore(storeDir),
+      // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
+      autoReview: false,
+      sandboxOptions: { enabled: job.enableSandbox === true }
+    };
+    const createOptions = {
       apiKey,
       model: {
         id: modelId,
         ...params ? { params } : {}
       },
       mcpServers: mcp.servers,
-      disallowedTools,
-      local: {
-        cwd: job.cwd,
-        // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
-        // 避免把所有个人 Skill 一并加入每个单卡会话。
-        settingSources: ["project"],
-        store: new JsonlLocalAgentStore(storeDir),
-        // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
-        autoReview: false,
-        sandboxOptions: { enabled: job.enableSandbox === true }
-      }
-    });
+      local: localOptions
+    };
+    let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
+    let agent;
+    try {
+      agent = await Agent.create({
+        ...createOptions,
+        disallowedTools
+      });
+    } catch (err) {
+      const fallback = fallbackDisallowedTools(err);
+      if (fallback == null) throw err;
+      disallowedTools = fallback;
+      agent = await Agent.create({
+        ...createOptions,
+        disallowedTools
+      });
+    }
+    logLine(
+      `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",")}\uFF1BsettingSources=project\uFF08\u7528\u6237 Rule \u5DF2\u5B8C\u6574\u6CE8\u5165\uFF1B\u4E0D\u52A0\u8F7D\u7528\u6237 Skill\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
+    );
     try {
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
       const run = await agent.send({
         text: job.prompt,
         images: job.round.images
       }, {
+        mcpServers: mcp.servers,
         onStep: ({ step }) => {
           try {
             stepCount += 1;
@@ -1984,16 +1994,11 @@ async function runCursor(job, cancellation) {
             const described = describeStep(
               step
             );
-            const exceeded = diagnostics.recordStep({
+            diagnostics.recordStep({
               type: String(step.type),
               toolName: described.toolName,
               detail: described.detail
             });
-            if (exceeded && !budgetError) {
-              budgetError = exceeded;
-              logLine(`Agent \u9884\u7B97\u8D85\u9650\uFF1A${exceeded}\uFF0C\u6B63\u5728\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD`);
-              void activeRun?.cancel().catch(() => void 0);
-            }
             if (described.lines.length > 0) {
               logLines(described.lines, described.source);
             }
@@ -2002,8 +2007,6 @@ async function runCursor(job, cancellation) {
           }
         }
       });
-      activeRun = run;
-      if (budgetError) await run.cancel().catch(() => void 0);
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => void 0);
       });
@@ -2018,9 +2021,6 @@ async function runCursor(job, cancellation) {
       );
       if (result.usage) {
         logLine(formatSessionTokenLog(result.usage, metrics));
-      }
-      if (budgetError) {
-        return { ok: false, error: `Agent \u9884\u7B97\u8D85\u9650\uFF1A${budgetError}` };
       }
       if (cancellation?.isSkipRequested) {
         logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u8DF3\u8FC7", "worker");
@@ -2063,6 +2063,67 @@ import {
 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
 import { isAbsolute, join as join5 } from "node:path";
+
+// src/dispatch_scoped_tool_prompt.ts
+var DISPATCH_SCOPED_TOOL_NAMES = [
+  "block_card",
+  "ready_to_submit",
+  "submit_consultation"
+];
+function formatScopedKanbanToolPrompt(cardId) {
+  const id = cardId.trim() || "<\u6CE8\u5165\u7684 cardId>";
+  return [
+    "## \u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177\uFF08\u5DF2\u6CE8\u5165 schema\uFF09",
+    "",
+    "scoped `kanbanMCP` \u53EA\u6CE8\u518C\u4E0B\u9762\u4E09\u4E2A\u5DE5\u5177\u3002\u7981\u6B62 `GetMcpTools`\u3001`tools/list` \u6216\u62C9\u53D6\u5176\u5B83\u770B\u677F\u5DE5\u5177\u76EE\u5F55\u3002",
+    "Cursor\uFF1A\u76F4\u63A5 `CallMcpTool`\uFF1BCodex\uFF1A\u76F4\u63A5\u8C03\u7528\u540C\u540D MCP \u5DE5\u5177\u3002`cardId` \u5FC5\u987B\u662F\u6CE8\u5165\u503C\u3002",
+    "",
+    "```json",
+    JSON.stringify(
+      {
+        server: "kanbanMCP",
+        tools: {
+          ready_to_submit: {
+            required: [
+              "cardId",
+              "completedChecklistIds",
+              "completedFeedbackIds"
+            ],
+            properties: {
+              cardId: id,
+              completedChecklistIds: "\u672C\u8F6E\u5B8C\u6210\u7684 checklist id\uFF1B\u65E0\u5219 []",
+              completedFeedbackIds: "\u672C\u8F6E\u5B8C\u6210\u7684 feedback id\uFF1B\u65E0\u5219 []",
+              manualVerificationReason: "\u65E0\u6CD5\u81EA\u52A8\u9A8C\u8BC1\u65F6\u624D\u4F20",
+              gitRevertCommit: "\u4EC5\u5F53 workItems \u660E\u786E\u8981\u6C42 revert \u65F6\u4F20 7\u201364 \u4F4D\u54C8\u5E0C"
+            },
+            example: {
+              cardId: id,
+              completedChecklistIds: [],
+              completedFeedbackIds: []
+            }
+          },
+          submit_consultation: {
+            required: ["cardId", "responseMarkdown"],
+            example: {
+              cardId: id,
+              responseMarkdown: "\u54A8\u8BE2\u7B54\u590D Markdown"
+            }
+          },
+          block_card: {
+            required: ["cardId"],
+            properties: { reason: "\u963B\u585E\u539F\u56E0" },
+            example: { cardId: id, reason: "\u65E0\u6CD5\u5B8C\u6210\u7684\u539F\u56E0" }
+          }
+        }
+      },
+      null,
+      2
+    ),
+    "```"
+  ].join("\n");
+}
+
+// src/session_context.ts
 function readBatchArchitecture(cwd) {
   const path = join5(cwd, "docs", "Architecture.md");
   if (!existsSync5(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
@@ -2113,6 +2174,8 @@ function createSessionContext(options) {
     JSON.stringify(payload, null, 2),
     "```",
     "",
+    formatScopedKanbanToolPrompt(cardIdFromPayload(payload)),
+    "",
     "## \u4E34\u65F6\u9644\u4EF6\u7EDD\u5BF9\u8DEF\u5F84",
     "",
     ...attachmentPaths.length === 0 ? ["- \u65E0\u6587\u4EF6\u9644\u4EF6"] : attachmentPaths.map((path) => `- \u6587\u4EF6\uFF1A${path}`),
@@ -2139,6 +2202,10 @@ function createSessionContext(options) {
       rmSync2(tempDir, { recursive: true, force: true });
     }
   };
+}
+function cardIdFromPayload(payload) {
+  const value = payload.cardId;
+  return typeof value === "string" ? value.trim() : "";
 }
 function isRecord2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -2211,11 +2278,6 @@ function collectRulePaths(root) {
 
 // src/run_batch.ts
 import { readFileSync as readFileSync6 } from "node:fs";
-var SCOPED_TOOL_NAMES = [
-  "block_card",
-  "ready_to_submit",
-  "submit_consultation"
-];
 var defaultDependencies = {
   connectMcp: async (endpoint) => {
     const client = new KanbanMcpClient();
@@ -2310,9 +2372,9 @@ ${tree.output}`);
       try {
         scoped = await dependencies.connectMcp(agentEndpointUrl);
         const tools = await scoped.listTools();
-        if (JSON.stringify(tools) !== JSON.stringify(SCOPED_TOOL_NAMES)) {
+        if (JSON.stringify(tools) !== JSON.stringify(DISPATCH_SCOPED_TOOL_NAMES)) {
           throw new Error(
-            `scoped MCP \u5DE5\u5177\u95E8\u7981\u5931\u8D25\uFF1A\u5B9E\u9645=${tools.join(",")}\uFF0C\u671F\u671B=${SCOPED_TOOL_NAMES.join(",")}`
+            `scoped MCP \u5DE5\u5177\u95E8\u7981\u5931\u8D25\uFF1A\u5B9E\u9645=${tools.join(",")}\uFF0C\u671F\u671B=${DISPATCH_SCOPED_TOOL_NAMES.join(",")}`
           );
         }
         context = dependencies.createContext({

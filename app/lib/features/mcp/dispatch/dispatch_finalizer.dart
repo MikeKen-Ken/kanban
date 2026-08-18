@@ -1,5 +1,6 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
+import '../../../common/git_commit_ref.dart';
 import '../../../controllers/board_controller.dart';
 import '../../activity/activity_models.dart';
 import '../mcp_git_commit.dart';
@@ -49,7 +50,7 @@ Future<CallToolResult> dispatchFinalize(
       if (recovered != null) {
         record = record.copyWith(
           status: DispatchPendingStatus.committed,
-          commitRef: recovered,
+          commitRef: abbreviateGitCommitRef(recovered),
           clearError: true,
         );
         await store.write(record);
@@ -142,14 +143,14 @@ Future<CallToolResult> dispatchFinalize(
         }
         record = record.copyWith(
           status: DispatchPendingStatus.committed,
-          commitRef: committed.commitRef,
+          commitRef: abbreviateGitCommitRef(committed.commitRef!),
           clearError: true,
         );
         await store.write(record);
       } else if (tree.kind == McpGitTreeKind.clean) {
         record = record.copyWith(
           status: DispatchPendingStatus.committed,
-          commitRef: head,
+          commitRef: head == null ? null : abbreviateGitCommitRef(head),
           clearError: true,
         );
         await store.write(record);

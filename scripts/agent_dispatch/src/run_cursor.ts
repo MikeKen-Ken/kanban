@@ -1,14 +1,22 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Agent, CursorAgentError, JsonlLocalAgentStore } from "@cursor/sdk";
+import {
+  Agent,
+  CursorAgentError,
+  JsonlLocalAgentStore,
+  type LocalAgentOptions,
+} from "@cursor/sdk";
 import { settleWithin } from "./async_limit.ts";
 import type { WorkerCancellation } from "./cancellation.ts";
 import { loadCursorMcpServers } from "./cursor_mcp_servers.ts";
+import {
+  CURSOR_WORKER_DISALLOWED_TOOLS,
+  fallbackDisallowedTools,
+} from "./cursor_disallowed_tools.ts";
 import { formatSessionTokenLog } from "./cursor_token_usage.ts";
 import {
   AgentRunDiagnostics,
-  DEFAULT_AGENT_RUN_BUDGET,
   formatAgentRunDiagnostics,
 } from "./run_diagnostics.ts";
 import {
@@ -179,7 +187,7 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
       const detail = extractToolDetail(message);
       if (!detail) {
         return {
-          lines: [],
+          lines: [`工具：${toolName}`],
           source: isShellTool(toolName) ? "shell" : "mcp",
           toolName,
         };
@@ -260,9 +268,7 @@ export async function runCursor(
     const startedAt = Date.now();
     let stepCount = 0;
     let toolCallCount = 0;
-    const diagnostics = new AgentRunDiagnostics(DEFAULT_AGENT_RUN_BUDGET);
-    let budgetError: string | undefined;
-    let activeRun: { cancel(): Promise<void> } | undefined;
+    const diagnostics = new AgentRunDiagnostics();
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -270,13 +276,42 @@ export async function runCursor(
       scopedKanbanUrl: agentMcpUrl,
       projectMcpTags: job.round.projectMcpTags,
     });
-    const hasProjectWebMcp = job.round.projectMcpTags.some(
-      (tag) => tag === "tavily" || tag === "chrome-devtools",
-    );
-    const disallowedTools: Array<"task" | "webSearch" | "webFetch"> = [
-      "task",
-      ...(hasProjectWebMcp ? ["webSearch" as const, "webFetch" as const] : []),
-    ];
+    const localOptions: LocalAgentOptions = {
+      cwd: job.cwd,
+      // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
+      // 避免把所有个人 Skill 一并加入每个单卡会话。
+      // 不含 user，避免 ~/.cursor/mcp.json 全量进会话。
+      settingSources: ["project"],
+      store: new JsonlLocalAgentStore(storeDir),
+      // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
+      autoReview: false,
+      sandboxOptions: { enabled: job.enableSandbox === true },
+    };
+    const createOptions = {
+      apiKey,
+      model: {
+        id: modelId,
+        ...(params ? { params } : {}),
+      },
+      mcpServers: mcp.servers,
+      local: localOptions,
+    };
+    let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
+    let agent;
+    try {
+      agent = await Agent.create({
+        ...createOptions,
+        disallowedTools,
+      });
+    } catch (err) {
+      const fallback = fallbackDisallowedTools(err);
+      if (fallback == null) throw err;
+      disallowedTools = fallback;
+      agent = await Agent.create({
+        ...createOptions,
+        disallowedTools,
+      });
+    }
     logLine(
       `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
         `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
@@ -284,31 +319,13 @@ export async function runCursor(
         `禁用工具=${disallowedTools.join(",")}；` +
         `settingSources=project（用户 Rule 已完整注入；不加载用户 Skill；保留项目规则 / Skill / Hooks）`,
     );
-    const agent = await Agent.create({
-      apiKey,
-      model: {
-        id: modelId,
-        ...(params ? { params } : {}),
-      },
-      mcpServers: mcp.servers,
-      disallowedTools,
-      local: {
-        cwd: job.cwd,
-        // 用户 Rule 已由 Worker 完整注入；只让 SDK 加载项目规则 / Skill / Hooks，
-        // 避免把所有个人 Skill 一并加入每个单卡会话。
-        settingSources: ["project"],
-        store: new JsonlLocalAgentStore(storeDir),
-        // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
-        autoReview: false,
-        sandboxOptions: { enabled: job.enableSandbox === true },
-      },
-    });
     try {
       logLine("本地会话已创建，开始执行…");
       const run = await agent.send({
         text: job.prompt,
         images: job.round.images,
       }, {
+        mcpServers: mcp.servers,
         onStep: ({ step }) => {
           try {
             stepCount += 1;
@@ -316,16 +333,11 @@ export async function runCursor(
             const described = describeStep(
               step as { type?: unknown; message?: unknown },
             );
-            const exceeded = diagnostics.recordStep({
+            diagnostics.recordStep({
               type: String(step.type),
               toolName: described.toolName,
               detail: described.detail,
             });
-            if (exceeded && !budgetError) {
-              budgetError = exceeded;
-              logLine(`Agent 预算超限：${exceeded}，正在终止当前会话`);
-              void activeRun?.cancel().catch(() => undefined);
-            }
             if (described.lines.length > 0) {
               logLines(described.lines, described.source);
             }
@@ -334,8 +346,6 @@ export async function runCursor(
           }
         },
       });
-      activeRun = run;
-      if (budgetError) await run.cancel().catch(() => undefined);
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => undefined);
       });
@@ -350,9 +360,6 @@ export async function runCursor(
       );
       if (result.usage) {
         logLine(formatSessionTokenLog(result.usage, metrics));
-      }
-      if (budgetError) {
-        return { ok: false, error: `Agent 预算超限：${budgetError}` };
       }
       if (cancellation?.isSkipRequested) {
         logLine("Cursor 会话已由用户跳过", "worker");

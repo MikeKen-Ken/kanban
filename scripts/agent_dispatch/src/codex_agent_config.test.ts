@@ -15,7 +15,7 @@ describe("codex_agent_config", () => {
     assert.equal(text.includes("unityMCP"), false);
   });
 
-  it("无项目标签时仅保留 hubMCP 与 scoped 看板 MCP，并去掉完整看板 MCP", () => {
+  it("无项目标签时只保留 scoped 看板 MCP，并去掉完整看板 MCP", () => {
     const user = `
 [mcp_servers.hubMCP]
 command = "node"
@@ -38,10 +38,10 @@ command = "npx"
     const text = buildCodexAgentConfigToml("http://127.0.0.1:19000/mcp", user);
     assert.equal(text.includes("unityMCP"), false);
     assert.equal(text.includes("tavily"), false);
-    assert.match(text, /\[mcp_servers\.hubMCP\]/);
+    assert.equal(text.includes("hubMCP"), false);
     assert.match(text, /url = "http:\/\/127\.0\.0\.1:19000\/mcp"/);
     assert.equal(text.includes("18765"), false);
-    assert.deepEqual(listCodexMcpServerNames(text), ["hubMCP", "kanbanMCP"]);
+    assert.deepEqual(listCodexMcpServerNames(text), ["kanbanMCP"]);
   });
 
   it("按项目标签放行对应 MCP，并去掉完整看板 MCP 及其子表", () => {
@@ -69,7 +69,7 @@ command = "npx"
       user,
       ["unity", "tavily"],
     );
-    assert.match(text, /\[mcp_servers\.hubMCP\]/);
+    assert.equal(text.includes("hubMCP"), false);
     assert.match(text, /\[mcp_servers\.unityMCP\]/);
     assert.match(text, /\[mcp_servers\.tavily\]/);
     assert.match(text, /TAVILY_API_KEY = "secret"/);
@@ -77,7 +77,6 @@ command = "npx"
     assert.equal(text.includes("18765"), false);
     assert.equal(text.includes("list_board"), false);
     assert.deepEqual(listCodexMcpServerNames(text), [
-      "hubMCP",
       "unityMCP",
       "tavily",
       "kanbanMCP",

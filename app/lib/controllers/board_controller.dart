@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../common/async_mutex.dart';
+import '../common/git_commit_ref.dart';
 import '../features/attachments/attachment_missing.dart';
 import '../features/attachments/attachment_refs.dart';
 import '../features/attachments/attachment_store.dart';

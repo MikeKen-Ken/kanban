@@ -29,6 +29,12 @@ const kProjectMcpTagOptions = <ProjectMcpTagOption>[
     color: Color(0xFF4285F4),
   ),
   ProjectMcpTagOption(
+    key: 'hub',
+    name: 'Hub MCP',
+    description: '为需要在 Worker 会话里管理其它 MCP 服务器的项目附加 Hub MCP',
+    color: Color(0xFF5D4037),
+  ),
+  ProjectMcpTagOption(
     key: 'tavily',
     name: 'Tavily',
     description: '为需要联网检索的项目附加 Tavily MCP',
@@ -57,6 +63,7 @@ const kProjectMcpTagOptions = <ProjectMcpTagOption>[
 const kProjectMcpTagKeys = <String>{
   'aseprite',
   'chrome-devtools',
+  'hub',
   'tavily',
   'unity',
   'cocos',

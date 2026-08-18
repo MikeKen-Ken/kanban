@@ -296,7 +296,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             SettingsSection(
               icon: Icons.memory_outlined,
               title: 'Agent MCP',
-              subtitle: 'Hub MCP 始终保留；这里只配置当前项目按主题附加的 MCP',
+              subtitle: 'Worker 默认只注入 scoped 看板 MCP；这里按主题附加其它 MCP（含可选 Hub）'
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),

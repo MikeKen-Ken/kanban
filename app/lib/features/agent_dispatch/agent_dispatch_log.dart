@@ -171,7 +171,7 @@ class AgentDispatchLogHighlight {
     r'\b(?:input|output|cacheRead|cacheWrite|total)=\d+|'
     r'\b(?:steps|tools|elapsedMs)=\d+|'
     r'\b(?:repeatedToolCalls|repeatedReads)=\d+|'
-    r'会话诊断|Agent 预算超限|用户 Rule 注入|'
+    r'会话诊断|用户 Rule 注入|'
     r'批次 id：\S+|'
     r'Cursor run id=\S+|'
     r'已处理 \d+ 张|'

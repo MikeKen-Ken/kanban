@@ -61,7 +61,7 @@ class ProjectSettings {
   /// 看板泳道分组方式
   final SwimlaneMode swimlaneMode;
 
-  /// 项目主题相关的附加 MCP 标签；Hub MCP 始终保留，不在这里开关。
+  /// 项目主题相关的附加 MCP 标签；Worker 默认只挂 scoped 看板 MCP。
   final List<String> agentMcpTags;
 
   /// 本地自动化规则

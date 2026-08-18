@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { formatScopedKanbanToolPrompt } from "./dispatch_scoped_tool_prompt.ts";
 import type { ParsedClaimResult } from "./mcp_client.ts";
 
 export type SessionContext = {
@@ -81,6 +82,8 @@ export function createSessionContext(options: {
     JSON.stringify(payload, null, 2),
     "```",
     "",
+    formatScopedKanbanToolPrompt(cardIdFromPayload(payload)),
+    "",
     "## 临时附件绝对路径",
     "",
     ...(attachmentPaths.length === 0
@@ -112,6 +115,11 @@ export function createSessionContext(options: {
       rmSync(tempDir, { recursive: true, force: true });
     },
   };
+}
+
+function cardIdFromPayload(payload: Record<string, unknown>): string {
+  const value = payload.cardId;
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

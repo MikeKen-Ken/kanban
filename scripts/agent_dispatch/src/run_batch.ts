@@ -18,6 +18,7 @@ import {
 } from "./session_context.ts";
 import { readUserCursorRules, type UserRuleBundle } from "./user_rules.ts";
 import { parseProjectMcpTags } from "./dispatch_mcp_allowlist.ts";
+import { DISPATCH_SCOPED_TOOL_NAMES } from "./dispatch_scoped_tool_prompt.ts";
 import {
   applyLiveJobOverlay,
   mergeJobWithCardOverrides,
@@ -27,12 +28,6 @@ import {
 } from "./types.ts";
 import { workerLog } from "./worker_log.ts";
 import { readFileSync } from "node:fs";
-
-const SCOPED_TOOL_NAMES = [
-  "block_card",
-  "ready_to_submit",
-  "submit_consultation",
-];
 
 export type RunBatchDependencies = {
   connectMcp(endpoint: string): Promise<KanbanMcpConnection>;
@@ -158,9 +153,9 @@ export async function runBatch(
       try {
         scoped = await dependencies.connectMcp(agentEndpointUrl);
         const tools = await scoped.listTools();
-        if (JSON.stringify(tools) !== JSON.stringify(SCOPED_TOOL_NAMES)) {
+        if (JSON.stringify(tools) !== JSON.stringify(DISPATCH_SCOPED_TOOL_NAMES)) {
           throw new Error(
-            `scoped MCP 工具门禁失败：实际=${tools.join(",")}，期望=${SCOPED_TOOL_NAMES.join(",")}`,
+            `scoped MCP 工具门禁失败：实际=${tools.join(",")}，期望=${DISPATCH_SCOPED_TOOL_NAMES.join(",")}`,
           );
         }
 

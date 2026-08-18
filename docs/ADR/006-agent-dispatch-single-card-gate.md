@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-13
-- Updated: 2026-08-17
+- Updated: 2026-08-18
 
 ## 背景
 
@@ -39,14 +39,16 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
 
 - scoped MCP 与完整目录共用 `/mcp` 路径，靠每会话临时端口区分。临时端口启动失败时
   不得回退完整工具目录。
-- Cursor 与 Codex 默认只注入本卡 scoped `kanbanMCP`，并始终保留 `hubMCP`。用户/
-  项目里的其它 MCP（Aseprite、Chrome DevTools、Tavily、Unity、Cocos、Node REPL
-  等）仅当当前项目在 `ProjectSettings.agentMcpTags` 中配置对应标签时才合并；
-  `kanbanMCP` 必须覆盖为本轮 scoped 端点，不得使用常驻完整看板 MCP。
+- Cursor 与 Codex 默认只注入本卡 scoped `kanbanMCP`。用户/项目里的其它 MCP（Hub、
+  Aseprite、Chrome DevTools、Tavily、Unity、Cocos、Node REPL 等）仅当当前项目在
+  `ProjectSettings.agentMcpTags` 中配置对应标签时才合并；`kanbanMCP` 必须覆盖为本轮
+  scoped 端点，不得使用常驻完整看板 MCP。
+- Worker 把三个 scoped 工具的参数 schema 写入本轮 prompt；Cursor 会话禁用 `task` 与
+  `GetMcpTools`（若 SDK 不认后者则回退为只禁 `task`），空参工具调用仍要打日志。
 - Cursor：Worker 递归读取并完整注入用户 `~/.cursor/rules` 下的全部 `.md` / `.mdc`
   Rule；SDK 的 `settingSources` 只加载 `project`，继续保留项目规则、Skill 与 Hooks，
-  避免把所有用户 Skill 注入每张卡。MCP 由 Worker 按当前项目 MCP 标签从用户/项目
-  `mcp.json` 筛选后再覆盖 `kanbanMCP`。
+  避免把所有用户 Skill 注入每张卡，也不加载用户 `mcp.json`。MCP 由 Worker 按当前项目
+  MCP 标签从用户/项目 `mcp.json` 筛选后再覆盖 `kanbanMCP`。
 - `kanban-complete-tasks` 仅供 Worker 注入，不用于对话手动或自动调用。Skill 正文假定
   Architecture 已注入，禁止再打开该文件。Worker 只剥 YAML frontmatter 写入 prompt，
   不改写磁盘上的 Skill，也不再过滤正文中的 Architecture 行。
@@ -54,10 +56,7 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
   用户 `config.toml` 中的 MCP，再写入 scoped `kanbanMCP`。复制 `AGENTS.md` 时覆盖
   「必须再打开 Architecture.md」：Worker 已注入全文，视为已读；不改用户磁盘上的原文。
 - 调度中 `ready_to_submit` / `block_card` / `submit_consultation` 只能操作本轮领取的卡片。
-- Cursor 主 Agent 始终禁用子 Agent；项目已配置 Tavily 或 Chrome DevTools 时再禁用
-  功能重复的内置 Web Search / Web Fetch，未配置时保留查阅外部文档的能力。项目按需
-  注入的 MCP 不受影响。Worker 记录步骤、工具、重复工具与重复读取指标，并在超过会话
-  预算时终止本轮，防止单卡无界消耗。
+- Worker 记录步骤、工具、重复工具与重复读取指标。
 - 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、move、complete、delete、
   commitRef、checklist 或 feedback 契约。
 - claim 失败或空队列不占用本轮名额，且不得创建临时端点。

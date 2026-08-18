@@ -75,7 +75,7 @@ export type RoundContext = {
   agentEndpointUrl: string;
   images: RoundImage[];
   attachmentPaths: string[];
-  /** 项目级 MCP 标签 key，用于按需注入用户 MCP；hubMCP 始终保留。 */
+  /** 项目级 MCP 标签 key，用于按需注入用户 MCP；无标签时只挂 scoped 看板 MCP。 */
   projectMcpTags: string[];
 };
 

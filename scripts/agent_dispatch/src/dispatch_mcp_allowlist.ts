@@ -3,13 +3,13 @@ export const MCP_LABEL_SERVERS: Record<string, readonly string[]> = {
   aseprite: ["aseprite"],
   "chrome-devtools": ["chrome-devtools"],
   chrome: ["chrome-devtools"],
+  hub: ["hubMCP"],
+  hubMCP: ["hubMCP"],
   tavily: ["tavily"],
   unity: ["unitymcp", "unityMCP"],
   cocos: ["cocos-creator"],
   node_repl: ["node_repl"],
 };
-
-const ALWAYS_ENABLED_MCP_SERVERS = ["hubMCP"] as const;
 
 export function parseProjectMcpTags(payload: Record<string, unknown>): string[] {
   const raw = payload.projectMcpTags;
@@ -27,7 +27,7 @@ export function parseProjectMcpTags(payload: Record<string, unknown>): string[] 
 }
 
 export function allowedMcpServerNames(labels: readonly string[]): Set<string> {
-  const allowed = new Set<string>(ALWAYS_ENABLED_MCP_SERVERS);
+  const allowed = new Set<string>();
   for (const raw of labels) {
     const key = raw.trim();
     if (!key) continue;

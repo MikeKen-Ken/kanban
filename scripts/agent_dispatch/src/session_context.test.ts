@@ -46,6 +46,9 @@ describe("session_context", () => {
       assert.match(context.prompt, /已缓存的 docs\/Architecture\.md/);
       assert.match(context.prompt, /完整用户 Rule/);
       assert.match(context.prompt, /必须使用简体中文/);
+      assert.match(context.prompt, /看板 MCP 收尾工具/);
+      assert.match(context.prompt, /GetMcpTools/);
+      assert.match(context.prompt, /card-a/);
       assert.match(context.prompt, /开发前必读 Architecture\.md/);
       assert.equal(
         readFileSync(context.attachmentPaths[0]!, "utf8"),

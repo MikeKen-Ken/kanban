@@ -287,7 +287,9 @@ extension BoardControllerCards on BoardController {
             relatedIds: relatedIds ?? card.relatedIds,
             commitRef: clearCommitRef
                 ? null
-                : (commitRef ?? card.commitRef),
+                : (commitRef != null
+                    ? abbreviateGitCommitRef(commitRef)
+                    : card.commitRef),
             agentEngine: clearAgentEngine
                 ? null
                 : (agentEngine ?? card.agentEngine),
@@ -337,7 +339,9 @@ extension BoardControllerCards on BoardController {
         final restoredRelated = relatedIds ?? original.relatedIds;
         final restoredCommitRef = clearCommitRef
             ? null
-            : (commitRef ?? original.commitRef);
+            : (commitRef != null
+                ? abbreviateGitCommitRef(commitRef)
+                : original.commitRef);
         final restoredAgentEngine = clearAgentEngine
             ? null
             : (agentEngine ?? original.agentEngine);

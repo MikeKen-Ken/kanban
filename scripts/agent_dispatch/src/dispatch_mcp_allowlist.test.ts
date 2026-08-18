@@ -7,14 +7,14 @@ import {
 } from "./dispatch_mcp_allowlist.ts";
 
 describe("dispatch_mcp_allowlist", () => {
-  it("无项目标签时仍保留 hubMCP", () => {
-    assert.deepEqual([...allowedMcpServerNames([])], ["hubMCP"]);
+  it("无项目标签时不注入 hubMCP", () => {
+    assert.deepEqual([...allowedMcpServerNames([])], []);
     assert.deepEqual(
       filterRecordByMcpAllowlist(
         { aseprite: 1, kanbanMCP: 2, hubMCP: 3 },
         [],
       ),
-      { hubMCP: 3 },
+      {},
     );
   });
 
@@ -37,8 +37,16 @@ describe("dispatch_mcp_allowlist", () => {
 
   it("chrome 别名映射到 chrome-devtools", () => {
     const allowed = allowedMcpServerNames(["chrome"]);
-    assert.equal(allowed.has("hubMCP"), true);
+    assert.equal(allowed.has("hubMCP"), false);
     assert.equal(allowed.has("chrome-devtools"), true);
+  });
+
+  it("hub 标签才放行 hubMCP", () => {
+    assert.equal(allowedMcpServerNames(["hub"]).has("hubMCP"), true);
+    assert.equal(
+      filterRecordByMcpAllowlist({ hubMCP: 1, unityMCP: 2 }, ["hub"]).hubMCP,
+      1,
+    );
   });
 
   it("未登记的标签按服务器名精确放行", () => {

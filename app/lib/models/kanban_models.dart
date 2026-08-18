@@ -523,7 +523,7 @@ class KanbanCard {
   /// 关联卡片 id（无先后关系，仅追溯/导航；写入本侧，不会自动回链）
   final List<String> relatedIds;
 
-  /// 完成该任务时对应的 Git 提交号（完整或短 hash）
+  /// 完成该任务时对应的 Git 提交号（写入时收成 7 位短哈希）
   final String? commitRef;
 
   /// Agent 引擎覆盖：`cursor` / `codex`；null 表示沿用工作台。
