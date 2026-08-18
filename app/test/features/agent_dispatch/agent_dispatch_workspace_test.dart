@@ -214,7 +214,15 @@ void main() {
   });
 
   testWidgets('日志窗口上方显示当前任务进度与实时状态', (tester) async {
-    final controller = TextEditingController();
+    final controller = TextEditingController(
+      text: [
+        '[09:00:00] [Worker] [信息] ──────── Worker 单卡轮次 1/12 ────────',
+        '[09:00:01] [系统] [信息] 当前卡片：agent 工作台',
+        '[09:00:02] [Worker] [信息] 本卡覆盖：engine=cursor model=composer-2.5 params=[] cardId=x',
+        '[09:00:10] [Worker] [信息] Cursor run id=run-1 status=completed steps=3 tools=5 elapsedMs=9000',
+        '[09:00:11] [Worker] [信息] 本会话 token：input=12 output=34 total=46',
+      ].join('\n'),
+    );
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(
@@ -248,6 +256,18 @@ void main() {
     expect(find.text('测试'), findsOneWidget);
     expect(find.text('agent 工作台'), findsOneWidget);
     expect(find.text('显示进度与实时状态'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-dispatch-card-metrics')),
+        findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-dispatch-card-token')),
+        matching: find.text('46'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('9秒'), findsOneWidget);
+    expect(find.textContaining('步骤 3'), findsOneWidget);
+    expect(find.textContaining('cursor'), findsOneWidget);
   });
 
   testWidgets('可按第几个任务筛选日志，复制只包含该任务', (tester) async {
