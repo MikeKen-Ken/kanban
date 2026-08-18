@@ -11,6 +11,7 @@ import '../kanban/swimlane.dart';
 import '../wallpapers/wallpaper_image.dart';
 import '../wallpapers/wallpaper_library_dialog.dart';
 import '../wallpapers/wallpaper_models.dart';
+import 'project_mcp_tag_chips.dart';
 import 'project_mcp_tags.dart';
 import 'project_settings.dart';
 import 'project_theme.dart';
@@ -187,15 +188,16 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     return names.join('、');
   }
 
-  void _toggleAgentMcpTag(String key, bool selected) {
-    setState(() {
-      if (selected) {
-        if (_agentMcpTags.contains(key)) return;
-        _agentMcpTags = [..._agentMcpTags, key];
-        return;
-      }
-      _agentMcpTags = _agentMcpTags.where((item) => item != key).toList();
-    });
+  Future<void> _toggleAgentMcpTag(String key, bool selected) async {
+    if (selected == _agentMcpTags.contains(key)) return;
+    final next = selected
+        ? [..._agentMcpTags, key]
+        : _agentMcpTags.where((item) => item != key).toList();
+    setState(() => _agentMcpTags = next);
+    final controller = context.read<BoardController>();
+    await controller.saveProjectSettings(
+      controller.projectSettings.copyWith(agentMcpTags: next),
+    );
   }
 
   @override
@@ -303,28 +305,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final option in kProjectMcpTagOptions)
-                            FilterChip(
-                              label: Text(option.name),
-                              selected: _agentMcpTags.contains(option.key),
-                              onSelected: (selected) =>
-                                  _toggleAgentMcpTag(option.key, selected),
-                              selectedColor: option.color.withValues(alpha: 0.18),
-                              side: BorderSide(color: option.color.withValues(alpha: 0.35)),
-                              labelStyle: TextStyle(
-                                color: _agentMcpTags.contains(option.key)
-                                    ? option.color
-                                    : null,
-                                fontWeight: _agentMcpTags.contains(option.key)
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                        ],
+                      ProjectMcpTagChips(
+                        selectedKeys: _agentMcpTags,
+                        onSelected: _toggleAgentMcpTag,
                       ),
                       const SizedBox(height: 10),
                       Text(
@@ -629,7 +612,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '主题与看板选项点「保存」后写入；背景图、遮罩与卡片不透明度会立即生效并同步到 WebDAV。',
+                    '主题与看板选项点「保存」后写入；Agent MCP 标签、背景图、遮罩与卡片不透明度会立即生效并同步到 WebDAV。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
