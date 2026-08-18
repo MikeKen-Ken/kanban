@@ -43,7 +43,7 @@ const bool kCardDetailSheetEnableDrag = false;
 @visibleForTesting
 const double kCardDetailSheetMaxWidth = 880;
 
-/// 卡片详情底部弹层：标题、备注、子任务、验证反馈、优先级、标签、卡片背景色、截止日期、关联、提交号等
+/// 卡片详情底部弹层：标题、备注、标签、验证反馈、子任务、优先级、卡片背景色、截止日期、关联、提交号等
 Future<void> showCardDetailSheet({
   required BuildContext context,
   required String columnId,
@@ -236,7 +236,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     return KeyEventResult.ignored;
   }
 
-  /// 备注框 Enter 保存；Shift+Enter 换行；Tab 切到子任务输入框。
+  /// 备注框 Enter 保存；Shift+Enter 换行；Tab 切到验证反馈输入框。
   KeyEventResult _onDescKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.enter) {
@@ -248,26 +248,26 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.tab) {
-      _checklistFocusNode.requestFocus();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  /// 子任务输入框 Tab：切到验证反馈输入框。
-  KeyEventResult _onChecklistKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
       _verificationFeedbackFocusNode.requestFocus();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
 
-  /// 验证反馈输入框 Tab：切到标题输入框。
+  /// 验证反馈输入框 Tab：切到子任务输入框。
   KeyEventResult _onVerificationFeedbackKeyEvent(
     FocusNode node,
     KeyEvent event,
   ) {
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
+      _checklistFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// 子任务输入框 Tab：切到标题输入框。
+  KeyEventResult _onChecklistKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
       _titleFocusNode.requestFocus();
       return KeyEventResult.handled;
@@ -1190,7 +1190,40 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             ),
                           ),
                         const SizedBox(height: 20),
-                        // 子任务与验证反馈；其后依次为优先级、标签、卡片背景色等，提交号在最底部。
+                        Row(
+                          children: [
+                            Text('标签', style: theme.textTheme.titleSmall),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () => showLabelEditorDialog(context),
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: const Text('编辑'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final label in allLabels)
+                              Tooltip(
+                                message: label.description ?? label.name,
+                                child: FilterChip(
+                                  label: Text(label.name),
+                                  selected: _labels.contains(label.key),
+                                  onSelected: (_) => _toggleLabel(label.key),
+                                  backgroundColor:
+                                      label.color.withValues(alpha: 0.12),
+                                  selectedColor:
+                                      label.color.withValues(alpha: 0.35),
+                                  checkmarkColor: label.color,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        // 验证反馈与子任务；其后依次为优先级、卡片背景色等，提交号在最底部。
                         CardDetailChecklistSection(
                           checklist: _checklist,
                           verificationFeedback: _verificationFeedback,
@@ -1237,39 +1270,6 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                     ),
                             );
                           }).toList(),
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Text('标签', style: theme.textTheme.titleSmall),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: () => showLabelEditorDialog(context),
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              label: const Text('编辑'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final label in allLabels)
-                              Tooltip(
-                                message: label.description ?? label.name,
-                                child: FilterChip(
-                                  label: Text(label.name),
-                                  selected: _labels.contains(label.key),
-                                  onSelected: (_) => _toggleLabel(label.key),
-                                  backgroundColor:
-                                      label.color.withValues(alpha: 0.12),
-                                  selectedColor:
-                                      label.color.withValues(alpha: 0.35),
-                                  checkmarkColor: label.color,
-                                ),
-                              ),
-                          ],
                         ),
                         const SizedBox(height: 20),
                         Text('卡片背景色', style: theme.textTheme.titleSmall),

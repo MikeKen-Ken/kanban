@@ -58,7 +58,7 @@ Future<List<ChecklistItem>> editChecklistLikeItem({
   );
 }
 
-/// 子任务与验证反馈列表 UI。
+/// 验证反馈与子任务列表 UI。
 class CardDetailChecklistSection extends StatelessWidget {
   const CardDetailChecklistSection({
     super.key,
@@ -99,64 +99,6 @@ class CardDetailChecklistSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Text('子任务', style: theme.textTheme.titleSmall),
-            if (checklist.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Text(
-                '${checklist.where((i) => i.completed).length}/${checklist.length}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...checklist.map(
-          (item) => CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: item.completed,
-            title: GestureDetector(
-              onTap: () => onEditChecklistItem(item.id),
-              child: Text(
-                item.text,
-                style: item.completed
-                    ? const TextStyle(
-                        decoration: TextDecoration.lineThrough,
-                      )
-                    : null,
-              ),
-            ),
-            onChanged: (_) => onToggleChecklistItem(item.id),
-            secondary: IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: () => onRemoveChecklistItem(item.id),
-            ),
-            controlAffinity: ListTileControlAffinity.leading,
-          ),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                key: const ValueKey('card-detail-checklist'),
-                controller: checklistInput,
-                focusNode: checklistFocusNode,
-                decoration: const InputDecoration(
-                  hintText: '添加子任务…',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                onSubmitted: (_) => onAddChecklistItem(),
-              ),
-            ),
-            IconButton(
-              onPressed: onAddChecklistItem,
-              icon: const Icon(Icons.add),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
         Row(
           children: [
             Text('验证反馈', style: theme.textTheme.titleSmall),
@@ -210,6 +152,64 @@ class CardDetailChecklistSection extends StatelessWidget {
             ),
             IconButton(
               onPressed: onAddVerificationFeedbackItem,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Text('子任务', style: theme.textTheme.titleSmall),
+            if (checklist.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(
+                '${checklist.where((i) => i.completed).length}/${checklist.length}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...checklist.map(
+          (item) => CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: item.completed,
+            title: GestureDetector(
+              onTap: () => onEditChecklistItem(item.id),
+              child: Text(
+                item.text,
+                style: item.completed
+                    ? const TextStyle(
+                        decoration: TextDecoration.lineThrough,
+                      )
+                    : null,
+              ),
+            ),
+            onChanged: (_) => onToggleChecklistItem(item.id),
+            secondary: IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () => onRemoveChecklistItem(item.id),
+            ),
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const ValueKey('card-detail-checklist'),
+                controller: checklistInput,
+                focusNode: checklistFocusNode,
+                decoration: const InputDecoration(
+                  hintText: '添加子任务…',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (_) => onAddChecklistItem(),
+              ),
+            ),
+            IconButton(
+              onPressed: onAddChecklistItem,
               icon: const Icon(Icons.add),
             ),
           ],
