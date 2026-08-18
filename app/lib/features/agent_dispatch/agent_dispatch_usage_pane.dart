@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'agent_dispatch_usage.dart';
+import 'agent_dispatch_section_header.dart';
 
 class AgentDispatchUsagePane extends StatelessWidget {
   const AgentDispatchUsagePane({
@@ -32,7 +33,10 @@ class AgentDispatchUsagePane extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('Cursor 账号', style: textTheme.labelLarge),
+            const AgentDispatchSectionHeader(
+              title: 'Cursor 账号',
+              tone: AgentDispatchSectionTone.account,
+            ),
             const Spacer(),
             if (loading)
               const Padding(

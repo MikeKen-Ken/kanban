@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'agent_dispatch_after_queue.dart';
+import 'agent_dispatch_section_header.dart';
 
 class AgentDispatchAfterQueueField extends StatelessWidget {
   const AgentDispatchAfterQueueField({
@@ -24,7 +25,10 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('完成后队列', style: theme.textTheme.labelLarge),
+        const AgentDispatchSectionHeader(
+          title: '完成后队列',
+          tone: AgentDispatchSectionTone.queue,
+        ),
         const SizedBox(height: 4),
         InkWell(
           onTap: enabled && onRunOnFailureChanged != null
@@ -95,8 +99,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
                 trailing: IconButton(
                   tooltip: '移除',
                   onPressed: enabled
-                      ? () =>
-                          onChanged(removeAfterQueueStepAt(steps, index))
+                      ? () => onChanged(removeAfterQueueStepAt(steps, index))
                       : null,
                   icon: const Icon(Icons.close),
                 ),

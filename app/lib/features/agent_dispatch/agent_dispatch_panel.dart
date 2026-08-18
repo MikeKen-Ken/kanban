@@ -27,6 +27,7 @@ import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_registry.dart';
 import 'agent_dispatch_run_toggles.dart';
+import 'agent_dispatch_section_header.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_token_stats_dialog.dart';
@@ -677,7 +678,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           settings: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('引擎', style: Theme.of(context).textTheme.labelLarge),
+              const AgentDispatchSectionHeader(
+                title: '引擎',
+                tone: AgentDispatchSectionTone.configuration,
+              ),
               const SizedBox(height: 8),
               DropdownButtonFormField<AgentDispatchEngine>(
                 key: ValueKey('engine-${_settings.engine}'),
@@ -704,7 +708,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     ),
                   ),
                 ),
-              Text('代码仓库', style: Theme.of(context).textTheme.labelLarge),
+              const AgentDispatchSectionHeader(
+                title: '代码仓库',
+                tone: AgentDispatchSectionTone.repository,
+              ),
               AgentDispatchRepositoryField(
                 controller: _repoController,
                 paths: _settings.repoPaths,
@@ -721,7 +728,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 onDeletePath: _deleteRepoPath,
               ),
               const SizedBox(height: 12),
-              Text('Git 提交身份', style: Theme.of(context).textTheme.labelLarge),
+              const AgentDispatchSectionHeader(
+                title: 'Git 提交身份',
+                tone: AgentDispatchSectionTone.identity,
+              ),
               const SizedBox(height: 8),
               AgentDispatchGitAuthorFields(
                 nameController: _gitAuthorNameController,
@@ -736,8 +746,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               ),
               const SizedBox(height: 12),
               if (_settings.engine == AgentDispatchEngine.cursor) ...[
-                Text('Cursor API Key',
-                    style: Theme.of(context).textTheme.labelLarge),
+                const AgentDispatchSectionHeader(
+                  title: 'Cursor API Key',
+                  tone: AgentDispatchSectionTone.credential,
+                ),
                 CursorApiKeySection(
                   enabled: !_busy,
                   credentials: _credentials,

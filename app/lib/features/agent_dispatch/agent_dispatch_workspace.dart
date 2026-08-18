@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'agent_dispatch_log.dart';
 import 'agent_dispatch_progress.dart';
+import 'agent_dispatch_section_header.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
@@ -58,7 +59,10 @@ class AgentDispatchWorkspace extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _PaneTitle(title: '调度配置'),
+              const _PaneTitle(
+                title: '调度配置',
+                tone: AgentDispatchSectionTone.configuration,
+              ),
               const SizedBox(height: 12),
               settings,
               const Divider(height: 32),
@@ -93,7 +97,10 @@ class AgentDispatchWorkerPane extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _PaneTitle(title: 'Worker'),
+        const _PaneTitle(
+          title: 'Worker',
+          tone: AgentDispatchSectionTone.worker,
+        ),
         const SizedBox(height: 12),
         SelectableText(workerStatus ?? '检查中…', style: textTheme.bodySmall),
         Align(
@@ -167,7 +174,12 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
                     size: 22,
                   ),
                 ),
-                const Expanded(child: _PaneTitle(title: 'Skill')),
+                const Expanded(
+                  child: _PaneTitle(
+                    title: 'Skill',
+                    tone: AgentDispatchSectionTone.skill,
+                  ),
+                ),
                 IconButton(
                   tooltip: '打开 Skill 目录',
                   onPressed:
@@ -308,8 +320,8 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
 
   _LogSummary _summary() {
     final allLines = widget.controller.text.split('\n').where(
-      (line) => !AgentDispatchLogEntry.isLowValue(line),
-    );
+          (line) => !AgentDispatchLogEntry.isLowValue(line),
+        );
     var errors = 0;
     var warnings = 0;
     String? totalTokens;
@@ -320,7 +332,8 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
       final match = RegExp(r'\btotal=(\d+)').firstMatch(line);
       if (match != null) totalTokens = match.group(1);
     }
-    return _LogSummary(errors: errors, warnings: warnings, totalTokens: totalTokens);
+    return _LogSummary(
+        errors: errors, warnings: warnings, totalTokens: totalTokens);
   }
 
   @override
@@ -476,7 +489,9 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   }) {
     final selected = filter != null && _levelFilter == filter;
     return InkWell(
-      key: filter == null ? null : ValueKey('agent-dispatch-log-level-${filter.name}'),
+      key: filter == null
+          ? null
+          : ValueKey('agent-dispatch-log-level-${filter.name}'),
       borderRadius: BorderRadius.circular(8),
       onTap: filter == null
           ? null
@@ -495,7 +510,8 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         decoration: BoxDecoration(
           color: color.withValues(alpha: selected ? 0.22 : 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: selected ? 0.8 : 0.25)),
+          border:
+              Border.all(color: color.withValues(alpha: selected ? 0.8 : 0.25)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -503,7 +519,9 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
             Icon(icon, size: 15, color: color),
             const SizedBox(width: 4),
             Text('$label ', style: const TextStyle(fontSize: 11)),
-            Text(value, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w800)),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 12, color: color, fontWeight: FontWeight.w800)),
           ],
         ),
       ),
@@ -528,7 +546,8 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
       decoration: BoxDecoration(
         color: isAlert ? color.withValues(alpha: 0.09) : null,
         borderRadius: BorderRadius.circular(4),
-        border: isAlert ? Border(left: BorderSide(color: color, width: 3)) : null,
+        border:
+            isAlert ? Border(left: BorderSide(color: color, width: 3)) : null,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -553,10 +572,10 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     final hasLog = widget.controller.text.isNotEmpty;
     final lines = _visibleLines();
     final tasks = _cachedTasks;
-    final selectedTask = _taskFilter != null &&
-            tasks.any((task) => task.ordinal == _taskFilter)
-        ? _taskFilter
-        : null;
+    final selectedTask =
+        _taskFilter != null && tasks.any((task) => task.ordinal == _taskFilter)
+            ? _taskFilter
+            : null;
     final actionLog = AgentDispatchLogTasks.slice(
       widget.controller.text,
       selectedTask,
@@ -568,9 +587,15 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
       children: [
         Row(
           children: [
-            const Expanded(child: _PaneTitle(title: '运行日志')),
+            const Expanded(
+              child: _PaneTitle(
+                title: '运行日志',
+                tone: AgentDispatchSectionTone.log,
+              ),
+            ),
             if (tasks.isNotEmpty) ...[
-              Flexible(child: Align(
+              Flexible(
+                  child: Align(
                 alignment: Alignment.centerRight,
                 child: _taskFilterMenu(tasks, selectedTask),
               )),
@@ -649,7 +674,8 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
                   key: const ValueKey('agent-dispatch-log-scroll'),
                   controller: _scrollController,
                   itemCount: lines.length,
-                  itemBuilder: (context, index) => _logLine(context, lines[index]),
+                  itemBuilder: (context, index) =>
+                      _logLine(context, lines[index]),
                 ),
               ),
             ),
@@ -680,7 +706,8 @@ class _TaskStatusPane extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border.all(color: theme.dividerColor),
         borderRadius: BorderRadius.circular(8),
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -697,8 +724,7 @@ class _TaskStatusPane extends StatelessWidget {
               const SizedBox(width: 8),
               Container(
                 key: const ValueKey('agent-dispatch-task-phase'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(999),
@@ -760,7 +786,10 @@ class _ScrollablePane extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _PaneTitle(title: title),
+        _PaneTitle(
+          title: title,
+          tone: AgentDispatchSectionTone.configuration,
+        ),
         const SizedBox(height: 12),
         Expanded(child: SingleChildScrollView(child: child)),
       ],
@@ -769,12 +798,13 @@ class _ScrollablePane extends StatelessWidget {
 }
 
 class _PaneTitle extends StatelessWidget {
-  const _PaneTitle({required this.title});
+  const _PaneTitle({required this.title, required this.tone});
 
   final String title;
+  final AgentDispatchSectionTone tone;
 
   @override
   Widget build(BuildContext context) {
-    return Text(title, style: Theme.of(context).textTheme.titleSmall);
+    return AgentDispatchSectionHeader(title: title, tone: tone);
   }
 }
