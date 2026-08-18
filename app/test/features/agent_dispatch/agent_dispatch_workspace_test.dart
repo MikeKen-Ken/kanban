@@ -305,5 +305,14 @@ void main() {
     expect(copied, contains('完成乙'));
     expect(copied, isNot(contains('完成甲')));
     expect(copied, isNot(contains('启动批次')));
+
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('完成甲'), findsOneWidget);
+    expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
+    expect(find.text('全部任务'), findsOneWidget);
   });
 }

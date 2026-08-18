@@ -224,6 +224,9 @@ class AgentDispatchLogPane extends StatefulWidget {
 }
 
 class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
+  /// PopupMenuButton 不会在选中 null 时触发 [PopupMenuButton.onSelected]。
+  static const _allTasksMenuValue = 0;
+
   final _scrollController = ScrollController();
   AgentDispatchLogSource? _sourceFilter;
   AgentDispatchLogLevel? _levelFilter;
@@ -374,13 +377,13 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     final label = selectedTask == null
         ? '全部任务'
         : tasks.firstWhere((task) => task.ordinal == selectedTask).label;
-    return PopupMenuButton<int?>(
+    return PopupMenuButton<int>(
       key: const ValueKey('agent-dispatch-log-task-filter'),
       tooltip: '按任务筛选日志',
-      initialValue: selectedTask,
+      initialValue: selectedTask ?? _allTasksMenuValue,
       onSelected: (value) {
         setState(() {
-          _taskFilter = value;
+          _taskFilter = value == _allTasksMenuValue ? null : value;
           _pinToBottom = true;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -389,12 +392,13 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         });
       },
       itemBuilder: (context) => [
-        const PopupMenuItem<int?>(
-          value: null,
+        const PopupMenuItem<int>(
+          key: ValueKey('agent-dispatch-log-task-all'),
+          value: _allTasksMenuValue,
           child: Text('全部任务'),
         ),
         for (final task in tasks)
-          PopupMenuItem<int?>(
+          PopupMenuItem<int>(
             key: ValueKey('agent-dispatch-log-task-${task.ordinal}'),
             value: task.ordinal,
             child: Text(task.label),
