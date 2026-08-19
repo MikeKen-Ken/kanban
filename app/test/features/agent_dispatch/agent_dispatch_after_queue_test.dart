@@ -269,6 +269,44 @@ void main() {
     );
   });
 
+  test('批次结束解析完成后队列时以最新配置为准', () {
+    final latest = resolveAfterQueueForBatchEnd(
+      liveSteps: const [AgentDispatchAfterStep.sleep],
+      liveRunOnFailure: false,
+      resolved: (
+        steps: const [
+          AgentDispatchAfterStep.gitPush,
+          AgentDispatchAfterStep.webdavUpload,
+        ],
+        runOnFailure: true,
+      ),
+    );
+    expect(latest.steps, [
+      AgentDispatchAfterStep.gitPush,
+      AgentDispatchAfterStep.webdavUpload,
+    ]);
+    expect(latest.runOnFailure, isTrue);
+  });
+
+  test('批次结束无最新配置时回退运行中快照', () {
+    final latest = resolveAfterQueueForBatchEnd(
+      liveSteps: const [AgentDispatchAfterStep.shutdown],
+      liveRunOnFailure: false,
+    );
+    expect(latest.steps, [AgentDispatchAfterStep.shutdown]);
+    expect(latest.runOnFailure, isFalse);
+  });
+
+  test('批次结束最新配置可清空启动时的完成后队列', () {
+    final latest = resolveAfterQueueForBatchEnd(
+      liveSteps: const [AgentDispatchAfterStep.gitPush],
+      liveRunOnFailure: true,
+      resolved: (steps: const [], runOnFailure: false),
+    );
+    expect(latest.steps, isEmpty);
+    expect(latest.runOnFailure, isFalse);
+  });
+
   testWidgets('添加按钮只显示短文案', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

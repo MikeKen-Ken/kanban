@@ -201,6 +201,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Future<void> _persist(AgentDispatchSettings next) async {
     final synced = next.rememberActiveEngineProfile();
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final disk = prefs.loadAgentDispatchSettings();
     final projectId = widget.projectId;
     final afterMap = Map<String, List<AgentDispatchAfterStep>>.from(
@@ -209,10 +210,16 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final runMap = Map<String, bool>.from(
       disk.runAfterQueueOnFailureByProject,
     );
-    if (synced.afterQueueByProject.containsKey(projectId)) {
+    // await 之后以当前界面内存为准，避免并发 persist 冲掉运行中改过的完成后队列。
+    final latest = _settings;
+    if (latest.afterQueueByProject.containsKey(projectId)) {
+      afterMap[projectId] = latest.afterQueueByProject[projectId]!;
+    } else if (synced.afterQueueByProject.containsKey(projectId)) {
       afterMap[projectId] = synced.afterQueueByProject[projectId]!;
     }
-    if (synced.runAfterQueueOnFailureByProject.containsKey(projectId)) {
+    if (latest.runAfterQueueOnFailureByProject.containsKey(projectId)) {
+      runMap[projectId] = latest.runAfterQueueOnFailureByProject[projectId]!;
+    } else if (synced.runAfterQueueOnFailureByProject.containsKey(projectId)) {
       runMap[projectId] = synced.runAfterQueueOnFailureByProject[projectId]!;
     }
     final merged = synced.copyWith(
@@ -243,14 +250,31 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   Future<void> _persistAfterQueue(AgentDispatchSettings next) async {
-    final saving = _persist(next);
-    if (_service.isRunning) {
+    // 先写入界面内存，再同步到运行中服务，最后落盘；批次结束会再取一次最新状态。
+    setState(() => _settings = next);
+    if (_running || _service.isRunning) {
       _service.updateAfterQueue(
         steps: next.afterQueueFor(widget.projectId),
         runOnFailure: next.runAfterQueueOnFailureFor(widget.projectId),
       );
     }
-    await saving;
+    await _persist(next);
+  }
+
+  Future<AgentDispatchAfterQueueSnapshot?> _resolveLatestAfterQueue() async {
+    final projectId = widget.projectId;
+    if (mounted) {
+      return (
+        steps: _settings.afterQueueFor(projectId),
+        runOnFailure: _settings.runAfterQueueOnFailureFor(projectId),
+      );
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final disk = prefs.loadAgentDispatchSettings();
+    return (
+      steps: disk.afterQueueFor(projectId),
+      runOnFailure: disk.runAfterQueueOnFailureFor(projectId),
+    );
   }
 
   void _appendLog(
@@ -615,8 +639,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       closeScopedEndpoint: board.mcpHost.closeScopedEndpoint,
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
-      afterQueue: next.afterQueueFor(projectId),
-      runAfterQueueOnFailure: next.runAfterQueueOnFailureFor(projectId),
+      afterQueue: _settings.afterQueueFor(projectId),
+      runAfterQueueOnFailure: _settings.runAfterQueueOnFailureFor(projectId),
+      resolveAfterQueue: _resolveLatestAfterQueue,
       afterQueueHost: AgentDispatchAfterQueueHost(
         uploadAll: board.uploadNow,
         gitPush: () => gitPushWithRebase(repoPath: options.repoPath),

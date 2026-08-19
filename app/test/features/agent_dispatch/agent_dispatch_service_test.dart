@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_after_queue.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_log.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_log_store.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_progress.dart';
@@ -94,5 +95,25 @@ void main() {
       prefs.loadAgentDispatchLog(projectId: 'bounded').split('\n'),
       hasLength(3000),
     );
+  });
+
+  test('运行中 updateAfterQueue 会覆盖启动快照', () {
+    final service = AgentDispatchRegistry.instance.forProject('after-q');
+    expect(service.debugAfterQueue, isEmpty);
+    service.updateAfterQueue(
+      steps: const [
+        AgentDispatchAfterStep.gitPush,
+        AgentDispatchAfterStep.sleep,
+      ],
+      runOnFailure: false,
+    );
+    expect(service.debugAfterQueue, [
+      AgentDispatchAfterStep.gitPush,
+      AgentDispatchAfterStep.sleep,
+    ]);
+    expect(service.debugRunAfterQueueOnFailure, isFalse);
+    service.updateAfterQueue(steps: const [], runOnFailure: true);
+    expect(service.debugAfterQueue, isEmpty);
+    expect(service.debugRunAfterQueueOnFailure, isTrue);
   });
 }

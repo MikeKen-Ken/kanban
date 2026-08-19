@@ -84,6 +84,32 @@ List<AgentDispatchAfterStep> reorderAfterQueueStep(
   return List<AgentDispatchAfterStep>.unmodifiable(next);
 }
 
+/// 批次结束时要执行的完成后队列快照。
+typedef AgentDispatchAfterQueueSnapshot = ({
+  List<AgentDispatchAfterStep> steps,
+  bool runOnFailure,
+});
+
+/// 批次结束时解析完成后队列：以 [resolved]（最新配置）为准，缺省则用运行中快照。
+///
+/// 运行过程中的增删改应在结束时重新取最新状态，而不是沿用启动时的旧列表。
+AgentDispatchAfterQueueSnapshot resolveAfterQueueForBatchEnd({
+  required List<AgentDispatchAfterStep> liveSteps,
+  required bool liveRunOnFailure,
+  AgentDispatchAfterQueueSnapshot? resolved,
+}) {
+  if (resolved != null) {
+    return (
+      steps: List<AgentDispatchAfterStep>.unmodifiable(resolved.steps),
+      runOnFailure: resolved.runOnFailure,
+    );
+  }
+  return (
+    steps: List<AgentDispatchAfterStep>.unmodifiable(liveSteps),
+    runOnFailure: liveRunOnFailure,
+  );
+}
+
 /// 是否应执行完成后队列。
 ///
 /// 手动停止或「本轮结束后停止」不触发。批次成功始终触发。

@@ -60,8 +60,8 @@ class AgentDispatchService {
 
   /// 在批次运行期间更新结束后要执行的动作。
   ///
-  /// 这些设置由工作台持久化；服务保留本次运行的最新快照，避免
-  /// Worker 正在执行时新增的动作被启动时的旧快照忽略。
+  /// 工作台改动会同步到此快照；批次真正结束时仍会再解析一次最新配置，
+  /// 避免只沿用启动瞬间的旧列表。
   void updateAfterQueue({
     required List<AgentDispatchAfterStep> steps,
     required bool runOnFailure,
@@ -69,6 +69,12 @@ class AgentDispatchService {
     _afterQueue = List<AgentDispatchAfterStep>.unmodifiable(steps);
     _runAfterQueueOnFailure = runOnFailure;
   }
+
+  @visibleForTesting
+  List<AgentDispatchAfterStep> get debugAfterQueue => _afterQueue;
+
+  @visibleForTesting
+  bool get debugRunAfterQueueOnFailure => _runAfterQueueOnFailure;
 
   /// 运行中更新默认平台与模型；当前卡片不变，下一张领取时生效。
   void updateLiveRunOptions(AgentDispatchRunOptions options) {
@@ -289,6 +295,7 @@ class AgentDispatchService {
     List<AgentDispatchAfterStep> afterQueue = const [],
     bool runAfterQueueOnFailure = true,
     AgentDispatchAfterQueueHost? afterQueueHost,
+    Future<AgentDispatchAfterQueueSnapshot?> Function()? resolveAfterQueue,
     void Function(AgentDispatchLogEntry entry)? onLog,
   }) async {
     if (_isRunning) {
@@ -333,6 +340,24 @@ class AgentDispatchService {
         onLog: onLog,
         onWorkerInvoked: () => workerInvoked = true,
       );
+      AgentDispatchAfterQueueSnapshot? resolved;
+      if (resolveAfterQueue != null) {
+        try {
+          resolved = await resolveAfterQueue();
+        } catch (error) {
+          _emitLog(
+            '完成后队列：读取最新配置失败，回退运行中快照：$error',
+            level: AgentDispatchLogLevel.warning,
+          );
+        }
+      }
+      final latest = resolveAfterQueueForBatchEnd(
+        liveSteps: _afterQueue,
+        liveRunOnFailure: _runAfterQueueOnFailure,
+        resolved: resolved,
+      );
+      _afterQueue = latest.steps;
+      _runAfterQueueOnFailure = latest.runOnFailure;
       final shouldRunAfterQueue = shouldRunAgentDispatchAfterQueue(
         batchOk: result.ok,
         cancelRequested: _cancelRequested,
