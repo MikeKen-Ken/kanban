@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import {
   createAskUserTool,
   INTERACTION_EVENT_PREFIX,
+  interactionStdio,
 } from "./interaction_bridge.ts";
 import type { RoundDispatchJob } from "./types.ts";
 
@@ -31,11 +32,10 @@ describe("interaction_bridge", () => {
       },
     } satisfies RoundDispatchJob;
     const output: string[] = [];
-    const originalWrite = process.stdout.write.bind(process.stdout);
-    process.stdout.write = ((chunk: string | Uint8Array) => {
-      output.push(String(chunk));
-      return true;
-    }) as typeof process.stdout.write;
+    const originalWrite = interactionStdio.write;
+    interactionStdio.write = (line) => {
+      output.push(line);
+    };
     try {
       const tool = createAskUserTool(job);
       assert.ok(tool);
@@ -54,7 +54,7 @@ describe("interaction_bridge", () => {
       );
       assert.equal(await pending, "方案 A");
     } finally {
-      process.stdout.write = originalWrite;
+      interactionStdio.write = originalWrite;
     }
   });
 });

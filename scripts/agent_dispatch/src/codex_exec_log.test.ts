@@ -23,6 +23,20 @@ describe("recordsFromCodexEvent", () => {
     ]);
   });
 
+  it("Codex 助手 content 块也会打成完整正文", () => {
+    const records = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "agent_message",
+        content: [
+          { type: "output_text", text: "第一段\n第二段完整结论。" },
+        ],
+      },
+    });
+    assert.equal(records[0]?.line, "助手：第一段");
+    assert.equal(records[1]?.line, "  │ 第二段完整结论。");
+  });
+
   it("把 reasoning 标成思考", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",

@@ -34,6 +34,7 @@ import {
   emitAssistantMessage,
   emitSessionStart,
 } from "./interaction_bridge.ts";
+import { extractCursorAssistantStepText } from "./assistant_text.ts";
 import {
   resolveModelParams,
   type DispatchResult,
@@ -184,7 +185,7 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
   switch (type) {
     case "assistantMessage":
       return {
-        lines: expandMultiline("助手：", String(message?.text ?? "")),
+        lines: expandMultiline("助手：", extractCursorAssistantStepText(record)),
         source: "ai",
       };
     case "thinkingMessage": {
@@ -253,6 +254,21 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
       };
     }
   }
+}
+
+function assistantTextsFromTurns(turns: readonly unknown[]): string[] {
+  const texts: string[] = [];
+  for (const turn of turns) {
+    const record = asRecord(turn);
+    const inner = asRecord(record?.turn) ?? record;
+    const steps = inner?.steps;
+    if (!Array.isArray(steps)) continue;
+    for (const step of steps) {
+      const text = extractCursorAssistantStepText(step);
+      if (text) texts.push(text);
+    }
+  }
+  return texts;
 }
 
 export async function runCursor(
@@ -341,6 +357,13 @@ export async function runCursor(
       );
       logLine("本地会话已创建，开始执行…");
       emitSessionStart(job);
+      const emittedAssistant = new Set<string>();
+      const emitAssistant = (text: string): void => {
+        const normalized = text.trim();
+        if (!normalized || emittedAssistant.has(normalized)) return;
+        emittedAssistant.add(normalized);
+        emitAssistantMessage(job, normalized);
+      };
       const run = await agent.send({
         text: askUserTool
           ? `${job.prompt}\n\n## 看板交互\n需要用户确认时必须调用 ask_user；不要调用 askQuestion。ask_user 会暂停本轮并等待看板回复。`
@@ -364,10 +387,7 @@ export async function runCursor(
               logLines(described.lines, described.source);
             }
             if (step.type === "assistantMessage") {
-              emitAssistantMessage(
-                job,
-                String(asRecord(step.message)?.text ?? ""),
-              );
+              emitAssistant(extractCursorAssistantStepText(step));
             }
           } catch {
             logLine("收到一步进度");
@@ -391,6 +411,17 @@ export async function runCursor(
         await run.cancel().catch(() => undefined);
       }
       const result = await run.wait();
+      try {
+        const turns = await run.conversation();
+        for (const text of assistantTextsFromTurns(turns)) {
+          emitAssistant(text);
+        }
+      } catch {
+        // 会话快照不可用时仍用 result.result 兜底。
+      }
+      if (typeof result.result === "string") {
+        emitAssistant(result.result);
+      }
       const metrics = diagnostics.snapshot();
       logLine(formatAgentRunDiagnostics(metrics));
       logLine(

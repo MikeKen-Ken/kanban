@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  writeSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
@@ -22,10 +23,17 @@ export type InteractionEvent = {
   at: string;
 };
 
+/** 测试可替换；默认与 Worker 日志一样用 writeSync，避免和日志互相截断 JSON。 */
+export const interactionStdio = {
+  write(line: string): void {
+    writeSync(1, line);
+  },
+};
+
 export function emitInteractionEvent(
   event: Omit<InteractionEvent, "at">,
 ): void {
-  process.stdout.write(
+  interactionStdio.write(
     `${INTERACTION_EVENT_PREFIX}${JSON.stringify({
       ...event,
       at: new Date().toISOString(),

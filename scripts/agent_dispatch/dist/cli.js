@@ -685,6 +685,67 @@ function formatSessionTokenLog(raw, diagnostics) {
   return `\u672C\u4F1A\u8BDD token\uFF1Ainput=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}` + (diagnostics ? ` steps=${diagnostics.steps} tools=${diagnostics.toolCalls} repeatedToolCalls=${diagnostics.repeatedToolCalls} repeatedReads=${diagnostics.repeatedReads}` : "");
 }
 
+// src/assistant_text.ts
+function extractAssistantText(value) {
+  const chunks = [];
+  collectText(value, chunks, 0);
+  return chunks.join("").trim();
+}
+function extractCursorAssistantStepText(step) {
+  const record = asRecord2(step);
+  if (!record) return "";
+  const type = String(record.type ?? "");
+  if (type && type !== "assistantMessage" && type !== "assistant") return "";
+  return extractAssistantText(record.message ?? record);
+}
+function extractCodexAssistantEventText(event) {
+  const record = asRecord2(event);
+  if (!record) return "";
+  const type = String(record.type ?? "");
+  if (type !== "item.completed" && type !== "item.updated") return "";
+  const item = asRecord2(record.item) ?? {};
+  const itemType = String(item.type ?? item.item_type ?? "");
+  if (itemType !== "agent_message" && itemType !== "assistant_message") {
+    return "";
+  }
+  if (type === "item.updated") return "";
+  return extractAssistantText(item);
+}
+function collectText(value, chunks, depth) {
+  if (depth > 6 || value == null) return;
+  if (typeof value === "string") {
+    if (value.trim()) chunks.push(value);
+    return;
+  }
+  if (typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectText(item, chunks, depth + 1);
+    return;
+  }
+  const record = value;
+  const type = String(record.type ?? "");
+  if (type === "tool_use" || type === "tool-use" || type === "toolCall") return;
+  if (typeof record.text === "string" && record.text.trim()) {
+    chunks.push(record.text);
+    return;
+  }
+  if (typeof record.thinking === "string" && type === "thinking") return;
+  if (record.content !== void 0) {
+    collectText(record.content, chunks, depth + 1);
+    return;
+  }
+  if (record.parts !== void 0) {
+    collectText(record.parts, chunks, depth + 1);
+    return;
+  }
+  if (record.message !== void 0) {
+    collectText(record.message, chunks, depth + 1);
+  }
+}
+function asRecord2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/codex_exec_log.ts
 var OUTPUT_CLIP = 4e3;
 var JSON_CLIP = 2e3;
@@ -726,7 +787,7 @@ function recordsFromCodexJsonLine(raw, state) {
   }
   let event;
   try {
-    event = asRecord2(JSON.parse(line)) ?? {};
+    event = asRecord3(JSON.parse(line)) ?? {};
   } catch {
     return withDefaultLevel([{ line: clip(line, 200), source: "worker" }]);
   }
@@ -753,9 +814,9 @@ function recordsFromCodexEventInner(event) {
     case "turn.started":
       return [];
     case "turn.completed":
-      return recordsFromUsage(asRecord2(event.usage));
+      return recordsFromUsage(asRecord3(event.usage));
     case "turn.failed": {
-      const message = pickString(asRecord2(event.error), "message") || pickString(event, "message") || "Codex \u56DE\u5408\u5931\u8D25";
+      const message = pickString(asRecord3(event.error), "message") || pickString(event, "message") || "Codex \u56DE\u5408\u5931\u8D25";
       return [{ line: message, source: "worker", level: "error" }];
     }
     case "error": {
@@ -768,7 +829,7 @@ function recordsFromCodexEventInner(event) {
     case "item.started":
     case "item.updated":
     case "item.completed":
-      return recordsFromCodexItem(type, asRecord2(event.item) ?? {});
+      return recordsFromCodexItem(type, asRecord3(event.item) ?? {});
     default:
       return [];
   }
@@ -781,7 +842,10 @@ function recordsFromCodexItem(eventType, item) {
     case "agent_message":
     case "assistant_message":
       if (eventType !== "item.completed") return [];
-      return toRecords(expandMultiline("\u52A9\u624B\uFF1A", pickString(item, "text")), "ai");
+      return toRecords(
+        expandMultiline("\u52A9\u624B\uFF1A", extractAssistantText(item) || pickString(item, "text")),
+        "ai"
+      );
     case "reasoning":
       if (eventType !== "item.completed") return [];
       return toRecords(expandMultiline("\u601D\u8003\uFF1A", pickString(item, "text")), "ai");
@@ -847,7 +911,7 @@ function recordsFromCommand(eventType, item, failed) {
 }
 function recordsFromFileChange(item, failed) {
   const changes = Array.isArray(item.changes) ? item.changes : [];
-  const parts = changes.map((entry) => asRecord2(entry)).filter((entry) => entry != null).map((entry) => {
+  const parts = changes.map((entry) => asRecord3(entry)).filter((entry) => entry != null).map((entry) => {
     const path = pickString(entry, "path");
     if (!path) return "";
     const kind = String(entry.kind ?? "update");
@@ -872,7 +936,7 @@ function recordsFromMcp(eventType, item, failed) {
   }
   if (eventType !== "item.completed") return [];
   if (failed) {
-    const err = pickString(asRecord2(item.error), "message") || pickString(item, "error") || "\u8C03\u7528\u5931\u8D25";
+    const err = pickString(asRecord3(item.error), "message") || pickString(item, "error") || "\u8C03\u7528\u5931\u8D25";
     return [
       {
         line: `\u5DE5\u5177\u5931\u8D25\uFF1A${tool} ${err}`,
@@ -887,7 +951,7 @@ function recordsFromMcp(eventType, item, failed) {
 }
 function recordsFromTodo(item) {
   const items = Array.isArray(item.items) ? item.items : [];
-  const parts = items.map((entry) => asRecord2(entry)).filter((entry) => entry != null).map((entry) => {
+  const parts = items.map((entry) => asRecord3(entry)).filter((entry) => entry != null).map((entry) => {
     const text = pickString(entry, "text");
     if (!text) return "";
     return `${entry.completed === true ? "\u2713 " : ""}${text}`;
@@ -1033,11 +1097,11 @@ function toRecords(lines, source, level = "info") {
   return lines.map((line) => ({ line, source, level }));
 }
 function mcpResultText(result) {
-  const record = asRecord2(result);
+  const record = asRecord3(result);
   if (!record) return usefulJson(result);
   const content = record.content;
   if (Array.isArray(content)) {
-    const texts = content.map((block) => asRecord2(block)).filter((block) => block != null).filter((block) => block.type === "text" && typeof block.text === "string").map((block) => String(block.text).trim()).filter(Boolean);
+    const texts = content.map((block) => asRecord3(block)).filter((block) => block != null).filter((block) => block.type === "text" && typeof block.text === "string").map((block) => String(block.text).trim()).filter(Boolean);
     if (texts.length > 0) return clip(texts.join("\n"), OUTPUT_CLIP);
   }
   return usefulJson(record.structured_content ?? result);
@@ -1057,7 +1121,7 @@ function pickString(record, key) {
   const value = record?.[key];
   return typeof value === "string" ? value : "";
 }
-function asRecord2(value) {
+function asRecord3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function asCount2(value) {
@@ -1310,13 +1374,19 @@ import {
   existsSync as existsSync3,
   mkdirSync as mkdirSync2,
   readFileSync as readFileSync2,
-  rmSync
+  rmSync,
+  writeSync
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join as join2 } from "node:path";
 var INTERACTION_EVENT_PREFIX = "@@KANBAN_INTERACTION@@";
+var interactionStdio = {
+  write(line) {
+    writeSync(1, line);
+  }
+};
 function emitInteractionEvent(event) {
-  process.stdout.write(
+  interactionStdio.write(
     `${INTERACTION_EVENT_PREFIX}${JSON.stringify({
       ...event,
       at: (/* @__PURE__ */ new Date()).toISOString()
@@ -1417,11 +1487,11 @@ function workItems(job) {
 }
 
 // src/worker_log.ts
-import { writeSync } from "node:fs";
+import { writeSync as writeSync2 } from "node:fs";
 function workerLog(line, source = "worker", level = "info") {
   const prefix = level === "info" ? `[${source}]` : `[${level}] [${source}]`;
   for (const part of line.split(/\r?\n/)) {
-    writeSync(1, `${prefix} ${part}
+    writeSync2(1, `${prefix} ${part}
 `);
   }
 }
@@ -1501,6 +1571,13 @@ async function runCodex(job, cancellation) {
     });
     workerLog(`Codex args=${args.join(" ")}`);
     emitSessionStart(job);
+    const emittedAssistant = /* @__PURE__ */ new Set();
+    const emitAssistant = (text) => {
+      const normalized = text.trim();
+      if (!normalized || emittedAssistant.has(normalized)) return;
+      emittedAssistant.add(normalized);
+      emitAssistantMessage(job, normalized);
+    };
     const code = await new Promise((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
       let child;
@@ -1525,6 +1602,10 @@ async function runCodex(job, cancellation) {
       const logState = createCodexLogState();
       const stdoutLines = createLineBuffer((line) => {
         workerLogRecords(recordsFromCodexJsonLine(line, logState));
+        try {
+          emitAssistant(extractCodexAssistantEventText(JSON.parse(line)));
+        } catch {
+        }
       });
       const stderrLines = createLineBuffer((line) => {
         workerLogRecords(recordsFromCodexStderrLine(line, logState));
@@ -1573,7 +1654,7 @@ async function runCodex(job, cancellation) {
       summary = void 0;
     }
     workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
-    if (summary) emitAssistantMessage(job, summary);
+    if (summary) emitAssistant(summary);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
     }
@@ -1775,7 +1856,7 @@ async function withTimeout(operation, timeoutMs, work) {
 }
 
 // src/cursor_shell_spans.ts
-function asRecord3(value) {
+function asRecord4(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function pickString2(record, ...keys) {
@@ -1804,16 +1885,16 @@ function normalizeDispatchCallId(callId) {
   return (callId ?? "").trim().split(/\s+/).filter((part) => part.length > 0).join("_");
 }
 function toolPayload(step) {
-  return asRecord3(step.message) ?? asRecord3(step.toolCall) ?? asRecord3(step.call) ?? asRecord3(step.tool) ?? asRecord3(asRecord3(step.message)?.toolCall) ?? asRecord3(asRecord3(step.message)?.call);
+  return asRecord4(step.message) ?? asRecord4(step.toolCall) ?? asRecord4(step.call) ?? asRecord4(step.tool) ?? asRecord4(asRecord4(step.message)?.toolCall) ?? asRecord4(asRecord4(step.message)?.call);
 }
 function extractCommand(message) {
-  const nested = asRecord3(message.args) ?? asRecord3(message.arguments) ?? asRecord3(message.input) ?? asRecord3(message.params);
+  const nested = asRecord4(message.args) ?? asRecord4(message.arguments) ?? asRecord4(message.input) ?? asRecord4(message.params);
   return pickString2(message, "command", "cmd", "shellCommand") || pickString2(nested, "command", "cmd", "shellCommand");
 }
 function extractResult(message) {
-  const result = asRecord3(message.result) ?? asRecord3(message.output) ?? asRecord3(message.value);
+  const result = asRecord4(message.result) ?? asRecord4(message.output) ?? asRecord4(message.value);
   if (!result) return void 0;
-  const value = asRecord3(result.value) ?? result;
+  const value = asRecord4(result.value) ?? result;
   const executionTimeMs = pickNumber(
     value,
     "executionTime",
@@ -1821,7 +1902,7 @@ function extractResult(message) {
     "execution_time_ms"
   );
   const exitCode = pickNumber(value, "exitCode", "exit_code");
-  if (executionTimeMs == null && exitCode == null && asRecord3(message.result) == null) {
+  if (executionTimeMs == null && exitCode == null && asRecord4(message.result) == null) {
     return void 0;
   }
   return { executionTimeMs, exitCode };
@@ -1832,10 +1913,10 @@ function extractCallId(record, message) {
   );
 }
 function isReadyToSubmitStep(step) {
-  const record = asRecord3(step);
+  const record = asRecord4(step);
   if (!record) return false;
   const message = toolPayload(record);
-  const nested = asRecord3(message?.args) ?? asRecord3(message?.arguments);
+  const nested = asRecord4(message?.args) ?? asRecord4(message?.arguments);
   const toolName = pickString2(message, "toolName", "name") || pickString2(nested, "toolName", "name");
   const type = pickString2(message, "type") || pickString2(record, "type");
   if (toolName === "ready_to_submit") return true;
@@ -1877,11 +1958,11 @@ var CursorShellSpanEmitter = class {
   seq = 0;
   lastReadyAtMs;
   observe(step, nowMs) {
-    const record = asRecord3(step);
+    const record = asRecord4(step);
     if (!record) return void 0;
     if (isReadyToSubmitStep(record)) {
       const message2 = toolPayload(record);
-      const hasResult = asRecord3(message2?.result) != null;
+      const hasResult = asRecord4(message2?.result) != null;
       if (!hasResult) this.lastReadyAtMs = nowMs;
       return { kind: "ready", startedAtMs: nowMs };
     }
@@ -2270,7 +2351,7 @@ function expandMultiline2(prefix, body) {
   }
   return result;
 }
-function asRecord4(value) {
+function asRecord5(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function pickString3(message, ...keys) {
@@ -2286,7 +2367,7 @@ function parseJsonRecord(value) {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return void 0;
   try {
-    return asRecord4(JSON.parse(trimmed));
+    return asRecord5(JSON.parse(trimmed));
   } catch {
     return void 0;
   }
@@ -2299,11 +2380,11 @@ function usefulJson2(value, max = 4e3) {
   return text;
 }
 function toolPayload2(step) {
-  return asRecord4(step.message) ?? asRecord4(step.toolCall) ?? asRecord4(step.call) ?? asRecord4(step.tool) ?? asRecord4(asRecord4(step.message)?.toolCall) ?? asRecord4(asRecord4(step.message)?.call);
+  return asRecord5(step.message) ?? asRecord5(step.toolCall) ?? asRecord5(step.call) ?? asRecord5(step.tool) ?? asRecord5(asRecord5(step.message)?.toolCall) ?? asRecord5(asRecord5(step.message)?.call);
 }
 function extractToolDetail(payload) {
   if (!payload) return "";
-  const nested = asRecord4(payload.args) ?? asRecord4(payload.arguments) ?? asRecord4(payload.input) ?? asRecord4(payload.params) ?? asRecord4(asRecord4(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord4(payload.function)?.arguments);
+  const nested = asRecord5(payload.args) ?? asRecord5(payload.arguments) ?? asRecord5(payload.input) ?? asRecord5(payload.params) ?? asRecord5(asRecord5(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord5(payload.function)?.arguments);
   const command = pickString3(
     payload,
     "command",
@@ -2344,13 +2425,13 @@ function isShellTool(name) {
   return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
 }
 function describeStep(step) {
-  const record = asRecord4(step) ?? {};
+  const record = asRecord5(step) ?? {};
   const type = String(record.type ?? "unknown");
   const message = toolPayload2(record);
   switch (type) {
     case "assistantMessage":
       return {
-        lines: expandMultiline2("\u52A9\u624B\uFF1A", String(message?.text ?? "")),
+        lines: expandMultiline2("\u52A9\u624B\uFF1A", extractCursorAssistantStepText(record)),
         source: "ai"
       };
     case "thinkingMessage": {
@@ -2416,6 +2497,20 @@ function describeStep(step) {
       };
     }
   }
+}
+function assistantTextsFromTurns(turns) {
+  const texts = [];
+  for (const turn of turns) {
+    const record = asRecord5(turn);
+    const inner = asRecord5(record?.turn) ?? record;
+    const steps = inner?.steps;
+    if (!Array.isArray(steps)) continue;
+    for (const step of steps) {
+      const text = extractCursorAssistantStepText(step);
+      if (text) texts.push(text);
+    }
+  }
+  return texts;
 }
 async function runCursor(job, cancellation) {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
@@ -2491,6 +2586,13 @@ async function runCursor(job, cancellation) {
       );
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
       emitSessionStart(job);
+      const emittedAssistant = /* @__PURE__ */ new Set();
+      const emitAssistant = (text) => {
+        const normalized = text.trim();
+        if (!normalized || emittedAssistant.has(normalized)) return;
+        emittedAssistant.add(normalized);
+        emitAssistantMessage(job, normalized);
+      };
       const run = await agent.send({
         text: askUserTool ? `${job.prompt}
 
@@ -2515,10 +2617,7 @@ async function runCursor(job, cancellation) {
               logLines(described.lines, described.source);
             }
             if (step.type === "assistantMessage") {
-              emitAssistantMessage(
-                job,
-                String(asRecord4(step.message)?.text ?? "")
-              );
+              emitAssistant(extractCursorAssistantStepText(step));
             }
           } catch {
             logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
@@ -2542,6 +2641,16 @@ async function runCursor(job, cancellation) {
         await run.cancel().catch(() => void 0);
       }
       const result = await run.wait();
+      try {
+        const turns = await run.conversation();
+        for (const text of assistantTextsFromTurns(turns)) {
+          emitAssistant(text);
+        }
+      } catch {
+      }
+      if (typeof result.result === "string") {
+        emitAssistant(result.result);
+      }
       const metrics = diagnostics.snapshot();
       logLine(formatAgentRunDiagnostics(metrics));
       logLine(
@@ -3080,7 +3189,7 @@ ${afterSkip.output}`,
           ...projectId ? { projectId } : {}
         });
         const state = cardState(latest);
-        const pending = asRecord5(status.pending);
+        const pending = asRecord6(status.pending);
         if (state === "blocked") {
           return {
             ok: false,
@@ -3173,7 +3282,7 @@ async function recoverPendingSessions(mcp, job) {
   const pending = Array.isArray(listed.pending) ? listed.pending : [];
   let processedCards = 0;
   for (const raw of pending) {
-    const record = asRecord5(raw);
+    const record = asRecord6(raw);
     if (!record) continue;
     const sessionId = requiredString(record, "sessionId");
     const recovered = await mcp.callJson("dispatch_recover", {
@@ -3278,7 +3387,7 @@ function requiredString(record, key) {
   if (!value) throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${key} \u4E0D\u80FD\u4E3A\u7A7A`);
   return value;
 }
-function asRecord5(value) {
+function asRecord6(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function completedResult(processedCards, reason) {
@@ -3294,7 +3403,7 @@ function logClaimedCard(payload) {
   let title = "";
   const details = [];
   for (const raw of items) {
-    const record = asRecord5(raw);
+    const record = asRecord6(raw);
     if (!record) continue;
     const kind = String(record.kind ?? "");
     const text = String(record.text ?? "").trim();

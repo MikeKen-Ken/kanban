@@ -23,6 +23,35 @@ void main() {
     );
   });
 
+  test('可从日志前缀后解析交互事件', () {
+    final event = parseAgentInteractionEvent(
+      '[ai] @@KANBAN_INTERACTION@@'
+      '{"type":"assistant","cardId":"card-a","sessionId":"session-a",'
+      '"text":"完整答复","at":"2026-08-19T08:00:00Z"}',
+    );
+    expect(event, isNotNull);
+    expect(event!.text, '完整答复');
+  });
+
+  test('流式变长的助手正文会合并为完整一段', () {
+    final first = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"assistant","cardId":"card-a","sessionId":"session-a",'
+      '"text":"先改保存。","at":"2026-08-19T08:00:00Z"}',
+    )!;
+    final second = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"assistant","cardId":"card-a","sessionId":"session-a",'
+      '"text":"先改保存。再补上完整助手消息。","at":"2026-08-19T08:00:01Z"}',
+    )!;
+    final markdown = appendAgentConversationEvent(
+      appendAgentConversationEvent(null, first),
+      second,
+    );
+    expect(markdown, contains('先改保存。再补上完整助手消息。'));
+    expect('### 助手'.allMatches(markdown).length, 1);
+  });
+
   test('卡片对话字段可序列化并兼容旧数据缺省', () {
     final card = _card(
       conversation: '## 会话\n\n### 用户\n继续处理\n',

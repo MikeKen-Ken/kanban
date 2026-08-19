@@ -27,6 +27,7 @@ import {
   emitAssistantMessage,
   emitSessionStart,
 } from "./interaction_bridge.ts";
+import { extractCodexAssistantEventText } from "./assistant_text.ts";
 import { workerLog, workerLogRecords } from "./worker_log.ts";
 
 export function resolveCodexCommand(): {
@@ -123,6 +124,14 @@ export async function runCodex(
     workerLog(`Codex args=${args.join(" ")}`);
     emitSessionStart(job);
 
+    const emittedAssistant = new Set<string>();
+    const emitAssistant = (text: string): void => {
+      const normalized = text.trim();
+      if (!normalized || emittedAssistant.has(normalized)) return;
+      emittedAssistant.add(normalized);
+      emitAssistantMessage(job, normalized);
+    };
+
     const code = await new Promise<number>((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
       let child: ChildProcess | undefined;
@@ -148,6 +157,11 @@ export async function runCodex(
       const logState = createCodexLogState();
       const stdoutLines = createLineBuffer((line) => {
         workerLogRecords(recordsFromCodexJsonLine(line, logState));
+        try {
+          emitAssistant(extractCodexAssistantEventText(JSON.parse(line)));
+        } catch {
+          // 非 JSON 行只记日志。
+        }
       });
       const stderrLines = createLineBuffer((line) => {
         workerLogRecords(recordsFromCodexStderrLine(line, logState));
@@ -199,7 +213,7 @@ export async function runCodex(
     }
 
     workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
-    if (summary) emitAssistantMessage(job, summary);
+    if (summary) emitAssistant(summary);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex 会话完成" };
     }

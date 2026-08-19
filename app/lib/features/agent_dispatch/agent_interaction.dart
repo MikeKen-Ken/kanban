@@ -30,9 +30,12 @@ class AgentInteractionEvent {
 }
 
 AgentInteractionEvent? parseAgentInteractionEvent(String line) {
-  if (!line.startsWith(agentInteractionEventPrefix)) return null;
+  final start = line.indexOf(agentInteractionEventPrefix);
+  if (start < 0) return null;
   try {
-    final raw = jsonDecode(line.substring(agentInteractionEventPrefix.length));
+    final raw = jsonDecode(
+      line.substring(start + agentInteractionEventPrefix.length),
+    );
     if (raw is! Map) return null;
     final type = switch ('${raw['type'] ?? ''}') {
       'session' => AgentInteractionEventType.session,
@@ -64,6 +67,11 @@ String appendAgentConversationEvent(
   String? current,
   AgentInteractionEvent event,
 ) {
+  if (event.type == AgentInteractionEventType.assistant ||
+      event.type == AgentInteractionEventType.question) {
+    final coalesced = _coalesceAssistantText(current, event.text);
+    if (coalesced != null) return coalesced;
+  }
   final buffer = StringBuffer((current ?? '').trimRight());
   if (buffer.isNotEmpty) buffer.write('\n\n');
   switch (event.type) {
@@ -105,4 +113,26 @@ String _formatLocalTime(DateTime value) {
 String? _optionalString(Object? value) {
   final text = '${value ?? ''}'.trim();
   return text.isEmpty ? null : text;
+}
+
+/// 同一轮助手流式快照会越写越长；用较长正文替换上一段，避免只留下开头几句。
+String? _coalesceAssistantText(String? current, String nextText) {
+  final existing = (current ?? '').trimRight();
+  if (existing.isEmpty) return null;
+  const marker = '### 助手';
+  final index = existing.lastIndexOf(marker);
+  if (index < 0) return null;
+  final after = existing.substring(index + marker.length);
+  if (after.contains('### 用户')) return null;
+  final previous = after.trim();
+  final next = nextText.trim();
+  if (previous.isEmpty || next.isEmpty) return null;
+  if (next == previous) return '${existing.trimRight()}\n';
+  if (next.startsWith(previous)) {
+    return '${existing.substring(0, index)}$marker\n$next\n';
+  }
+  if (previous.startsWith(next)) {
+    return '${existing.trimRight()}\n';
+  }
+  return null;
 }

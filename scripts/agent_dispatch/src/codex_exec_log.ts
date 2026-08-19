@@ -1,5 +1,6 @@
 import { formatSessionTokenLog } from "./cursor_token_usage.ts";
 import type { WorkerLogLevel, WorkerLogRecord, WorkerLogSource } from "./worker_log.ts";
+import { extractAssistantText } from "./assistant_text.ts";
 
 const OUTPUT_CLIP = 4000;
 const JSON_CLIP = 2000;
@@ -136,7 +137,10 @@ function recordsFromCodexItem(
     case "agent_message":
     case "assistant_message":
       if (eventType !== "item.completed") return [];
-      return toRecords(expandMultiline("助手：", pickString(item, "text")), "ai");
+      return toRecords(
+        expandMultiline("助手：", extractAssistantText(item) || pickString(item, "text")),
+        "ai",
+      );
     case "reasoning":
       if (eventType !== "item.completed") return [];
       return toRecords(expandMultiline("思考：", pickString(item, "text")), "ai");
