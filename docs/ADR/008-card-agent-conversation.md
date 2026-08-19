@@ -25,7 +25,8 @@ ADR-003 禁止把完整对话放进仅本机 MCP 运行上下文；ADR-006 则�
    Markdown 及附件镜像的唯一持久化入口；临时 request/reply 文件不进入工作区、备份
    或 WebDAV。
 4. 已结束卡片的追问追加到 Markdown，并新增一条未完成验证反馈，使卡片进入待返工。
-   下一次正常 Worker claim 会把既有 Markdown 随冻结卡片上下文注入新会话。跨设备
+   下一次正常 Worker claim 会把既有 Markdown 随冻结卡片上下文注入新会话，但本轮
+   `workItems` 只含未完成验证反馈，不再把卡片最初的标题与备注当作当前任务。跨设备
    恢复依赖 Markdown，而不依赖本机 Cursor agentId。
 5. 对话记录不保存密钥、Worker token、scoped endpoint、临时附件路径或完整内部
    thinking/tool 输出；只保存用户消息与面向用户的助手消息。

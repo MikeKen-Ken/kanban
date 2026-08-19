@@ -230,7 +230,7 @@ void main() {
     expect(newer?.id, 'new');
   });
 
-  test('返工 workItems 含背景与未完成验证反馈', () {
+  test('返工 workItems 只含未完成验证反馈，不含原标题备注', () {
     final card = _card(
       id: 'r',
       title: '旧标题',
@@ -248,9 +248,6 @@ void main() {
     );
     expect(isReworkWorkMode(card), isTrue);
     expect(buildCardWorkItems(card), [
-      {'kind': 'title', 'text': '旧标题'},
-      {'kind': 'description', 'text': '旧备注'},
-      {'kind': 'checklist', 'id': 'c1', 'text': '未做子任务'},
       {
         'kind': 'verificationFeedback',
         'id': 'fb1',

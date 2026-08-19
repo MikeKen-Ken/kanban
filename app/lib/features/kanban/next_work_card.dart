@@ -122,9 +122,22 @@ Map<String, dynamic> buildCardWorkScope(KanbanCard card) {
 
 /// 本轮应实施的工作项。
 ///
-/// 普通与返工均含标题、备注、未完成 checklist；返工另附未完成验证反馈。
+/// 普通模式含标题、备注、未完成 checklist。返工（含 Agent 追问）只含未完成
+/// 验证反馈，避免把卡片最初的标题/备注再次当成当前任务。
 /// 已完成 checklist / 反馈不返回。
 List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
+  if (isReworkWorkMode(card)) {
+    return [
+      for (final item in card.verificationFeedback)
+        if (!item.completed)
+          {
+            'kind': 'verificationFeedback',
+            'id': item.id,
+            'text': item.text,
+          },
+    ];
+  }
+
   final items = <Map<String, dynamic>>[
     {'kind': 'title', 'text': card.title},
   ];
@@ -136,14 +149,6 @@ List<Map<String, dynamic>> buildCardWorkItems(KanbanCard card) {
     if (item.completed) continue;
     items.add({
       'kind': 'checklist',
-      'id': item.id,
-      'text': item.text,
-    });
-  }
-  for (final item in card.verificationFeedback) {
-    if (item.completed) continue;
-    items.add({
-      'kind': 'verificationFeedback',
       'id': item.id,
       'text': item.text,
     });

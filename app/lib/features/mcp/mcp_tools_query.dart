@@ -43,7 +43,7 @@ void registerKanbanMcpQueryTools(McpServer server, BoardController controller) {
   server.registerTool(
     'get_work_items',
     description: '按 cardId 再次拉取本轮 workItems（不含 commit message）。'
-        '含标题/备注/未完成 checklist；有未完成验证反馈时一并返回。'
+        '普通模式含标题/备注/未完成 checklist；返工仅含未完成验证反馈。'
         '有附件时直接内联内容（同 pick_next_card），无需再 list/read。',
     inputSchema: JsonSchema.object(
       properties: {

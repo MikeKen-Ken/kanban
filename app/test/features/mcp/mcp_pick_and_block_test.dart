@@ -252,7 +252,7 @@ void main() {
     expect(payload['movedToDoing'], isFalse);
   });
 
-  test('pick_next_card 待办空时取待返工且 workItems 含背景', () async {
+  test('pick_next_card 待办空时取待返工且 workItems 仅含验证反馈', () async {
     final reworkColumn = controller.board!.columns
         .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
     final cardId = await controller.addCard(reworkColumn.id, '返工卡');
@@ -278,8 +278,6 @@ void main() {
     expect(payload['movedToDoing'], isFalse);
     expect(payload['columnId'], KanbanBoard.defaultReworkColumnId);
     expect(payload['workItems'], [
-      {'kind': 'title', 'text': '返工卡'},
-      {'kind': 'description', 'text': '背景说明'},
       {
         'kind': 'verificationFeedback',
         'id': 'fb1',
