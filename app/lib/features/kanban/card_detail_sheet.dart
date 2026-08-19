@@ -482,7 +482,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       _persisted = true;
       _skipPersist = true;
       try {
-        await _boardController.deleteCard(widget.columnId, widget.card.id);
+        await _boardController.discardBlankNewCard(
+          widget.columnId,
+          widget.card.id,
+        );
       } catch (_) {
         // 失败后允许再次保存/关闭重试，避免「已标记已保存却仍停在详情页」。
         _persisted = false;

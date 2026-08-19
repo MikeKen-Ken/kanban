@@ -232,6 +232,7 @@ extension BoardControllerPersist on BoardController {
       await _mirrorSharedLabelsToLocalPreferences();
       if (activeProjectId != null) {
         board = await _repository.loadBoard(activeProjectId!);
+        _ephemeralCardIds.clear();
         projectSettings =
             await _repository.loadProjectSettings(activeProjectId!);
         await _loadTrashState();
@@ -244,6 +245,23 @@ extension BoardControllerPersist on BoardController {
     });
   }
 
+  /// 落盘前去掉未确认的空白草稿卡，避免「新建又取消」反复写全列 JSON。
+  KanbanBoard _boardWithoutEphemeralCards(KanbanBoard source) {
+    if (_ephemeralCardIds.isEmpty) return source;
+    var changed = false;
+    final columns = source.columns.map((column) {
+      final cards = [
+        for (final card in column.cards)
+          if (!_ephemeralCardIds.contains(card.id)) card,
+      ];
+      if (cards.length == column.cards.length) return column;
+      changed = true;
+      return column.copyWith(cards: cards);
+    }).toList();
+    if (!changed) return source;
+    return source.copyWith(columns: columns);
+  }
+
   Future<void> _persistAndSync(KanbanBoard next) async {
     return _withBoardMutation(() async {
       // 以看板 id 为落盘主键，避免与 active 短暂不一致时写错项目文件。
@@ -252,7 +270,10 @@ extension BoardControllerPersist on BoardController {
       if (activeProjectId == projectId) {
         board = next;
       }
-      await _repository.saveBoard(projectId, next);
+      await _repository.saveBoard(
+        projectId,
+        _boardWithoutEphemeralCards(next),
+      );
       if (activeProjectId == projectId) {
         await _updateManifestEntry(title: next.title);
       }

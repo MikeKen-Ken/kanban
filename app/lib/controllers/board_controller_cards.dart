@@ -1,6 +1,64 @@
 part of 'board_controller.dart';
 
 extension BoardControllerCards on BoardController {
+  /// 空白新建：只写入内存并打开编辑，确认内容前不落盘、不记活动。
+  ///
+  /// 避免「新建 → 立刻取消」对整板列 JSON 与活动日志做两次重写入。
+  Future<String?> beginBlankCard(String columnId) async {
+    return _withBoardMutation(() async {
+      if (board == null) return null;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final cardId = const Uuid().v4();
+      var added = false;
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        added = true;
+        return col.copyWith(
+          cards: [
+            ...col.cards,
+            KanbanCard(
+              id: cardId,
+              title: '',
+              order: col.cards.length,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ],
+        );
+      }).toList();
+      if (!added) return null;
+      // 不 bump revision：草稿未确认前不视为已持久化变更。
+      board = board!.copyWith(columns: columns);
+      _ephemeralCardIds.add(cardId);
+      notifyListeners();
+      return cardId;
+    });
+  }
+
+  /// 丢弃未确认的空白新建卡；非草稿则走普通删除（回收站）。
+  Future<void> discardBlankNewCard(String columnId, String cardId) async {
+    if (_ephemeralCardIds.contains(cardId)) {
+      await _discardEphemeralCard(columnId, cardId);
+      return;
+    }
+    await deleteCard(columnId, cardId);
+  }
+
+  Future<void> _discardEphemeralCard(String columnId, String cardId) async {
+    return _withBoardMutation(() async {
+      if (board == null) return;
+      if (!_ephemeralCardIds.remove(cardId)) return;
+      final columns = board!.columns.map((col) {
+        if (col.id != columnId) return col;
+        return col.copyWith(
+          cards: col.cards.where((card) => card.id != cardId).toList(),
+        );
+      }).toList();
+      board = board!.copyWith(columns: columns);
+      notifyListeners();
+    });
+  }
+
   Future<String?> addCard(
     String columnId,
     String title, {
@@ -250,6 +308,10 @@ extension BoardControllerCards on BoardController {
           .where((card) => card.id == cardId)
           .firstOrNull;
       if (original == null) return null;
+      final committingEphemeral = _ephemeralCardIds.contains(cardId);
+      if (committingEphemeral) {
+        _ephemeralCardIds.remove(cardId);
+      }
       final nextVerificationFeedback =
           verificationFeedback ?? original.verificationFeedback;
       if (completed == true &&
@@ -311,145 +373,180 @@ extension BoardControllerCards on BoardController {
         }).toList();
         return col.copyWith(cards: cards);
       }).toList();
-      await _persistAndSync(
-        _bump(board!.copyWith(columns: _normalizeOrders(columns))),
-      );
-      if (!_applyingAutomation) {
-        final restoredTitle = title ?? original.title;
-        final restoredDescription =
-            clearDescription ? null : (description ?? original.description);
-        final restoredCompleted = nextCompleted;
-        final restoredDueDate =
-            clearDueDate ? null : (dueDate ?? original.dueDate);
-        final restoredReminderAt =
-            clearReminder ? null : (reminderAt ?? original.reminderAt);
-        final restoredRecurrence = recurrence ?? original.recurrence;
-        final restoredRecurrenceInterval =
-            recurrenceInterval ?? original.recurrenceInterval;
-        final restoredPriority = priority ?? original.priority;
-        final restoredLabels = labels ?? original.labels;
-        final restoredChecklist = checklist ?? original.checklist;
-        final restoredVerification =
-            verificationFeedback ?? original.verificationFeedback;
-        final restoredAttachments = attachments ?? original.attachments;
-        final restoredFileAttachments =
-            fileAttachments ?? original.fileAttachments;
-        final restoredLinks = links ?? original.links;
-        final restoredBlockedBy = blockedByIds ?? original.blockedByIds;
-        final restoredRelated = relatedIds ?? original.relatedIds;
-        final restoredCommitRef = clearCommitRef
-            ? null
-            : (commitRef != null
-                ? abbreviateGitCommitRef(commitRef)
-                : original.commitRef);
-        final restoredAgentEngine = clearAgentEngine
-            ? null
-            : (agentEngine ?? original.agentEngine);
-        final restoredAgentModelId = clearAgentModelId
-            ? null
-            : (agentModelId ?? original.agentModelId);
-        final restoredAgentModelParamValues = clearAgentModelParamValues
-            ? null
-            : (agentModelParamValues ?? original.agentModelParamValues);
-        final restoredAgentAllowDirtyWorkspace = clearAgentAllowDirtyWorkspace
-            ? null
-            : (agentAllowDirtyWorkspace ?? original.agentAllowDirtyWorkspace);
-        final restoredAgentEnableSandbox = clearAgentEnableSandbox
-            ? null
-            : (agentEnableSandbox ?? original.agentEnableSandbox);
-        final restoredColor =
-            clearColor ? null : (colorValue ?? original.colorValue);
-        _pushUndo(
-          '编辑「${original.title}」',
-          () async {
-            final error = await updateCardFull(
-              columnId,
-              cardId,
-              title: original.title,
-              description: original.description,
-              clearDescription: original.description == null,
-              completed: original.completed,
-              dueDate: original.dueDate,
-              clearDueDate: original.dueDate == null,
-              reminderAt: original.reminderAt,
-              clearReminder: original.reminderAt == null,
-              recurrence: original.recurrence,
-              recurrenceInterval: original.recurrenceInterval,
-              priority: original.priority,
-              labels: original.labels,
-              checklist: original.checklist,
-              verificationFeedback: original.verificationFeedback,
-              attachments: original.attachments,
-              fileAttachments: original.fileAttachments,
-              links: original.links,
-              blockedByIds: original.blockedByIds,
-              relatedIds: original.relatedIds,
-              commitRef: original.commitRef,
-              clearCommitRef: original.commitRef == null,
-              agentEngine: original.agentEngine,
-              clearAgentEngine: original.agentEngine == null,
-              agentModelId: original.agentModelId,
-              clearAgentModelId: original.agentModelId == null,
-              agentModelParamValues: original.agentModelParamValues,
-              clearAgentModelParamValues: original.agentModelParamValues == null,
-              agentAllowDirtyWorkspace: original.agentAllowDirtyWorkspace,
-              clearAgentAllowDirtyWorkspace:
-                  original.agentAllowDirtyWorkspace == null,
-              agentEnableSandbox: original.agentEnableSandbox,
-              clearAgentEnableSandbox: original.agentEnableSandbox == null,
-              colorValue: original.colorValue,
-              clearColor: original.colorValue == null,
-            );
-            if (error != null) throw StateError(error);
-          },
-          redo: () async {
-            final error = await updateCardFull(
-              columnId,
-              cardId,
-              title: restoredTitle,
-              description: restoredDescription,
-              clearDescription: restoredDescription == null,
-              completed: restoredCompleted,
-              dueDate: restoredDueDate,
-              clearDueDate: restoredDueDate == null,
-              reminderAt: restoredReminderAt,
-              clearReminder: restoredReminderAt == null,
-              recurrence: restoredRecurrence,
-              recurrenceInterval: restoredRecurrenceInterval,
-              priority: restoredPriority,
-              labels: restoredLabels,
-              checklist: restoredChecklist,
-              verificationFeedback: restoredVerification,
-              attachments: restoredAttachments,
-              fileAttachments: restoredFileAttachments,
-              links: restoredLinks,
-              blockedByIds: restoredBlockedBy,
-              relatedIds: restoredRelated,
-              commitRef: restoredCommitRef,
-              clearCommitRef: restoredCommitRef == null,
-              agentEngine: restoredAgentEngine,
-              clearAgentEngine: restoredAgentEngine == null,
-              agentModelId: restoredAgentModelId,
-              clearAgentModelId: restoredAgentModelId == null,
-              agentModelParamValues: restoredAgentModelParamValues,
-              clearAgentModelParamValues: restoredAgentModelParamValues == null,
-              agentAllowDirtyWorkspace: restoredAgentAllowDirtyWorkspace,
-              clearAgentAllowDirtyWorkspace:
-                  restoredAgentAllowDirtyWorkspace == null,
-              agentEnableSandbox: restoredAgentEnableSandbox,
-              clearAgentEnableSandbox: restoredAgentEnableSandbox == null,
-              colorValue: restoredColor,
-              clearColor: restoredColor == null,
-            );
-            if (error != null) throw StateError(error);
-          },
+      try {
+        await _persistAndSync(
+          _bump(board!.copyWith(columns: _normalizeOrders(columns))),
+        );
+      } catch (_) {
+        if (committingEphemeral) {
+          _ephemeralCardIds.add(cardId);
+        }
+        rethrow;
+      }
+      if (committingEphemeral) {
+        if (!_applyingAutomation) {
+          final createdTitle = title ?? original.title;
+          String? trashId;
+          _pushUndo(
+            '新建「$createdTitle」',
+            () async {
+              trashId = await deleteCard(columnId, cardId);
+            },
+            redo: () async {
+              final id = trashId;
+              if (id == null) return;
+              final error = await restoreTrashItem(id);
+              if (error != null) throw StateError(error);
+            },
+          );
+        }
+        await _recordActivity(
+          entityId: cardId,
+          entityTitle: title ?? original.title,
+          action: ActivityAction.created,
+        );
+      } else {
+        if (!_applyingAutomation) {
+          final restoredTitle = title ?? original.title;
+          final restoredDescription =
+              clearDescription ? null : (description ?? original.description);
+          final restoredCompleted = nextCompleted;
+          final restoredDueDate =
+              clearDueDate ? null : (dueDate ?? original.dueDate);
+          final restoredReminderAt =
+              clearReminder ? null : (reminderAt ?? original.reminderAt);
+          final restoredRecurrence = recurrence ?? original.recurrence;
+          final restoredRecurrenceInterval =
+              recurrenceInterval ?? original.recurrenceInterval;
+          final restoredPriority = priority ?? original.priority;
+          final restoredLabels = labels ?? original.labels;
+          final restoredChecklist = checklist ?? original.checklist;
+          final restoredVerification =
+              verificationFeedback ?? original.verificationFeedback;
+          final restoredAttachments = attachments ?? original.attachments;
+          final restoredFileAttachments =
+              fileAttachments ?? original.fileAttachments;
+          final restoredLinks = links ?? original.links;
+          final restoredBlockedBy = blockedByIds ?? original.blockedByIds;
+          final restoredRelated = relatedIds ?? original.relatedIds;
+          final restoredCommitRef = clearCommitRef
+              ? null
+              : (commitRef != null
+                  ? abbreviateGitCommitRef(commitRef)
+                  : original.commitRef);
+          final restoredAgentEngine = clearAgentEngine
+              ? null
+              : (agentEngine ?? original.agentEngine);
+          final restoredAgentModelId = clearAgentModelId
+              ? null
+              : (agentModelId ?? original.agentModelId);
+          final restoredAgentModelParamValues = clearAgentModelParamValues
+              ? null
+              : (agentModelParamValues ?? original.agentModelParamValues);
+          final restoredAgentAllowDirtyWorkspace =
+              clearAgentAllowDirtyWorkspace
+                  ? null
+                  : (agentAllowDirtyWorkspace ??
+                      original.agentAllowDirtyWorkspace);
+          final restoredAgentEnableSandbox = clearAgentEnableSandbox
+              ? null
+              : (agentEnableSandbox ?? original.agentEnableSandbox);
+          final restoredColor =
+              clearColor ? null : (colorValue ?? original.colorValue);
+          _pushUndo(
+            '编辑「${original.title}」',
+            () async {
+              final error = await updateCardFull(
+                columnId,
+                cardId,
+                title: original.title,
+                description: original.description,
+                clearDescription: original.description == null,
+                completed: original.completed,
+                dueDate: original.dueDate,
+                clearDueDate: original.dueDate == null,
+                reminderAt: original.reminderAt,
+                clearReminder: original.reminderAt == null,
+                recurrence: original.recurrence,
+                recurrenceInterval: original.recurrenceInterval,
+                priority: original.priority,
+                labels: original.labels,
+                checklist: original.checklist,
+                verificationFeedback: original.verificationFeedback,
+                attachments: original.attachments,
+                fileAttachments: original.fileAttachments,
+                links: original.links,
+                blockedByIds: original.blockedByIds,
+                relatedIds: original.relatedIds,
+                commitRef: original.commitRef,
+                clearCommitRef: original.commitRef == null,
+                agentEngine: original.agentEngine,
+                clearAgentEngine: original.agentEngine == null,
+                agentModelId: original.agentModelId,
+                clearAgentModelId: original.agentModelId == null,
+                agentModelParamValues: original.agentModelParamValues,
+                clearAgentModelParamValues:
+                    original.agentModelParamValues == null,
+                agentAllowDirtyWorkspace: original.agentAllowDirtyWorkspace,
+                clearAgentAllowDirtyWorkspace:
+                    original.agentAllowDirtyWorkspace == null,
+                agentEnableSandbox: original.agentEnableSandbox,
+                clearAgentEnableSandbox: original.agentEnableSandbox == null,
+                colorValue: original.colorValue,
+                clearColor: original.colorValue == null,
+              );
+              if (error != null) throw StateError(error);
+            },
+            redo: () async {
+              final error = await updateCardFull(
+                columnId,
+                cardId,
+                title: restoredTitle,
+                description: restoredDescription,
+                clearDescription: restoredDescription == null,
+                completed: restoredCompleted,
+                dueDate: restoredDueDate,
+                clearDueDate: restoredDueDate == null,
+                reminderAt: restoredReminderAt,
+                clearReminder: restoredReminderAt == null,
+                recurrence: restoredRecurrence,
+                recurrenceInterval: restoredRecurrenceInterval,
+                priority: restoredPriority,
+                labels: restoredLabels,
+                checklist: restoredChecklist,
+                verificationFeedback: restoredVerification,
+                attachments: restoredAttachments,
+                fileAttachments: restoredFileAttachments,
+                links: restoredLinks,
+                blockedByIds: restoredBlockedBy,
+                relatedIds: restoredRelated,
+                commitRef: restoredCommitRef,
+                clearCommitRef: restoredCommitRef == null,
+                agentEngine: restoredAgentEngine,
+                clearAgentEngine: restoredAgentEngine == null,
+                agentModelId: restoredAgentModelId,
+                clearAgentModelId: restoredAgentModelId == null,
+                agentModelParamValues: restoredAgentModelParamValues,
+                clearAgentModelParamValues:
+                    restoredAgentModelParamValues == null,
+                agentAllowDirtyWorkspace: restoredAgentAllowDirtyWorkspace,
+                clearAgentAllowDirtyWorkspace:
+                    restoredAgentAllowDirtyWorkspace == null,
+                agentEnableSandbox: restoredAgentEnableSandbox,
+                clearAgentEnableSandbox: restoredAgentEnableSandbox == null,
+                colorValue: restoredColor,
+                clearColor: restoredColor == null,
+              );
+              if (error != null) throw StateError(error);
+            },
+          );
+        }
+        await _recordActivity(
+          entityId: cardId,
+          entityTitle: title ?? original.title,
+          action: ActivityAction.updated,
         );
       }
-      await _recordActivity(
-        entityId: cardId,
-        entityTitle: title ?? original.title,
-        action: ActivityAction.updated,
-      );
       await _rescheduleReminders();
 
       if (!_applyingAutomation) {

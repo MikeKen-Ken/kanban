@@ -128,7 +128,7 @@ class KanbanColumnWidget extends StatelessWidget {
     }
   }
 
-  /// 先落库再建卡，再打开与点击卡片相同的详情页编辑。
+  /// 空白新建仅进内存草稿；有内容时再落盘。模板卡仍立即落库。
   Future<void> _addCard(BuildContext context) async {
     final controller = context.read<BoardController>();
 
@@ -152,7 +152,7 @@ class KanbanColumnWidget extends StatelessWidget {
       }
     }
 
-    final cardId = await controller.addCard(column.id, '');
+    final cardId = await controller.beginBlankCard(column.id);
     if (!context.mounted) return;
     await _openCreatedCardDetail(context, controller, cardId);
   }

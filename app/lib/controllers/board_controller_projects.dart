@@ -9,6 +9,7 @@ extension BoardControllerProjects on BoardController {
       activeProjectId = projectId;
       await _repository.saveActiveProjectId(projectId);
       board = await _repository.loadBoard(projectId);
+      _ephemeralCardIds.clear();
       projectSettings = await _repository.loadProjectSettings(projectId);
       projectThemeIds[projectId] = projectSettings.themeId;
       activeProjectTrash = projectTrashes[projectId] ?? TrashBin.empty;
@@ -520,6 +521,7 @@ extension BoardControllerProjects on BoardController {
         activeProjectId = next.id;
         await _repository.saveActiveProjectId(next.id);
         board = await _repository.loadBoard(next.id);
+        _ephemeralCardIds.clear();
         projectSettings = await _repository.loadProjectSettings(next.id);
         projectThemeIds[next.id] = projectSettings.themeId;
         activeProjectTrash = projectTrashes[next.id] ?? TrashBin.empty;
