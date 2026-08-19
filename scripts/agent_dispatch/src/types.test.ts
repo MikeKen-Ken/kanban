@@ -7,7 +7,9 @@ import {
   mergeJobWithCardOverrides,
   parseTokenBudget,
   resolveModelParams,
+  nextCursorSdkParamsAfterCreateError,
   selectCursorSdkModelParams,
+  withCursorSdkCatalog,
   type DispatchJob,
 } from "./types.ts";
 
@@ -195,6 +197,66 @@ describe("mergeJobWithCardOverrides", () => {
     });
     assert.deepEqual(selected.params, [{ id: "fast", value: "true" }]);
     assert.deepEqual(selected.dropped.sort(), ["context", "reasoning_effort"]);
+  });
+
+  it("无目录时 Grok 不要把 fast 传给 SDK，Composer 仍可传", () => {
+    const grok = selectCursorSdkModelParams({
+      ...job,
+      model: "grok-4.6",
+      modelParams: [
+        { id: "fast", value: "true" },
+        { id: "reasoning_effort", value: "medium" },
+        { id: "context", value: "64k" },
+      ],
+    });
+    assert.deepEqual(grok.params, [{ id: "reasoning_effort", value: "medium" }]);
+    assert.ok(grok.dropped.includes("fast"));
+
+    const composer = selectCursorSdkModelParams({
+      ...job,
+      model: "composer-2.5",
+      modelParams: [
+        { id: "fast", value: "true" },
+        { id: "reasoning_effort", value: "medium" },
+        { id: "context", value: "64k" },
+      ],
+    });
+    assert.deepEqual(composer.params, [{ id: "fast", value: "true" }]);
+  });
+
+  it("withCursorSdkCatalog 后按实时目录丢掉 Grok 的 fast", () => {
+    const selected = selectCursorSdkModelParams(
+      withCursorSdkCatalog(
+        {
+          ...job,
+          model: "grok-4.6",
+          modelParams: [{ id: "fast", value: "true" }],
+        },
+        [
+          {
+            id: "grok-4.6",
+            parameters: [
+              { id: "reasoning_effort", values: ["low", "medium", "high"] },
+            ],
+          },
+        ],
+      ),
+    );
+    assert.equal(selected.params, undefined);
+    assert.ok(selected.dropped.includes("fast"));
+  });
+
+  it("Agent.create 报 fast 不支持时丢掉该参数再试", () => {
+    const next = nextCursorSdkParamsAfterCreateError(
+      [
+        { id: "fast", value: "true" },
+        { id: "reasoning_effort", value: "medium" },
+      ],
+      new Error("Parameter `fast` is not supported for this model"),
+    );
+    assert.equal(next.changed, true);
+    assert.deepEqual(next.params, [{ id: "reasoning_effort", value: "medium" }]);
+    assert.deepEqual(next.dropped, ["fast"]);
   });
 
   it("当前模型目录没有 fast 时不要传给 SDK", () => {

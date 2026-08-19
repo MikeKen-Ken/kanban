@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   Agent,
+  Cursor,
   CursorAgentError,
   JsonlLocalAgentStore,
   type LocalAgentOptions,
@@ -27,7 +28,7 @@ import {
   AgentRunDiagnostics,
   formatAgentRunDiagnostics,
 } from "./run_diagnostics.ts";
-import { isRetryableError } from "./retry.ts";
+import { isRetryableError, withRetry } from "./retry.ts";
 import { readyBlockedByShells } from "./verification_ready_gate.ts";
 import {
   createAskUserTool,
@@ -43,8 +44,11 @@ import {
 } from "./assistant_text.ts";
 import { buildConversationTranscript } from "./conversation_transcript.ts";
 import {
+  nextCursorSdkParamsAfterCreateError,
   selectCursorSdkModelParams,
+  withCursorSdkCatalog,
   type DispatchResult,
+  type ModelParam,
   type RoundDispatchJob,
 } from "./types.ts";
 import { type WorkerLogSource, workerLog } from "./worker_log.ts";
@@ -269,6 +273,45 @@ function assistantTextsFromTurns(turns: readonly unknown[]): string[] {
     .map((item) => item.text);
 }
 
+function catalogParameterValues(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (typeof item === "string" && item.trim()) return [item.trim()];
+    if (item && typeof item === "object" && "value" in item) {
+      const text = String((item as { value?: unknown }).value ?? "").trim();
+      return text ? [text] : [];
+    }
+    return [];
+  });
+}
+
+async function attachLiveCursorModelCatalog(
+  job: RoundDispatchJob,
+  apiKey: string,
+): Promise<RoundDispatchJob> {
+  try {
+    const models = await withRetry(
+      "拉取 Cursor 模型目录",
+      () => Cursor.models.list({ apiKey }),
+      { maxAttempts: 2, baseDelayMs: 400 },
+    );
+    const mapped = models.map((item) => ({
+      id: item.id,
+      parameters: (item.parameters ?? []).map((parameter) => ({
+        id: parameter.id,
+        values: catalogParameterValues(parameter.values),
+      })),
+    }));
+    logLine(`已用 Cursor.models.list 核对参数（${mapped.length} 个模型）`);
+    return withCursorSdkCatalog(job, mapped) as RoundDispatchJob;
+  } catch (err) {
+    logLine(
+      `拉取 Cursor 模型目录失败，改用工作台缓存：${err instanceof Error ? err.message : String(err)}`,
+    );
+    return job;
+  }
+}
+
 export async function runCursor(
   job: RoundDispatchJob,
   cancellation?: WorkerCancellation,
@@ -282,8 +325,9 @@ export async function runCursor(
   }
 
   const modelId = job.model?.trim() || "composer-2.5";
-  const selected = selectCursorSdkModelParams(job);
-  const params = selected.params;
+  const jobWithCatalog = await attachLiveCursorModelCatalog(job, apiKey);
+  const selected = selectCursorSdkModelParams(jobWithCatalog);
+  let params = selected.params;
   logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
   if (selected.dropped.length > 0) {
     logLine(
@@ -331,30 +375,37 @@ export async function runCursor(
       autoReview: false,
       sandboxOptions: { enabled: job.enableSandbox === true },
     };
-    const createOptions = {
+    const createOptions = (modelParams?: ModelParam[]) => ({
       apiKey,
       model: {
         id: modelId,
-        ...(params ? { params } : {}),
+        ...(modelParams && modelParams.length > 0 ? { params: modelParams } : {}),
       },
       mcpServers: mcp.servers,
       local: localOptions,
-    };
+    });
     let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
     let agent;
     const stopScanLog = installCursorSdkScanLogTap();
     try {
       try {
         agent = await Agent.create({
-          ...createOptions,
+          ...createOptions(params),
           disallowedTools,
         });
       } catch (err) {
         const fallback = fallbackDisallowedTools(err);
-        if (fallback == null) throw err;
-        disallowedTools = fallback;
+        const stripped = nextCursorSdkParamsAfterCreateError(params, err);
+        if (fallback == null && !stripped.changed) throw err;
+        if (fallback != null) disallowedTools = fallback;
+        if (stripped.changed) {
+          params = stripped.params;
+          logLine(
+            `Cursor 拒绝参数 ${stripped.dropped.join(", ")}，已去掉后重试创建会话。`,
+          );
+        }
         agent = await Agent.create({
-          ...createOptions,
+          ...createOptions(params),
           disallowedTools,
         });
       }

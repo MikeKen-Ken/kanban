@@ -322,12 +322,65 @@ function cursorCatalogParameterIds(job: DispatchJob): string[] {
     .filter((id) => id.length > 0 && !isContextParamId(id));
 }
 
+/** Composer 系列才有 fast；无目录时不要把 fast 传给 Grok 等模型。 */
+export function cursorModelLikelySupportsFast(modelId: string): boolean {
+  return /composer/i.test(modelId.trim());
+}
+
+export function withCursorSdkCatalog(
+  job: DispatchJob,
+  models: NonNullable<EngineDefault["models"]> | undefined,
+): DispatchJob {
+  if (!models || models.length === 0) return job;
+  return {
+    ...job,
+    engineDefaults: {
+      ...job.engineDefaults,
+      cursor: {
+        ...job.engineDefaults?.cursor,
+        models,
+      },
+    },
+  };
+}
+
+function errorLooksLikeUnsupportedParam(text: string): boolean {
+  return /not supported|unsupported|unknown param|invalid param|unrecognized param/i.test(
+    text,
+  );
+}
+
+/** Agent.create 因参数不支持失败时，丢掉被点名的项；未点名则去掉全部 params 再试。 */
+export function nextCursorSdkParamsAfterCreateError(
+  params: ModelParam[] | undefined,
+  err: unknown,
+): { changed: boolean; params?: ModelParam[]; dropped: string[] } {
+  if (!params || params.length === 0) {
+    return { changed: false, params, dropped: [] };
+  }
+  const text = err instanceof Error ? err.message : String(err);
+  if (!errorLooksLikeUnsupportedParam(text)) {
+    return { changed: false, params, dropped: [] };
+  }
+  const lower = text.toLowerCase();
+  const named = params.filter((item) => lower.includes(item.id.toLowerCase()));
+  const dropped = named.length > 0 ? named.map((item) => item.id) : params.map((item) => item.id);
+  const drop = new Set(dropped);
+  const kept = params.filter((item) => !drop.has(item.id));
+  return {
+    changed: true,
+    params: kept.length > 0 ? kept : undefined,
+    dropped: [...new Set(dropped)],
+  };
+}
+
 /** Cursor Agent.create 只应收到官方 catalog 参数；丢掉 context 等自造项。 */
 export function selectCursorSdkModelParams(job: DispatchJob): {
   params?: ModelParam[];
   dropped: string[];
 } {
   const raw = resolveModelParams(job) ?? [];
+  const modelId = job.model?.trim() || "composer-2.5";
   const catalogIds = cursorCatalogParameterIds(job);
   const allowed = new Set(catalogIds);
   const hasFast = raw.some((item) => item.id === "fast");
@@ -342,7 +395,20 @@ export function selectCursorSdkModelParams(job: DispatchJob): {
       dropped.push(item.id);
       continue;
     }
-    if (allowed.size === 0 && hasFast && isReasoningParamId(item.id)) {
+    if (
+      allowed.size === 0 &&
+      item.id === "fast" &&
+      !cursorModelLikelySupportsFast(modelId)
+    ) {
+      dropped.push(item.id);
+      continue;
+    }
+    if (
+      allowed.size === 0 &&
+      hasFast &&
+      isReasoningParamId(item.id) &&
+      cursorModelLikelySupportsFast(modelId)
+    ) {
       dropped.push(item.id);
       continue;
     }

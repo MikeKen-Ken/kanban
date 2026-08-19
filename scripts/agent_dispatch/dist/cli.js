@@ -1,7 +1,7 @@
 // src/cli.ts
 import { readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
 import { resolve } from "node:path";
-import { Cursor as Cursor2 } from "@cursor/sdk";
+import { Cursor as Cursor3 } from "@cursor/sdk";
 
 // src/cancellation.ts
 import { existsSync } from "node:fs";
@@ -397,8 +397,49 @@ function cursorCatalogParameterIds(job) {
   );
   return (catalog?.parameters ?? []).map((item) => String(item.id ?? "").trim()).filter((id) => id.length > 0 && !isContextParamId(id));
 }
+function cursorModelLikelySupportsFast(modelId) {
+  return /composer/i.test(modelId.trim());
+}
+function withCursorSdkCatalog(job, models) {
+  if (!models || models.length === 0) return job;
+  return {
+    ...job,
+    engineDefaults: {
+      ...job.engineDefaults,
+      cursor: {
+        ...job.engineDefaults?.cursor,
+        models
+      }
+    }
+  };
+}
+function errorLooksLikeUnsupportedParam(text) {
+  return /not supported|unsupported|unknown param|invalid param|unrecognized param/i.test(
+    text
+  );
+}
+function nextCursorSdkParamsAfterCreateError(params, err) {
+  if (!params || params.length === 0) {
+    return { changed: false, params, dropped: [] };
+  }
+  const text = err instanceof Error ? err.message : String(err);
+  if (!errorLooksLikeUnsupportedParam(text)) {
+    return { changed: false, params, dropped: [] };
+  }
+  const lower = text.toLowerCase();
+  const named = params.filter((item) => lower.includes(item.id.toLowerCase()));
+  const dropped = named.length > 0 ? named.map((item) => item.id) : params.map((item) => item.id);
+  const drop = new Set(dropped);
+  const kept = params.filter((item) => !drop.has(item.id));
+  return {
+    changed: true,
+    params: kept.length > 0 ? kept : void 0,
+    dropped: [...new Set(dropped)]
+  };
+}
 function selectCursorSdkModelParams(job) {
   const raw = resolveModelParams(job) ?? [];
+  const modelId = job.model?.trim() || "composer-2.5";
   const catalogIds = cursorCatalogParameterIds(job);
   const allowed = new Set(catalogIds);
   const hasFast = raw.some((item) => item.id === "fast");
@@ -413,7 +454,11 @@ function selectCursorSdkModelParams(job) {
       dropped.push(item.id);
       continue;
     }
-    if (allowed.size === 0 && hasFast && isReasoningParamId(item.id)) {
+    if (allowed.size === 0 && item.id === "fast" && !cursorModelLikelySupportsFast(modelId)) {
+      dropped.push(item.id);
+      continue;
+    }
+    if (allowed.size === 0 && hasFast && isReasoningParamId(item.id) && cursorModelLikelySupportsFast(modelId)) {
       dropped.push(item.id);
       continue;
     }
@@ -2220,6 +2265,7 @@ import { homedir as homedir3 } from "node:os";
 import { join as join5 } from "node:path";
 import {
   Agent,
+  Cursor as Cursor2,
   CursorAgentError,
   JsonlLocalAgentStore
 } from "@cursor/sdk";
@@ -2729,6 +2775,40 @@ function describeStep(step) {
 function assistantTextsFromTurns(turns) {
   return extractConversationMessages(turns).filter((item) => item.role === "assistant").map((item) => item.text);
 }
+function catalogParameterValues(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (typeof item === "string" && item.trim()) return [item.trim()];
+    if (item && typeof item === "object" && "value" in item) {
+      const text = String(item.value ?? "").trim();
+      return text ? [text] : [];
+    }
+    return [];
+  });
+}
+async function attachLiveCursorModelCatalog(job, apiKey) {
+  try {
+    const models = await withRetry(
+      "\u62C9\u53D6 Cursor \u6A21\u578B\u76EE\u5F55",
+      () => Cursor2.models.list({ apiKey }),
+      { maxAttempts: 2, baseDelayMs: 400 }
+    );
+    const mapped = models.map((item) => ({
+      id: item.id,
+      parameters: (item.parameters ?? []).map((parameter) => ({
+        id: parameter.id,
+        values: catalogParameterValues(parameter.values)
+      }))
+    }));
+    logLine(`\u5DF2\u7528 Cursor.models.list \u6838\u5BF9\u53C2\u6570\uFF08${mapped.length} \u4E2A\u6A21\u578B\uFF09`);
+    return withCursorSdkCatalog(job, mapped);
+  } catch (err) {
+    logLine(
+      `\u62C9\u53D6 Cursor \u6A21\u578B\u76EE\u5F55\u5931\u8D25\uFF0C\u6539\u7528\u5DE5\u4F5C\u53F0\u7F13\u5B58\uFF1A${err instanceof Error ? err.message : String(err)}`
+    );
+    return job;
+  }
+}
 async function runCursor(job, cancellation) {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
@@ -2738,8 +2818,9 @@ async function runCursor(job, cancellation) {
     };
   }
   const modelId = job.model?.trim() || "composer-2.5";
-  const selected = selectCursorSdkModelParams(job);
-  const params = selected.params;
+  const jobWithCatalog = await attachLiveCursorModelCatalog(job, apiKey);
+  const selected = selectCursorSdkModelParams(jobWithCatalog);
+  let params = selected.params;
   logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
   if (selected.dropped.length > 0) {
     logLine(
@@ -2780,30 +2861,37 @@ async function runCursor(job, cancellation) {
       autoReview: false,
       sandboxOptions: { enabled: job.enableSandbox === true }
     };
-    const createOptions = {
+    const createOptions = (modelParams) => ({
       apiKey,
       model: {
         id: modelId,
-        ...params ? { params } : {}
+        ...modelParams && modelParams.length > 0 ? { params: modelParams } : {}
       },
       mcpServers: mcp.servers,
       local: localOptions
-    };
+    });
     let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
     let agent;
     const stopScanLog = installCursorSdkScanLogTap();
     try {
       try {
         agent = await Agent.create({
-          ...createOptions,
+          ...createOptions(params),
           disallowedTools
         });
       } catch (err) {
         const fallback = fallbackDisallowedTools(err);
-        if (fallback == null) throw err;
-        disallowedTools = fallback;
+        const stripped = nextCursorSdkParamsAfterCreateError(params, err);
+        if (fallback == null && !stripped.changed) throw err;
+        if (fallback != null) disallowedTools = fallback;
+        if (stripped.changed) {
+          params = stripped.params;
+          logLine(
+            `Cursor \u62D2\u7EDD\u53C2\u6570 ${stripped.dropped.join(", ")}\uFF0C\u5DF2\u53BB\u6389\u540E\u91CD\u8BD5\u521B\u5EFA\u4F1A\u8BDD\u3002`
+          );
+        }
         agent = await Agent.create({
-          ...createOptions,
+          ...createOptions(params),
           disallowedTools
         });
       }
@@ -3733,7 +3821,7 @@ async function listModels(engine) {
   try {
     models = await withRetry(
       "\u62C9\u53D6\u6A21\u578B\u5217\u8868",
-      () => Cursor2.models.list({ apiKey }),
+      () => Cursor3.models.list({ apiKey }),
       {
         onRetry: ({ operation, attempt, maxAttempts, delayMs }) => {
           console.error(
