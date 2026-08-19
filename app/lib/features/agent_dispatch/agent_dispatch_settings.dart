@@ -34,6 +34,63 @@ class AgentDispatchEngineProfile {
   }
 }
 
+/// 单个项目的引擎 / 模型默认配置（本机、按项目隔离）。
+class AgentDispatchProjectEngineConfig {
+  const AgentDispatchProjectEngineConfig({
+    this.engine = AgentDispatchEngine.cursor,
+    this.modelId = AgentDispatchSettings.defaultModelId,
+    this.modelParamValues = AgentDispatchSettings.defaultModelParamValues,
+    this.engineProfiles = const {},
+  });
+
+  final AgentDispatchEngine engine;
+  final String? modelId;
+  final Map<String, String> modelParamValues;
+  final Map<String, AgentDispatchEngineProfile> engineProfiles;
+
+  Map<String, dynamic> toJson() => {
+        'engine': engine.name,
+        if (modelId != null && modelId!.trim().isNotEmpty) 'modelId': modelId,
+        if (modelParamValues.isNotEmpty) 'modelParamValues': modelParamValues,
+        if (engineProfiles.isNotEmpty)
+          'engineProfiles': {
+            for (final entry in engineProfiles.entries)
+              entry.key: entry.value.toJson(),
+          },
+      };
+
+  factory AgentDispatchProjectEngineConfig.fromJson(Map<String, dynamic> json) {
+    final modelParamsRaw = json['modelParamValues'] as Map<String, dynamic>?;
+    final profilesRaw = json['engineProfiles'] as Map<String, dynamic>?;
+    final engine = AgentDispatchEngine.fromName(json['engine'] as String?);
+    final modelId = json['modelId'] as String? ??
+        AgentDispatchSettings.defaultModelId;
+    final modelParamValues = modelParamsRaw == null
+        ? Map<String, String>.from(AgentDispatchSettings.defaultModelParamValues)
+        : modelParamsRaw.map((key, value) => MapEntry(key, '$value'));
+    final engineProfiles = <String, AgentDispatchEngineProfile>{
+      if (profilesRaw != null)
+        for (final entry in profilesRaw.entries)
+          if (entry.value is Map)
+            entry.key: AgentDispatchEngineProfile.fromJson(
+              Map<String, dynamic>.from(entry.value as Map),
+            ),
+    };
+    if (engineProfiles[engine.name] == null) {
+      engineProfiles[engine.name] = AgentDispatchEngineProfile(
+        modelId: modelId,
+        modelParamValues: modelParamValues,
+      );
+    }
+    return AgentDispatchProjectEngineConfig(
+      engine: engine,
+      modelId: modelId,
+      modelParamValues: modelParamValues,
+      engineProfiles: engineProfiles,
+    );
+  }
+}
+
 /// Agent 调度本机偏好（不同步）。
 class AgentDispatchSettings {
   const AgentDispatchSettings({
@@ -44,6 +101,7 @@ class AgentDispatchSettings {
     this.modelId = defaultModelId,
     this.modelParamValues = defaultModelParamValues,
     this.engineProfiles = const {},
+    this.engineConfigByProject = const {},
     this.ignoreCardParams = false,
     this.allowDirtyWorkspace = false,
     this.enableSandbox = false,
@@ -82,6 +140,10 @@ class AgentDispatchSettings {
 
   /// 各平台上次配置；切换下拉框时恢复，不互相覆盖。
   final Map<String, AgentDispatchEngineProfile> engineProfiles;
+
+  /// 各项目独立的引擎 / 模型默认；避免改 A 项目时影响 B。
+  /// 顶层 [engine]/[modelId]/[modelParamValues]/[engineProfiles] 仅作尚未配置项目的回退种子。
+  final Map<String, AgentDispatchProjectEngineConfig> engineConfigByProject;
 
   /// 为 true 时忽略卡片覆盖。工作台文案为「允许使用卡片参数」，勾选对应本字段为 false。
   final bool ignoreCardParams;
@@ -126,6 +188,7 @@ class AgentDispatchSettings {
     Object? modelId = _sentinel,
     Map<String, String>? modelParamValues,
     Map<String, AgentDispatchEngineProfile>? engineProfiles,
+    Map<String, AgentDispatchProjectEngineConfig>? engineConfigByProject,
     bool? ignoreCardParams,
     bool? allowDirtyWorkspace,
     bool? enableSandbox,
@@ -150,6 +213,8 @@ class AgentDispatchSettings {
       modelId: modelId == _sentinel ? this.modelId : modelId as String?,
       modelParamValues: modelParamValues ?? this.modelParamValues,
       engineProfiles: engineProfiles ?? this.engineProfiles,
+      engineConfigByProject:
+          engineConfigByProject ?? this.engineConfigByProject,
       ignoreCardParams: ignoreCardParams ?? this.ignoreCardParams,
       allowDirtyWorkspace: allowDirtyWorkspace ?? this.allowDirtyWorkspace,
       enableSandbox: enableSandbox ?? this.enableSandbox,
@@ -263,6 +328,61 @@ class AgentDispatchSettings {
     );
   }
 
+  /// 解析某项目的引擎 / 模型：有项目配置用项目的；否则回退顶层种子。
+  AgentDispatchProjectEngineConfig engineConfigFor(String? projectId) {
+    if (projectId != null && engineConfigByProject.containsKey(projectId)) {
+      return engineConfigByProject[projectId]!;
+    }
+    return AgentDispatchProjectEngineConfig(
+      engine: engine,
+      modelId: modelId,
+      modelParamValues: modelParamValues,
+      engineProfiles: engineProfiles,
+    );
+  }
+
+  /// 把顶层引擎 / 模型字段切到指定项目配置，供工作台 UI 与 [toRunOptions] 使用。
+  AgentDispatchSettings viewForProject(String projectId) {
+    final config = engineConfigFor(projectId);
+    return copyWith(
+      engine: config.engine,
+      modelId: config.modelId,
+      modelParamValues: config.modelParamValues,
+      engineProfiles: config.engineProfiles,
+    );
+  }
+
+  /// 写入指定项目的引擎 / 模型；不改写其它项目或顶层回退种子。
+  AgentDispatchSettings bindEngineConfigToProject(
+    String projectId, {
+    AgentDispatchEngine? engine,
+    Object? modelId = _sentinel,
+    Map<String, String>? modelParamValues,
+    Map<String, AgentDispatchEngineProfile>? engineProfiles,
+  }) {
+    final effectiveEngine = engine ?? this.engine;
+    final effectiveModelId =
+        modelId == _sentinel ? this.modelId : modelId as String?;
+    final effectiveParams = modelParamValues ?? this.modelParamValues;
+    final profiles = Map<String, AgentDispatchEngineProfile>.from(
+      engineProfiles ?? this.engineProfiles,
+    );
+    profiles[effectiveEngine.name] = AgentDispatchEngineProfile(
+      modelId: effectiveModelId,
+      modelParamValues: effectiveParams,
+    );
+    final map = Map<String, AgentDispatchProjectEngineConfig>.from(
+      engineConfigByProject,
+    );
+    map[projectId] = AgentDispatchProjectEngineConfig(
+      engine: effectiveEngine,
+      modelId: effectiveModelId,
+      modelParamValues: effectiveParams,
+      engineProfiles: profiles,
+    );
+    return copyWith(engineConfigByProject: map);
+  }
+
   /// 把当前平台的模型写回分平台配置，避免切换后丢失。
   AgentDispatchSettings rememberActiveEngineProfile() {
     final profiles =
@@ -355,6 +475,11 @@ class AgentDispatchSettings {
             for (final entry in engineProfiles.entries)
               entry.key: entry.value.toJson(),
           },
+        if (engineConfigByProject.isNotEmpty)
+          'engineConfigByProject': {
+            for (final entry in engineConfigByProject.entries)
+              entry.key: entry.value.toJson(),
+          },
         'ignoreCardParams': ignoreCardParams,
         'allowDirtyWorkspace': allowDirtyWorkspace,
         'enableSandbox': enableSandbox,
@@ -445,6 +570,17 @@ class AgentDispatchSettings {
             for (final entry in runByProjectRaw.entries)
               entry.key: entry.value == true,
           };
+    final engineByProjectRaw =
+        json['engineConfigByProject'] as Map<String, dynamic>?;
+    final engineConfigByProject = engineByProjectRaw == null
+        ? const <String, AgentDispatchProjectEngineConfig>{}
+        : {
+            for (final entry in engineByProjectRaw.entries)
+              if (entry.value is Map)
+                entry.key: AgentDispatchProjectEngineConfig.fromJson(
+                  Map<String, dynamic>.from(entry.value as Map),
+                ),
+          };
     return AgentDispatchSettings(
       engine: engine,
       useProject: json['useProject'] as bool? ?? false,
@@ -453,6 +589,7 @@ class AgentDispatchSettings {
       modelId: modelId,
       modelParamValues: modelParamValues,
       engineProfiles: engineProfiles,
+      engineConfigByProject: engineConfigByProject,
       ignoreCardParams: json['ignoreCardParams'] as bool? ?? false,
       allowDirtyWorkspace: json['allowDirtyWorkspace'] as bool? ?? false,
       enableSandbox: json['enableSandbox'] as bool? ?? false,

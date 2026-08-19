@@ -402,6 +402,68 @@ disable-model-invocation: true
     expect(withB.afterQueue, [AgentDispatchAfterStep.gitPush]);
   });
 
+  test('引擎与模型按项目隔离，互不覆盖', () {
+    const settings = AgentDispatchSettings(
+      engine: AgentDispatchEngine.cursor,
+      modelId: 'composer-2.5',
+      modelParamValues: {'fast': 'false', 'reasoning_effort': 'medium'},
+    );
+
+    // 尚未有按项目配置时，都回退顶层种子
+    expect(settings.viewForProject('a').modelId, 'composer-2.5');
+    expect(settings.viewForProject('b').modelId, 'composer-2.5');
+
+    final withA = settings.bindEngineConfigToProject(
+      'a',
+      engine: AgentDispatchEngine.codex,
+      modelId: 'gpt-5.4',
+      modelParamValues: const {'model_reasoning_effort': 'high'},
+    );
+
+    expect(withA.engineConfigFor('a').modelId, 'gpt-5.4');
+    expect(withA.engineConfigFor('a').engine, AgentDispatchEngine.codex);
+    // 顶层种子不变，未配置的 B 不受 A 影响
+    expect(withA.modelId, 'composer-2.5');
+    expect(withA.engine, AgentDispatchEngine.cursor);
+    expect(withA.engineConfigFor('b').modelId, 'composer-2.5');
+    expect(withA.engineConfigFor('b').engine, AgentDispatchEngine.cursor);
+    expect(withA.viewForProject('a').modelId, 'gpt-5.4');
+    expect(withA.viewForProject('b').modelId, 'composer-2.5');
+
+    final withB = withA.bindEngineConfigToProject(
+      'b',
+      modelId: 'composer-2',
+    );
+    expect(withB.viewForProject('a').modelId, 'gpt-5.4');
+    expect(withB.viewForProject('b').modelId, 'composer-2');
+    expect(withB.modelId, 'composer-2.5');
+  });
+
+  test('按项目引擎配置 JSON 往返', () {
+    const original = AgentDispatchSettings(
+      modelId: 'composer-2.5',
+      engineConfigByProject: {
+        'a': AgentDispatchProjectEngineConfig(
+          engine: AgentDispatchEngine.codex,
+          modelId: 'gpt-5',
+          modelParamValues: {'model_reasoning_effort': 'low'},
+        ),
+        'b': AgentDispatchProjectEngineConfig(
+          engine: AgentDispatchEngine.cursor,
+          modelId: 'composer-2',
+          modelParamValues: {'fast': 'true'},
+        ),
+      },
+    );
+    final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
+    expect(roundTrip.viewForProject('a').engine, AgentDispatchEngine.codex);
+    expect(roundTrip.viewForProject('a').modelId, 'gpt-5');
+    expect(roundTrip.viewForProject('b').modelId, 'composer-2');
+    expect(roundTrip.viewForProject('b').modelParamValues['fast'], 'true');
+    // 未配置项目仍回退顶层
+    expect(roundTrip.viewForProject('c').modelId, 'composer-2.5');
+  });
+
   test('按项目完成后队列 JSON 往返', () {
     const original = AgentDispatchSettings(
       afterQueueByProject: {

@@ -146,13 +146,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     final loaded = prefs.loadAgentDispatchSettings();
+    final forProject = loaded.viewForProject(widget.projectId);
     final cachedModels = prefs.loadAgentDispatchModelCatalog(
-      engine: loaded.engine,
+      engine: forProject.engine,
     );
     final cachedModelId = cachedModels.isEmpty
-        ? loaded.modelId
-        : resolveAgentDispatchModelId(cachedModels, loaded.modelId);
-    final modelChanged = cachedModelId != loaded.modelId;
+        ? forProject.modelId
+        : resolveAgentDispatchModelId(cachedModels, forProject.modelId);
+    final modelChanged = cachedModelId != forProject.modelId;
     AgentDispatchModelInfo? selected;
     if (modelChanged) {
       for (final model in cachedModels) {
@@ -163,16 +164,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       }
     }
     final normalized = modelChanged
-        ? loaded.copyWith(
+        ? forProject.copyWith(
             modelId: cachedModelId,
             modelParamValues: preferredAgentDispatchModelParamValues(
               selected?.parameters ?? const [],
             ),
           )
-        : loaded;
-    if (modelChanged) {
-      await prefs.saveAgentDispatchSettings(normalized);
-    }
+        : forProject;
     if (!mounted) return;
     setState(() {
       _settings = normalized;
@@ -182,6 +180,11 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       _gitAuthorEmailController.text = normalized.gitAuthorEmail ?? '';
       _countController.text = '${normalized.cardLimitCount}';
     });
+    // 模型归一化，或首次打开时把该项目种子写入按项目槽位。
+    if (modelChanged ||
+        !loaded.engineConfigByProject.containsKey(widget.projectId)) {
+      await _persist(normalized);
+    }
     await _service.hydrateLog();
     if (!mounted) return;
     setState(_syncLogFromService);
@@ -222,14 +225,43 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     } else if (synced.runAfterQueueOnFailureByProject.containsKey(projectId)) {
       runMap[projectId] = synced.runAfterQueueOnFailureByProject[projectId]!;
     }
-    final merged = synced.copyWith(
-      afterQueueByProject: afterMap,
-      runAfterQueueOnFailureByProject: runMap,
-    );
-    setState(() => _settings = merged);
-    await prefs.saveAgentDispatchSettings(merged);
+    // 顶层引擎/模型仅作未配置项目的回退种子：落盘以磁盘原值为基，再绑本项目槽位。
+    final forDisk = disk
+        .copyWith(
+          useProject: synced.useProject,
+          projectId: synced.projectId,
+          repoPath: synced.repoPath,
+          ignoreCardParams: synced.ignoreCardParams,
+          allowDirtyWorkspace: synced.allowDirtyWorkspace,
+          enableSandbox: synced.enableSandbox,
+          cardLimitMax: synced.cardLimitMax,
+          cardLimitCount: synced.cardLimitCount,
+          afterQueue: synced.afterQueue,
+          runAfterQueueOnFailure: synced.runAfterQueueOnFailure,
+          afterQueueByProject: afterMap,
+          runAfterQueueOnFailureByProject: runMap,
+          workerScriptPath: synced.workerScriptPath,
+          skillPath: synced.skillPath,
+          repoPathByProject: synced.repoPathByProject,
+          repoPaths: synced.repoPaths,
+          gitAuthorName: synced.gitAuthorName,
+          gitAuthorEmail: synced.gitAuthorEmail,
+        )
+        .bindEngineConfigToProject(
+          projectId,
+          engine: synced.engine,
+          modelId: synced.modelId,
+          modelParamValues: synced.modelParamValues,
+          engineProfiles: synced.engineProfiles,
+        );
+    final forUi = forDisk.viewForProject(projectId).copyWith(
+          afterQueueByProject: afterMap,
+          runAfterQueueOnFailureByProject: runMap,
+        );
+    setState(() => _settings = forUi);
+    await prefs.saveAgentDispatchSettings(forDisk);
     if (_service.isRunning && mounted) {
-      await _pushLiveRunOptions(merged);
+      await _pushLiveRunOptions(forUi);
     }
   }
 

@@ -107,13 +107,21 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
   }
 
   final next = loaded
+      .viewForProject(id)
       .copyWith(
         useProject: true,
         projectId: id,
       )
-      .bindRepoToProject(id, repo)
-      .rememberActiveEngineProfile();
-  await prefs.saveAgentDispatchSettings(next);
+      .bindRepoToProject(id, repo);
+  // 只更新仓库绑定与最近项目；引擎/模型按项目隔离，不回写全局种子。
+  await prefs.saveAgentDispatchSettings(
+    loaded.copyWith(
+      useProject: true,
+      projectId: id,
+      repoPathByProject: next.repoPathByProject,
+      repoPaths: next.repoPaths,
+    ),
+  );
 
   final catalogs = {
     for (final engine in AgentDispatchEngine.values)
