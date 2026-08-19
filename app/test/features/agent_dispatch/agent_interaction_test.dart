@@ -66,6 +66,38 @@ void main() {
     expect('### 助手'.allMatches(markdown).length, 2);
   });
 
+  test('二次追问快照追加新会话，不覆盖第一次记录', () {
+    const first = '## 会话 2026-08-19 08:00\n\n'
+        '### 用户\n'
+        '- 第一次任务\n\n'
+        '### 助手\n'
+        '第一次完整答复。\n\n'
+        '### 用户\n'
+        '请再确认窗口默认关闭\n';
+    final snapshot = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"snapshot","cardId":"card-a","sessionId":"session-b",'
+      '"text":"[{\\"role\\":\\"user\\",\\"text\\":\\"- Agent 追问：请再确认窗口默认关闭\\"},'
+      '{\\"role\\":\\"assistant\\",\\"text\\":\\"第二次答复。\\"}]",'
+      '"at":"2026-08-19T10:00:00Z"}',
+    )!;
+    final markdown = appendAgentConversationEvent(first, snapshot);
+    expect(markdown, contains('第一次完整答复。'));
+    expect(markdown, contains('请再确认窗口默认关闭'));
+    expect(markdown, contains('第二次答复。'));
+    expect('## 会话'.allMatches(markdown).length, 2);
+  });
+
+  test('无会话标题时快照也追加而不是整文件覆盖', () {
+    const first = '### 用户\n第一次任务\n\n### 助手\n第一次答复。\n';
+    final markdown = replaceAgentConversationSession(first, const [
+      AgentConversationMessage(role: 'user', text: '第二次追问'),
+      AgentConversationMessage(role: 'assistant', text: '第二次答复。'),
+    ], at: DateTime.utc(2026, 8, 19, 10));
+    expect(markdown, contains('第一次答复。'));
+    expect(markdown, contains('第二次答复。'));
+  });
+
   test('流式变长的助手正文会合并为完整一段', () {
     final first = parseAgentInteractionEvent(
       '@@KANBAN_INTERACTION@@'

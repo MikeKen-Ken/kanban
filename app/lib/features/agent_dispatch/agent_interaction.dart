@@ -152,6 +152,8 @@ String appendAgentConversationUserReply(String? current, String text) {
   return '${buffer.toString().trimRight()}\n';
 }
 
+final _sessionHeaderLinePattern = RegExp(r'^## 会话[^\n]*', multiLine: true);
+
 String replaceAgentConversationSession(
   String? current,
   List<AgentConversationMessage> messages, {
@@ -159,19 +161,45 @@ String replaceAgentConversationSession(
 }) {
   if (messages.isEmpty) return current ?? '';
   final existing = (current ?? '').trimRight();
-  const header = '## 会话';
-  final index = existing.lastIndexOf(header);
-  final prefix = index >= 0 ? existing.substring(0, index).trimRight() : '';
-  final headerLine = index >= 0
-      ? existing.substring(index).split('\n').first.trim()
-      : '$header ${_formatLocalTime(at ?? DateTime.now())}';
-  final buffer = StringBuffer();
-  if (prefix.isNotEmpty) {
-    buffer
-      ..writeln(prefix)
-      ..writeln();
+  if (existing.isEmpty) {
+    return _renderSession(
+      messages,
+      headerLine: '## 会话 ${_formatLocalTime(at ?? DateTime.now())}',
+    );
   }
-  buffer.writeln(headerLine);
+  final match = _sessionHeaderLinePattern.allMatches(existing).lastOrNull;
+  if (match == null) {
+    return _joinMarkdown(
+      existing,
+      _renderSession(
+        messages,
+        headerLine: '## 会话 ${_formatLocalTime(at ?? DateTime.now())}',
+      ),
+    );
+  }
+  final prefix = existing.substring(0, match.start).trimRight();
+  final lastSession = existing.substring(match.start);
+  final sameSession = _sameConversationSession(lastSession, messages);
+  if (!sameSession) {
+    return _joinMarkdown(
+      existing,
+      _renderSession(
+        messages,
+        headerLine: '## 会话 ${_formatLocalTime(at ?? DateTime.now())}',
+      ),
+    );
+  }
+  return _joinMarkdown(
+    prefix,
+    _renderSession(messages, headerLine: match.group(0)!.trim()),
+  );
+}
+
+String _renderSession(
+  List<AgentConversationMessage> messages, {
+  required String headerLine,
+}) {
+  final buffer = StringBuffer()..writeln(headerLine);
   for (final message in messages) {
     buffer
       ..writeln()
@@ -179,6 +207,39 @@ String replaceAgentConversationSession(
       ..write(message.text.trim());
   }
   return '${buffer.toString().trimRight()}\n';
+}
+
+String _joinMarkdown(String prefix, String next) {
+  final left = prefix.trimRight();
+  final right = next.trimRight();
+  if (left.isEmpty) return '$right\n';
+  if (right.isEmpty) return '$left\n';
+  return '$left\n\n$right\n';
+}
+
+bool _sameConversationSession(
+  String lastSession,
+  List<AgentConversationMessage> messages,
+) {
+  final existingUser = _firstUserSectionText(lastSession);
+  final snapshotUser = messages
+      .where((message) => message.role == 'user')
+      .map((message) => message.text.trim())
+      .where((text) => text.isNotEmpty)
+      .firstOrNull;
+  if (existingUser == null || snapshotUser == null) return false;
+  return existingUser == snapshotUser;
+}
+
+String? _firstUserSectionText(String markdown) {
+  const marker = '### 用户';
+  final start = markdown.indexOf(marker);
+  if (start < 0) return null;
+  var body = markdown.substring(start + marker.length);
+  final next = body.indexOf('\n### ');
+  if (next >= 0) body = body.substring(0, next);
+  final text = body.trim();
+  return text.isEmpty ? null : text;
 }
 
 String _formatLocalTime(DateTime value) {
