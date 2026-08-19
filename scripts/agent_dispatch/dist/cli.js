@@ -302,20 +302,21 @@ function mergeJobWithCardOverrides(job, claim) {
   const catalog = defaults.models?.find((item) => item.id === model);
   const rawParameters = catalog?.parameters ?? [];
   const parameters = ensureContextParameter(rawParameters);
+  const fillFrom = engine === "cursor" ? rawParameters : parameters;
   if (rawParameters.length > 0) {
     const allowed = new Set(
-      parameters.map((item) => String(item.id ?? "").trim()).filter(Boolean)
+      fillFrom.map((item) => String(item.id ?? "").trim()).filter(Boolean)
     );
     for (const id of [...byId.keys()]) {
       if (!allowed.has(id)) byId.delete(id);
     }
-    for (const parameter of parameters) {
+    for (const parameter of fillFrom) {
       const id = String(parameter.id ?? "").trim();
       if (!id || byId.has(id)) continue;
       const value = conservativeParamValue(id, parameterValueList(parameter.values));
       if (value) byId.set(id, { id, value });
     }
-  } else if (cardModel) {
+  } else if (cardModel && engine === "codex") {
     const hasReasoning = [...byId.keys()].some(isReasoningParamId);
     if (!hasReasoning) {
       byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
@@ -388,6 +389,40 @@ function resolveModelParams(job) {
     default:
       return void 0;
   }
+}
+function cursorCatalogParameterIds(job) {
+  const modelId = job.model?.trim() || "composer-2.5";
+  const catalog = job.engineDefaults?.cursor?.models?.find(
+    (item) => item.id === modelId
+  );
+  return (catalog?.parameters ?? []).map((item) => String(item.id ?? "").trim()).filter((id) => id.length > 0 && !isContextParamId(id));
+}
+function selectCursorSdkModelParams(job) {
+  const raw = resolveModelParams(job) ?? [];
+  const catalogIds = cursorCatalogParameterIds(job);
+  const allowed = new Set(catalogIds);
+  const hasFast = raw.some((item) => item.id === "fast");
+  const dropped = [];
+  const kept = [];
+  for (const item of raw) {
+    if (isContextParamId(item.id)) {
+      dropped.push(item.id);
+      continue;
+    }
+    if (allowed.size > 0 && !allowed.has(item.id)) {
+      dropped.push(item.id);
+      continue;
+    }
+    if (allowed.size === 0 && hasFast && isReasoningParamId(item.id)) {
+      dropped.push(item.id);
+      continue;
+    }
+    kept.push(item);
+  }
+  return {
+    params: kept.length > 0 ? kept : void 0,
+    dropped: [...new Set(dropped)]
+  };
 }
 function effortToCodexConfigArgs(job) {
   const params = resolveModelParams(job) ?? [];
@@ -2703,8 +2738,14 @@ async function runCursor(job, cancellation) {
     };
   }
   const modelId = job.model?.trim() || "composer-2.5";
-  const params = resolveModelParams(job);
+  const selected = selectCursorSdkModelParams(job);
+  const params = selected.params;
   logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
+  if (selected.dropped.length > 0) {
+    logLine(
+      `\u672A\u4F20\u7ED9 Cursor SDK\uFF1A${selected.dropped.join(", ")}\uFF08\u5F53\u524D\u6A21\u578B\u76EE\u5F55\u4E0D\u652F\u6301\uFF0C\u6216\u5C5E\u4E8E\u770B\u677F\u81EA\u9020\u53C2\u6570\uFF09\u3002` + (selected.dropped.includes("fast") ? "\u5F53\u524D\u6A21\u578B\u6CA1\u6709 fast\uFF0C\u5F00\u542F\u5FEB\u901F\u6A21\u5F0F\u4E0D\u4F1A\u751F\u6548\u3002" : "")
+    );
+  }
   const agentMcpUrl = job.round.agentEndpointUrl.trim();
   if (!agentMcpUrl) {
     return { ok: false, error: "\u672C\u8F6E claim \u7F3A\u5C11 scoped MCP \u7AEF\u70B9" };

@@ -198,20 +198,22 @@ export function mergeJobWithCardOverrides(
   const catalog = defaults.models?.find((item) => item.id === model);
   const rawParameters = catalog?.parameters ?? [];
   const parameters = ensureContextParameter(rawParameters);
+  // Cursor SDK 只接受 models.list 里的参数；`context` 是看板自己补的，传上去会报不支持。
+  const fillFrom = engine === "cursor" ? rawParameters : parameters;
   if (rawParameters.length > 0) {
     const allowed = new Set(
-      parameters.map((item) => String(item.id ?? "").trim()).filter(Boolean),
+      fillFrom.map((item) => String(item.id ?? "").trim()).filter(Boolean),
     );
     for (const id of [...byId.keys()]) {
       if (!allowed.has(id)) byId.delete(id);
     }
-    for (const parameter of parameters) {
+    for (const parameter of fillFrom) {
       const id = String(parameter.id ?? "").trim();
       if (!id || byId.has(id)) continue;
       const value = conservativeParamValue(id, parameterValueList(parameter.values));
       if (value) byId.set(id, { id, value });
     }
-  } else if (cardModel) {
+  } else if (cardModel && engine === "codex") {
     const hasReasoning = [...byId.keys()].some(isReasoningParamId);
     if (!hasReasoning) {
       byId.set("reasoning_effort", { id: "reasoning_effort", value: "medium" });
@@ -308,6 +310,48 @@ export function resolveModelParams(
     default:
       return undefined;
   }
+}
+
+function cursorCatalogParameterIds(job: DispatchJob): string[] {
+  const modelId = job.model?.trim() || "composer-2.5";
+  const catalog = job.engineDefaults?.cursor?.models?.find(
+    (item) => item.id === modelId,
+  );
+  return (catalog?.parameters ?? [])
+    .map((item) => String(item.id ?? "").trim())
+    .filter((id) => id.length > 0 && !isContextParamId(id));
+}
+
+/** Cursor Agent.create 只应收到官方 catalog 参数；丢掉 context 等自造项。 */
+export function selectCursorSdkModelParams(job: DispatchJob): {
+  params?: ModelParam[];
+  dropped: string[];
+} {
+  const raw = resolveModelParams(job) ?? [];
+  const catalogIds = cursorCatalogParameterIds(job);
+  const allowed = new Set(catalogIds);
+  const hasFast = raw.some((item) => item.id === "fast");
+  const dropped: string[] = [];
+  const kept: ModelParam[] = [];
+  for (const item of raw) {
+    if (isContextParamId(item.id)) {
+      dropped.push(item.id);
+      continue;
+    }
+    if (allowed.size > 0 && !allowed.has(item.id)) {
+      dropped.push(item.id);
+      continue;
+    }
+    if (allowed.size === 0 && hasFast && isReasoningParamId(item.id)) {
+      dropped.push(item.id);
+      continue;
+    }
+    kept.push(item);
+  }
+  return {
+    params: kept.length > 0 ? kept : undefined,
+    dropped: [...new Set(dropped)],
+  };
 }
 
 export function effortToCodexConfigArgs(job: DispatchJob): string[] {

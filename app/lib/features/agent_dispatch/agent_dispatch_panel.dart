@@ -536,8 +536,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   bool _isStockModelParams(Map<String, String> values) {
     if (values.isEmpty) return true;
-    if (values.length == 1 &&
-        (values['fast'] == 'true' || values['fast'] == 'false')) {
+    if (values.length == 1 && values['fast'] == 'false') {
       return true;
     }
     const stock = AgentDispatchSettings.defaultModelParamValues;

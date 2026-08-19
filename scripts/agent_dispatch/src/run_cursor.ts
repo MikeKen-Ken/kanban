@@ -43,7 +43,7 @@ import {
 } from "./assistant_text.ts";
 import { buildConversationTranscript } from "./conversation_transcript.ts";
 import {
-  resolveModelParams,
+  selectCursorSdkModelParams,
   type DispatchResult,
   type RoundDispatchJob,
 } from "./types.ts";
@@ -282,8 +282,17 @@ export async function runCursor(
   }
 
   const modelId = job.model?.trim() || "composer-2.5";
-  const params = resolveModelParams(job);
+  const selected = selectCursorSdkModelParams(job);
+  const params = selected.params;
   logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
+  if (selected.dropped.length > 0) {
+    logLine(
+      `未传给 Cursor SDK：${selected.dropped.join(", ")}（当前模型目录不支持，或属于看板自造参数）。` +
+        (selected.dropped.includes("fast")
+          ? "当前模型没有 fast，开启快速模式不会生效。"
+          : ""),
+    );
+  }
 
   const agentMcpUrl = job.round.agentEndpointUrl.trim();
   if (!agentMcpUrl) {

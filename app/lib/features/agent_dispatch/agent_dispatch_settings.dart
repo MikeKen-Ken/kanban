@@ -533,9 +533,6 @@ class AgentDispatchSettings {
         legacyParamId == null &&
         legacyParamValue == null) {
       modelParamValues = Map<String, String>.from(defaultModelParamValues);
-    } else if (modelParamValues.length == 1 &&
-        modelParamValues['fast'] == 'true') {
-      modelParamValues = Map<String, String>.from(defaultModelParamValues);
     }
     final engine = AgentDispatchEngine.fromName(json['engine'] as String?);
     final modelId = json['modelId'] as String? ?? legacyModel ?? defaultModelId;

@@ -32,6 +32,14 @@ void main() {
     );
   });
 
+  test('加载设置时保留仅开启快速模式的用户选择', () {
+    final settings = AgentDispatchSettings.fromJson({
+      'modelParamValues': {'fast': 'true'},
+    });
+
+    expect(settings.modelParamValues, {'fast': 'true'});
+  });
+
   test('缺少新字段的旧设置迁移到新的默认值', () {
     final settings = AgentDispatchSettings.fromJson({});
 

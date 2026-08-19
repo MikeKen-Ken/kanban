@@ -7,6 +7,7 @@ import {
   mergeJobWithCardOverrides,
   parseTokenBudget,
   resolveModelParams,
+  selectCursorSdkModelParams,
   type DispatchJob,
 } from "./types.ts";
 
@@ -130,6 +131,98 @@ describe("mergeJobWithCardOverrides", () => {
       merged.modelParams?.find((item) => item.id === "context")?.value,
       "64k",
     );
+  });
+
+  it("Cursor catalog 只有 fast 时丢掉自造 context 和思考参数", () => {
+    const merged = mergeJobWithCardOverrides(
+      {
+        ...job,
+        model: "composer-2.5",
+        modelParams: [
+          { id: "fast", value: "true" },
+          { id: "reasoning_effort", value: "medium" },
+          { id: "context", value: "64k" },
+        ],
+        engineDefaults: {
+          cursor: {
+            model: "composer-2.5",
+            modelParams: [
+              { id: "fast", value: "true" },
+              { id: "reasoning_effort", value: "medium" },
+              { id: "context", value: "64k" },
+            ],
+            models: [
+              {
+                id: "composer-2.5",
+                parameters: [{ id: "fast", values: ["true", "false"] }],
+              },
+            ],
+          },
+        },
+      },
+      {},
+    );
+    assert.deepEqual(merged.modelParams, [{ id: "fast", value: "true" }]);
+  });
+
+  it("Cursor 无 catalog 时不要凭空补 reasoning_effort", () => {
+    const merged = mergeJobWithCardOverrides(job, {
+      agentModelId: "composer-2.5",
+      agentModelParamValues: { fast: "true" },
+    });
+    assert.deepEqual(merged.modelParams, [{ id: "fast", value: "true" }]);
+  });
+
+  it("selectCursorSdkModelParams 丢掉 context，并按目录过滤 fast", () => {
+    const selected = selectCursorSdkModelParams({
+      ...job,
+      model: "composer-2.5",
+      modelParams: [
+        { id: "fast", value: "true" },
+        { id: "reasoning_effort", value: "high" },
+        { id: "context", value: "272k" },
+      ],
+      engineDefaults: {
+        cursor: {
+          models: [
+            {
+              id: "composer-2.5",
+              parameters: [{ id: "fast", values: ["true", "false"] }],
+            },
+          ],
+        },
+      },
+    });
+    assert.deepEqual(selected.params, [{ id: "fast", value: "true" }]);
+    assert.deepEqual(selected.dropped.sort(), ["context", "reasoning_effort"]);
+  });
+
+  it("当前模型目录没有 fast 时不要传给 SDK", () => {
+    const selected = selectCursorSdkModelParams({
+      ...job,
+      model: "grok-4.6",
+      modelParams: [
+        { id: "fast", value: "true" },
+        { id: "reasoning_effort", value: "medium" },
+        { id: "context", value: "64k" },
+      ],
+      engineDefaults: {
+        cursor: {
+          models: [
+            {
+              id: "grok-4.6",
+              parameters: [
+                { id: "reasoning_effort", values: ["low", "medium", "high"] },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    assert.deepEqual(selected.params, [
+      { id: "reasoning_effort", value: "medium" },
+    ]);
+    assert.ok(selected.dropped.includes("fast"));
   });
 
   it("resolveModelParams 保留所选上下文", () => {
