@@ -309,6 +309,16 @@ const agentDispatchContextParameter = AgentDispatchModelParameter(
 bool isAgentDispatchContextParam(String id) =>
     id.toLowerCase().contains('context');
 
+bool isAgentDispatchReasoningParam(String id) => switch (id) {
+      'reasoning' ||
+      'reasoning_effort' ||
+      'model_reasoning_effort' ||
+      'effort' ||
+      'thinking' =>
+        true,
+      _ => false,
+    };
+
 List<AgentDispatchModelParameter> withAgentDispatchContextParameter(
   List<AgentDispatchModelParameter> parameters,
 ) {

@@ -267,6 +267,14 @@ void main() {
     );
     expect(progress.engine, 'cursor');
     expect(progress.model, 'composer-2.5');
+    progress = applyWorkerProgressLog(
+      progress,
+      '本卡覆盖：engine=cursor model=composer-2.5 params=[{"id":"fast","value":"true"},{"id":"context","value":"272k"}] cardId=abc',
+    );
+    expect(progress.modelParams, {
+      'fast': 'true',
+      'context': '272k',
+    });
     expect(
       progress.batchElapsedSeconds(now: started.add(const Duration(minutes: 5))),
       5 * 60,

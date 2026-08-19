@@ -8,12 +8,14 @@ class AgentDispatchHubOverview {
     required this.cardTitle,
     required this.statusLine,
     required this.engineModelLabel,
+    required this.modelDetailLabel,
     required this.elapsedLabel,
   });
 
   final String cardTitle;
   final String statusLine;
   final String engineModelLabel;
+  final String modelDetailLabel;
   final String elapsedLabel;
 
   static AgentDispatchHubOverview running({
@@ -22,6 +24,7 @@ class AgentDispatchHubOverview {
     required String phaseLabel,
     required String engine,
     required String model,
+    Map<String, String> modelParams = const {},
     DateTime? batchStartedAt,
     DateTime? cardStartedAt,
     DateTime? now,
@@ -48,6 +51,7 @@ class AgentDispatchHubOverview {
         engine: engine,
         model: model,
       ),
+      modelDetailLabel: formatAgentDispatchHubModelDetails(modelParams),
       elapsedLabel: elapsedParts.join(' · '),
     );
   }
@@ -78,4 +82,63 @@ String _modelLabel(String raw) {
   final model = raw.trim();
   if (model.isEmpty || model == '(平台默认)') return '';
   return model;
+}
+
+String formatAgentDispatchHubModelDetails(Map<String, String> params) {
+  if (params.isEmpty) return '';
+  final remaining = Map<String, String>.from(params);
+  final parts = <String>[];
+
+  String? take(bool Function(String id) match) {
+    String? matchedId;
+    for (final id in remaining.keys) {
+      if (match(id)) {
+        matchedId = id;
+        break;
+      }
+    }
+    if (matchedId == null) return null;
+    final value = remaining.remove(matchedId);
+    if (value == null || value.trim().isEmpty) return null;
+    return _formatHubParam(matchedId, value);
+  }
+
+  final context = take(isAgentDispatchContextParam);
+  if (context != null) parts.add(context);
+  final fast = take((id) => id == 'fast');
+  if (fast != null) parts.add(fast);
+  final reasoning = take(isAgentDispatchReasoningParam);
+  if (reasoning != null) parts.add(reasoning);
+  final leftover = remaining.entries.toList()
+    ..sort((a, b) => a.key.compareTo(b.key));
+  for (final entry in leftover) {
+    if (entry.value.trim().isEmpty) continue;
+    parts.add(_formatHubParam(entry.key, entry.value));
+  }
+  return parts.join(' · ');
+}
+
+String _formatHubParam(String id, String value) {
+  final label = switch (id) {
+    'reasoning' ||
+    'reasoning_effort' ||
+    'model_reasoning_effort' ||
+    'effort' ||
+    'thinking' =>
+      '思考程度',
+    'fast' => '快速模式',
+    _ => isAgentDispatchContextParam(id) ? '上下文' : id,
+  };
+  return '$label ${_hubParamValue(id, value)}';
+}
+
+String _hubParamValue(String id, String value) {
+  if (id == 'fast') {
+    return switch (value.trim()) {
+      'true' => '开',
+      'false' => '关',
+      _ => value.trim(),
+    };
+  }
+  return value.trim();
 }

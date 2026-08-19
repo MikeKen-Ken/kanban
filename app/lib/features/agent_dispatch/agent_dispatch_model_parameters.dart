@@ -110,16 +110,6 @@ String _parameterLabel(AgentDispatchModelParameter parameter) =>
           : (parameter.displayName ?? parameter.id),
     };
 
-bool isAgentDispatchReasoningParam(String id) => switch (id) {
-      'reasoning' ||
-      'reasoning_effort' ||
-      'model_reasoning_effort' ||
-      'effort' ||
-      'thinking' =>
-        true,
-      _ => false,
-    };
-
 /// 快速模式关闭、思考程度 Medium；目录尚未加载时仍带上常见参数名。
 Map<String, String> preferredAgentDispatchModelParamValues(
   List<AgentDispatchModelParameter> parameters,

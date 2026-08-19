@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// 单个看板项目的 Agent 调度进度，供总览与工作台展示。
 class AgentDispatchProgress {
   const AgentDispatchProgress({
@@ -13,6 +15,7 @@ class AgentDispatchProgress {
     this.drainAfterCurrent = false,
     this.engine = '',
     this.model = '',
+    this.modelParams = const {},
     this.batchStartedAt,
     this.cardStartedAt,
   });
@@ -37,6 +40,9 @@ class AgentDispatchProgress {
 
   /// 批次默认或本卡覆盖后的模型 id。
   final String model;
+
+  /// 当前生效的模型参数，如 context / fast / reasoning_effort。
+  final Map<String, String> modelParams;
 
   /// 本批次开始时刻，供总览展示总体已运行时间。
   final DateTime? batchStartedAt;
@@ -99,6 +105,7 @@ class AgentDispatchProgress {
     bool? drainAfterCurrent,
     String? engine,
     String? model,
+    Map<String, String>? modelParams,
     DateTime? batchStartedAt,
     DateTime? cardStartedAt,
   }) {
@@ -115,6 +122,7 @@ class AgentDispatchProgress {
       drainAfterCurrent: drainAfterCurrent ?? this.drainAfterCurrent,
       engine: engine ?? this.engine,
       model: model ?? this.model,
+      modelParams: modelParams ?? this.modelParams,
       batchStartedAt: batchStartedAt ?? this.batchStartedAt,
       cardStartedAt: cardStartedAt ?? this.cardStartedAt,
     );
@@ -207,8 +215,9 @@ final _processedPattern = RegExp(r'已处理 (\d+) 张');
 final _currentTitlePattern = RegExp(r'^当前卡片：(.+)$', multiLine: true);
 final _currentDetailPattern = RegExp(r'^当前任务：([\s\S]+)$', multiLine: true);
 final _afterQueuePattern = RegExp(r'完成后队列：开始「(.+)」');
-final _cardOverridePattern =
-    RegExp(r'本卡覆盖：engine=(\w+) model=([^\s]+)');
+final _cardOverridePattern = RegExp(
+  r'本卡覆盖：engine=(\w+) model=([^\s]+)(?: params=(\[.*?\]))?',
+);
 final _cursorModelPattern = RegExp(r'Cursor 模型=([^\s]+)');
 
 /// 从 Worker 日志行更新进度；无法识别的行原样返回。
@@ -246,9 +255,13 @@ AgentDispatchProgress applyWorkerProgressLog(
   }
   final override = _cardOverridePattern.firstMatch(message);
   if (override != null) {
+    final rawParams = override.group(3);
     return current.copyWith(
       engine: override.group(1)!.trim(),
       model: override.group(2)!.trim(),
+      modelParams: rawParams == null
+          ? null
+          : parseAgentDispatchLoggedModelParams(rawParams),
     );
   }
   final cursorModel = _cursorModelPattern.firstMatch(message);
@@ -311,4 +324,35 @@ int _totalAfterRoundLog(
     return current.totalCards > 0 ? keep : current.totalCards;
   }
   return roundTotal > current.totalCards ? roundTotal : current.totalCards;
+}
+
+Map<String, String> agentDispatchModelParamMap(
+  Iterable<({String id, String value})> items,
+) {
+  final result = <String, String>{};
+  for (final item in items) {
+    final id = item.id.trim();
+    final value = item.value.trim();
+    if (id.isEmpty || value.isEmpty) continue;
+    result[id] = value;
+  }
+  return result;
+}
+
+Map<String, String> parseAgentDispatchLoggedModelParams(String raw) {
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) return const {};
+    final result = <String, String>{};
+    for (final item in decoded) {
+      if (item is! Map) continue;
+      final id = '${item['id'] ?? ''}'.trim();
+      final value = '${item['value'] ?? ''}'.trim();
+      if (id.isEmpty || value.isEmpty) continue;
+      result[id] = value;
+    }
+    return result;
+  } catch (_) {
+    return const {};
+  }
 }

@@ -26,6 +26,7 @@ class AgentDispatchHubItem {
     this.phaseLabel,
     this.engine,
     this.model,
+    this.modelParams = const {},
     this.batchStartedAt,
     this.cardStartedAt,
   });
@@ -40,6 +41,7 @@ class AgentDispatchHubItem {
   final String? phaseLabel;
   final String? engine;
   final String? model;
+  final Map<String, String> modelParams;
   final DateTime? batchStartedAt;
   final DateTime? cardStartedAt;
 }
@@ -136,6 +138,7 @@ class AgentDispatchHub extends StatelessWidget {
       phaseLabel: progress.phaseLabel,
       engine: progress.engine,
       model: progress.model,
+      modelParams: progress.modelParams,
       batchStartedAt: progress.batchStartedAt,
       cardStartedAt: progress.cardStartedAt,
     );
@@ -243,6 +246,7 @@ class _HubProjectTile extends StatelessWidget {
             phaseLabel: item.phaseLabel ?? '',
             engine: item.engine ?? '',
             model: item.model ?? '',
+            modelParams: item.modelParams,
             batchStartedAt: item.batchStartedAt,
             cardStartedAt: item.cardStartedAt,
           )
@@ -299,6 +303,16 @@ class _HubProjectTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall,
             ),
+            if (overview.modelDetailLabel.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                overview.modelDetailLabel,
+                key: ValueKey('agent-dispatch-hub-params-${item.projectId}'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
             if (overview.elapsedLabel.isNotEmpty) ...[
               const SizedBox(height: 2),
               Text(

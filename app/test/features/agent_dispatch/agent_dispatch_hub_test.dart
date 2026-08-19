@@ -96,7 +96,29 @@ void main() {
     expect(overview.statusLine, '运行中 · 实施 · 2/5');
     expect(overview.cardTitle, 'Agent 调度总览可以显示更多的信息');
     expect(overview.engineModelLabel, 'Cursor SDK · composer-2.5');
+    expect(overview.modelDetailLabel, isEmpty);
     expect(overview.elapsedLabel, '批次 12分30秒 · 本卡 2分30秒');
+  });
+
+  test('总览文案包含上下文长度与快速模式', () {
+    final overview = AgentDispatchHubOverview.running(
+      liveCardLabel: '1/2',
+      currentTitle: '卡片',
+      phaseLabel: '实施',
+      engine: 'cursor',
+      model: 'composer-2.5',
+      modelParams: const {
+        'fast': 'false',
+        'reasoning_effort': 'medium',
+        'context': '64k',
+      },
+    );
+
+    expect(overview.engineModelLabel, 'Cursor SDK · composer-2.5');
+    expect(
+      overview.modelDetailLabel,
+      '上下文 64k · 快速模式 关 · 思考程度 medium',
+    );
   });
 
   testWidgets('总览列出当前卡片标题、模型与运行时间', (tester) async {
@@ -116,6 +138,10 @@ void main() {
               phaseLabel: '实施',
               engine: 'cursor',
               model: 'composer-2.5',
+              modelParams: const {
+                'fast': 'true',
+                'context': '272k',
+              },
               batchStartedAt: batchStarted,
               cardStartedAt: cardStarted,
             ),
@@ -129,6 +155,7 @@ void main() {
     expect(find.text('运行中 · 实施 · 1/3'), findsOneWidget);
     expect(find.text('Agent 调度总览可以显示更多的信息'), findsOneWidget);
     expect(find.text('Cursor SDK · composer-2.5'), findsOneWidget);
+    expect(find.text('上下文 272k · 快速模式 开'), findsOneWidget);
     expect(find.textContaining('批次'), findsOneWidget);
     expect(find.textContaining('本卡'), findsOneWidget);
   });

@@ -317,6 +317,7 @@ class AgentDispatchService {
         ),
         engine: options.engine.name,
         model: options.modelId?.trim() ?? '',
+        modelParams: agentDispatchModelParamMap(options.modelParams),
         batchStartedAt: DateTime.now(),
       ),
     );
