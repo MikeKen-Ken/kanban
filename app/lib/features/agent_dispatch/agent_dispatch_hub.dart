@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import '../project/project_list_preferences.dart';
 import '../project/projects_manifest.dart';
+import 'agent_dispatch_hub_batch.dart';
 import 'agent_dispatch_hub_overview.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_registry.dart';
@@ -102,9 +104,60 @@ class AgentDispatchHub extends StatelessWidget {
           items: items,
           onClose: AgentDispatchWindow.hide,
           onOpenProject: AgentDispatchWindow.openProject,
+          onRunProject: (projectId) => _runFromHub(context, board, projectId),
+          onStopProject: stopAgentDispatchFromHub,
         );
       },
     );
+  }
+
+  Future<void> _runFromHub(
+    BuildContext context,
+    BoardController board,
+    String projectId,
+  ) async {
+    final result = await startAgentDispatchFromHub(
+      projectId: projectId,
+      board: board,
+      confirmSameRepo: (otherProjectId, repo) =>
+          _confirmSameRepo(context, board, otherProjectId, repo),
+    );
+    if (!context.mounted) return;
+    final message = result.message?.trim();
+    if (message != null && message.isNotEmpty) {
+      showAppSnackBar(context, message: message);
+    }
+  }
+
+  Future<bool> _confirmSameRepo(
+    BuildContext context,
+    BoardController board,
+    String otherProjectId,
+    String repo,
+  ) async {
+    final otherTitle =
+        board.manifest?.findById(otherProjectId)?.title ?? otherProjectId;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('仓库已被其它项目占用'),
+        content: Text(
+          '项目「$otherTitle」正在同一仓库运行：\n$repo\n\n'
+          '并行可能导致互相改到同一批文件。仍要继续吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('仍要运行'),
+          ),
+        ],
+      ),
+    );
+    return go == true;
   }
 
   AgentDispatchHubItem _itemFor(
@@ -150,12 +203,16 @@ class AgentDispatchHubView extends StatefulWidget {
     required this.items,
     required this.onClose,
     required this.onOpenProject,
+    required this.onRunProject,
+    required this.onStopProject,
     super.key,
   });
 
   final List<AgentDispatchHubItem> items;
   final VoidCallback onClose;
   final void Function(String projectId) onOpenProject;
+  final Future<void> Function(String projectId) onRunProject;
+  final Future<void> Function(String projectId) onStopProject;
 
   @override
   State<AgentDispatchHubView> createState() => _AgentDispatchHubViewState();
@@ -163,6 +220,8 @@ class AgentDispatchHubView extends StatefulWidget {
 
 class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
   Timer? _ticker;
+  final _startingIds = <String>{};
+  final _stoppingIds = <String>{};
 
   @override
   void initState() {
@@ -176,6 +235,15 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
     final wasRunning = oldWidget.items.any((item) => item.running);
     final isRunning = widget.items.any((item) => item.running);
     if (wasRunning != isRunning) _syncTicker();
+    _pruneActionIds();
+  }
+
+  void _pruneActionIds() {
+    final byId = {
+      for (final item in widget.items) item.projectId: item.running,
+    };
+    _startingIds.removeWhere((id) => byId[id] == true || !byId.containsKey(id));
+    _stoppingIds.removeWhere((id) => byId[id] != true);
   }
 
   void _syncTicker() {
@@ -185,6 +253,34 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  Future<void> _handleRun(String projectId) async {
+    if (_startingIds.contains(projectId) || _stoppingIds.contains(projectId)) {
+      return;
+    }
+    setState(() => _startingIds.add(projectId));
+    try {
+      await widget.onRunProject(projectId);
+    } finally {
+      if (mounted) {
+        setState(() => _startingIds.remove(projectId));
+      }
+    }
+  }
+
+  Future<void> _handleStop(String projectId) async {
+    if (_stoppingIds.contains(projectId) || _startingIds.contains(projectId)) {
+      return;
+    }
+    setState(() => _stoppingIds.add(projectId));
+    try {
+      await widget.onStopProject(projectId);
+    } finally {
+      if (mounted) {
+        setState(() => _stoppingIds.remove(projectId));
+      }
+    }
   }
 
   @override
@@ -218,7 +314,11 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
                   final item = widget.items[index];
                   return _HubProjectTile(
                     item: item,
+                    starting: _startingIds.contains(item.projectId),
+                    stopping: _stoppingIds.contains(item.projectId),
                     onOpen: () => widget.onOpenProject(item.projectId),
+                    onRun: () => _handleRun(item.projectId),
+                    onStop: () => _handleStop(item.projectId),
                   );
                 },
               ),
@@ -231,10 +331,21 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
 }
 
 class _HubProjectTile extends StatelessWidget {
-  const _HubProjectTile({required this.item, required this.onOpen});
+  const _HubProjectTile({
+    required this.item,
+    required this.starting,
+    required this.stopping,
+    required this.onOpen,
+    required this.onRun,
+    required this.onStop,
+  });
 
   final AgentDispatchHubItem item;
+  final bool starting;
+  final bool stopping;
   final VoidCallback onOpen;
+  final VoidCallback onRun;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -252,6 +363,7 @@ class _HubProjectTile extends StatelessWidget {
           )
         : null;
     final status = overview?.statusLine ?? '未运行';
+    final actionsBusy = starting || stopping;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       leading: Icon(
@@ -326,11 +438,38 @@ class _HubProjectTile extends StatelessWidget {
             const SizedBox(height: 8),
             LinearProgressIndicator(value: item.progressFraction),
           ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (item.running)
+                OutlinedButton(
+                  key: ValueKey('agent-dispatch-hub-stop-${item.projectId}'),
+                  onPressed: actionsBusy ? null : onStop,
+                  child: Text(stopping ? '停止中…' : '停止'),
+                )
+              else
+                FilledButton.tonalIcon(
+                  key: ValueKey('agent-dispatch-hub-run-${item.projectId}'),
+                  onPressed: actionsBusy ? null : onRun,
+                  icon: starting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow),
+                  label: Text(starting ? '启动中…' : '运行'),
+                ),
+              TextButton(
+                onPressed: onOpen,
+                child: Text(item.running ? '查看' : '打开'),
+              ),
+            ],
+          ),
         ],
-      ),
-      trailing: TextButton(
-        onPressed: onOpen,
-        child: Text(item.running ? '查看' : '打开'),
       ),
       onTap: onOpen,
     );

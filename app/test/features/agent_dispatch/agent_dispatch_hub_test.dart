@@ -67,6 +67,8 @@ void main() {
           ],
           onClose: () {},
           onOpenProject: (_) {},
+          onRunProject: (_) async {},
+          onStopProject: (_) async {},
         ),
       ),
     );
@@ -79,6 +81,8 @@ void main() {
     expect(find.text('当前'), findsOneWidget);
     expect(find.text('查看'), findsOneWidget);
     expect(find.text('打开'), findsOneWidget);
+    expect(find.text('停止'), findsOneWidget);
+    expect(find.text('运行'), findsOneWidget);
   });
 
   test('总览文案包含标题、模型与批次/本卡耗时', () {
@@ -148,6 +152,8 @@ void main() {
           ],
           onClose: () {},
           onOpenProject: (_) {},
+          onRunProject: (_) async {},
+          onStopProject: (_) async {},
         ),
       ),
     );
@@ -158,5 +164,42 @@ void main() {
     expect(find.text('上下文 272k · 快速模式 开'), findsOneWidget);
     expect(find.textContaining('批次'), findsOneWidget);
     expect(find.textContaining('本卡'), findsOneWidget);
+  });
+
+  testWidgets('总览可直接点运行与停止', (tester) async {
+    final ran = <String>[];
+    final stopped = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AgentDispatchHubView(
+          items: const [
+            AgentDispatchHubItem(
+              projectId: 'a',
+              title: '项目甲',
+              running: false,
+            ),
+            AgentDispatchHubItem(
+              projectId: 'b',
+              title: '项目乙',
+              running: true,
+              progressLabel: '1/2',
+              progressFraction: 0.5,
+            ),
+          ],
+          onClose: () {},
+          onOpenProject: (_) {},
+          onRunProject: (id) async => ran.add(id),
+          onStopProject: (id) async => stopped.add(id),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-hub-run-a')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-hub-stop-b')));
+    await tester.pump();
+
+    expect(ran, equals(['a']));
+    expect(stopped, equals(['b']));
   });
 }
