@@ -12,10 +12,14 @@ import 'agent_dispatch_service.dart';
 class CardAgentConversationSection extends StatelessWidget {
   const CardAgentConversationSection({
     required this.cardId,
+    this.onSubmittedClose,
     super.key,
   });
 
   final String cardId;
+
+  /// 提交追问或回复成功后关闭对话与上层界面（卡片详情等）。
+  final Future<void> Function()? onSubmittedClose;
 
   @override
   Widget build(BuildContext context) {
@@ -27,10 +31,13 @@ class CardAgentConversationSection extends StatelessWidget {
       key: const ValueKey('card-agent-conversation-open'),
       onPressed: card == null
           ? null
-          : () => showCardAgentConversationDialog(
+          : () {
+              showCardAgentConversationDialog(
                 context: context,
                 cardId: cardId,
-              ),
+                onSubmittedClose: onSubmittedClose,
+              );
+            },
       icon: Icon(hasHistory ? Icons.forum : Icons.forum_outlined),
       label: Text(hasHistory ? '查看 / 追问 Agent' : 'Agent 对话'),
     );
@@ -40,17 +47,25 @@ class CardAgentConversationSection extends StatelessWidget {
 Future<void> showCardAgentConversationDialog({
   required BuildContext context,
   required String cardId,
+  Future<void> Function()? onSubmittedClose,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _CardAgentConversationDialog(cardId: cardId),
+    builder: (_) => _CardAgentConversationDialog(
+      cardId: cardId,
+      onSubmittedClose: onSubmittedClose,
+    ),
   );
 }
 
 class _CardAgentConversationDialog extends StatefulWidget {
-  const _CardAgentConversationDialog({required this.cardId});
+  const _CardAgentConversationDialog({
+    required this.cardId,
+    this.onSubmittedClose,
+  });
 
   final String cardId;
+  final Future<void> Function()? onSubmittedClose;
 
   @override
   State<_CardAgentConversationDialog> createState() =>
@@ -123,14 +138,12 @@ class _CardAgentConversationDialogState
         final historyError =
             await _board.setCardAgentConversation(widget.cardId, markdown);
         if (historyError != null) throw StateError(historyError);
-        if (mounted) {
-          showAppSnackBar(
-            context,
-            message: '追问已写入对话并加入待返工；下次调度会继续读取上下文',
-          );
-        }
       }
       _input.clear();
+      if (!mounted) return;
+      final closer = widget.onSubmittedClose;
+      Navigator.of(context, rootNavigator: true).pop();
+      await closer?.call();
     } catch (error) {
       if (mounted) showAppSnackBar(context, message: '发送失败：$error');
     } finally {

@@ -538,8 +538,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     // 先占位防 PopScope/连点重复写入；失败时回滚以便重试。
     _persisted = true;
     try {
+      final persistColumnId =
+          _boardController.findColumnIdForCard(widget.card.id) ??
+              widget.columnId;
       final updateError = await _boardController.updateCardFull(
-        widget.columnId,
+        persistColumnId,
         widget.card.id,
         title: title,
         description: description,
@@ -627,6 +630,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       return;
     }
     if (mounted) Navigator.pop(context);
+  }
+
+  /// 追问已写入看板后，同步详情本地列表再保存关闭，避免打开快照覆盖反馈/附件。
+  Future<void> _saveAndCloseAfterAgentFollowUp() async {
+    final live = _liveCard;
+    if (live != null) {
+      _verificationFeedback = [...live.verificationFeedback];
+      _fileAttachments = [...live.sortedFileAttachments];
+    }
+    await _save();
   }
 
   /// 待验证详情：先保存编辑，再按看板完成逻辑移入「已完成」并关闭。
@@ -1139,6 +1152,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           alignment: Alignment.centerLeft,
                           child: CardAgentConversationSection(
                             cardId: widget.card.id,
+                            onSubmittedClose: _saveAndCloseAfterAgentFollowUp,
                           ),
                         ),
                         const SizedBox(height: 12),
