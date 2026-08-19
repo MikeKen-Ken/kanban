@@ -45,6 +45,8 @@ typedef RegQueryRunner = ({int exitCode, String stdout}) Function(
 
 typedef DirectoryExists = bool Function(String path);
 
+typedef FileExists = bool Function(String path);
+
 /// 组装 Worker 进程环境：合并 Windows 用户/系统 PATH，并加入 FLUTTER_ROOT 与常见 SDK 位置。
 WorkerEnvironmentBuild buildWorkerEnvironment({
   required Map<String, String> processEnvironment,
@@ -52,6 +54,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
   String? cursorApiKey,
   WindowsRegistryEnvironment? windowsRegistry,
   DirectoryExists? directoryExists,
+  FileExists? fileExists,
   String? pathSeparator,
   int? totalPhysicalMemoryMb,
 }) {
@@ -61,6 +64,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
   final separator = pathSeparator ?? (Platform.isWindows ? ';' : ':');
   final ctx = separator == ';' ? p.windows : p.posix;
   final exists = directoryExists ?? (path) => Directory(path).existsSync();
+  final fileIsPresent = fileExists ?? (path) => File(path).existsSync();
   final nodeDir = ctx.dirname(nodeExecutable);
   final originalPath = _envValue(environment, 'Path') ??
       _envValue(environment, 'PATH') ??
@@ -110,6 +114,24 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
 
   environment['Path'] = mergedPath;
   environment['PATH'] = mergedPath;
+  final gitBash = separator == ';'
+      ? resolveWindowsGitBash(
+          environment: environment,
+          separator: separator,
+          ctx: ctx,
+          fileExists: fileIsPresent,
+        )
+      : null;
+  if (gitBash != null) {
+    environment['SHELL'] = gitBash;
+    final gitBin = ctx.dirname(gitBash);
+    final withGitBin = mergePathEntries(
+      [gitBin, environment['Path'] ?? mergedPath],
+      separator: separator,
+    );
+    environment['Path'] = withGitBin;
+    environment['PATH'] = withGitBin;
+  }
   if (flutterRoot != null && flutterRoot.trim().isNotEmpty) {
     environment['FLUTTER_ROOT'] = expandWindowsEnvVars(flutterRoot, environment);
   } else if (flutterBins.isNotEmpty) {
@@ -135,6 +157,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
     summary: _summary(
       mergedWindowsPath: windowsRegistry?.hasPath ?? false,
       flutterBin: flutterBins.isEmpty ? null : flutterBins.first,
+      gitBash: gitBash,
       nodeHeapMb: parseNodeMaxOldSpaceSizeMb(environment['NODE_OPTIONS']),
       totalPhysicalMb: totalPhysicalMemoryMb,
       heapOverridden: parseNodeMaxOldSpaceSizeMb(
@@ -163,6 +186,72 @@ WindowsRegistryEnvironment readWindowsRegistryEnvironment({
     machineFlutterRoot: _queryRegValue(run, _hklmEnvironment, 'FLUTTER_ROOT'),
     userFlutterRoot: _queryRegValue(run, _hkcuEnvironment, 'FLUTTER_ROOT'),
   );
+}
+
+/// Cursor SDK 在 Windows 上若 `SHELL` 指向 Git Bash，会改用 bash（支持 `&&`），
+/// 而不是系统自带的 PowerShell 5.1。
+String? resolveWindowsGitBash({
+  required Map<String, String> environment,
+  required String separator,
+  required p.Context ctx,
+  required FileExists fileExists,
+}) {
+  final existing = _envValue(environment, 'SHELL');
+  if (existing != null &&
+      _looksLikeGitBash(existing) &&
+      fileExists(existing)) {
+    return existing;
+  }
+
+  final candidates = <String>[];
+  void add(String? path) {
+    final trimmed = path?.trim() ?? '';
+    if (trimmed.isEmpty) return;
+    candidates.add(trimmed);
+  }
+
+  final pathValue = _envValue(environment, 'Path') ??
+      _envValue(environment, 'PATH') ??
+      '';
+  for (final raw in pathValue.split(separator)) {
+    final dir = raw.trim();
+    if (dir.isEmpty) continue;
+    final base = ctx.basename(dir).toLowerCase();
+    if (base == 'cmd') {
+      add(ctx.join(ctx.dirname(dir), 'bin', 'bash.exe'));
+    } else if (base == 'bin') {
+      add(ctx.join(dir, 'bash.exe'));
+    }
+    add(ctx.join(dir, 'bash.exe'));
+  }
+
+  for (final name in const ['ProgramFiles', 'ProgramFiles(x86)']) {
+    final root = _envValue(environment, name);
+    if (root == null || root.trim().isEmpty) continue;
+    add(
+      ctx.join(
+        expandWindowsEnvVars(root, environment),
+        'Git',
+        'bin',
+        'bash.exe',
+      ),
+    );
+  }
+
+  final seen = <String>{};
+  for (final candidate in candidates) {
+    final key = candidate.toLowerCase();
+    if (!seen.add(key)) continue;
+    if (fileExists(candidate) && _looksLikeGitBash(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+bool _looksLikeGitBash(String path) {
+  final normalized = path.replaceAll('\\', '/').toLowerCase();
+  return normalized.contains('git') && normalized.endsWith('bash.exe');
 }
 
 String mergePathEntries(
@@ -281,6 +370,7 @@ String? _firstNonEmpty(List<String?> values) {
 String _summary({
   required bool mergedWindowsPath,
   required String? flutterBin,
+  String? gitBash,
   int? nodeHeapMb,
   int? totalPhysicalMb,
   required bool heapOverridden,
@@ -294,6 +384,9 @@ String _summary({
     buffer.write('已合并用户/系统 PATH');
   } else {
     buffer.write('沿用看板进程 PATH');
+  }
+  if (gitBash != null && gitBash.trim().isNotEmpty) {
+    buffer.write('；Cursor Agent Shell 使用 Git Bash（$gitBash）');
   }
   if (nodeHeapMb != null) {
     buffer.write('；Node 堆上限 ${nodeHeapMb}MB');

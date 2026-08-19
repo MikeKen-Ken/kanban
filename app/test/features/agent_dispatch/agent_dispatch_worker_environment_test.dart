@@ -214,4 +214,56 @@ HKEY_CURRENT_USER\\Environment
     expect(registry.userFlutterRoot, r'C:\flutter');
     expect(registry.hasPath, isTrue);
   });
+
+  test('Windows 上发现 Git Bash 时写入 SHELL 并前置其 bin', () {
+    final built = buildWorkerEnvironment(
+      processEnvironment: const {
+        'Path': r'D:\Program Files\Git\cmd;C:\Windows',
+        'ProgramFiles': r'C:\Program Files',
+      },
+      nodeExecutable: r'C:\node\node.exe',
+      pathSeparator: ';',
+      fileExists: (path) =>
+          path == r'D:\Program Files\Git\bin\bash.exe',
+    );
+
+    expect(built.environment['SHELL'], r'D:\Program Files\Git\bin\bash.exe');
+    expect(
+      built.environment['Path']!.startsWith(r'D:\Program Files\Git\bin;'),
+      isTrue,
+    );
+    expect(built.summary, contains('Git Bash'));
+    expect(built.summary, contains(r'D:\Program Files\Git\bin\bash.exe'));
+  });
+
+  test('未找到 Git Bash 时不改 SHELL', () {
+    final built = buildWorkerEnvironment(
+      processEnvironment: const {
+        'Path': r'C:\Windows',
+        'ProgramFiles': r'C:\Program Files',
+      },
+      nodeExecutable: r'C:\node\node.exe',
+      pathSeparator: ';',
+      fileExists: (_) => false,
+    );
+
+    expect(built.environment.containsKey('SHELL'), isFalse);
+    expect(built.summary, isNot(contains('Git Bash')));
+  });
+
+  test('已有 Git Bash 的 SHELL 保持原值', () {
+    const shell = r'E:\tools\Git\bin\bash.exe';
+    final built = buildWorkerEnvironment(
+      processEnvironment: const {
+        'Path': r'C:\Windows',
+        'SHELL': shell,
+      },
+      nodeExecutable: r'C:\node\node.exe',
+      pathSeparator: ';',
+      fileExists: (path) => path == shell,
+    );
+
+    expect(built.environment['SHELL'], shell);
+    expect(built.environment['Path']!.startsWith(r'E:\tools\Git\bin;'), isTrue);
+  });
 }
