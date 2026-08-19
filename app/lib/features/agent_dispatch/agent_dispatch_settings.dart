@@ -51,6 +51,8 @@ class AgentDispatchSettings {
     this.cardLimitCount = 1,
     this.afterQueue = const [],
     this.runAfterQueueOnFailure = true,
+    this.afterQueueByProject = const {},
+    this.runAfterQueueOnFailureByProject = const {},
     this.workerScriptPath,
     this.skillPath,
     this.repoPathByProject = const {},
@@ -93,11 +95,17 @@ class AgentDispatchSettings {
   final bool cardLimitMax;
   final int cardLimitCount;
 
-  /// 批次结束后按顺序执行的动作。
+  /// 旧版全局完成后队列；仅当尚未有任何按项目配置时作为回退。
   final List<AgentDispatchAfterStep> afterQueue;
 
-  /// 批次因配额、网络等失败时仍执行完成后队列；手动停止不会触发。默认勾选。
+  /// 旧版全局「失败后仍执行」；仅当尚未有任何按项目配置时作为回退。
   final bool runAfterQueueOnFailure;
+
+  /// 各项目独立的完成后队列；避免项目之间推送等动作互相覆盖。
+  final Map<String, List<AgentDispatchAfterStep>> afterQueueByProject;
+
+  /// 各项目独立的「失败后仍执行」。
+  final Map<String, bool> runAfterQueueOnFailureByProject;
 
   final String? workerScriptPath;
   final String? skillPath;
@@ -125,6 +133,8 @@ class AgentDispatchSettings {
     int? cardLimitCount,
     List<AgentDispatchAfterStep>? afterQueue,
     bool? runAfterQueueOnFailure,
+    Map<String, List<AgentDispatchAfterStep>>? afterQueueByProject,
+    Map<String, bool>? runAfterQueueOnFailureByProject,
     Object? workerScriptPath = _sentinel,
     Object? skillPath = _sentinel,
     Map<String, String>? repoPathByProject,
@@ -148,6 +158,9 @@ class AgentDispatchSettings {
       afterQueue: afterQueue ?? this.afterQueue,
       runAfterQueueOnFailure:
           runAfterQueueOnFailure ?? this.runAfterQueueOnFailure,
+      afterQueueByProject: afterQueueByProject ?? this.afterQueueByProject,
+      runAfterQueueOnFailureByProject: runAfterQueueOnFailureByProject ??
+          this.runAfterQueueOnFailureByProject,
       workerScriptPath: workerScriptPath == _sentinel
           ? this.workerScriptPath
           : workerScriptPath as String?,
@@ -171,6 +184,48 @@ class AgentDispatchSettings {
     final fallback = repoPath?.trim();
     if (fallback != null && fallback.isNotEmpty) return fallback;
     return null;
+  }
+
+  bool get _hasPerProjectAfterQueue =>
+      afterQueueByProject.isNotEmpty ||
+      runAfterQueueOnFailureByProject.isNotEmpty;
+
+  /// 解析某项目完成后队列：有项目配置用项目的；尚无任何项目配置时回退旧全局值。
+  List<AgentDispatchAfterStep> afterQueueFor(String? projectId) {
+    if (projectId != null && afterQueueByProject.containsKey(projectId)) {
+      return afterQueueByProject[projectId]!;
+    }
+    if (!_hasPerProjectAfterQueue) return afterQueue;
+    return const [];
+  }
+
+  /// 解析某项目「失败后仍执行」：逻辑同 [afterQueueFor]。
+  bool runAfterQueueOnFailureFor(String? projectId) {
+    if (projectId != null &&
+        runAfterQueueOnFailureByProject.containsKey(projectId)) {
+      return runAfterQueueOnFailureByProject[projectId]!;
+    }
+    if (!_hasPerProjectAfterQueue) return runAfterQueueOnFailure;
+    return true;
+  }
+
+  /// 把完成后队列绑到指定项目；不改写其它项目或旧全局回退字段。
+  AgentDispatchSettings bindAfterQueueToProject(
+    String projectId, {
+    List<AgentDispatchAfterStep>? steps,
+    bool? runOnFailure,
+  }) {
+    final afterMap =
+        Map<String, List<AgentDispatchAfterStep>>.from(afterQueueByProject);
+    final runMap = Map<String, bool>.from(runAfterQueueOnFailureByProject);
+    afterMap[projectId] = List<AgentDispatchAfterStep>.unmodifiable(
+      steps ?? afterQueueFor(projectId),
+    );
+    runMap[projectId] = runOnFailure ?? runAfterQueueOnFailureFor(projectId);
+    return copyWith(
+      afterQueueByProject: afterMap,
+      runAfterQueueOnFailureByProject: runMap,
+    );
   }
 
   /// 把仓库绑到指定项目，并记入历史；不改写其它项目或全局 [repoPath]。
@@ -308,6 +363,13 @@ class AgentDispatchSettings {
         if (afterQueue.isNotEmpty)
           'afterQueue': afterQueue.map((step) => step.name).toList(),
         'runAfterQueueOnFailure': runAfterQueueOnFailure,
+        if (afterQueueByProject.isNotEmpty)
+          'afterQueueByProject': {
+            for (final entry in afterQueueByProject.entries)
+              entry.key: entry.value.map((step) => step.name).toList(),
+          },
+        if (runAfterQueueOnFailureByProject.isNotEmpty)
+          'runAfterQueueOnFailureByProject': runAfterQueueOnFailureByProject,
         if (workerScriptPath != null) 'workerScriptPath': workerScriptPath,
         if (skillPath != null) 'skillPath': skillPath,
         if (repoPathByProject.isNotEmpty)
@@ -367,6 +429,22 @@ class AgentDispatchSettings {
         modelParamValues: modelParamValues,
       );
     }
+    final afterByProjectRaw =
+        json['afterQueueByProject'] as Map<String, dynamic>?;
+    final afterQueueByProject = afterByProjectRaw == null
+        ? const <String, List<AgentDispatchAfterStep>>{}
+        : {
+            for (final entry in afterByProjectRaw.entries)
+              entry.key: parseAgentDispatchAfterQueue(entry.value),
+          };
+    final runByProjectRaw =
+        json['runAfterQueueOnFailureByProject'] as Map<String, dynamic>?;
+    final runAfterQueueOnFailureByProject = runByProjectRaw == null
+        ? const <String, bool>{}
+        : {
+            for (final entry in runByProjectRaw.entries)
+              entry.key: entry.value == true,
+          };
     return AgentDispatchSettings(
       engine: engine,
       useProject: json['useProject'] as bool? ?? false,
@@ -384,6 +462,8 @@ class AgentDispatchSettings {
           1,
       afterQueue: parseAgentDispatchAfterQueue(json['afterQueue']),
       runAfterQueueOnFailure: json['runAfterQueueOnFailure'] as bool? ?? true,
+      afterQueueByProject: afterQueueByProject,
+      runAfterQueueOnFailureByProject: runAfterQueueOnFailureByProject,
       workerScriptPath: json['workerScriptPath'] as String?,
       skillPath: json['skillPath'] as String?,
       repoPathByProject: mapRaw == null

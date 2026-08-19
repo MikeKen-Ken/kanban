@@ -200,11 +200,29 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
   Future<void> _persist(AgentDispatchSettings next) async {
     final synced = next.rememberActiveEngineProfile();
-    setState(() => _settings = synced);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.saveAgentDispatchSettings(synced);
+    final disk = prefs.loadAgentDispatchSettings();
+    final projectId = widget.projectId;
+    final afterMap = Map<String, List<AgentDispatchAfterStep>>.from(
+      disk.afterQueueByProject,
+    );
+    final runMap = Map<String, bool>.from(
+      disk.runAfterQueueOnFailureByProject,
+    );
+    if (synced.afterQueueByProject.containsKey(projectId)) {
+      afterMap[projectId] = synced.afterQueueByProject[projectId]!;
+    }
+    if (synced.runAfterQueueOnFailureByProject.containsKey(projectId)) {
+      runMap[projectId] = synced.runAfterQueueOnFailureByProject[projectId]!;
+    }
+    final merged = synced.copyWith(
+      afterQueueByProject: afterMap,
+      runAfterQueueOnFailureByProject: runMap,
+    );
+    setState(() => _settings = merged);
+    await prefs.saveAgentDispatchSettings(merged);
     if (_service.isRunning && mounted) {
-      await _pushLiveRunOptions(synced);
+      await _pushLiveRunOptions(merged);
     }
   }
 
@@ -228,8 +246,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final saving = _persist(next);
     if (_service.isRunning) {
       _service.updateAfterQueue(
-        steps: next.afterQueue,
-        runOnFailure: next.runAfterQueueOnFailure,
+        steps: next.afterQueueFor(widget.projectId),
+        runOnFailure: next.runAfterQueueOnFailureFor(widget.projectId),
       );
     }
     await saving;
@@ -597,8 +615,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       closeScopedEndpoint: board.mcpHost.closeScopedEndpoint,
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
-      afterQueue: next.afterQueue,
-      runAfterQueueOnFailure: next.runAfterQueueOnFailure,
+      afterQueue: next.afterQueueFor(projectId),
+      runAfterQueueOnFailure: next.runAfterQueueOnFailureFor(projectId),
       afterQueueHost: AgentDispatchAfterQueueHost(
         uploadAll: board.uploadNow,
         gitPush: () => gitPushWithRebase(repoPath: options.repoPath),
@@ -897,17 +915,24 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               ),
               const SizedBox(height: 12),
               AgentDispatchAfterQueueField(
-                steps: _settings.afterQueue,
+                steps: _settings.afterQueueFor(widget.projectId),
                 enabled: !_busy,
                 onChanged: (steps) async {
                   await _persistAfterQueue(
-                    _settings.copyWith(afterQueue: steps),
+                    _settings.bindAfterQueueToProject(
+                      widget.projectId,
+                      steps: steps,
+                    ),
                   );
                 },
-                runOnFailure: _settings.runAfterQueueOnFailure,
+                runOnFailure:
+                    _settings.runAfterQueueOnFailureFor(widget.projectId),
                 onRunOnFailureChanged: (value) async {
                   await _persistAfterQueue(
-                    _settings.copyWith(runAfterQueueOnFailure: value),
+                    _settings.bindAfterQueueToProject(
+                      widget.projectId,
+                      runOnFailure: value,
+                    ),
                   );
                 },
               ),

@@ -140,6 +140,33 @@ void main() {
     expect(loaded.afterQueue, settings.afterQueue);
   });
 
+  test('保存并加载按项目完成后队列且互不串扰', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final settings = const AgentDispatchSettings().bindAfterQueueToProject(
+      'proj-a',
+      steps: const [AgentDispatchAfterStep.gitPush],
+      runOnFailure: true,
+    ).bindAfterQueueToProject(
+      'proj-b',
+      steps: const [AgentDispatchAfterStep.webdavUpload],
+      runOnFailure: false,
+    );
+
+    await prefs.saveAgentDispatchSettings(settings);
+    final loaded = prefs.loadAgentDispatchSettings();
+
+    expect(loaded.afterQueueFor('proj-a'), [AgentDispatchAfterStep.gitPush]);
+    expect(
+      loaded.afterQueueFor('proj-b'),
+      [AgentDispatchAfterStep.webdavUpload],
+    );
+    expect(loaded.runAfterQueueOnFailureFor('proj-a'), isTrue);
+    expect(loaded.runAfterQueueOnFailureFor('proj-b'), isFalse);
+    expect(loaded.afterQueueFor('proj-c'), isEmpty);
+  });
+
   test('缺少 afterQueue 的旧设置回退为空队列，失败后仍执行默认勾选', () {
     final settings = AgentDispatchSettings.fromJson({});
     expect(settings.afterQueue, isEmpty);

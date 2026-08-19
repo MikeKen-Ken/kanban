@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_after_queue.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_credentials.dart';
@@ -367,6 +368,59 @@ disable-model-invocation: true
     expect(next.repoPathFor('a'), '/legacy');
     expect(next.repoPathFor('b'), '/b');
     expect(next.repoPath, '/legacy');
+  });
+
+  test('完成后队列按项目隔离，互不覆盖', () {
+    const settings = AgentDispatchSettings(
+      afterQueue: [AgentDispatchAfterStep.gitPush],
+    );
+
+    // 尚无按项目配置时，仍回退旧全局值
+    expect(settings.afterQueueFor('a'), [AgentDispatchAfterStep.gitPush]);
+    expect(settings.afterQueueFor('b'), [AgentDispatchAfterStep.gitPush]);
+
+    final withA = settings.bindAfterQueueToProject(
+      'a',
+      steps: const [AgentDispatchAfterStep.gitPush],
+      runOnFailure: true,
+    );
+    expect(withA.afterQueueFor('a'), [AgentDispatchAfterStep.gitPush]);
+    // 任一项目已写入后，未配置的项目不再继承全局推送
+    expect(withA.afterQueueFor('b'), isEmpty);
+    expect(withA.runAfterQueueOnFailureFor('b'), isTrue);
+
+    final withB = withA.bindAfterQueueToProject(
+      'b',
+      steps: const [AgentDispatchAfterStep.webdavUpload],
+      runOnFailure: false,
+    );
+    expect(withB.afterQueueFor('a'), [AgentDispatchAfterStep.gitPush]);
+    expect(withB.afterQueueFor('b'), [AgentDispatchAfterStep.webdavUpload]);
+    expect(withB.runAfterQueueOnFailureFor('a'), isTrue);
+    expect(withB.runAfterQueueOnFailureFor('b'), isFalse);
+    // 旧全局字段保持不变，仅作迁移回退
+    expect(withB.afterQueue, [AgentDispatchAfterStep.gitPush]);
+  });
+
+  test('按项目完成后队列 JSON 往返', () {
+    const original = AgentDispatchSettings(
+      afterQueueByProject: {
+        'a': [AgentDispatchAfterStep.gitPush, AgentDispatchAfterStep.sleep],
+        'b': [AgentDispatchAfterStep.webdavUpload],
+      },
+      runAfterQueueOnFailureByProject: {
+        'a': true,
+        'b': false,
+      },
+    );
+    final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
+    expect(roundTrip.afterQueueFor('a'), [
+      AgentDispatchAfterStep.gitPush,
+      AgentDispatchAfterStep.sleep,
+    ]);
+    expect(roundTrip.afterQueueFor('b'), [AgentDispatchAfterStep.webdavUpload]);
+    expect(roundTrip.runAfterQueueOnFailureFor('a'), isTrue);
+    expect(roundTrip.runAfterQueueOnFailureFor('b'), isFalse);
   });
 
   test('旧版单一模型参数迁移到参数映射', () {
