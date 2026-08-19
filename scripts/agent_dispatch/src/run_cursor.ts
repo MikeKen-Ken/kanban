@@ -16,6 +16,7 @@ import {
   fallbackDisallowedTools,
 } from "./cursor_disallowed_tools.ts";
 import { installCursorSdkScanLogTap } from "./cursor_sdk_scan_log.ts";
+import { CursorThinkingStream } from "./cursor_thinking_stream.ts";
 import {
   formatSessionTokenLog,
   toDashboardTokenUsage,
@@ -387,6 +388,7 @@ export async function runCursor(
     let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
     let agent;
     const stopScanLog = installCursorSdkScanLogTap();
+    let thinkingStream: CursorThinkingStream | undefined;
     try {
       try {
         agent = await Agent.create({
@@ -417,6 +419,8 @@ export async function runCursor(
           `settingSources=project（SDK 扫描用户主目录后按仓库路径过滤；用户 Rule 已由 Worker 注入；保留项目规则 / Skill / Hooks）`,
       );
       logLine("本地会话已创建，开始执行…");
+      thinkingStream = new CursorThinkingStream();
+      thinkingStream.notePromptSent();
       emitSessionStart(job);
       const sessionUser = sessionStartText(job);
       if (sessionUser) live.push({ role: "user", text: sessionUser });
@@ -449,6 +453,9 @@ export async function runCursor(
         images: job.round.images,
       }, {
         mcpServers: mcp.servers,
+        onDelta: ({ update }) => {
+          thinkingStream?.handleDelta(update);
+        },
         onStep: async ({ step }) => {
           try {
             stepCount += 1;
@@ -461,7 +468,10 @@ export async function runCursor(
               toolName: described.toolName,
               detail: described.detail,
             });
-            if (described.lines.length > 0) {
+            const skipThinkingDump =
+              step.type === "thinkingMessage" &&
+              thinkingStream?.consumeStreamedThinking() === true;
+            if (!skipThinkingDump && described.lines.length > 0) {
               logLines(described.lines, described.source);
             }
             if (step.type === "assistantMessage") {
