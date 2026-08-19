@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/app_update/app_update_installer.dart';
+import 'package:kanban/features/app_update/app_update_service.dart';
 import 'package:kanban/features/app_update/github_release_client.dart';
 import 'package:kanban/features/app_update/github_release_models.dart';
 import 'package:kanban/features/app_update/release_notes_plain_text.dart';
@@ -9,6 +10,57 @@ import 'package:kanban/features/app_update/version_compare.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  group('isReusableDownloadedPackage', () {
+    test('不存在或空文件不可复用', () {
+      expect(
+        AppUpdateService.isReusableDownloadedPackage(
+          exists: false,
+          length: 0,
+          expectedSize: 10,
+        ),
+        isFalse,
+      );
+      expect(
+        AppUpdateService.isReusableDownloadedPackage(
+          exists: true,
+          length: 0,
+          expectedSize: 10,
+        ),
+        isFalse,
+      );
+    });
+
+    test('已知 size 时仅长度一致可复用', () {
+      expect(
+        AppUpdateService.isReusableDownloadedPackage(
+          exists: true,
+          length: 9,
+          expectedSize: 10,
+        ),
+        isFalse,
+      );
+      expect(
+        AppUpdateService.isReusableDownloadedPackage(
+          exists: true,
+          length: 10,
+          expectedSize: 10,
+        ),
+        isTrue,
+      );
+    });
+
+    test('未知 size 时非空文件可复用（避免重复下载）', () {
+      expect(
+        AppUpdateService.isReusableDownloadedPackage(
+          exists: true,
+          length: 1024,
+          expectedSize: 0,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('VersionCompare', () {
     test('解析 v 前缀与 build 号', () {
       expect(VersionCompare.parse('v1.2.3'), [1, 2, 3]);

@@ -158,6 +158,8 @@ class AppUpdateService {
   }
 
   /// 下载并安装；Windows 成功时进程会退出。
+  ///
+  /// 若本地已有完整安装包（例如 Android 已下载但未完成安装），则跳过下载直接安装。
   Future<void> downloadAndInstall(
     AppUpdateCheckResult check, {
     void Function(double? progress)? onProgress,
@@ -174,11 +176,11 @@ class AppUpdateService {
       'kanban_download_${asset.name}',
     );
     final file = File(downloadPath);
-    if (await file.exists()) {
-      await file.delete();
+    if (!await _ensureLocalPackage(file, asset)) {
+      await _downloadToCompleteFile(file, asset, onProgress: onProgress);
+    } else {
+      onProgress?.call(1.0);
     }
-
-    await _client.downloadAsset(asset, file, onProgress: onProgress);
 
     if (!kIsWeb && Platform.isAndroid) {
       await _installer.installAndroidApk(file);
@@ -195,6 +197,50 @@ class AppUpdateService {
     }
 
     throw UnsupportedError('当前平台不支持自动安装');
+  }
+
+  /// 本地是否已有可直接安装的完整包。
+  Future<bool> _ensureLocalPackage(
+    File file,
+    GithubReleaseAsset asset,
+  ) async {
+    if (!await file.exists()) return false;
+    final length = await file.length();
+    return isReusableDownloadedPackage(
+      exists: true,
+      length: length,
+      expectedSize: asset.size,
+    );
+  }
+
+  /// 先下到 `.partial`，成功后再改名为正式文件，避免半成品被当成完整包。
+  Future<void> _downloadToCompleteFile(
+    File file,
+    GithubReleaseAsset asset, {
+    void Function(double? progress)? onProgress,
+  }) async {
+    if (await file.exists()) {
+      await file.delete();
+    }
+    final partial = File('${file.path}.partial');
+    if (await partial.exists()) {
+      await partial.delete();
+    }
+    await _client.downloadAsset(asset, partial, onProgress: onProgress);
+    await partial.rename(file.path);
+  }
+
+  /// 本地安装包是否可跳过重新下载直接安装。
+  @visibleForTesting
+  static bool isReusableDownloadedPackage({
+    required bool exists,
+    required int length,
+    required int expectedSize,
+  }) {
+    if (!exists || length <= 0) return false;
+    if (expectedSize > 0) return length == expectedSize;
+    // 远端 size 未知（如 HEAD 解析路径）时，非空正式文件视为可复用。
+    return true;
   }
 
   void dispose() => _client.close();
