@@ -23,6 +23,46 @@ void main() {
     );
   });
 
+  test('问题正文里的编号列表会还原为点选选项', () {
+    final event = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"question","cardId":"card-a","sessionId":"session-a",'
+      '"requestId":"request-a","text":"请选择方案\\n1. 本机已是最新\\n'
+      '2. 强制使用 pwsh\\n3. 仅执行 winget upgrade",'
+      '"at":"2026-08-19T08:00:00Z"}',
+    );
+    expect(event, isNotNull);
+    expect(event!.choices, [
+      '本机已是最新',
+      '强制使用 pwsh',
+      '仅执行 winget upgrade',
+    ]);
+    expect(
+      appendAgentConversationEvent(null, event),
+      isNot(contains('1. 本机已是最新\n1. 本机已是最新')),
+    );
+  });
+
+  test('提问选项会写入对话并可供界面点选', () {
+    final event = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"question","cardId":"card-a","sessionId":"session-a",'
+      '"requestId":"request-a","text":"请选择方案",'
+      '"choices":["本机已是最新","强制使用 pwsh","仅执行 winget upgrade"],'
+      '"at":"2026-08-19T08:00:00Z"}',
+    );
+    expect(event, isNotNull);
+    expect(event!.choices, [
+      '本机已是最新',
+      '强制使用 pwsh',
+      '仅执行 winget upgrade',
+    ]);
+    expect(
+      appendAgentConversationEvent(null, event),
+      contains('1. 本机已是最新'),
+    );
+  });
+
   test('可从日志前缀后解析交互事件', () {
     final event = parseAgentInteractionEvent(
       '[ai] @@KANBAN_INTERACTION@@'

@@ -448,7 +448,7 @@ export async function runCursor(
       };
       const run = await agent.send({
         text: askUserTool
-          ? `${job.prompt}\n\n## 看板交互\n需要用户确认时必须调用 ask_user；不要调用 askQuestion。ask_user 会暂停本轮并等待看板回复。`
+          ? `${job.prompt}\n\n## 看板交互\n需要用户确认、补充需求或选择方案时必须调用 ask_user；不要调用 askQuestion，也不要只在助手正文里口头列出选项。有 2–4 个互斥方案时必须传入 choices，看板会在最近运行界面弹出选项菜单并等待回复。`
           : job.prompt,
         images: job.round.images,
       }, {

@@ -59,6 +59,114 @@ describe("interaction_bridge", () => {
     }
   });
 
+  it("问题正文中的编号列表会写入提问事件", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kanban-interaction-"));
+    const job = {
+      engine: "cursor",
+      cwd: process.cwd(),
+      prompt: "执行任务",
+      mcpEndpoint: "http://full/mcp",
+      cardLimit: 1,
+      workerToken: "token",
+      interactionDir: dir,
+      outPath: "unused",
+      round: {
+        cardId: "card-a",
+        sessionId: "session-a",
+        agentEndpointUrl: "http://scoped/mcp",
+        images: [],
+        attachmentPaths: [],
+        projectMcpTags: [],
+      },
+    } satisfies RoundDispatchJob;
+    const output: string[] = [];
+    const originalWrite = interactionStdio.write;
+    interactionStdio.write = (line) => {
+      output.push(line);
+    };
+    try {
+      const tool = createAskUserTool(job);
+      assert.ok(tool);
+      const pending = tool.execute(
+        {
+          question:
+            "请选择方案\n1. 本机已是最新\n2. 强制使用 pwsh\n3. 仅执行 winget upgrade",
+        },
+        {},
+      );
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const line = output.find((item) =>
+        item.startsWith(INTERACTION_EVENT_PREFIX)
+      );
+      assert.ok(line);
+      const event = JSON.parse(line.slice(INTERACTION_EVENT_PREFIX.length));
+      assert.deepEqual(event.choices, [
+        "本机已是最新",
+        "强制使用 pwsh",
+        "仅执行 winget upgrade",
+      ]);
+      writeFileSync(
+        join(dir, `${event.requestId}.reply.json`),
+        JSON.stringify({ text: "本机已是最新" }),
+      );
+      assert.equal(await pending, "本机已是最新");
+    } finally {
+      interactionStdio.write = originalWrite;
+    }
+  });
+
+  it("ask_user 会把互斥选项写入提问事件", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kanban-interaction-"));
+    const job = {
+      engine: "cursor",
+      cwd: process.cwd(),
+      prompt: "执行任务",
+      mcpEndpoint: "http://full/mcp",
+      cardLimit: 1,
+      workerToken: "token",
+      interactionDir: dir,
+      outPath: "unused",
+      round: {
+        cardId: "card-a",
+        sessionId: "session-a",
+        agentEndpointUrl: "http://scoped/mcp",
+        images: [],
+        attachmentPaths: [],
+        projectMcpTags: [],
+      },
+    } satisfies RoundDispatchJob;
+    const output: string[] = [];
+    const originalWrite = interactionStdio.write;
+    interactionStdio.write = (line) => {
+      output.push(line);
+    };
+    try {
+      const tool = createAskUserTool(job);
+      assert.ok(tool);
+      const pending = tool.execute(
+        {
+          question: "请选择方案",
+          choices: ["方案 A", "方案 B", "方案 C"],
+        },
+        {},
+      );
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const line = output.find((item) =>
+        item.startsWith(INTERACTION_EVENT_PREFIX)
+      );
+      assert.ok(line);
+      const event = JSON.parse(line.slice(INTERACTION_EVENT_PREFIX.length));
+      assert.deepEqual(event.choices, ["方案 A", "方案 B", "方案 C"]);
+      writeFileSync(
+        join(dir, `${event.requestId}.reply.json`),
+        JSON.stringify({ text: "方案 B" }),
+      );
+      assert.equal(await pending, "方案 B");
+    } finally {
+      interactionStdio.write = originalWrite;
+    }
+  });
+
   it("会话结束时把完整用户与助手消息写入快照文件", () => {
     const dir = mkdtempSync(join(tmpdir(), "kanban-interaction-"));
     const job = {

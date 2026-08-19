@@ -23,6 +23,7 @@ class AgentInteractionEvent {
     required this.at,
     this.projectId,
     this.requestId,
+    this.choices = const [],
   });
 
   final AgentInteractionEventType type;
@@ -32,6 +33,7 @@ class AgentInteractionEvent {
   final DateTime at;
   final String? projectId;
   final String? requestId;
+  final List<String> choices;
 
   bool get awaitsReply =>
       type == AgentInteractionEventType.question &&
@@ -61,6 +63,7 @@ AgentInteractionEvent? parseAgentInteractionEvent(String line) {
     if (type == null || cardId.isEmpty || sessionId.isEmpty || text.isEmpty) {
       return null;
     }
+    final explicitChoices = parseAgentInteractionChoices(raw['choices']);
     return AgentInteractionEvent(
       type: type,
       cardId: cardId,
@@ -69,6 +72,9 @@ AgentInteractionEvent? parseAgentInteractionEvent(String line) {
       at: DateTime.tryParse('${raw['at'] ?? ''}') ?? DateTime.now(),
       projectId: _optionalString(raw['projectId']),
       requestId: _optionalString(raw['requestId']),
+      choices: explicitChoices.isNotEmpty
+          ? explicitChoices
+          : inferAgentInteractionChoices(text),
     );
   } catch (_) {
     return null;
@@ -115,7 +121,10 @@ String appendAgentConversationEvent(
   }
   if (event.type == AgentInteractionEventType.assistant ||
       event.type == AgentInteractionEventType.question) {
-    final coalesced = _coalesceAssistantText(current, event.text);
+    final body = event.type == AgentInteractionEventType.question
+        ? agentInteractionQuestionBody(event)
+        : event.text;
+    final coalesced = _coalesceAssistantText(current, body);
     if (coalesced != null) return coalesced;
   }
   final buffer = StringBuffer((current ?? '').trimRight());
@@ -132,7 +141,7 @@ String appendAgentConversationEvent(
     case AgentInteractionEventType.question:
       buffer
         ..writeln('### 助手')
-        ..write(event.text);
+        ..write(agentInteractionQuestionBody(event));
       break;
     case AgentInteractionEventType.user:
     case AgentInteractionEventType.snapshot:
@@ -253,6 +262,49 @@ String? _optionalString(Object? value) {
   final text = '${value ?? ''}'.trim();
   return text.isEmpty ? null : text;
 }
+
+List<String> parseAgentInteractionChoices(Object? raw) {
+  if (raw is! List) return const [];
+  final choices = <String>[];
+  for (final item in raw) {
+    final text = '$item'.trim();
+    if (text.isEmpty || choices.contains(text)) continue;
+    choices.add(text);
+    if (choices.length >= 4) break;
+  }
+  return choices.length >= 2 ? List<String>.unmodifiable(choices) : const [];
+}
+
+String agentInteractionQuestionBody(AgentInteractionEvent event) {
+  final question = event.text.trim();
+  if (event.choices.isEmpty) return question;
+  if (event.choices.every(question.contains)) return question;
+  final buffer = StringBuffer(question);
+  if (question.isNotEmpty) buffer
+    ..writeln()
+    ..writeln();
+  for (var i = 0; i < event.choices.length; i++) {
+    buffer.write('${i + 1}. ${event.choices[i]}');
+    if (i < event.choices.length - 1) buffer.writeln();
+  }
+  return buffer.toString();
+}
+
+/// 模型常把 2–4 个方案写进问题正文而不传 `choices`；从编号/项目符号列表还原。
+List<String> inferAgentInteractionChoices(String question) {
+  final items = <String>[];
+  for (final line in question.split(RegExp(r'\r?\n'))) {
+    final match = _choiceLinePattern.firstMatch(line);
+    if (match == null) continue;
+    final text = (match.group(1) ?? '').trim();
+    if (text.isEmpty || items.contains(text)) continue;
+    items.add(text);
+    if (items.length >= 4) break;
+  }
+  return parseAgentInteractionChoices(items);
+}
+
+final _choiceLinePattern = RegExp(r'^\s*(?:\d+[\.、\)]|[-*•])\s+(.+)$');
 
 /// 同一轮助手流式快照会越写越长；用较长正文替换上一段，避免只留下开头几句。
 String? _coalesceAssistantText(String? current, String nextText) {

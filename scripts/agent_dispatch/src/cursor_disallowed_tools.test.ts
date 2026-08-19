@@ -7,8 +7,11 @@ import {
 } from "./cursor_disallowed_tools.ts";
 
 describe("cursor_disallowed_tools", () => {
-  it("只禁用 GetMcpTools，不禁 task", () => {
-    assert.deepEqual(CURSOR_WORKER_DISALLOWED_TOOLS, ["GetMcpTools"]);
+  it("禁用 GetMcpTools 与无头 askQuestion，不禁 task", () => {
+    assert.deepEqual(CURSOR_WORKER_DISALLOWED_TOOLS, [
+      "GetMcpTools",
+      "askQuestion",
+    ]);
     assert.equal(CURSOR_WORKER_DISALLOWED_TOOLS.includes("task"), false);
   });
 

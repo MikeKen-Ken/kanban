@@ -1572,13 +1572,20 @@ function createAskUserTool(job, cancellation, onUserReply) {
   if (!interactionDir) return void 0;
   mkdirSync2(interactionDir, { recursive: true });
   return {
-    description: "\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u8C03\u7528\u3002\u5DE5\u5177\u4F1A\u6682\u505C\u5F53\u524D\u5361\u7247\uFF0C\u76F4\u5230\u7528\u6237\u5728\u770B\u677F\u5BF9\u8BDD\u4E2D\u56DE\u590D\u3002",
+    description: "\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u8C03\u7528\u3002\u6709\u4E92\u65A5\u65B9\u6848\u65F6\u4F20\u5165 choices\uFF0C\u770B\u677F\u4F1A\u5F39\u51FA\u9009\u9879\u83DC\u5355\uFF1B\u5DE5\u5177\u4F1A\u6682\u505C\u5F53\u524D\u5361\u7247\uFF0C\u76F4\u5230\u7528\u6237\u56DE\u590D\u3002",
     inputSchema: {
       type: "object",
       properties: {
         question: {
           type: "string",
           description: "\u5411\u7528\u6237\u63D0\u51FA\u7684\u5B8C\u6574\u95EE\u9898\uFF0C\u4F7F\u7528\u7B80\u4F53\u4E2D\u6587\u3002"
+        },
+        choices: {
+          type: "array",
+          description: "2 \u5230 4 \u4E2A\u4E92\u65A5\u9009\u9879\u3002\u6709\u660E\u786E\u65B9\u6848\u65F6\u5FC5\u987B\u63D0\u4F9B\uFF0C\u770B\u677F\u4F1A\u5728\u6700\u8FD1\u8FD0\u884C\u754C\u9762\u5F39\u51FA\u9009\u9879\u83DC\u5355\u4F9B\u7528\u6237\u70B9\u9009\uFF1B\u4E0D\u8981\u53EA\u5728\u6B63\u6587\u91CC\u53E3\u5934\u5217\u51FA\u9009\u9879\u3002",
+          items: { type: "string" },
+          minItems: 2,
+          maxItems: 4
         }
       },
       required: ["question"],
@@ -1589,6 +1596,8 @@ function createAskUserTool(job, cancellation, onUserReply) {
       if (!question) {
         return { content: [{ type: "text", text: "\u95EE\u9898\u4E0D\u80FD\u4E3A\u7A7A" }], isError: true };
       }
+      const explicit = stringListArg(args.choices);
+      const choices = explicit.length > 0 ? explicit : inferChoicesFromQuestion(question);
       const requestId = randomUUID();
       const replyPath = join2(interactionDir, `${requestId}.reply.json`);
       emitInteractionEvent({
@@ -1597,7 +1606,8 @@ function createAskUserTool(job, cancellation, onUserReply) {
         cardId: job.round.cardId,
         sessionId: job.round.sessionId,
         requestId,
-        text: question
+        text: question,
+        ...choices.length > 0 ? { choices } : {}
       });
       const answer = await waitForReply(replyPath, cancellation);
       if (answer && answer !== "\u7528\u6237\u5DF2\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD\u3002") {
@@ -1627,6 +1637,30 @@ async function waitForReply(replyPath, cancellation) {
 }
 function stringArg(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+function stringListArg(value) {
+  if (!Array.isArray(value)) return [];
+  const choices = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const text = item.trim();
+    if (!text || choices.includes(text)) continue;
+    choices.push(text);
+    if (choices.length >= 4) break;
+  }
+  return choices.length >= 2 ? choices : [];
+}
+var choiceLinePattern = /^\s*(?:\d+[\.、\)]|[-*•])\s+(.+)$/;
+function inferChoicesFromQuestion(question) {
+  const items = [];
+  for (const line of question.split(/\r?\n/)) {
+    const match = choiceLinePattern.exec(line);
+    const text = match?.[1]?.trim() ?? "";
+    if (!text || items.includes(text)) continue;
+    items.push(text);
+    if (items.length >= 4) break;
+  }
+  return items.length >= 2 ? items : [];
 }
 function workItems(job) {
   const raw = job.round.cardContext?.workItems;
@@ -2467,6 +2501,116 @@ function wrapWriteStream(stream, buffer) {
   };
 }
 
+// src/cursor_thinking_stream.ts
+function defaultSchedule(fn, ms) {
+  const timer = setTimeout(fn, ms);
+  timer.unref?.();
+  return { cancel: () => clearTimeout(timer) };
+}
+var CursorThinkingStream = class {
+  write;
+  intervalMs;
+  schedule;
+  pending = "";
+  assembled = "";
+  startedBlock = false;
+  streamed = false;
+  scheduled;
+  constructor(options = {}) {
+    this.write = options.write ?? ((line, source) => workerLog(line, source ?? "ai"));
+    this.intervalMs = options.intervalMs ?? 800;
+    this.schedule = options.schedule ?? defaultSchedule;
+  }
+  notePromptSent() {
+    this.write(
+      "\u5DF2\u53D1\u9001\u4EFB\u52A1\uFF0C\u6B63\u5728\u7B49\u5F85\u6A21\u578B\u601D\u8003\u6D41\u3002\u5B8C\u6574\u601D\u8003\u6B65\u9AA4\u8981\u7B49\u8FD9\u6BB5\u601D\u8003\u7ED3\u675F\u540E\u624D\u5230\u8FBE\uFF0C\u4E2D\u95F4\u7A7A\u767D\u4E0D\u4EE3\u8868\u7A7A\u95F2\u3002",
+      "worker"
+    );
+  }
+  handleDelta(update) {
+    if (!update || typeof update !== "object") return;
+    const record = update;
+    const type = typeof record.type === "string" ? record.type : "";
+    if (type === "thinking-delta" && typeof record.text === "string" && record.text) {
+      this.appendDelta(record.text);
+      return;
+    }
+    if (type === "thinking-completed") {
+      this.flush(true);
+      const ms = record.thinkingDurationMs;
+      if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0) {
+        this.write(`\u601D\u8003\u5B8C\u6210\uFF08${Math.round(ms / 1e3)} \u79D2\uFF09`, "ai");
+      }
+    }
+  }
+  /** 若思考已通过增量打出，则跳过 onStep 的整段重复 dump。 */
+  consumeStreamedThinking() {
+    if (!this.streamed) return false;
+    this.streamed = false;
+    this.startedBlock = false;
+    this.assembled = "";
+    return true;
+  }
+  dispose() {
+    this.scheduled?.cancel();
+    this.scheduled = void 0;
+    this.flush(true);
+  }
+  appendDelta(text) {
+    const addition = this.deltaAddition(text);
+    if (!addition) return;
+    this.pending += addition;
+    if (this.pending.includes("\n")) {
+      this.flush(false);
+      return;
+    }
+    this.ensureScheduled();
+  }
+  deltaAddition(text) {
+    if (this.assembled && text.startsWith(this.assembled) && text.length >= this.assembled.length) {
+      const extra = text.slice(this.assembled.length);
+      this.assembled = text;
+      return extra;
+    }
+    this.assembled += text;
+    return text;
+  }
+  ensureScheduled() {
+    if (this.scheduled || this.pending.length === 0) return;
+    this.scheduled = this.schedule(() => {
+      this.scheduled = void 0;
+      this.flush(false);
+    }, this.intervalMs);
+  }
+  flush(force) {
+    if (!this.pending) return;
+    let emit = this.pending;
+    let keep = "";
+    if (!force) {
+      const lastNl = this.pending.lastIndexOf("\n");
+      if (lastNl < 0) {
+        emit = this.pending;
+        keep = "";
+      } else {
+        emit = this.pending.slice(0, lastNl);
+        keep = this.pending.slice(lastNl + 1);
+      }
+    }
+    this.pending = keep;
+    const lines = emit.split(/\r?\n/).map((line) => line.replace(/\s+$/, "")).filter((line) => line.length > 0);
+    if (lines.length === 0) return;
+    this.streamed = true;
+    for (const line of lines) {
+      if (!this.startedBlock) {
+        this.write(`\u601D\u8003\uFF1A${line}`, "ai");
+        this.startedBlock = true;
+      } else {
+        this.write(`  \u2502 ${line}`, "ai");
+      }
+    }
+  }
+};
+
 // src/run_diagnostics.ts
 var AgentRunDiagnostics = class {
   steps = 0;
@@ -2873,6 +3017,7 @@ async function runCursor(job, cancellation) {
     let disallowedTools = CURSOR_WORKER_DISALLOWED_TOOLS;
     let agent;
     const stopScanLog = installCursorSdkScanLogTap();
+    let thinkingStream;
     try {
       try {
         agent = await Agent.create({
@@ -2899,6 +3044,8 @@ async function runCursor(job, cancellation) {
         `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project\uFF08SDK \u626B\u63CF\u7528\u6237\u4E3B\u76EE\u5F55\u540E\u6309\u4ED3\u5E93\u8DEF\u5F84\u8FC7\u6EE4\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u6CE8\u5165\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
       );
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
+      thinkingStream = new CursorThinkingStream();
+      thinkingStream.notePromptSent();
       emitSessionStart(job);
       const sessionUser = sessionStartText(job);
       if (sessionUser) live.push({ role: "user", text: sessionUser });
@@ -2925,10 +3072,13 @@ async function runCursor(job, cancellation) {
         text: askUserTool ? `${job.prompt}
 
 ## \u770B\u677F\u4EA4\u4E92
-\u9700\u8981\u7528\u6237\u786E\u8BA4\u65F6\u5FC5\u987B\u8C03\u7528 ask_user\uFF1B\u4E0D\u8981\u8C03\u7528 askQuestion\u3002ask_user \u4F1A\u6682\u505C\u672C\u8F6E\u5E76\u7B49\u5F85\u770B\u677F\u56DE\u590D\u3002` : job.prompt,
+\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u5FC5\u987B\u8C03\u7528 ask_user\uFF1B\u4E0D\u8981\u8C03\u7528 askQuestion\uFF0C\u4E5F\u4E0D\u8981\u53EA\u5728\u52A9\u624B\u6B63\u6587\u91CC\u53E3\u5934\u5217\u51FA\u9009\u9879\u3002\u6709 2\u20134 \u4E2A\u4E92\u65A5\u65B9\u6848\u65F6\u5FC5\u987B\u4F20\u5165 choices\uFF0C\u770B\u677F\u4F1A\u5728\u6700\u8FD1\u8FD0\u884C\u754C\u9762\u5F39\u51FA\u9009\u9879\u83DC\u5355\u5E76\u7B49\u5F85\u56DE\u590D\u3002` : job.prompt,
         images: job.round.images
       }, {
         mcpServers: mcp.servers,
+        onDelta: ({ update }) => {
+          thinkingStream?.handleDelta(update);
+        },
         onStep: async ({ step }) => {
           try {
             stepCount += 1;
@@ -2941,7 +3091,8 @@ async function runCursor(job, cancellation) {
               toolName: described.toolName,
               detail: described.detail
             });
-            if (described.lines.length > 0) {
+            const skipThinkingDump = step.type === "thinkingMessage" && thinkingStream?.consumeStreamedThinking() === true;
+            if (!skipThinkingDump && described.lines.length > 0) {
               logLines(described.lines, described.source);
             }
             if (step.type === "assistantMessage") {

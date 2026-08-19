@@ -5,6 +5,8 @@ import 'agent_dispatch_displayed_card.dart';
 import 'agent_dispatch_log.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_section_header.dart';
+import 'agent_interaction.dart';
+import 'agent_interaction_prompt.dart';
 
 /// Agent 调度面板的桌面工作区。
 ///
@@ -223,6 +225,8 @@ class AgentDispatchLogPane extends StatefulWidget {
     required this.onExport,
     required this.onCopy,
     this.progress = AgentDispatchProgress.idle,
+    this.pendingInteraction,
+    this.onInteractionReply,
     super.key,
   });
 
@@ -232,6 +236,8 @@ class AgentDispatchLogPane extends StatefulWidget {
   final ValueChanged<String> onExport;
   final ValueChanged<String> onCopy;
   final AgentDispatchProgress progress;
+  final AgentInteractionEvent? pendingInteraction;
+  final Future<bool> Function(String text)? onInteractionReply;
 
   @override
   State<AgentDispatchLogPane> createState() => _AgentDispatchLogPaneState();
@@ -680,6 +686,15 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
               ? () => _jumpToRunningCard(displayed.runningOrdinal)
               : null,
         ),
+        if (widget.pendingInteraction != null &&
+            widget.onInteractionReply != null) ...[
+          const SizedBox(height: 8),
+          AgentInteractionPrompt(
+            event: widget.pendingInteraction!,
+            onReply: widget.onInteractionReply!,
+            autoShowDialog: widget.pendingInteraction!.choices.isNotEmpty,
+          ),
+        ],
         const SizedBox(height: 8),
         if (displayed.running)
           LinearProgressIndicator(value: displayed.progress.fraction),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_progress.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_workspace.dart';
+import 'package:kanban/features/agent_dispatch/agent_interaction.dart';
 
 void main() {
   testWidgets('宽窗口并排显示三个工作区，Skill 与 Worker 同列', (tester) async {
@@ -420,5 +421,107 @@ void main() {
     expect(find.textContaining('完成甲', skipOffstage: false), findsNothing);
     expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
         findsNothing);
+  });
+
+  testWidgets('最近运行在提问时弹出选项菜单并可点选', (tester) async {
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = TextEditingController(text: '[09:00:00] [系统] [信息] 运行中');
+    addTearDown(controller.dispose);
+    var replied = '';
+    final pending = AgentInteractionEvent(
+      type: AgentInteractionEventType.question,
+      cardId: 'card-a',
+      sessionId: 'session-a',
+      text: '请选择方案',
+      at: DateTime.utc(2026, 8, 20),
+      requestId: 'request-a',
+      choices: const ['方案 A', '方案 B', '方案 C'],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 520,
+            height: 900,
+            child: AgentDispatchLogPane(
+              controller: controller,
+              running: true,
+              pendingInteraction: pending,
+              onInteractionReply: (text) async {
+                replied = text;
+                return true;
+              },
+              onClear: () {},
+              onExport: (_) {},
+              onCopy: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('agent-dispatch-interaction-prompt')),
+        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-dispatch-interaction-dialog')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('agent-dispatch-interaction-dialog-choice-1')),
+    );
+    await tester.pump();
+    expect(replied, '方案 B');
+  });
+
+  testWidgets('问题正文编号列表也会弹出选项菜单', (tester) async {
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = TextEditingController(text: '[09:00:00] [系统] [信息] 运行中');
+    addTearDown(controller.dispose);
+    final pending = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"question","cardId":"card-a","sessionId":"session-a",'
+      '"requestId":"request-a","text":"请选择方案\\n1. 方案 A\\n2. 方案 B\\n3. 方案 C",'
+      '"at":"2026-08-20T08:00:00Z"}',
+    )!;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 520,
+            height: 900,
+            child: AgentDispatchLogPane(
+              controller: controller,
+              running: true,
+              pendingInteraction: pending,
+              onInteractionReply: (text) async => true,
+              onClear: () {},
+              onExport: (_) {},
+              onCopy: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('agent-dispatch-interaction-dialog')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-dispatch-interaction-dialog-choice-2')),
+      findsOneWidget,
+    );
   });
 }

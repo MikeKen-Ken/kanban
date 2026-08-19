@@ -619,6 +619,12 @@ class AgentDispatchService {
     return result;
   }
 
+  @visibleForTesting
+  void debugSetPendingInteraction(AgentInteractionEvent? event) {
+    _pendingInteraction = event;
+    _notifyInteraction();
+  }
+
   void debugReset() {
     _cancelRequested = false;
     _drainAfterCurrentRequested = false;

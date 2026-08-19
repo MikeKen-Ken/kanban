@@ -22,6 +22,7 @@ export type InteractionEvent = {
   sessionId: string;
   text: string;
   requestId?: string;
+  choices?: string[];
   at: string;
 };
 
@@ -125,13 +126,21 @@ export function createAskUserTool(
   mkdirSync(interactionDir, { recursive: true });
   return {
     description:
-      "需要用户确认、补充需求或选择方案时调用。工具会暂停当前卡片，直到用户在看板对话中回复。",
+      "需要用户确认、补充需求或选择方案时调用。有互斥方案时传入 choices，看板会弹出选项菜单；工具会暂停当前卡片，直到用户回复。",
     inputSchema: {
       type: "object",
       properties: {
         question: {
           type: "string",
           description: "向用户提出的完整问题，使用简体中文。",
+        },
+        choices: {
+          type: "array",
+          description:
+            "2 到 4 个互斥选项。有明确方案时必须提供，看板会在最近运行界面弹出选项菜单供用户点选；不要只在正文里口头列出选项。",
+          items: { type: "string" },
+          minItems: 2,
+          maxItems: 4,
         },
       },
       required: ["question"],
@@ -142,6 +151,9 @@ export function createAskUserTool(
       if (!question) {
         return { content: [{ type: "text", text: "问题不能为空" }], isError: true };
       }
+      const explicit = stringListArg(args.choices);
+      const choices =
+        explicit.length > 0 ? explicit : inferChoicesFromQuestion(question);
       const requestId = randomUUID();
       const replyPath = join(interactionDir, `${requestId}.reply.json`);
       emitInteractionEvent({
@@ -151,6 +163,7 @@ export function createAskUserTool(
         sessionId: job.round.sessionId,
         requestId,
         text: question,
+        ...(choices.length > 0 ? { choices } : {}),
       });
       const answer = await waitForReply(replyPath, cancellation);
       if (answer && answer !== "用户已终止当前会话。") {
@@ -188,6 +201,33 @@ async function waitForReply(
 
 function stringArg(value: SDKJsonValue | undefined): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function stringListArg(value: SDKJsonValue | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  const choices: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const text = item.trim();
+    if (!text || choices.includes(text)) continue;
+    choices.push(text);
+    if (choices.length >= 4) break;
+  }
+  return choices.length >= 2 ? choices : [];
+}
+
+const choiceLinePattern = /^\s*(?:\d+[\.、\)]|[-*•])\s+(.+)$/;
+
+function inferChoicesFromQuestion(question: string): string[] {
+  const items: string[] = [];
+  for (const line of question.split(/\r?\n/)) {
+    const match = choiceLinePattern.exec(line);
+    const text = match?.[1]?.trim() ?? "";
+    if (!text || items.includes(text)) continue;
+    items.push(text);
+    if (items.length >= 4) break;
+  }
+  return items.length >= 2 ? items : [];
 }
 
 function workItems(job: RoundDispatchJob): string[] {
