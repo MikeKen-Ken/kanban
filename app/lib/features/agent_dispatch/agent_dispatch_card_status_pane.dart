@@ -11,12 +11,16 @@ class AgentDispatchCardStatusPane extends StatefulWidget {
     required this.progress,
     required this.running,
     required this.logText,
+    this.showJumpToRunning = false,
+    this.onJumpToRunning,
     super.key,
   });
 
   final AgentDispatchProgress progress;
   final bool running;
   final String logText;
+  final bool showJumpToRunning;
+  final VoidCallback? onJumpToRunning;
 
   @override
   State<AgentDispatchCardStatusPane> createState() =>
@@ -64,11 +68,11 @@ class _AgentDispatchCardStatusPaneState
         : widget.progress.phaseLabel;
     final title = widget.progress.currentTitle.trim();
     final detail = widget.progress.currentDetail.trim();
-    final metrics = AgentDispatchCardMetrics.forCurrentTask(
+    final parsed = AgentDispatchCardMetrics.parse(
       widget.logText,
-      widget.progress,
       running: widget.running,
     );
+    final metrics = parsed.hasAny || widget.running ? parsed : null;
 
     return Container(
       key: const ValueKey('agent-dispatch-task-status'),
@@ -108,6 +112,16 @@ class _AgentDispatchCardStatusPaneState
                   ),
                 ),
               ),
+              if (widget.showJumpToRunning &&
+                  widget.onJumpToRunning != null) ...[
+                const Spacer(),
+                TextButton.icon(
+                  key: const ValueKey('agent-dispatch-jump-running-card'),
+                  onPressed: widget.onJumpToRunning,
+                  icon: const Icon(Icons.play_circle_outline, size: 18),
+                  label: const Text('运行中卡片'),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 8),

@@ -335,4 +335,90 @@ void main() {
     expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
     expect(find.text('全部任务'), findsOneWidget);
   });
+
+  testWidgets('切换任务后状态区跟随该卡，并可跳回运行中卡片', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = TextEditingController(
+      text: [
+        '[09:00:01] [Worker] [信息] ──────── Worker 单卡轮次 1/2 ────────',
+        '[09:00:02] [系统] [信息] 当前卡片：任务甲',
+        '[09:00:03] [系统] [信息] 当前任务：已完成的需求',
+        '[09:00:04] [AI] [信息] 助手：完成甲',
+        '[09:00:05] [Worker] [信息] ──────── Worker 单卡轮次 2/2 ────────',
+        '[09:00:06] [系统] [信息] 当前卡片：任务乙',
+        '[09:00:07] [系统] [信息] 当前任务：正在实施',
+        '[09:00:08] [AI] [信息] 助手：处理乙',
+      ].join('\n'),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 520,
+            height: 900,
+            child: AgentDispatchLogPane(
+              controller: controller,
+              running: true,
+              progress: const AgentDispatchProgress(
+                running: true,
+                currentRound: 2,
+                totalCards: 2,
+                currentTitle: '任务乙',
+                currentDetail: '正在实施',
+                phaseLabel: '实施',
+              ),
+              onClear: () {},
+              onExport: (_) {},
+              onCopy: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('agent-dispatch-task-title')))
+          .data,
+      '任务乙',
+    );
+    expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('agent-dispatch-task-title')))
+          .data,
+      '任务甲',
+    );
+    expect(find.text('已完成的需求'), findsOneWidget);
+    expect(find.text('已完成'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-dispatch-jump-running-card')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('agent-dispatch-task-title')))
+          .data,
+      '任务乙',
+    );
+    expect(find.textContaining('处理乙', skipOffstage: false), findsOneWidget);
+    expect(find.textContaining('完成甲', skipOffstage: false), findsNothing);
+    expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
+        findsNothing);
+  });
 }

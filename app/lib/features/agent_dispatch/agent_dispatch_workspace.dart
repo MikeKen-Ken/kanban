@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'agent_dispatch_card_status_pane.dart';
+import 'agent_dispatch_displayed_card.dart';
 import 'agent_dispatch_log.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_section_header.dart';
@@ -282,6 +283,18 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     if (mounted) setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients || !_pinToBottom) return;
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
+
+  void _jumpToRunningCard(int? ordinal) {
+    if (ordinal == null) return;
+    setState(() {
+      _taskFilter = ordinal;
+      _pinToBottom = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     });
   }
@@ -583,6 +596,13 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     );
     final canAct = actionLog.trim().isNotEmpty;
     final summary = _summary();
+    final displayed = AgentDispatchDisplayedCard.resolve(
+      fullLog: widget.controller.text,
+      tasks: tasks,
+      selectedOrdinal: selectedTask,
+      live: widget.progress,
+      batchRunning: widget.running,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -652,14 +672,18 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         ),
         const SizedBox(height: 8),
         AgentDispatchCardStatusPane(
-          progress: widget.progress,
-          running: widget.running,
-          logText: widget.controller.text,
+          progress: displayed.progress,
+          running: displayed.running,
+          logText: displayed.logSlice,
+          showJumpToRunning: displayed.canJumpToRunning,
+          onJumpToRunning: displayed.canJumpToRunning
+              ? () => _jumpToRunningCard(displayed.runningOrdinal)
+              : null,
         ),
         const SizedBox(height: 8),
-        if (widget.running)
-          LinearProgressIndicator(value: widget.progress.fraction),
-        if (widget.running) const SizedBox(height: 8),
+        if (displayed.running)
+          LinearProgressIndicator(value: displayed.progress.fraction),
+        if (displayed.running) const SizedBox(height: 8),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
