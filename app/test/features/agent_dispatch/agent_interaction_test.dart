@@ -33,6 +33,39 @@ void main() {
     expect(event!.text, '完整答复');
   });
 
+  test('会话快照会写入用户与全部助手消息', () {
+    final session = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"session","cardId":"card-a","sessionId":"session-a",'
+      '"text":"- 标题","at":"2026-08-19T08:00:00Z"}',
+    )!;
+    final first = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"assistant","cardId":"card-a","sessionId":"session-a",'
+      '"text":"短句","at":"2026-08-19T08:00:01Z"}',
+    )!;
+    final snapshot = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"snapshot","cardId":"card-a","sessionId":"session-a",'
+      '"text":"[{\\"role\\":\\"user\\",\\"text\\":\\"- 标题\\"},'
+      '{\\"role\\":\\"assistant\\",\\"text\\":\\"第一条完整助手。\\"},'
+      '{\\"role\\":\\"assistant\\",\\"text\\":\\"第二条完整助手。\\"}]",'
+      '"at":"2026-08-19T08:00:02Z"}',
+    )!;
+    final markdown = appendAgentConversationEvent(
+      appendAgentConversationEvent(
+        appendAgentConversationEvent(null, session),
+        first,
+      ),
+      snapshot,
+    );
+    expect(markdown, contains('### 用户\n- 标题'));
+    expect(markdown, contains('### 助手\n第一条完整助手。'));
+    expect(markdown, contains('### 助手\n第二条完整助手。'));
+    expect(markdown, isNot(contains('短句')));
+    expect('### 助手'.allMatches(markdown).length, 2);
+  });
+
   test('流式变长的助手正文会合并为完整一段', () {
     final first = parseAgentInteractionEvent(
       '@@KANBAN_INTERACTION@@'

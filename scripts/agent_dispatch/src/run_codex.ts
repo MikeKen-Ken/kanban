@@ -25,9 +25,16 @@ import {
 import { isRetryableError } from "./retry.ts";
 import {
   emitAssistantMessage,
+  emitConversationSnapshot,
   emitSessionStart,
+  sessionStartText,
 } from "./interaction_bridge.ts";
-import { extractCodexAssistantEventText } from "./assistant_text.ts";
+import {
+  extractCodexAssistantEventText,
+  extractCodexTranscriptMessage,
+  type ConversationTranscriptMessage,
+} from "./assistant_text.ts";
+import { buildConversationTranscript } from "./conversation_transcript.ts";
 import { workerLog, workerLogRecords } from "./worker_log.ts";
 
 export function resolveCodexCommand(): {
@@ -123,12 +130,17 @@ export async function runCodex(
 
     workerLog(`Codex args=${args.join(" ")}`);
     emitSessionStart(job);
+    const live: ConversationTranscriptMessage[] = [];
+    const sessionUser = sessionStartText(job);
+    if (sessionUser) live.push({ role: "user", text: sessionUser });
+    const fromTurns: ConversationTranscriptMessage[] = [];
 
     const emittedAssistant = new Set<string>();
     const emitAssistant = (text: string): void => {
       const normalized = text.trim();
       if (!normalized || emittedAssistant.has(normalized)) return;
       emittedAssistant.add(normalized);
+      live.push({ role: "assistant", text: normalized });
       emitAssistantMessage(job, normalized);
     };
 
@@ -158,7 +170,10 @@ export async function runCodex(
       const stdoutLines = createLineBuffer((line) => {
         workerLogRecords(recordsFromCodexJsonLine(line, logState));
         try {
-          emitAssistant(extractCodexAssistantEventText(JSON.parse(line)));
+          const parsed = JSON.parse(line);
+          const message = extractCodexTranscriptMessage(parsed);
+          if (message) fromTurns.push(message);
+          emitAssistant(extractCodexAssistantEventText(parsed));
         } catch {
           // 非 JSON 行只记日志。
         }
@@ -214,6 +229,15 @@ export async function runCodex(
 
     workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
     if (summary) emitAssistant(summary);
+    emitConversationSnapshot(
+      job,
+      buildConversationTranscript({
+        sessionUser,
+        live,
+        fromTurns,
+        trailingAssistant: summary,
+      }),
+    );
     if (code === 0) {
       return { ok: true, summary: summary || "Codex 会话完成" };
     }

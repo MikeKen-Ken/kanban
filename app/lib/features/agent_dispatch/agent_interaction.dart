@@ -1,8 +1,18 @@
 import 'dart:convert';
 
 const agentInteractionEventPrefix = '@@KANBAN_INTERACTION@@';
+final _conversationSnapshotFilePattern = RegExp(
+  r'^conversation-snapshot-[a-zA-Z0-9._-]+\.json$',
+);
 
-enum AgentInteractionEventType { session, assistant, question }
+enum AgentInteractionEventType { session, assistant, question, user, snapshot }
+
+class AgentConversationMessage {
+  const AgentConversationMessage({required this.role, required this.text});
+
+  final String role;
+  final String text;
+}
 
 class AgentInteractionEvent {
   const AgentInteractionEvent({
@@ -41,6 +51,8 @@ AgentInteractionEvent? parseAgentInteractionEvent(String line) {
       'session' => AgentInteractionEventType.session,
       'assistant' => AgentInteractionEventType.assistant,
       'question' => AgentInteractionEventType.question,
+      'user' => AgentInteractionEventType.user,
+      'snapshot' => AgentInteractionEventType.snapshot,
       _ => null,
     };
     final cardId = '${raw['cardId'] ?? ''}'.trim();
@@ -63,10 +75,44 @@ AgentInteractionEvent? parseAgentInteractionEvent(String line) {
   }
 }
 
+bool isAgentConversationSnapshotFileName(String name) =>
+    _conversationSnapshotFilePattern.hasMatch(name.trim());
+
+List<AgentConversationMessage> parseAgentConversationSnapshotMessages(
+  Object? raw,
+) {
+  final payload = raw is Map ? raw['messages'] ?? raw : raw;
+  if (payload is! List) return const [];
+  final messages = <AgentConversationMessage>[];
+  for (final item in payload) {
+    if (item is! Map) continue;
+    final role = '${item['role'] ?? ''}'.trim();
+    final text = '${item['text'] ?? ''}'.trim();
+    if (text.isEmpty) continue;
+    if (role != 'user' && role != 'assistant') continue;
+    messages.add(AgentConversationMessage(role: role, text: text));
+  }
+  return messages;
+}
+
 String appendAgentConversationEvent(
   String? current,
   AgentInteractionEvent event,
 ) {
+  if (event.type == AgentInteractionEventType.snapshot) {
+    try {
+      return replaceAgentConversationSession(
+        current,
+        parseAgentConversationSnapshotMessages(jsonDecode(event.text)),
+        at: event.at,
+      );
+    } catch (_) {
+      return current ?? '';
+    }
+  }
+  if (event.type == AgentInteractionEventType.user) {
+    return appendAgentConversationUserReply(current, event.text);
+  }
   if (event.type == AgentInteractionEventType.assistant ||
       event.type == AgentInteractionEventType.question) {
     final coalesced = _coalesceAssistantText(current, event.text);
@@ -88,6 +134,9 @@ String appendAgentConversationEvent(
         ..writeln('### 助手')
         ..write(event.text);
       break;
+    case AgentInteractionEventType.user:
+    case AgentInteractionEventType.snapshot:
+      break;
   }
   return '${buffer.toString().trimRight()}\n';
 }
@@ -100,6 +149,35 @@ String appendAgentConversationUserReply(String? current, String text) {
   buffer
     ..writeln('### 用户')
     ..write(normalized);
+  return '${buffer.toString().trimRight()}\n';
+}
+
+String replaceAgentConversationSession(
+  String? current,
+  List<AgentConversationMessage> messages, {
+  DateTime? at,
+}) {
+  if (messages.isEmpty) return current ?? '';
+  final existing = (current ?? '').trimRight();
+  const header = '## 会话';
+  final index = existing.lastIndexOf(header);
+  final prefix = index >= 0 ? existing.substring(0, index).trimRight() : '';
+  final headerLine = index >= 0
+      ? existing.substring(index).split('\n').first.trim()
+      : '$header ${_formatLocalTime(at ?? DateTime.now())}';
+  final buffer = StringBuffer();
+  if (prefix.isNotEmpty) {
+    buffer
+      ..writeln(prefix)
+      ..writeln();
+  }
+  buffer.writeln(headerLine);
+  for (final message in messages) {
+    buffer
+      ..writeln()
+      ..writeln(message.role == 'user' ? '### 用户' : '### 助手')
+      ..write(message.text.trim());
+  }
   return '${buffer.toString().trimRight()}\n';
 }
 

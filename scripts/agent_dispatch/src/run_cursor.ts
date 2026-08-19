@@ -32,9 +32,16 @@ import { readyBlockedByShells } from "./verification_ready_gate.ts";
 import {
   createAskUserTool,
   emitAssistantMessage,
+  emitConversationSnapshot,
   emitSessionStart,
+  sessionStartText,
 } from "./interaction_bridge.ts";
-import { extractCursorAssistantStepText } from "./assistant_text.ts";
+import {
+  extractConversationMessages,
+  extractCursorAssistantStepText,
+  type ConversationTranscriptMessage,
+} from "./assistant_text.ts";
+import { buildConversationTranscript } from "./conversation_transcript.ts";
 import {
   resolveModelParams,
   type DispatchResult,
@@ -257,18 +264,9 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
 }
 
 function assistantTextsFromTurns(turns: readonly unknown[]): string[] {
-  const texts: string[] = [];
-  for (const turn of turns) {
-    const record = asRecord(turn);
-    const inner = asRecord(record?.turn) ?? record;
-    const steps = inner?.steps;
-    if (!Array.isArray(steps)) continue;
-    for (const step of steps) {
-      const text = extractCursorAssistantStepText(step);
-      if (text) texts.push(text);
-    }
-  }
-  return texts;
+  return extractConversationMessages(turns)
+    .filter((item) => item.role === "assistant")
+    .map((item) => item.text);
 }
 
 export async function runCursor(
@@ -301,7 +299,10 @@ export async function runCursor(
     let toolCallCount = 0;
     const diagnostics = new AgentRunDiagnostics();
     const shellSpans = new CursorShellSpanEmitter();
-    const askUserTool = createAskUserTool(job, cancellation);
+    const live: ConversationTranscriptMessage[] = [];
+    const askUserTool = createAskUserTool(job, cancellation, (text) => {
+      live.push({ role: "user", text });
+    });
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -357,12 +358,29 @@ export async function runCursor(
       );
       logLine("本地会话已创建，开始执行…");
       emitSessionStart(job);
+      const sessionUser = sessionStartText(job);
+      if (sessionUser) live.push({ role: "user", text: sessionUser });
       const emittedAssistant = new Set<string>();
       const emitAssistant = (text: string): void => {
         const normalized = text.trim();
         if (!normalized || emittedAssistant.has(normalized)) return;
         emittedAssistant.add(normalized);
+        live.push({ role: "assistant", text: normalized });
         emitAssistantMessage(job, normalized);
+      };
+      const flushSnapshot = (
+        turns: readonly unknown[] = [],
+        trailing?: string,
+      ): void => {
+        emitConversationSnapshot(
+          job,
+          buildConversationTranscript({
+            sessionUser,
+            live,
+            fromTurns: extractConversationMessages(turns),
+            trailingAssistant: trailing,
+          }),
+        );
       };
       const run = await agent.send({
         text: askUserTool
@@ -411,8 +429,9 @@ export async function runCursor(
         await run.cancel().catch(() => undefined);
       }
       const result = await run.wait();
+      let turns: unknown[] = [];
       try {
-        const turns = await run.conversation();
+        turns = await run.conversation();
         for (const text of assistantTextsFromTurns(turns)) {
           emitAssistant(text);
         }
@@ -422,6 +441,10 @@ export async function runCursor(
       if (typeof result.result === "string") {
         emitAssistant(result.result);
       }
+      flushSnapshot(
+        turns,
+        typeof result.result === "string" ? result.result : undefined,
+      );
       const metrics = diagnostics.snapshot();
       logLine(formatAgentRunDiagnostics(metrics));
       logLine(

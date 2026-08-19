@@ -1,5 +1,5 @@
 // src/cli.ts
-import { readFileSync as readFileSync8, writeFileSync as writeFileSync4 } from "node:fs";
+import { readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
@@ -638,7 +638,7 @@ import {
   mkdtempSync as mkdtempSync2,
   readFileSync as readFileSync3,
   rmSync as rmSync2,
-  writeFileSync as writeFileSync2
+  writeFileSync as writeFileSync3
 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
 import { dirname, join as join3 } from "node:path";
@@ -699,17 +699,53 @@ function extractCursorAssistantStepText(step) {
   return extractAssistantText(record.message ?? record);
 }
 function extractCodexAssistantEventText(event) {
+  const message = extractCodexTranscriptMessage(event);
+  return message?.role === "assistant" ? message.text : "";
+}
+function extractCodexTranscriptMessage(event) {
   const record = asRecord2(event);
-  if (!record) return "";
+  if (!record) return void 0;
   const type = String(record.type ?? "");
-  if (type !== "item.completed" && type !== "item.updated") return "";
+  if (type !== "item.completed") return void 0;
   const item = asRecord2(record.item) ?? {};
   const itemType = String(item.type ?? item.item_type ?? "");
-  if (itemType !== "agent_message" && itemType !== "assistant_message") {
-    return "";
+  const role = String(item.role ?? "");
+  const text = extractAssistantText(item);
+  if (!text) return void 0;
+  if (itemType === "user_message" || itemType === "user" || itemType === "message" && role === "user") {
+    return { role: "user", text };
   }
-  if (type === "item.updated") return "";
-  return extractAssistantText(item);
+  if (itemType === "agent_message" || itemType === "assistant_message" || itemType === "message" && (role === "assistant" || role === "agent")) {
+    return { role: "assistant", text };
+  }
+  return void 0;
+}
+function extractConversationMessages(turns) {
+  const messages = [];
+  if (!Array.isArray(turns)) return messages;
+  for (const turn of turns) {
+    const record = asRecord2(turn);
+    if (!record) continue;
+    const inner = asRecord2(record.turn) ?? record;
+    const userText = extractUserText(inner.userMessage ?? record.userMessage);
+    if (userText) messages.push({ role: "user", text: userText });
+    const steps = inner.steps ?? record.steps;
+    if (!Array.isArray(steps)) continue;
+    for (const step of steps) {
+      const assistant = extractCursorAssistantStepText(step);
+      if (assistant) messages.push({ role: "assistant", text: assistant });
+    }
+  }
+  return messages;
+}
+function extractUserText(value) {
+  if (typeof value === "string") return value.trim();
+  const record = asRecord2(value);
+  if (!record) return "";
+  if (typeof record.text === "string" && record.text.trim()) {
+    return record.text.trim();
+  }
+  return extractAssistantText(record);
 }
 function collectText(value, chunks, depth) {
   if (depth > 6 || value == null) return;
@@ -1375,6 +1411,7 @@ import {
   mkdirSync as mkdirSync2,
   readFileSync as readFileSync2,
   rmSync,
+  writeFileSync as writeFileSync2,
   writeSync
 } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -1394,15 +1431,49 @@ function emitInteractionEvent(event) {
 `
   );
 }
-function emitSessionStart(job) {
+function sessionStartText(job) {
   const items = workItems(job);
-  const text = items.length === 0 ? "\u5F00\u59CB\u5904\u7406\u672C\u5361\u3002" : items.map((item) => `- ${item}`).join("\n");
+  return items.length === 0 ? "\u5F00\u59CB\u5904\u7406\u672C\u5361\u3002" : items.map((item) => `- ${item}`).join("\n");
+}
+function conversationSnapshotFileName(cardId) {
+  return `conversation-snapshot-${cardId.replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
+}
+function writeConversationSnapshot(job, messages) {
+  const interactionDir = job.interactionDir?.trim();
+  if (!interactionDir || messages.length === 0) return void 0;
+  mkdirSync2(interactionDir, { recursive: true });
+  const fileName = conversationSnapshotFileName(job.round.cardId);
+  writeFileSync2(
+    join2(interactionDir, fileName),
+    `${JSON.stringify({
+      cardId: job.round.cardId,
+      sessionId: job.round.sessionId,
+      projectId: job.projectId,
+      messages
+    })}
+`,
+    "utf8"
+  );
+  return fileName;
+}
+function emitConversationSnapshot(job, messages) {
+  const fileName = writeConversationSnapshot(job, messages);
+  if (!fileName) return;
+  emitInteractionEvent({
+    type: "snapshot",
+    projectId: job.projectId,
+    cardId: job.round.cardId,
+    sessionId: job.round.sessionId,
+    text: fileName
+  });
+}
+function emitSessionStart(job) {
   emitInteractionEvent({
     type: "session",
     projectId: job.projectId,
     cardId: job.round.cardId,
     sessionId: job.round.sessionId,
-    text
+    text: sessionStartText(job)
   });
 }
 function emitAssistantMessage(job, text) {
@@ -1416,7 +1487,7 @@ function emitAssistantMessage(job, text) {
     text: normalized
   });
 }
-function createAskUserTool(job, cancellation) {
+function createAskUserTool(job, cancellation, onUserReply) {
   const interactionDir = job.interactionDir?.trim();
   if (!interactionDir) return void 0;
   mkdirSync2(interactionDir, { recursive: true });
@@ -1449,6 +1520,9 @@ function createAskUserTool(job, cancellation) {
         text: question
       });
       const answer = await waitForReply(replyPath, cancellation);
+      if (answer && answer !== "\u7528\u6237\u5DF2\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD\u3002") {
+        onUserReply?.(answer);
+      }
       return answer;
     }
   };
@@ -1484,6 +1558,85 @@ function workItems(job) {
     const text = String(item.text ?? "").trim();
     return text ? [text] : [];
   });
+}
+
+// src/conversation_transcript.ts
+var INJECTED_PROMPT_MARKERS = [
+  "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
+  "KANBAN_WORKER_USER_RULES_BEGIN",
+  "# Skill \u6B63\u6587",
+  "\u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177"
+];
+function isInjectedWorkerPrompt(text) {
+  return INJECTED_PROMPT_MARKERS.some((marker) => text.includes(marker));
+}
+function buildConversationTranscript(options) {
+  const out = [];
+  const sessionUser = options.sessionUser.trim();
+  if (sessionUser) pushMessage(out, { role: "user", text: sessionUser });
+  const live = (options.live ?? []).filter((item) => !isNoiseUser(item, sessionUser));
+  const fromTurns = (options.fromTurns ?? []).filter(
+    (item) => !isNoiseUser(item, sessionUser)
+  );
+  const pendingAssistants = fromTurns.filter((item) => item.role === "assistant").map((item) => item.text.trim()).filter(Boolean);
+  const timeline = live.length > 0 ? live : fromTurns;
+  for (const message of timeline) {
+    if (message.role === "user") {
+      pushMessage(out, message);
+      continue;
+    }
+    const liveText = message.text.trim();
+    const index = pendingAssistants.findIndex((text) => relatedAssistant(text, liveText));
+    if (index >= 0) {
+      const snapshot = pendingAssistants.splice(index, 1)[0] ?? liveText;
+      pushMessage(out, {
+        role: "assistant",
+        text: longerText(snapshot, liveText)
+      });
+      continue;
+    }
+    pushMessage(out, message);
+  }
+  for (const text of pendingAssistants) {
+    pushMessage(out, { role: "assistant", text });
+  }
+  if (options.trailingAssistant) {
+    pushMessage(out, {
+      role: "assistant",
+      text: options.trailingAssistant
+    });
+  }
+  return out;
+}
+function isNoiseUser(message, sessionUser) {
+  if (message.role !== "user") return false;
+  const text = message.text.trim();
+  if (!text) return true;
+  if (sessionUser && text === sessionUser) return true;
+  return isInjectedWorkerPrompt(text);
+}
+function relatedAssistant(left, right) {
+  return left === right || left.startsWith(right) || right.startsWith(left);
+}
+function longerText(left, right) {
+  return left.length >= right.length ? left : right;
+}
+function pushMessage(out, message) {
+  const text = message.text.trim();
+  if (!text) return;
+  const last = out[out.length - 1];
+  if (last && last.role === message.role && last.text === text) return;
+  if (last && last.role === "assistant" && message.role === "assistant") {
+    if (text.startsWith(last.text)) {
+      last.text = text;
+      return;
+    }
+    if (last.text.startsWith(text)) return;
+  }
+  if (message.role === "user" && out.some((item) => item.role === "user" && item.text === text)) {
+    return;
+  }
+  out.push({ role: message.role, text });
 }
 
 // src/worker_log.ts
@@ -1553,7 +1706,7 @@ async function runCodex(job, cancellation) {
   const promptFile = join3(temp, "prompt.txt");
   const lastMessageFile = join3(temp, "last.txt");
   try {
-    writeFileSync2(promptFile, job.prompt, "utf8");
+    writeFileSync3(promptFile, job.prompt, "utf8");
     const agentHome = createCodexAgentHome({
       mcpUrl,
       userCodexHome: resolveUserCodexHome(),
@@ -1571,11 +1724,16 @@ async function runCodex(job, cancellation) {
     });
     workerLog(`Codex args=${args.join(" ")}`);
     emitSessionStart(job);
+    const live = [];
+    const sessionUser = sessionStartText(job);
+    if (sessionUser) live.push({ role: "user", text: sessionUser });
+    const fromTurns = [];
     const emittedAssistant = /* @__PURE__ */ new Set();
     const emitAssistant = (text) => {
       const normalized = text.trim();
       if (!normalized || emittedAssistant.has(normalized)) return;
       emittedAssistant.add(normalized);
+      live.push({ role: "assistant", text: normalized });
       emitAssistantMessage(job, normalized);
     };
     const code = await new Promise((resolvePromise, reject) => {
@@ -1603,7 +1761,10 @@ async function runCodex(job, cancellation) {
       const stdoutLines = createLineBuffer((line) => {
         workerLogRecords(recordsFromCodexJsonLine(line, logState));
         try {
-          emitAssistant(extractCodexAssistantEventText(JSON.parse(line)));
+          const parsed = JSON.parse(line);
+          const message = extractCodexTranscriptMessage(parsed);
+          if (message) fromTurns.push(message);
+          emitAssistant(extractCodexAssistantEventText(parsed));
         } catch {
         }
       });
@@ -1655,6 +1816,15 @@ async function runCodex(job, cancellation) {
     }
     workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
     if (summary) emitAssistant(summary);
+    emitConversationSnapshot(
+      job,
+      buildConversationTranscript({
+        sessionUser,
+        live,
+        fromTurns,
+        trailingAssistant: summary
+      })
+    );
     if (code === 0) {
       return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
     }
@@ -2499,18 +2669,7 @@ function describeStep(step) {
   }
 }
 function assistantTextsFromTurns(turns) {
-  const texts = [];
-  for (const turn of turns) {
-    const record = asRecord5(turn);
-    const inner = asRecord5(record?.turn) ?? record;
-    const steps = inner?.steps;
-    if (!Array.isArray(steps)) continue;
-    for (const step of steps) {
-      const text = extractCursorAssistantStepText(step);
-      if (text) texts.push(text);
-    }
-  }
-  return texts;
+  return extractConversationMessages(turns).filter((item) => item.role === "assistant").map((item) => item.text);
 }
 async function runCursor(job, cancellation) {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
@@ -2534,7 +2693,10 @@ async function runCursor(job, cancellation) {
     let toolCallCount = 0;
     const diagnostics = new AgentRunDiagnostics();
     const shellSpans = new CursorShellSpanEmitter();
-    const askUserTool = createAskUserTool(job, cancellation);
+    const live = [];
+    const askUserTool = createAskUserTool(job, cancellation, (text) => {
+      live.push({ role: "user", text });
+    });
     const storeDir = join5(homedir3(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync3(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -2586,12 +2748,26 @@ async function runCursor(job, cancellation) {
       );
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
       emitSessionStart(job);
+      const sessionUser = sessionStartText(job);
+      if (sessionUser) live.push({ role: "user", text: sessionUser });
       const emittedAssistant = /* @__PURE__ */ new Set();
       const emitAssistant = (text) => {
         const normalized = text.trim();
         if (!normalized || emittedAssistant.has(normalized)) return;
         emittedAssistant.add(normalized);
+        live.push({ role: "assistant", text: normalized });
         emitAssistantMessage(job, normalized);
+      };
+      const flushSnapshot = (turns2 = [], trailing) => {
+        emitConversationSnapshot(
+          job,
+          buildConversationTranscript({
+            sessionUser,
+            live,
+            fromTurns: extractConversationMessages(turns2),
+            trailingAssistant: trailing
+          })
+        );
       };
       const run = await agent.send({
         text: askUserTool ? `${job.prompt}
@@ -2641,8 +2817,9 @@ async function runCursor(job, cancellation) {
         await run.cancel().catch(() => void 0);
       }
       const result = await run.wait();
+      let turns = [];
       try {
-        const turns = await run.conversation();
+        turns = await run.conversation();
         for (const text of assistantTextsFromTurns(turns)) {
           emitAssistant(text);
         }
@@ -2651,6 +2828,10 @@ async function runCursor(job, cancellation) {
       if (typeof result.result === "string") {
         emitAssistant(result.result);
       }
+      flushSnapshot(
+        turns,
+        typeof result.result === "string" ? result.result : void 0
+      );
       const metrics = diagnostics.snapshot();
       logLine(formatAgentRunDiagnostics(metrics));
       logLine(
@@ -2757,7 +2938,7 @@ import {
   mkdtempSync as mkdtempSync3,
   readFileSync as readFileSync5,
   rmSync as rmSync3,
-  writeFileSync as writeFileSync3
+  writeFileSync as writeFileSync4
 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
 import { isAbsolute, join as join6 } from "node:path";
@@ -2854,7 +3035,7 @@ function createSessionContext(options) {
       `attachment-${index}.bin`
     );
     const path = uniquePath(tempDir, `${index + 1}-${fileName}`);
-    writeFileSync3(path, Buffer.from(content, "base64"));
+    writeFileSync4(path, Buffer.from(content, "base64"));
     raw.absolutePath = path;
     attachmentPaths.push(path);
   }
@@ -2865,7 +3046,7 @@ function createSessionContext(options) {
       tempDir,
       `image-${index + 1}.${extensionForMime(image.mimeType)}`
     );
-    writeFileSync3(path, Buffer.from(image.data, "base64"));
+    writeFileSync4(path, Buffer.from(image.data, "base64"));
     imagePaths.push(path);
   }
   const prompt = [
@@ -3444,7 +3625,7 @@ function formatListModelsError(err) {
   return `Cursor.models.list \u5931\u8D25\uFF1A${String(err)}`;
 }
 function writeResult(outPath, result) {
-  writeFileSync4(outPath, JSON.stringify(result, null, 2), "utf8");
+  writeFileSync5(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 function withContextParameter(parameters) {
   if (parameters.some((item) => isContextParamId(item.id))) return parameters;

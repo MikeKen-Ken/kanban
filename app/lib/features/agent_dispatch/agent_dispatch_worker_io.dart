@@ -283,22 +283,27 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       interactionDir: interactionDir.path,
     );
     onProcessStarted?.call(workerProcess);
-    process.stdout
+    final stdoutDone = process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
       final event = parseAgentInteractionEvent(line);
       if (event != null) {
-        onInteraction?.call(event);
+        final hydrated = _hydrateInteractionEvent(event, interactionDir.path);
+        if (hydrated != null) onInteraction?.call(hydrated);
         return;
       }
       onLog?.call(line);
-    });
+    }).asFuture<void>();
     process.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) => onLog?.call('[err] $line'));
     final code = await process.exitCode;
+    try {
+      await stdoutDone;
+    } catch (_) {}
+    _replayConversationSnapshots(interactionDir, onInteraction);
     workerProcess.dispose();
     if (await outFile.exists()) {
       try {
@@ -328,6 +333,72 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     try {
       await tempDir.delete(recursive: true);
     } catch (_) {}
+  }
+}
+
+void _replayConversationSnapshots(
+  Directory interactionDir,
+  void Function(AgentInteractionEvent event)? onInteraction,
+) {
+  if (onInteraction == null || !interactionDir.existsSync()) return;
+  final files = interactionDir.listSync().whereType<File>().toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
+  for (final file in files) {
+    final name = p.basename(file.path);
+    if (!isAgentConversationSnapshotFileName(name)) continue;
+    try {
+      final payload = jsonDecode(file.readAsStringSync());
+      if (payload is! Map) continue;
+      final cardId = '${payload['cardId'] ?? ''}'.trim();
+      final sessionId = '${payload['sessionId'] ?? ''}'.trim();
+      final messages = parseAgentConversationSnapshotMessages(payload);
+      if (cardId.isEmpty || sessionId.isEmpty || messages.isEmpty) continue;
+      onInteraction(
+        AgentInteractionEvent(
+          type: AgentInteractionEventType.snapshot,
+          cardId: cardId,
+          sessionId: sessionId,
+          text: jsonEncode([
+            for (final message in messages)
+              {'role': message.role, 'text': message.text},
+          ]),
+          at: DateTime.now(),
+          projectId: '${payload['projectId'] ?? ''}'.trim().isEmpty
+              ? null
+              : '${payload['projectId']}'.trim(),
+        ),
+      );
+    } catch (_) {}
+  }
+}
+
+AgentInteractionEvent? _hydrateInteractionEvent(
+  AgentInteractionEvent event,
+  String interactionDir,
+) {
+  if (event.type != AgentInteractionEventType.snapshot) return event;
+  final name = event.text.trim();
+  if (!isAgentConversationSnapshotFileName(name)) return null;
+  final file = File(p.join(interactionDir, name));
+  if (!file.existsSync()) return null;
+  try {
+    final messages = parseAgentConversationSnapshotMessages(
+      jsonDecode(file.readAsStringSync()),
+    );
+    if (messages.isEmpty) return null;
+    return AgentInteractionEvent(
+      type: AgentInteractionEventType.snapshot,
+      cardId: event.cardId,
+      sessionId: event.sessionId,
+      text: jsonEncode([
+        for (final message in messages)
+          {'role': message.role, 'text': message.text},
+      ]),
+      at: event.at,
+      projectId: event.projectId,
+    );
+  } catch (_) {
+    return null;
   }
 }
 

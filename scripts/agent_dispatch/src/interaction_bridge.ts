@@ -3,18 +3,20 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
   writeSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { SDKCustomTool, SDKJsonValue } from "@cursor/sdk";
+import type { ConversationTranscriptMessage } from "./assistant_text.ts";
 import type { WorkerCancellation } from "./cancellation.ts";
 import type { RoundDispatchJob } from "./types.ts";
 
 export const INTERACTION_EVENT_PREFIX = "@@KANBAN_INTERACTION@@";
 
 export type InteractionEvent = {
-  type: "session" | "assistant" | "question";
+  type: "session" | "assistant" | "question" | "user" | "snapshot";
   projectId?: string;
   cardId: string;
   sessionId: string;
@@ -41,17 +43,60 @@ export function emitInteractionEvent(
   );
 }
 
-export function emitSessionStart(job: RoundDispatchJob): void {
+export function sessionStartText(job: RoundDispatchJob): string {
   const items = workItems(job);
-  const text = items.length === 0
+  return items.length === 0
     ? "开始处理本卡。"
     : items.map((item) => `- ${item}`).join("\n");
+}
+
+export function conversationSnapshotFileName(cardId: string): string {
+  return `conversation-snapshot-${cardId.replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
+}
+
+export function writeConversationSnapshot(
+  job: RoundDispatchJob,
+  messages: readonly ConversationTranscriptMessage[],
+): string | undefined {
+  const interactionDir = job.interactionDir?.trim();
+  if (!interactionDir || messages.length === 0) return undefined;
+  mkdirSync(interactionDir, { recursive: true });
+  const fileName = conversationSnapshotFileName(job.round.cardId);
+  writeFileSync(
+    join(interactionDir, fileName),
+    `${JSON.stringify({
+      cardId: job.round.cardId,
+      sessionId: job.round.sessionId,
+      projectId: job.projectId,
+      messages,
+    })}\n`,
+    "utf8",
+  );
+  return fileName;
+}
+
+export function emitConversationSnapshot(
+  job: RoundDispatchJob,
+  messages: readonly ConversationTranscriptMessage[],
+): void {
+  const fileName = writeConversationSnapshot(job, messages);
+  if (!fileName) return;
+  emitInteractionEvent({
+    type: "snapshot",
+    projectId: job.projectId,
+    cardId: job.round.cardId,
+    sessionId: job.round.sessionId,
+    text: fileName,
+  });
+}
+
+export function emitSessionStart(job: RoundDispatchJob): void {
   emitInteractionEvent({
     type: "session",
     projectId: job.projectId,
     cardId: job.round.cardId,
     sessionId: job.round.sessionId,
-    text,
+    text: sessionStartText(job),
   });
 }
 
@@ -73,6 +118,7 @@ export function emitAssistantMessage(
 export function createAskUserTool(
   job: RoundDispatchJob,
   cancellation?: WorkerCancellation,
+  onUserReply?: (text: string) => void,
 ): SDKCustomTool | undefined {
   const interactionDir = job.interactionDir?.trim();
   if (!interactionDir) return undefined;
@@ -107,6 +153,9 @@ export function createAskUserTool(
         text: question,
       });
       const answer = await waitForReply(replyPath, cancellation);
+      if (answer && answer !== "用户已终止当前会话。") {
+        onUserReply?.(answer);
+      }
       return answer;
     },
   };

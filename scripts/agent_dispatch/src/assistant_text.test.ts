@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   extractAssistantText,
   extractCodexAssistantEventText,
+  extractCodexTranscriptMessage,
+  extractConversationMessages,
   extractCursorAssistantStepText,
 } from "./assistant_text.ts";
 
@@ -52,5 +54,42 @@ describe("assistant_text", () => {
       "",
     );
     assert.equal(extractAssistantText({ text: "  明文  " }), "明文");
+    assert.deepEqual(
+      extractCodexTranscriptMessage({
+        type: "item.completed",
+        item: { type: "user_message", text: "用方案 A" },
+      }),
+      { role: "user", text: "用方案 A" },
+    );
+  });
+
+  it("从 Cursor 会话回合抽出用户与全部助手消息", () => {
+    assert.deepEqual(
+      extractConversationMessages([
+        {
+          type: "agentConversationTurn",
+          turn: {
+            userMessage: { text: "请继续" },
+            steps: [
+              { type: "thinkingMessage", message: { text: "内部思考" } },
+              {
+                type: "assistantMessage",
+                message: { text: "第一条助手。" },
+              },
+              { type: "toolCall", message: { type: "read", args: {} } },
+              {
+                type: "assistantMessage",
+                message: { text: "第二条助手。" },
+              },
+            ],
+          },
+        },
+      ]),
+      [
+        { role: "user", text: "请继续" },
+        { role: "assistant", text: "第一条助手。" },
+        { role: "assistant", text: "第二条助手。" },
+      ],
+    );
   });
 });
