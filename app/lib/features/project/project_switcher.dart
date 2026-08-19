@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/board_controller.dart';
 import '../../features/project/project_list_preferences.dart';
 import '../../features/project/projects_manifest.dart';
+import 'android_project_title.dart';
 import 'project_quick_switch.dart';
 import 'project_settings_screen.dart';
 import 'project_theme.dart';
@@ -186,6 +187,11 @@ class ProjectSwitcher extends StatelessWidget {
         final active = controller.activeProject;
         final projects = controller.projects;
         final sortMode = controller.appSettings.projectSortMode;
+        final isAndroid =
+            Theme.of(context).platform == TargetPlatform.android;
+        final rawTitle = active?.title ?? '看板';
+        final displayTitle =
+            isAndroid ? androidCompactProjectTitle(rawTitle) : rawTitle;
 
         // 短按：完整菜单；稍长按住后上下滑动：快速切换项目
         return Row(
@@ -198,7 +204,9 @@ class ProjectSwitcher extends StatelessWidget {
               themeIdFor: controller.themeIdForProject,
               onCommit: controller.switchProject,
               child: PopupMenuButton<String>(
-            tooltip: '切换项目（短按菜单，长按滑动快速切换）',
+            tooltip: isAndroid
+                ? '切换项目：$rawTitle'
+                : '切换项目（短按菜单，长按滑动快速切换）',
             constraints: const BoxConstraints(
               minWidth: _menuMinWidth,
               maxWidth: _menuMaxWidth,
@@ -223,7 +231,9 @@ class ProjectSwitcher extends StatelessWidget {
               }
             },
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: _titleMaxWidth),
+              constraints: BoxConstraints(
+                maxWidth: isAndroid ? 96 : _titleMaxWidth,
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
@@ -233,8 +243,9 @@ class ProjectSwitcher extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        active?.title ?? '看板',
-                        overflow: TextOverflow.ellipsis,
+                        displayTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
