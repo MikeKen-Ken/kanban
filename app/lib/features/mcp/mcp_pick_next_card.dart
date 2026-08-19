@@ -119,10 +119,8 @@ Future<CallToolResult> mcpPickNextCard(
 
     var columnId = fromColumnId;
     var columnTitle = picked.column.title;
-    final isReworkSource =
-        picked.sourceColumn == KanbanBoard.defaultReworkColumnTitle;
     final alreadyInDoing = fromColumnId == doingColumn.id;
-    if (!alreadyInDoing && !isReworkSource) {
+    if (!alreadyInDoing) {
       final moveError = await controller.moveCard(
         cardId: card.id,
         fromColumnId: fromColumnId,
@@ -173,7 +171,7 @@ Future<CallToolResult> mcpPickNextCard(
       'fromColumnId': fromColumnId,
       'columnId': columnId,
       'columnTitle': columnTitle,
-      'movedToDoing': !alreadyInDoing && !isReworkSource,
+      'movedToDoing': !alreadyInDoing,
       'workMode': rework ? 'rework' : 'normal',
       ...card.agentDispatchOverridePayload(),
       if (card.commitRef != null && card.commitRef!.isNotEmpty)

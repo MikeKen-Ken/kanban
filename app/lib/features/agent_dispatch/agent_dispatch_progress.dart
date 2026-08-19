@@ -273,18 +273,32 @@ AgentDispatchProgress applyWorkerProgressLog(
     return current.copyWith(currentDetail: detail.group(1)!.trim());
   }
   final phase = _phaseFromLog(message);
-  if (phase != null) {
-    return current.copyWith(phaseLabel: phase);
+  final absoluteProcessed = _absoluteProcessedFromLog(message);
+  final completedCard = absoluteProcessed == null && _isCompletedCardLog(message);
+  if (phase == null && absoluteProcessed == null && !completedCard) {
+    return current;
   }
+  var next = phase != null ? current.copyWith(phaseLabel: phase) : current;
+  if (absoluteProcessed != null) {
+    next = _withProcessed(next, absoluteProcessed);
+  } else if (completedCard) {
+    next = _withProcessed(next, current.processedCards + 1);
+  }
+  return next;
+}
+
+int? _absoluteProcessedFromLog(String message) {
   final confirmed = _confirmedPattern.firstMatch(message);
-  if (confirmed != null) {
-    return _withProcessed(current, int.parse(confirmed.group(1)!));
-  }
+  if (confirmed != null) return int.parse(confirmed.group(1)!);
   final processed = _processedPattern.firstMatch(message);
-  if (processed != null) {
-    return _withProcessed(current, int.parse(processed.group(1)!));
-  }
-  return current;
+  if (processed != null) return int.parse(processed.group(1)!);
+  return null;
+}
+
+bool _isCompletedCardLog(String message) {
+  return RegExp(r'卡片 \S+ 已验证、提交并送交人工验证').hasMatch(message) ||
+      RegExp(r'咨询卡 \S+ 已送交验证').hasMatch(message) ||
+      message.contains('已恢复 pending 会话');
 }
 
 String? _phaseFromLog(String message) {

@@ -111,8 +111,6 @@ export async function runBatch(
         return cancellation.isCancelled ? cancelledResult() : drainedResult();
       }
       const liveJob = readLiveJob(job);
-      const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
-      workerLog(`──────── Worker 单卡轮次 ${roundLabel} ────────`);
       const peek = await mcp.callJson("peek_next_card", {
         ...(liveJob.projectId ? { projectId: liveJob.projectId } : {}),
       });
@@ -141,6 +139,9 @@ export async function runBatch(
       if (claim.payload.found !== true) {
         return completedResult(processedCards, "claim 时队列已为空");
       }
+
+      const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
+      workerLog(`──────── Worker 单卡轮次 ${roundLabel} ────────`);
 
       const cardId = requiredString(claim.payload, "cardId");
       const sessionId = requiredString(claim.payload, "sessionId");

@@ -92,7 +92,7 @@ void main() {
   });
 
   test('未完成反馈存在时拒绝离开待返工到其他列', () async {
-    final cardId = await controller.addCard('verify', '不得离开返工');
+    final cardId = await controller.addCard('verify', '不得离开返工到其他列');
     expect(cardId, isNotNull);
 
     await controller.updateCardFull(
@@ -106,7 +106,7 @@ void main() {
     final err = await controller.moveCard(
       cardId: cardId,
       fromColumnId: KanbanBoard.defaultReworkColumnId,
-      toColumnId: 'doing',
+      toColumnId: 'todo',
       toDisplayIndex: 0,
     );
 
@@ -115,6 +115,39 @@ void main() {
       controller.findColumnIdForCard(cardId),
       KanbanBoard.defaultReworkColumnId,
     );
+  });
+
+  test('未完成反馈存在时允许从待返工移入进行中或阻塞中', () async {
+    final cardId = await controller.addCard('verify', '可继续实施');
+    expect(cardId, isNotNull);
+
+    await controller.updateCardFull(
+      'verify',
+      cardId!,
+      verificationFeedback: [
+        ChecklistItem(id: 'vf1', text: '仍需修复'),
+      ],
+    );
+
+    final doingErr = await controller.moveCard(
+      cardId: cardId,
+      fromColumnId: KanbanBoard.defaultReworkColumnId,
+      toColumnId: 'doing',
+      toDisplayIndex: 0,
+    );
+
+    expect(doingErr, isNull);
+    expect(controller.findColumnIdForCard(cardId), 'doing');
+
+    final blockedErr = await controller.moveCard(
+      cardId: cardId,
+      fromColumnId: 'doing',
+      toColumnId: 'blocked',
+      toDisplayIndex: 0,
+    );
+
+    expect(blockedErr, isNull);
+    expect(controller.findColumnIdForCard(cardId), 'blocked');
   });
 
   test('未完成反馈存在时拒绝移入已完成列且不落盘', () async {

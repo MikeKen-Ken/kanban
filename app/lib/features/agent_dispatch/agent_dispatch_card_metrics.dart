@@ -134,9 +134,9 @@ class AgentDispatchCardMetrics {
     List<AgentDispatchLogTask> tasks,
   ) {
     if (progress.running && progress.currentRound > 0) {
-      final match =
-          tasks.where((task) => task.ordinal == progress.currentRound);
-      if (match.isNotEmpty) return progress.currentRound;
+      final byRound =
+          tasks.where((task) => task.roundIndex == progress.currentRound);
+      if (byRound.isNotEmpty) return byRound.last.ordinal;
     }
     return tasks.last.ordinal;
   }

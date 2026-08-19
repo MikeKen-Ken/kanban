@@ -54,6 +54,62 @@ void main() {
     expect(progress.fractionLabel, '2/5');
   });
 
+  test('提交与送验完成日志累加已处理张数，且批次完成行同步阶段', () {
+    var progress = const AgentDispatchProgress(
+      running: true,
+      totalCards: 4,
+      cardLimitMax: true,
+    );
+    progress =
+        applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/4 ────────');
+    progress = applyWorkerProgressLog(
+      progress,
+      '卡片 abc 已验证、提交并送交人工验证',
+    );
+    expect(progress.processedCards, 1);
+    expect(progress.phaseLabel, '提交');
+
+    progress =
+        applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 2/4 ────────');
+    progress = applyWorkerProgressLog(progress, '咨询卡 def 已送交验证');
+    expect(progress.processedCards, 2);
+    expect(progress.phaseLabel, '送验');
+
+    progress = applyWorkerProgressLog(progress, '已恢复 pending 会话 session-1');
+    expect(progress.processedCards, 3);
+
+    progress = applyWorkerProgressLog(
+      progress,
+      '验证已由 Agent 会话完成，Worker 不再复跑测试',
+    );
+    expect(progress.processedCards, 3);
+    expect(progress.phaseLabel, '提交');
+
+    progress = applyWorkerProgressLog(
+      progress,
+      'Worker 批次完成：当前无更多卡片；已处理 3 张',
+    );
+    expect(progress.processedCards, 3);
+    expect(progress.phaseLabel, '完成');
+  });
+
+  test('已处理张数参与实时分母，完成后不会把 4/10 收成 4/7', () {
+    const progress = AgentDispatchProgress(
+      running: true,
+      processedCards: 3,
+      totalCards: 10,
+      currentRound: 4,
+      cardLimitMax: true,
+    );
+    final live = applyLiveBoardQueue(
+      progress,
+      remainingQueue: 6,
+      hasActiveCard: true,
+    );
+    expect(live.liveCardLabel, '4/10');
+    expect(live.totalCards, 10);
+  });
+
   test('从日志解析当前卡片内容与实时阶段', () {
     var progress = const AgentDispatchProgress(running: true, totalCards: 12);
     progress =

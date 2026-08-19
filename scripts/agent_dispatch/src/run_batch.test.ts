@@ -242,6 +242,42 @@ describe("run_batch", () => {
     );
   });
 
+  it("队列为空时不写空的单卡轮次日志", async () => {
+    const full = new FakeMcp((name) => {
+      switch (name) {
+        case "dispatch_list_pending":
+          return { ok: true, pending: [] };
+        case "peek_next_card":
+          return { found: false };
+        default:
+          return { ok: true };
+      }
+    });
+    const dependencies: RunBatchDependencies = {
+      connectMcp: async () => full,
+      inspectGit: () => ({ kind: "clean" }),
+      readArchitecture: () => "# 架构",
+      createContext: () => makeContext(),
+      runAgent: async () => ({ ok: true }),
+    };
+    const chunks: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
+      chunks.push(String(chunk));
+      return originalWrite(chunk as never, ...(args as never[]));
+    }) as typeof process.stdout.write;
+
+    try {
+      const result = await runBatch(job, undefined, dependencies);
+      assert.equal(result.ok, true);
+      assert.equal(result.processedCards, 0);
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+
+    assert.equal(chunks.join("").includes("Worker 单卡轮次"), false);
+  });
+
   it("claim、门禁、会话验证记账、finalize 形成完整单卡流程", async () => {
     const { dependencies, full, scoped } = createHappyDependencies({
       peekFields: { projectMcpTags: ["unity"] },

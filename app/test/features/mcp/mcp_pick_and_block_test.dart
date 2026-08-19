@@ -249,7 +249,11 @@ void main() {
     expect(payload['cardId'], reworkCardId);
     expect(payload['sourceColumn'], '待返工');
     expect(payload['workMode'], 'normal');
-    expect(payload['movedToDoing'], isFalse);
+    expect(payload['movedToDoing'], isTrue);
+    expect(payload['columnId'], 'doing');
+
+    final doing = findDoingColumn(controller.board!.columns)!;
+    expect(doing.cards.any((card) => card.id == reworkCardId), isTrue);
   });
 
   test('pick_next_card 待办空时取待返工且 workItems 仅含验证反馈', () async {
@@ -275,8 +279,8 @@ void main() {
     expect(payload['sourceColumn'], '待返工');
     expect(payload['workMode'], 'rework');
     expect(payload['commitRef'], 'abc1234');
-    expect(payload['movedToDoing'], isFalse);
-    expect(payload['columnId'], KanbanBoard.defaultReworkColumnId);
+    expect(payload['movedToDoing'], isTrue);
+    expect(payload['columnId'], 'doing');
     expect(payload['workItems'], [
       {
         'kind': 'verificationFeedback',
@@ -285,9 +289,8 @@ void main() {
       },
     ]);
 
-    final rework = controller.board!.columns
-        .firstWhere((c) => c.id == KanbanBoard.defaultReworkColumnId);
-    expect(rework.cards.any((card) => card.id == cardId), isTrue);
+    final doing = findDoingColumn(controller.board!.columns)!;
+    expect(doing.cards.any((card) => card.id == cardId), isTrue);
   });
 
   test('待办空时 peek/pick 领取进行中滞留卡且不重复移列', () async {

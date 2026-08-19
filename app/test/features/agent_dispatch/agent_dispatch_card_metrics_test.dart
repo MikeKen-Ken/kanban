@@ -33,6 +33,26 @@ void main() {
     expect(metrics.cursorRunId, 'run-1');
   });
 
+  test('当前任务取同轮次最后一段，避免旧批次日志抢指标', () {
+    final log = [
+      '[08:00:00] [Worker] [信息] ──────── Worker 单卡轮次 1/2 ────────',
+      '[08:00:01] [Worker] [信息] 本会话 token：input=1 output=1 total=2',
+      '[09:00:00] [Worker] [信息] ──────── Worker 单卡轮次 1/2 ────────',
+      '[09:00:01] [Worker] [信息] 本会话 token：input=9 output=9 total=18',
+    ].join('\n');
+
+    final metrics = AgentDispatchCardMetrics.forCurrentTask(
+      log,
+      const AgentDispatchProgress(
+        running: true,
+        currentRound: 1,
+        totalCards: 2,
+      ),
+    );
+
+    expect(metrics?.token?.totalTokens, 18);
+  });
+
   test('运行中按日志时间戳估算耗时', () {
     final now = DateTime(2026, 8, 18, 9, 2, 30);
     final log = [

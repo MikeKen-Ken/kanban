@@ -142,6 +142,15 @@ void main() {
     expect(AgentDispatchLogTasks.slice(text, 1), isNot(contains('启动批次')));
   });
 
+  test('无分母的 Max 轮次日志不把当前张当成总数', () {
+    final tasks = AgentDispatchLogTasks.parse([
+      '[09:00:01] [Worker] [信息] ──────── Worker 单卡轮次 2 ────────',
+    ]);
+    expect(tasks, hasLength(1));
+    expect(tasks.single.label, '第 1 个任务 · 2');
+    expect(tasks.single.roundTotal, 0);
+  });
+
   test('无分母的 Max 轮次日志仍能切出任务段', () {
     final lines = [
       '[09:00:01] [Worker] [信息] ──────── Worker 单卡轮次 1 ────────',

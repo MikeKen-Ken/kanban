@@ -93,6 +93,34 @@ void main() {
         contains('exitCode=1'),
       );
     });
+
+    test('较新的成功验证覆盖较早失败', () {
+      const failed = DispatchShellSpan(
+        callId: 'shell-1',
+        command:
+            'cd app && flutter test test/features/kanban/rework_move_gate_test.dart --name old',
+        startedAtMs: 0,
+        endedAtMs: 1000,
+        executionTimeMs: 1000,
+        exitCode: 1,
+      );
+      const passed = DispatchShellSpan(
+        callId: 'shell-2',
+        command: 'flutter test test/features/kanban/rework_move_gate_test.dart',
+        startedAtMs: 2000,
+        endedAtMs: 9000,
+        executionTimeMs: 7000,
+        exitCode: 0,
+      );
+      expect(
+        dispatchReadyBlockedByShells([failed, passed], nowMs: 10000),
+        isNull,
+      );
+      expect(
+        dispatchReadyBlockedByShells([passed, failed], nowMs: 10000),
+        isNull,
+      );
+    });
   });
 
   group('ready_to_submit 门禁', () {

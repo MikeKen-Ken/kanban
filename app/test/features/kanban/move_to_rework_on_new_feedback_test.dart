@@ -192,7 +192,7 @@ void main() {
       );
     });
 
-    test('有未完成反馈时离开待返工 → 拒绝', () {
+    test('有未完成反馈时从待返工移入进行中 → 允许', () {
       expect(
         reworkMoveRejectionReason(
           fromColumnId: 'rework',
@@ -204,6 +204,37 @@ void main() {
             ...columns,
             KanbanColumn(id: 'doing', title: '进行中', order: 3, cards: const []),
           ],
+        ),
+        isNull,
+      );
+    });
+
+    test('有未完成反馈时从待返工移入阻塞中 → 允许', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'blocked',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '仍需修复'),
+          ],
+          columns: [
+            ...columns,
+            KanbanColumn(id: 'blocked', title: '阻塞中', order: 3, cards: const []),
+          ],
+        ),
+        isNull,
+      );
+    });
+
+    test('有未完成反馈时从待返工移入其他列 → 拒绝', () {
+      expect(
+        reworkMoveRejectionReason(
+          fromColumnId: 'rework',
+          toColumnId: 'verify',
+          verificationFeedback: [
+            ChecklistItem(id: 'vf', text: '仍需修复'),
+          ],
+          columns: columns,
         ),
         incompleteVerificationFeedbackBlocksReworkExitMessage,
       );
@@ -413,6 +444,31 @@ void main() {
           feedback: [ChecklistItem(id: 'vf1', text: '请返工')],
           currentColumnId: 'rework',
           columns: columns,
+        ),
+        isNull,
+      );
+    });
+
+    test('已在进行中或阻塞中不自动拉回待返工', () {
+      final withWorkColumns = [
+        ...columns,
+        KanbanColumn(id: 'doing', title: '进行中', order: 3, cards: const []),
+        KanbanColumn(id: 'blocked', title: '阻塞中', order: 4, cards: const []),
+      ];
+      final feedback = [ChecklistItem(id: 'vf1', text: '请返工')];
+      expect(
+        targetReworkColumnIdIfIncompleteFeedback(
+          feedback: feedback,
+          currentColumnId: 'doing',
+          columns: withWorkColumns,
+        ),
+        isNull,
+      );
+      expect(
+        targetReworkColumnIdIfIncompleteFeedback(
+          feedback: feedback,
+          currentColumnId: 'blocked',
+          columns: withWorkColumns,
         ),
         isNull,
       );

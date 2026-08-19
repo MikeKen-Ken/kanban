@@ -224,7 +224,8 @@ class AgentDispatchLogTask {
   String get label {
     final head = '第 $ordinal 个任务';
     if (title.isNotEmpty) return '$head · $title';
-    return '$head · $roundIndex/$roundTotal';
+    if (roundTotal > 0) return '$head · $roundIndex/$roundTotal';
+    return '$head · $roundIndex';
   }
 }
 
@@ -277,7 +278,7 @@ class AgentDispatchLogTasks {
         AgentDispatchLogTask(
           ordinal: ordinal,
           roundIndex: int.parse(round.group(1)!),
-          roundTotal: int.parse(round.group(2) ?? round.group(1)!),
+          roundTotal: int.parse(round.group(2) ?? '0'),
           title: '',
           start: i,
           end: lines.length,

@@ -46,12 +46,40 @@ const reworkMoveRequiresFeedbackMessage = '需要添加未完成的反馈才可�
 const incompleteVerificationFeedbackBlocksProgressMessage =
     '请先完成所有验证反馈，才能移入已完成列或标记完成';
 
-/// 待返工列仍有未完成验证反馈时，不可移入其他列。
+/// 待返工列仍有未完成验证反馈时，不可移入其他列（「进行中」「阻塞中」除外）。
 const incompleteVerificationFeedbackBlocksReworkExitMessage =
     '请先完成所有验证反馈，才能离开待返工列';
 
-/// 跨列移卡门禁：没有未完成反馈不可入待返工；待返工有未完成反馈不可离开；
-/// 有未完成反馈不可入已完成列。
+/// 默认「进行中」列标题（与 [KanbanBoard.empty] 一致）。
+const _defaultDoingColumnTitle = '进行中';
+
+/// 默认「进行中」列 id。
+const _defaultDoingColumnId = 'doing';
+
+/// 默认「阻塞中」列标题。
+const _defaultBlockedColumnTitle = '阻塞中';
+
+/// 默认「阻塞中」列 id。
+const _defaultBlockedColumnId = 'blocked';
+
+/// 待返工卡实施中允许落入的列：进行中（继续实施）或阻塞中（无法继续）。
+bool isReworkActiveWorkColumnId({
+  required String columnId,
+  required Iterable<KanbanColumn> columns,
+}) {
+  for (final col in columns) {
+    if (col.id != columnId) continue;
+    return col.title == _defaultDoingColumnTitle ||
+        col.id == _defaultDoingColumnId ||
+        col.title == _defaultBlockedColumnTitle ||
+        col.id == _defaultBlockedColumnId;
+  }
+  return columnId == _defaultDoingColumnId ||
+      columnId == _defaultBlockedColumnId;
+}
+
+/// 跨列移卡门禁：没有未完成反馈不可入待返工；待返工有未完成反馈时仅可移入
+/// 「进行中」或「阻塞中」；有未完成反馈不可入已完成列。
 ///
 /// 同列内重排不校验。仅已完成的反馈不能进入待返工。
 /// 已完成列按 [doneColumnName] 识别（项目设置可自定义，默认「已完成」）。
@@ -66,7 +94,8 @@ String? reworkMoveRejectionReason({
   if (fromColumnId == toColumnId) return null;
   if (hasIncompleteVerificationFeedback(verificationFeedback) &&
       isReworkColumnId(columnId: fromColumnId, columns: columns) &&
-      !isReworkColumnId(columnId: toColumnId, columns: columns)) {
+      !isReworkColumnId(columnId: toColumnId, columns: columns) &&
+      !isReworkActiveWorkColumnId(columnId: toColumnId, columns: columns)) {
     return incompleteVerificationFeedbackBlocksReworkExitMessage;
   }
   if (hasIncompleteVerificationFeedback(verificationFeedback) &&
@@ -114,6 +143,12 @@ String? targetReworkColumnIdIfIncompleteFeedback({
   required Iterable<KanbanColumn> columns,
 }) {
   if (!hasIncompleteVerificationFeedback(feedback)) return null;
+  if (isReworkActiveWorkColumnId(
+    columnId: currentColumnId,
+    columns: columns,
+  )) {
+    return null;
+  }
   final rework = findReworkColumn(columns);
   if (rework == null || rework.id == currentColumnId) return null;
   return rework.id;

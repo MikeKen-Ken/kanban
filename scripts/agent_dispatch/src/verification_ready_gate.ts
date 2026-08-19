@@ -51,20 +51,26 @@ export function readyBlockedByShells(
   nowMs: number,
 ): string | undefined {
   let lastVerification: ShellSpan | undefined;
+  let lastEndMs = -1;
   for (const span of spans) {
     if (!isVerificationCommand(span.command)) continue;
-    lastVerification = span;
-    if (nowMs < shellEffectiveEndMs(span)) {
-      return (
-        `验证命令仍在执行：${clip(span.command)}。` +
-        "请等待测试完成后再调用 ready_to_submit，不要与 Shell 并行。"
-      );
+    const endMs = shellEffectiveEndMs(span);
+    if (lastVerification == null || endMs >= lastEndMs) {
+      lastVerification = span;
+      lastEndMs = endMs;
     }
   }
-  const failed = lastVerification;
-  if (failed && failed.exitCode != null && failed.exitCode !== 0) {
+  if (!lastVerification) return undefined;
+  if (nowMs < lastEndMs) {
     return (
-      `验证命令失败（exitCode=${failed.exitCode}）：${clip(failed.command)}。` +
+      `验证命令仍在执行：${clip(lastVerification.command)}。` +
+      "请等待测试完成后再调用 ready_to_submit，不要与 Shell 并行。"
+    );
+  }
+  const code = lastVerification.exitCode;
+  if (code != null && code !== 0) {
+    return (
+      `验证命令失败（exitCode=${code}）：${clip(lastVerification.command)}。` +
       "请修复后重跑测试，再调用 ready_to_submit。"
     );
   }

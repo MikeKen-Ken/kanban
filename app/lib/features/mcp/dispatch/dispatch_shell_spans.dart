@@ -87,18 +87,23 @@ String? dispatchReadyBlockedByShells(
   required int nowMs,
 }) {
   DispatchShellSpan? lastVerification;
+  var lastEndMs = -1;
   for (final span in spans) {
     if (!isDispatchVerificationCommand(span.command)) continue;
-    lastVerification = span;
     final endMs = dispatchShellEffectiveEndMs(span);
-    if (nowMs < endMs) {
-      return '验证命令仍在执行：${_clip(span.command)}。'
-          '请等待测试完成后再调用 ready_to_submit，不要与 Shell 并行。';
+    if (lastVerification == null || endMs >= lastEndMs) {
+      lastVerification = span;
+      lastEndMs = endMs;
     }
   }
-  final code = lastVerification?.exitCode;
+  if (lastVerification == null) return null;
+  if (nowMs < lastEndMs) {
+    return '验证命令仍在执行：${_clip(lastVerification.command)}。'
+        '请等待测试完成后再调用 ready_to_submit，不要与 Shell 并行。';
+  }
+  final code = lastVerification.exitCode;
   if (code != null && code != 0) {
-    return '验证命令失败（exitCode=$code）：${_clip(lastVerification!.command)}。'
+    return '验证命令失败（exitCode=$code）：${_clip(lastVerification.command)}。'
         '请修复后重跑测试，再调用 ready_to_submit。';
   }
   return null;
