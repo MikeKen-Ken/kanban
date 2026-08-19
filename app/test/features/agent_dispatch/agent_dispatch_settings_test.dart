@@ -629,5 +629,10 @@ disable-model-invocation: true
     expect(message, contains('send'));
     expect(message, isNot(contains('SQLite')));
     expect(describeWorkerExitWithoutOutput(1), contains('退出码 1'));
+    expect(
+      describeWorkerExitWithoutOutput(134),
+      contains('堆内存耗尽'),
+    );
+    expect(describeWorkerExitWithoutOutput(134), contains('KANBAN_WORKER_HEAP_MB'));
   });
 }

@@ -62,6 +62,7 @@ HKEY_CURRENT_USER\\Environment
       directoryExists: (path) =>
           path == r'C:\Users\me\dev\flutter\bin',
       pathSeparator: ';',
+      totalPhysicalMemoryMb: 32768,
     );
 
     expect(
@@ -72,6 +73,11 @@ HKEY_CURRENT_USER\\Environment
     expect(built.environment['FLUTTER_ROOT'], r'C:\Users\me\dev\flutter');
     expect(built.summary, contains('已合并用户/系统 PATH'));
     expect(built.summary, contains(r'C:\Users\me\dev\flutter\bin'));
+    expect(built.summary, contains('Node 堆上限 24576MB'));
+    expect(
+      built.environment['NODE_OPTIONS'],
+      '--max-old-space-size=24576',
+    );
   });
 
   test('会发现 LOCALAPPDATA 下的 Flutter SDK', () {
@@ -120,10 +126,70 @@ HKEY_CURRENT_USER\\Environment
       processEnvironment: const {'Path': r'C:\Windows'},
       nodeExecutable: r'C:\node\node.exe',
       pathSeparator: ';',
+      totalPhysicalMemoryMb: 32768,
     );
 
     expect(built.environment['Path'], r'C:\node;C:\Windows');
-    expect(built.summary, 'Worker 环境：沿用看板进程 PATH');
+    expect(built.summary, contains('沿用看板进程 PATH'));
+    expect(built.summary, contains('Node 堆上限 24576MB'));
+    expect(built.summary, contains('本机物理内存 32768MB'));
+    expect(
+      built.environment['NODE_OPTIONS'],
+      '--max-old-space-size=24576',
+    );
+  });
+
+  test('已有 NODE_OPTIONS 堆上限时不覆盖', () {
+    final built = buildWorkerEnvironment(
+      processEnvironment: const {
+        'Path': r'C:\Windows',
+        'NODE_OPTIONS': '--enable-source-maps --max-old-space-size=8192',
+      },
+      nodeExecutable: r'C:\node\node.exe',
+      pathSeparator: ';',
+    );
+
+    expect(
+      built.environment['NODE_OPTIONS'],
+      '--enable-source-maps --max-old-space-size=8192',
+    );
+    expect(built.summary, contains('Node 堆上限 8192MB'));
+  });
+
+  test('已有 NODE_OPTIONS 但无堆上限时追加计算出的值', () {
+    expect(
+      applyWorkerNodeHeapLimit('--enable-source-maps', mb: 16384),
+      '--enable-source-maps --max-old-space-size=16384',
+    );
+  });
+
+  test('KANBAN_WORKER_HEAP_MB 可覆盖自动堆上限', () {
+    final built = buildWorkerEnvironment(
+      processEnvironment: const {
+        'Path': r'C:\Windows',
+        'KANBAN_WORKER_HEAP_MB': '12288',
+      },
+      nodeExecutable: r'C:\node\node.exe',
+      pathSeparator: ';',
+      totalPhysicalMemoryMb: 32768,
+    );
+    expect(
+      built.environment['NODE_OPTIONS'],
+      '--max-old-space-size=12288',
+    );
+    expect(built.summary, contains('用户指定'));
+  });
+
+  test('按物理内存选择 Node 堆上限', () {
+    expect(chooseWorkerNodeHeapMb(totalPhysicalMb: 8192), 6144);
+    expect(chooseWorkerNodeHeapMb(totalPhysicalMb: 16384), 12288);
+    expect(chooseWorkerNodeHeapMb(totalPhysicalMb: 32768), 24576);
+    expect(chooseWorkerNodeHeapMb(totalPhysicalMb: 65536), 49152);
+    expect(chooseWorkerNodeHeapMb(), 8192);
+    expect(
+      chooseWorkerNodeHeapMb(totalPhysicalMb: 32768, explicitHeapMb: 20000),
+      20000,
+    );
   });
 
   test('注入的 reg query 能读出用户 PATH 与 FLUTTER_ROOT', () {

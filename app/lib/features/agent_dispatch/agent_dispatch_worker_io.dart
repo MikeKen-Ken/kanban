@@ -7,6 +7,7 @@ import 'agent_dispatch_config.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_windows_job.dart';
 import 'agent_dispatch_worker_environment.dart';
+import 'agent_dispatch_worker_memory.dart';
 import 'agent_worker_health.dart';
 
 class AgentWorkerResult {
@@ -533,6 +534,15 @@ String describeWorkerExitWithoutOutput(int code) {
         '通常是 Cursor 本地运行时在开始执行（send）时原生崩溃，'
         '而不是看板 MCP 或 Skill 返回了错误码。';
   }
+  // Node fatal OOM 通常 abort，Unix/Windows 上常见退出码 134（128+SIGABRT）。
+  if (code == 134) {
+    return 'worker 因 JavaScript 堆内存耗尽异常退出（退出码 134），未能写出 out.json。'
+        'Node 在触及堆上限时会直接 abort，当前卡片不会完成，调度会失败退出；'
+        '未完成的 Agent 会话可在下次启动 Worker 时恢复收尾。'
+        '堆上限按本机内存约一半自动计算，也可用环境变量 KANBAN_WORKER_HEAP_MB'
+        '或 NODE_OPTIONS 的 --max-old-space-size 覆盖。'
+        '若内存已很大仍失败，请减少同时挂载的 MCP / 仓库扫描范围。';
+  }
   return 'worker 退出码 $code，且无 out.json';
 }
 
@@ -548,6 +558,8 @@ WorkerEnvironmentBuild _workerEnvironment({
     cursorApiKey: cursorApiKey,
     windowsRegistry:
         Platform.isWindows ? (_windowsRegistryCache ??= readWindowsRegistryEnvironment()) : null,
+    totalPhysicalMemoryMb:
+        Platform.isWindows ? readWindowsTotalPhysicalMemoryMb() : null,
   );
 }
 

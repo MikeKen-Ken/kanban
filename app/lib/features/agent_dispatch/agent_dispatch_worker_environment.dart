@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'agent_dispatch_worker_heap.dart';
+
+export 'agent_dispatch_worker_heap.dart';
+
 const _hkcuEnvironment = r'HKCU\Environment';
 const _hklmEnvironment =
     r'HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
@@ -49,6 +53,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
   WindowsRegistryEnvironment? windowsRegistry,
   DirectoryExists? directoryExists,
   String? pathSeparator,
+  int? totalPhysicalMemoryMb,
 }) {
   final environment = <String, String>{
     for (final entry in processEnvironment.entries) entry.key: entry.value,
@@ -114,12 +119,32 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
   if (key != null && key.isNotEmpty) {
     environment['CURSOR_API_KEY'] = key;
   }
+  final heapMb = chooseWorkerNodeHeapMb(
+    totalPhysicalMb: totalPhysicalMemoryMb,
+    explicitHeapMb: parseKanbanWorkerHeapMb(
+      _envValue(environment, 'KANBAN_WORKER_HEAP_MB'),
+    ),
+  );
+  environment['NODE_OPTIONS'] = applyWorkerNodeHeapLimit(
+    _envValue(environment, 'NODE_OPTIONS'),
+    mb: heapMb,
+  );
 
   return WorkerEnvironmentBuild(
     environment: environment,
     summary: _summary(
       mergedWindowsPath: windowsRegistry?.hasPath ?? false,
       flutterBin: flutterBins.isEmpty ? null : flutterBins.first,
+      nodeHeapMb: parseNodeMaxOldSpaceSizeMb(environment['NODE_OPTIONS']),
+      totalPhysicalMb: totalPhysicalMemoryMb,
+      heapOverridden: parseNodeMaxOldSpaceSizeMb(
+            _envValue(processEnvironment, 'NODE_OPTIONS'),
+          ) !=
+          null ||
+          parseKanbanWorkerHeapMb(
+                _envValue(environment, 'KANBAN_WORKER_HEAP_MB'),
+              ) !=
+              null,
     ),
   );
 }
@@ -256,15 +281,27 @@ String? _firstNonEmpty(List<String?> values) {
 String _summary({
   required bool mergedWindowsPath,
   required String? flutterBin,
+  int? nodeHeapMb,
+  int? totalPhysicalMb,
+  required bool heapOverridden,
 }) {
+  final buffer = StringBuffer('Worker 环境：');
   if (flutterBin != null && mergedWindowsPath) {
-    return 'Worker 环境：已合并用户/系统 PATH，并加入 $flutterBin';
+    buffer.write('已合并用户/系统 PATH，并加入 $flutterBin');
+  } else if (flutterBin != null) {
+    buffer.write('已加入 $flutterBin');
+  } else if (mergedWindowsPath) {
+    buffer.write('已合并用户/系统 PATH');
+  } else {
+    buffer.write('沿用看板进程 PATH');
   }
-  if (flutterBin != null) {
-    return 'Worker 环境：已加入 $flutterBin';
+  if (nodeHeapMb != null) {
+    buffer.write('；Node 堆上限 ${nodeHeapMb}MB');
+    if (heapOverridden) {
+      buffer.write('（用户指定）');
+    } else if (totalPhysicalMb != null && totalPhysicalMb > 0) {
+      buffer.write('（本机物理内存 ${totalPhysicalMb}MB 的约 75%）');
+    }
   }
-  if (mergedWindowsPath) {
-    return 'Worker 环境：已合并用户/系统 PATH';
-  }
-  return 'Worker 环境：沿用看板进程 PATH';
+  return buffer.toString();
 }
