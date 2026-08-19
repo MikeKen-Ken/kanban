@@ -27,6 +27,7 @@ import {
   emitAssistantMessage,
   emitConversationSnapshot,
   emitSessionStart,
+  emitThinkingMessage,
   sessionStartText,
 } from "./interaction_bridge.ts";
 import {
@@ -136,12 +137,20 @@ export async function runCodex(
     const fromTurns: ConversationTranscriptMessage[] = [];
 
     const emittedAssistant = new Set<string>();
+    const emittedThinking = new Set<string>();
     const emitAssistant = (text: string): void => {
       const normalized = text.trim();
       if (!normalized || emittedAssistant.has(normalized)) return;
       emittedAssistant.add(normalized);
       live.push({ role: "assistant", text: normalized });
       emitAssistantMessage(job, normalized);
+    };
+    const emitThinking = (text: string): void => {
+      const normalized = text.trim();
+      if (!normalized || emittedThinking.has(normalized)) return;
+      emittedThinking.add(normalized);
+      live.push({ role: "thinking", text: normalized });
+      emitThinkingMessage(job, normalized);
     };
 
     const code = await new Promise<number>((resolvePromise, reject) => {
@@ -173,6 +182,7 @@ export async function runCodex(
           const parsed = JSON.parse(line);
           const message = extractCodexTranscriptMessage(parsed);
           if (message) fromTurns.push(message);
+          if (message?.role === "thinking") emitThinking(message.text);
           emitAssistant(extractCodexAssistantEventText(parsed));
         } catch {
           // 非 JSON 行只记日志。

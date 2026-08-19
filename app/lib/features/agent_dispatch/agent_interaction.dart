@@ -5,7 +5,7 @@ final _conversationSnapshotFilePattern = RegExp(
   r'^conversation-snapshot-[a-zA-Z0-9._-]+\.json$',
 );
 
-enum AgentInteractionEventType { session, assistant, question, user, snapshot }
+enum AgentInteractionEventType { session, assistant, thinking, question, user, snapshot }
 
 class AgentConversationMessage {
   const AgentConversationMessage({required this.role, required this.text});
@@ -52,6 +52,7 @@ AgentInteractionEvent? parseAgentInteractionEvent(String line) {
     final type = switch ('${raw['type'] ?? ''}') {
       'session' => AgentInteractionEventType.session,
       'assistant' => AgentInteractionEventType.assistant,
+      'thinking' => AgentInteractionEventType.thinking,
       'question' => AgentInteractionEventType.question,
       'user' => AgentInteractionEventType.user,
       'snapshot' => AgentInteractionEventType.snapshot,
@@ -95,7 +96,7 @@ List<AgentConversationMessage> parseAgentConversationSnapshotMessages(
     final role = '${item['role'] ?? ''}'.trim();
     final text = '${item['text'] ?? ''}'.trim();
     if (text.isEmpty) continue;
-    if (role != 'user' && role != 'assistant') continue;
+    if (role != 'user' && role != 'assistant' && role != 'thinking') continue;
     messages.add(AgentConversationMessage(role: role, text: text));
   }
   return messages;
@@ -119,12 +120,16 @@ String appendAgentConversationEvent(
   if (event.type == AgentInteractionEventType.user) {
     return appendAgentConversationUserReply(current, event.text);
   }
+  if (event.type == AgentInteractionEventType.thinking) {
+    final coalesced = _coalesceLastSection(current, event.text, '### 思考');
+    if (coalesced != null) return coalesced;
+  }
   if (event.type == AgentInteractionEventType.assistant ||
       event.type == AgentInteractionEventType.question) {
     final body = event.type == AgentInteractionEventType.question
         ? agentInteractionQuestionBody(event)
         : event.text;
-    final coalesced = _coalesceAssistantText(current, body);
+    final coalesced = _coalesceLastSection(current, body, '### 助手');
     if (coalesced != null) return coalesced;
   }
   final buffer = StringBuffer((current ?? '').trimRight());
@@ -135,6 +140,11 @@ String appendAgentConversationEvent(
         ..writeln('## 会话 ${_formatLocalTime(event.at)}')
         ..writeln()
         ..writeln('### 用户')
+        ..write(event.text);
+      break;
+    case AgentInteractionEventType.thinking:
+      buffer
+        ..writeln('### 思考')
         ..write(event.text);
       break;
     case AgentInteractionEventType.assistant:
@@ -212,7 +222,11 @@ String _renderSession(
   for (final message in messages) {
     buffer
       ..writeln()
-      ..writeln(message.role == 'user' ? '### 用户' : '### 助手')
+      ..writeln(switch (message.role) {
+        'user' => '### 用户',
+        'thinking' => '### 思考',
+        _ => '### 助手',
+      })
       ..write(message.text.trim());
   }
   return '${buffer.toString().trimRight()}\n';
@@ -290,6 +304,31 @@ String agentInteractionQuestionBody(AgentInteractionEvent event) {
   return buffer.toString();
 }
 
+/// 同一轮流式快照会越写越长；用较长正文替换上一段，避免只留下开头几句。
+String? _coalesceLastSection(
+  String? current,
+  String nextText,
+  String marker,
+) {
+  final existing = (current ?? '').trimRight();
+  if (existing.isEmpty) return null;
+  final index = existing.lastIndexOf(marker);
+  if (index < 0) return null;
+  final after = existing.substring(index + marker.length);
+  if (RegExp(r'\n### ').hasMatch(after)) return null;
+  final previous = after.trim();
+  final next = nextText.trim();
+  if (previous.isEmpty || next.isEmpty) return null;
+  if (next == previous) return '${existing.trimRight()}\n';
+  if (next.startsWith(previous)) {
+    return '${existing.substring(0, index)}$marker\n$next\n';
+  }
+  if (previous.startsWith(next)) {
+    return '${existing.trimRight()}\n';
+  }
+  return null;
+}
+
 /// 模型常把 2–4 个方案写进问题正文而不传 `choices`；从编号/项目符号列表还原。
 List<String> inferAgentInteractionChoices(String question) {
   final items = <String>[];
@@ -306,24 +345,3 @@ List<String> inferAgentInteractionChoices(String question) {
 
 final _choiceLinePattern = RegExp(r'^\s*(?:\d+[\.、\)]|[-*•])\s+(.+)$');
 
-/// 同一轮助手流式快照会越写越长；用较长正文替换上一段，避免只留下开头几句。
-String? _coalesceAssistantText(String? current, String nextText) {
-  final existing = (current ?? '').trimRight();
-  if (existing.isEmpty) return null;
-  const marker = '### 助手';
-  final index = existing.lastIndexOf(marker);
-  if (index < 0) return null;
-  final after = existing.substring(index + marker.length);
-  if (after.contains('### 用户')) return null;
-  final previous = after.trim();
-  final next = nextText.trim();
-  if (previous.isEmpty || next.isEmpty) return null;
-  if (next == previous) return '${existing.trimRight()}\n';
-  if (next.startsWith(previous)) {
-    return '${existing.substring(0, index)}$marker\n$next\n';
-  }
-  if (previous.startsWith(next)) {
-    return '${existing.trimRight()}\n';
-  }
-  return null;
-}

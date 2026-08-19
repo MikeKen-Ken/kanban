@@ -13,8 +13,18 @@ export function extractCursorAssistantStepText(step: unknown): string {
   return extractAssistantText(record.message ?? record);
 }
 
+export function extractCursorThinkingStepText(step: unknown): string {
+  const record = asRecord(step);
+  if (!record) return "";
+  const type = String(record.type ?? "");
+  if (type && type !== "thinkingMessage" && type !== "thinking") return "";
+  return extractThinkingText(record.message ?? record);
+}
+
+export type ConversationTranscriptRole = "user" | "assistant" | "thinking";
+
 export type ConversationTranscriptMessage = {
-  role: "user" | "assistant";
+  role: ConversationTranscriptRole;
   text: string;
 };
 
@@ -33,21 +43,25 @@ export function extractCodexTranscriptMessage(
   const item = asRecord(record.item) ?? {};
   const itemType = String(item.type ?? item.item_type ?? "");
   const role = String(item.role ?? "");
-  const text = extractAssistantText(item);
-  if (!text) return undefined;
   if (
     itemType === "user_message" ||
     itemType === "user" ||
     (itemType === "message" && role === "user")
   ) {
-    return { role: "user", text };
+    const text = extractAssistantText(item);
+    return text ? { role: "user", text } : undefined;
   }
   if (
     itemType === "agent_message" ||
     itemType === "assistant_message" ||
     (itemType === "message" && (role === "assistant" || role === "agent"))
   ) {
-    return { role: "assistant", text };
+    const text = extractAssistantText(item);
+    return text ? { role: "assistant", text } : undefined;
+  }
+  if (itemType === "reasoning" || itemType === "thinking") {
+    const thinking = extractThinkingText(item);
+    return thinking ? { role: "thinking", text: thinking } : undefined;
   }
   return undefined;
 }
@@ -66,11 +80,27 @@ export function extractConversationMessages(
     const steps = inner.steps ?? record.steps;
     if (!Array.isArray(steps)) continue;
     for (const step of steps) {
+      const thinking = extractCursorThinkingStepText(step);
+      if (thinking) {
+        messages.push({ role: "thinking", text: thinking });
+        continue;
+      }
       const assistant = extractCursorAssistantStepText(step);
       if (assistant) messages.push({ role: "assistant", text: assistant });
     }
   }
   return messages;
+}
+
+function extractThinkingText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  const record = asRecord(value);
+  if (!record) return "";
+  for (const key of ["thinking", "text", "content"] as const) {
+    const field = record[key];
+    if (typeof field === "string" && field.trim()) return field.trim();
+  }
+  return extractAssistantText(record);
 }
 
 function extractUserText(value: unknown): string {

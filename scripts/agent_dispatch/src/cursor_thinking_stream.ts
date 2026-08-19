@@ -21,6 +21,7 @@ export class CursorThinkingStream {
   private assembled = "";
   private startedBlock = false;
   private streamed = false;
+  private blockComplete = false;
   private scheduled: { cancel: () => void } | undefined;
 
   constructor(options: CursorThinkingStreamOptions = {}) {
@@ -46,6 +47,7 @@ export class CursorThinkingStream {
     }
     if (type === "thinking-completed") {
       this.flush(true);
+      this.blockComplete = true;
       const ms = record.thinkingDurationMs;
       if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0) {
         this.write(`思考完成（${Math.round(ms / 1000)} 秒）`, "ai");
@@ -53,12 +55,16 @@ export class CursorThinkingStream {
     }
   }
 
+  /** 当前已组装的思考正文，供写入同步对话；不消费日志去重状态。 */
+  assembledText(): string {
+    return `${this.assembled}${this.pending}`.trim();
+  }
+
   /** 若思考已通过增量打出，则跳过 onStep 的整段重复 dump。 */
   consumeStreamedThinking(): boolean {
     if (!this.streamed) return false;
     this.streamed = false;
     this.startedBlock = false;
-    this.assembled = "";
     return true;
   }
 
@@ -69,6 +75,13 @@ export class CursorThinkingStream {
   }
 
   private appendDelta(text: string): void {
+    if (this.blockComplete) {
+      this.assembled = "";
+      this.pending = "";
+      this.startedBlock = false;
+      this.streamed = false;
+      this.blockComplete = false;
+    }
     const addition = this.deltaAddition(text);
     if (!addition) return;
     this.pending += addition;

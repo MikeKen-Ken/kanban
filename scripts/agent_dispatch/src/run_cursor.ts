@@ -36,11 +36,13 @@ import {
   emitAssistantMessage,
   emitConversationSnapshot,
   emitSessionStart,
+  emitThinkingMessage,
   sessionStartText,
 } from "./interaction_bridge.ts";
 import {
   extractConversationMessages,
   extractCursorAssistantStepText,
+  extractCursorThinkingStepText,
   type ConversationTranscriptMessage,
 } from "./assistant_text.ts";
 import { buildConversationTranscript } from "./conversation_transcript.ts";
@@ -425,12 +427,20 @@ export async function runCursor(
       const sessionUser = sessionStartText(job);
       if (sessionUser) live.push({ role: "user", text: sessionUser });
       const emittedAssistant = new Set<string>();
+      const emittedThinking = new Set<string>();
       const emitAssistant = (text: string): void => {
         const normalized = text.trim();
         if (!normalized || emittedAssistant.has(normalized)) return;
         emittedAssistant.add(normalized);
         live.push({ role: "assistant", text: normalized });
         emitAssistantMessage(job, normalized);
+      };
+      const emitThinking = (text: string): void => {
+        const normalized = text.trim();
+        if (!normalized || emittedThinking.has(normalized)) return;
+        emittedThinking.add(normalized);
+        live.push({ role: "thinking", text: normalized });
+        emitThinkingMessage(job, normalized);
       };
       const flushSnapshot = (
         turns: readonly unknown[] = [],
@@ -455,6 +465,13 @@ export async function runCursor(
         mcpServers: mcp.servers,
         onDelta: ({ update }) => {
           thinkingStream?.handleDelta(update);
+          const type =
+            update && typeof update === "object" && "type" in update
+              ? String((update as { type?: unknown }).type ?? "")
+              : "";
+          if (type === "thinking-completed") {
+            emitThinking(thinkingStream?.assembledText() ?? "");
+          }
         },
         onStep: async ({ step }) => {
           try {
@@ -473,6 +490,13 @@ export async function runCursor(
               thinkingStream?.consumeStreamedThinking() === true;
             if (!skipThinkingDump && described.lines.length > 0) {
               logLines(described.lines, described.source);
+            }
+            if (step.type === "thinkingMessage") {
+              emitThinking(
+                extractCursorThinkingStepText(step) ||
+                  thinkingStream?.assembledText() ||
+                  "",
+              );
             }
             if (step.type === "assistantMessage") {
               emitAssistant(extractCursorAssistantStepText(step));

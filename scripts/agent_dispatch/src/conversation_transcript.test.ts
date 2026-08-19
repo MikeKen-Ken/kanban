@@ -22,7 +22,7 @@ describe("conversation_transcript", () => {
     ]);
   });
 
-  it("会话快照缺助手时回退到实时记录，并保留追问用户消息", () => {
+  it("快照缺助手时回退到实时记录，并保留追问用户消息", () => {
     const messages = buildConversationTranscript({
       sessionUser: "- 任务",
       live: [
@@ -55,5 +55,27 @@ describe("conversation_transcript", () => {
     });
     assert.equal(messages.length, 2);
     assert.equal(messages[1]?.text, "先改保存。再写出完整助手正文。");
+  });
+
+  it("在助手正文前保留思考过程", () => {
+    const messages = buildConversationTranscript({
+      sessionUser: "- 任务",
+      live: [
+        { role: "thinking", text: "先核对字段。" },
+        { role: "assistant", text: "已写入对话。" },
+      ],
+      fromTurns: [
+        { role: "thinking", text: "先核对字段。再补全思考。" },
+        { role: "assistant", text: "已写入对话。" },
+      ],
+    });
+    assert.deepEqual(
+      messages.map((item) => `${item.role}:${item.text}`),
+      [
+        "user:- 任务",
+        "thinking:先核对字段。再补全思考。",
+        "assistant:已写入对话。",
+      ],
+    );
   });
 });

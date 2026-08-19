@@ -16,7 +16,7 @@ import type { RoundDispatchJob } from "./types.ts";
 export const INTERACTION_EVENT_PREFIX = "@@KANBAN_INTERACTION@@";
 
 export type InteractionEvent = {
-  type: "session" | "assistant" | "question" | "user" | "snapshot";
+  type: "session" | "assistant" | "thinking" | "question" | "user" | "snapshot";
   projectId?: string;
   cardId: string;
   sessionId: string;
@@ -105,10 +105,25 @@ export function emitAssistantMessage(
   job: RoundDispatchJob,
   text: string,
 ): void {
+  emitRoleMessage(job, "assistant", text);
+}
+
+export function emitThinkingMessage(
+  job: RoundDispatchJob,
+  text: string,
+): void {
+  emitRoleMessage(job, "thinking", text);
+}
+
+function emitRoleMessage(
+  job: RoundDispatchJob,
+  type: "assistant" | "thinking",
+  text: string,
+): void {
   const normalized = text.trim();
   if (!normalized) return;
   emitInteractionEvent({
-    type: "assistant",
+    type,
     projectId: job.projectId,
     cardId: job.round.cardId,
     sessionId: job.round.sessionId,

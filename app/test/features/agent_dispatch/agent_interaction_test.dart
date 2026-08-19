@@ -106,6 +106,44 @@ void main() {
     expect('### 助手'.allMatches(markdown).length, 2);
   });
 
+  test('思考事件会写入独立段落且可流式合并', () {
+    final thinking = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"thinking","cardId":"card-a","sessionId":"session-a",'
+      '"text":"先定位。","at":"2026-08-20T08:00:00Z"}',
+    )!;
+    final longer = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"thinking","cardId":"card-a","sessionId":"session-a",'
+      '"text":"先定位。再补思考。","at":"2026-08-20T08:00:01Z"}',
+    )!;
+    final assistant = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"assistant","cardId":"card-a","sessionId":"session-a",'
+      '"text":"完整答复","at":"2026-08-20T08:00:02Z"}',
+    )!;
+    final markdown = appendAgentConversationEvent(
+      appendAgentConversationEvent(
+        appendAgentConversationEvent(null, thinking),
+        longer,
+      ),
+      assistant,
+    );
+    expect(markdown, contains('### 思考\n先定位。再补思考。'));
+    expect(markdown, contains('### 助手\n完整答复'));
+    expect('### 思考'.allMatches(markdown).length, 1);
+  });
+
+  test('快照可还原思考角色', () {
+    final markdown = replaceAgentConversationSession(null, const [
+      AgentConversationMessage(role: 'user', text: '继续处理'),
+      AgentConversationMessage(role: 'thinking', text: '内部思考过程'),
+      AgentConversationMessage(role: 'assistant', text: '面向用户的结论'),
+    ], at: DateTime.utc(2026, 8, 20, 8));
+    expect(markdown, contains('### 思考\n内部思考过程'));
+    expect(markdown, contains('### 助手\n面向用户的结论'));
+  });
+
   test('二次追问快照追加新会话，不覆盖第一次记录', () {
     const first = '## 会话 2026-08-19 08:00\n\n'
         '### 用户\n'

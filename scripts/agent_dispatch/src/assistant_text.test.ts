@@ -63,7 +63,7 @@ describe("assistant_text", () => {
     );
   });
 
-  it("从 Cursor 会话回合抽出用户与全部助手消息", () => {
+  it("从 Cursor 会话回合抽出思考与全部助手消息", () => {
     assert.deepEqual(
       extractConversationMessages([
         {
@@ -87,9 +87,20 @@ describe("assistant_text", () => {
       ]),
       [
         { role: "user", text: "请继续" },
+        { role: "thinking", text: "内部思考" },
         { role: "assistant", text: "第一条助手。" },
         { role: "assistant", text: "第二条助手。" },
       ],
+    );
+  });
+
+  it("抽出 Codex 已完成的思考条目", () => {
+    assert.deepEqual(
+      extractCodexTranscriptMessage({
+        type: "item.completed",
+        item: { type: "reasoning", text: "先核对落盘字段。" },
+      }),
+      { role: "thinking", text: "先核对落盘字段。" },
     );
   });
 });

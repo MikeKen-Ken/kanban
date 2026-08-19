@@ -778,6 +778,13 @@ function extractCursorAssistantStepText(step) {
   if (type && type !== "assistantMessage" && type !== "assistant") return "";
   return extractAssistantText(record.message ?? record);
 }
+function extractCursorThinkingStepText(step) {
+  const record = asRecord2(step);
+  if (!record) return "";
+  const type = String(record.type ?? "");
+  if (type && type !== "thinkingMessage" && type !== "thinking") return "";
+  return extractThinkingText(record.message ?? record);
+}
 function extractCodexAssistantEventText(event) {
   const message = extractCodexTranscriptMessage(event);
   return message?.role === "assistant" ? message.text : "";
@@ -790,13 +797,17 @@ function extractCodexTranscriptMessage(event) {
   const item = asRecord2(record.item) ?? {};
   const itemType = String(item.type ?? item.item_type ?? "");
   const role = String(item.role ?? "");
-  const text = extractAssistantText(item);
-  if (!text) return void 0;
   if (itemType === "user_message" || itemType === "user" || itemType === "message" && role === "user") {
-    return { role: "user", text };
+    const text = extractAssistantText(item);
+    return text ? { role: "user", text } : void 0;
   }
   if (itemType === "agent_message" || itemType === "assistant_message" || itemType === "message" && (role === "assistant" || role === "agent")) {
-    return { role: "assistant", text };
+    const text = extractAssistantText(item);
+    return text ? { role: "assistant", text } : void 0;
+  }
+  if (itemType === "reasoning" || itemType === "thinking") {
+    const thinking = extractThinkingText(item);
+    return thinking ? { role: "thinking", text: thinking } : void 0;
   }
   return void 0;
 }
@@ -812,11 +823,26 @@ function extractConversationMessages(turns) {
     const steps = inner.steps ?? record.steps;
     if (!Array.isArray(steps)) continue;
     for (const step of steps) {
+      const thinking = extractCursorThinkingStepText(step);
+      if (thinking) {
+        messages.push({ role: "thinking", text: thinking });
+        continue;
+      }
       const assistant = extractCursorAssistantStepText(step);
       if (assistant) messages.push({ role: "assistant", text: assistant });
     }
   }
   return messages;
+}
+function extractThinkingText(value) {
+  if (typeof value === "string") return value.trim();
+  const record = asRecord2(value);
+  if (!record) return "";
+  for (const key of ["thinking", "text", "content"]) {
+    const field = record[key];
+    if (typeof field === "string" && field.trim()) return field.trim();
+  }
+  return extractAssistantText(record);
 }
 function extractUserText(value) {
   if (typeof value === "string") return value.trim();
@@ -1557,10 +1583,16 @@ function emitSessionStart(job) {
   });
 }
 function emitAssistantMessage(job, text) {
+  emitRoleMessage(job, "assistant", text);
+}
+function emitThinkingMessage(job, text) {
+  emitRoleMessage(job, "thinking", text);
+}
+function emitRoleMessage(job, type, text) {
   const normalized = text.trim();
   if (!normalized) return;
   emitInteractionEvent({
-    type: "assistant",
+    type,
     projectId: job.projectId,
     cardId: job.round.cardId,
     sessionId: job.round.sessionId,
@@ -1692,7 +1724,7 @@ function buildConversationTranscript(options) {
   const fromTurns = (options.fromTurns ?? []).filter(
     (item) => !isNoiseUser(item, sessionUser)
   );
-  const pendingAssistants = fromTurns.filter((item) => item.role === "assistant").map((item) => item.text.trim()).filter(Boolean);
+  const pending = fromTurns.filter((item) => item.role !== "user").map((item) => ({ role: item.role, text: item.text.trim() })).filter((item) => item.text.length > 0);
   const timeline = live.length > 0 ? live : fromTurns;
   for (const message of timeline) {
     if (message.role === "user") {
@@ -1700,19 +1732,21 @@ function buildConversationTranscript(options) {
       continue;
     }
     const liveText = message.text.trim();
-    const index = pendingAssistants.findIndex((text) => relatedAssistant(text, liveText));
+    const index = pending.findIndex(
+      (item) => item.role === message.role && relatedText(item.text, liveText)
+    );
     if (index >= 0) {
-      const snapshot = pendingAssistants.splice(index, 1)[0] ?? liveText;
+      const snapshot = pending.splice(index, 1)[0];
       pushMessage(out, {
-        role: "assistant",
-        text: longerText(snapshot, liveText)
+        role: message.role,
+        text: longerText(snapshot?.text ?? liveText, liveText)
       });
       continue;
     }
     pushMessage(out, message);
   }
-  for (const text of pendingAssistants) {
-    pushMessage(out, { role: "assistant", text });
+  for (const item of pending) {
+    pushMessage(out, item);
   }
   if (options.trailingAssistant) {
     pushMessage(out, {
@@ -1729,7 +1763,7 @@ function isNoiseUser(message, sessionUser) {
   if (sessionUser && text === sessionUser) return true;
   return isInjectedWorkerPrompt(text);
 }
-function relatedAssistant(left, right) {
+function relatedText(left, right) {
   return left === right || left.startsWith(right) || right.startsWith(left);
 }
 function longerText(left, right) {
@@ -1740,7 +1774,7 @@ function pushMessage(out, message) {
   if (!text) return;
   const last = out[out.length - 1];
   if (last && last.role === message.role && last.text === text) return;
-  if (last && last.role === "assistant" && message.role === "assistant") {
+  if (last && last.role === message.role && message.role !== "user") {
     if (text.startsWith(last.text)) {
       last.text = text;
       return;
@@ -1843,12 +1877,20 @@ async function runCodex(job, cancellation) {
     if (sessionUser) live.push({ role: "user", text: sessionUser });
     const fromTurns = [];
     const emittedAssistant = /* @__PURE__ */ new Set();
+    const emittedThinking = /* @__PURE__ */ new Set();
     const emitAssistant = (text) => {
       const normalized = text.trim();
       if (!normalized || emittedAssistant.has(normalized)) return;
       emittedAssistant.add(normalized);
       live.push({ role: "assistant", text: normalized });
       emitAssistantMessage(job, normalized);
+    };
+    const emitThinking = (text) => {
+      const normalized = text.trim();
+      if (!normalized || emittedThinking.has(normalized)) return;
+      emittedThinking.add(normalized);
+      live.push({ role: "thinking", text: normalized });
+      emitThinkingMessage(job, normalized);
     };
     const code = await new Promise((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
@@ -1878,6 +1920,7 @@ async function runCodex(job, cancellation) {
           const parsed = JSON.parse(line);
           const message = extractCodexTranscriptMessage(parsed);
           if (message) fromTurns.push(message);
+          if (message?.role === "thinking") emitThinking(message.text);
           emitAssistant(extractCodexAssistantEventText(parsed));
         } catch {
         }
@@ -2515,6 +2558,7 @@ var CursorThinkingStream = class {
   assembled = "";
   startedBlock = false;
   streamed = false;
+  blockComplete = false;
   scheduled;
   constructor(options = {}) {
     this.write = options.write ?? ((line, source) => workerLog(line, source ?? "ai"));
@@ -2537,18 +2581,22 @@ var CursorThinkingStream = class {
     }
     if (type === "thinking-completed") {
       this.flush(true);
+      this.blockComplete = true;
       const ms = record.thinkingDurationMs;
       if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0) {
         this.write(`\u601D\u8003\u5B8C\u6210\uFF08${Math.round(ms / 1e3)} \u79D2\uFF09`, "ai");
       }
     }
   }
+  /** 当前已组装的思考正文，供写入同步对话；不消费日志去重状态。 */
+  assembledText() {
+    return `${this.assembled}${this.pending}`.trim();
+  }
   /** 若思考已通过增量打出，则跳过 onStep 的整段重复 dump。 */
   consumeStreamedThinking() {
     if (!this.streamed) return false;
     this.streamed = false;
     this.startedBlock = false;
-    this.assembled = "";
     return true;
   }
   dispose() {
@@ -2557,6 +2605,13 @@ var CursorThinkingStream = class {
     this.flush(true);
   }
   appendDelta(text) {
+    if (this.blockComplete) {
+      this.assembled = "";
+      this.pending = "";
+      this.startedBlock = false;
+      this.streamed = false;
+      this.blockComplete = false;
+    }
     const addition = this.deltaAddition(text);
     if (!addition) return;
     this.pending += addition;
@@ -3050,12 +3105,20 @@ async function runCursor(job, cancellation) {
       const sessionUser = sessionStartText(job);
       if (sessionUser) live.push({ role: "user", text: sessionUser });
       const emittedAssistant = /* @__PURE__ */ new Set();
+      const emittedThinking = /* @__PURE__ */ new Set();
       const emitAssistant = (text) => {
         const normalized = text.trim();
         if (!normalized || emittedAssistant.has(normalized)) return;
         emittedAssistant.add(normalized);
         live.push({ role: "assistant", text: normalized });
         emitAssistantMessage(job, normalized);
+      };
+      const emitThinking = (text) => {
+        const normalized = text.trim();
+        if (!normalized || emittedThinking.has(normalized)) return;
+        emittedThinking.add(normalized);
+        live.push({ role: "thinking", text: normalized });
+        emitThinkingMessage(job, normalized);
       };
       const flushSnapshot = (turns2 = [], trailing) => {
         emitConversationSnapshot(
@@ -3078,6 +3141,10 @@ async function runCursor(job, cancellation) {
         mcpServers: mcp.servers,
         onDelta: ({ update }) => {
           thinkingStream?.handleDelta(update);
+          const type = update && typeof update === "object" && "type" in update ? String(update.type ?? "") : "";
+          if (type === "thinking-completed") {
+            emitThinking(thinkingStream?.assembledText() ?? "");
+          }
         },
         onStep: async ({ step }) => {
           try {
@@ -3094,6 +3161,11 @@ async function runCursor(job, cancellation) {
             const skipThinkingDump = step.type === "thinkingMessage" && thinkingStream?.consumeStreamedThinking() === true;
             if (!skipThinkingDump && described.lines.length > 0) {
               logLines(described.lines, described.source);
+            }
+            if (step.type === "thinkingMessage") {
+              emitThinking(
+                extractCursorThinkingStepText(step) || thinkingStream?.assembledText() || ""
+              );
             }
             if (step.type === "assistantMessage") {
               emitAssistant(extractCursorAssistantStepText(step));

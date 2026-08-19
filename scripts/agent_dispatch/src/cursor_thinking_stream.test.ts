@@ -26,6 +26,7 @@ describe("cursor_thinking_stream", () => {
     assert.deepEqual(lines, ["思考：第一行", "  │ 第二行"]);
     stream.handleDelta({ type: "thinking-completed", thinkingDurationMs: 270_000 });
     assert.equal(lines.at(-1), "思考完成（270 秒）");
+    assert.equal(stream.assembledText(), "第一行\n第二行");
     assert.equal(stream.consumeStreamedThinking(), true);
     assert.equal(stream.consumeStreamedThinking(), false);
   });

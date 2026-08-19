@@ -25,10 +25,10 @@ export function buildConversationTranscript(options: {
   const fromTurns = (options.fromTurns ?? []).filter(
     (item) => !isNoiseUser(item, sessionUser),
   );
-  const pendingAssistants = fromTurns
-    .filter((item) => item.role === "assistant")
-    .map((item) => item.text.trim())
-    .filter(Boolean);
+  const pending = fromTurns
+    .filter((item) => item.role !== "user")
+    .map((item) => ({ role: item.role, text: item.text.trim() }))
+    .filter((item) => item.text.length > 0);
 
   const timeline = live.length > 0 ? live : fromTurns;
   for (const message of timeline) {
@@ -37,20 +37,22 @@ export function buildConversationTranscript(options: {
       continue;
     }
     const liveText = message.text.trim();
-    const index = pendingAssistants.findIndex((text) => relatedAssistant(text, liveText));
+    const index = pending.findIndex(
+      (item) => item.role === message.role && relatedText(item.text, liveText),
+    );
     if (index >= 0) {
-      const snapshot = pendingAssistants.splice(index, 1)[0] ?? liveText;
+      const snapshot = pending.splice(index, 1)[0];
       pushMessage(out, {
-        role: "assistant",
-        text: longerText(snapshot, liveText),
+        role: message.role,
+        text: longerText(snapshot?.text ?? liveText, liveText),
       });
       continue;
     }
     pushMessage(out, message);
   }
 
-  for (const text of pendingAssistants) {
-    pushMessage(out, { role: "assistant", text });
+  for (const item of pending) {
+    pushMessage(out, item);
   }
   if (options.trailingAssistant) {
     pushMessage(out, {
@@ -72,7 +74,7 @@ function isNoiseUser(
   return isInjectedWorkerPrompt(text);
 }
 
-function relatedAssistant(left: string, right: string): boolean {
+function relatedText(left: string, right: string): boolean {
   return left === right || left.startsWith(right) || right.startsWith(left);
 }
 
@@ -88,7 +90,7 @@ function pushMessage(
   if (!text) return;
   const last = out[out.length - 1];
   if (last && last.role === message.role && last.text === text) return;
-  if (last && last.role === "assistant" && message.role === "assistant") {
+  if (last && last.role === message.role && message.role !== "user") {
     if (text.startsWith(last.text)) {
       last.text = text;
       return;
