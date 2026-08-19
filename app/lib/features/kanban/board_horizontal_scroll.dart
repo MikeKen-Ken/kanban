@@ -145,9 +145,36 @@ class _BoardHorizontalScrollBehavior extends MaterialScrollBehavior {
   const _BoardHorizontalScrollBehavior();
 
   @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+
+  @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
     return _RejectWhenHorizontalModifierScrollPhysics(
       parent: super.getScrollPhysics(context),
+    );
+  }
+}
+
+/// 禁止看板横向列表在 Android 边缘拖拽时拉伸，保持列宽与磨砂效果稳定。
+class KanbanHorizontalScrollConfiguration extends StatelessWidget {
+  const KanbanHorizontalScrollConfiguration({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(overscroll: false),
+      child: child,
     );
   }
 }
