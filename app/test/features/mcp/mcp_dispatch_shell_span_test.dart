@@ -121,6 +121,67 @@ void main() {
         isNull,
       );
     });
+
+    test('滞后上报的 cd && 解析失败不得覆盖已通过的 flutter test', () {
+      const passed = DispatchShellSpan(
+        callId: 'shell-pass',
+        command: 'flutter test test/a_test.dart',
+        startedAtMs: 1000,
+        endedAtMs: 21000,
+        executionTimeMs: 20000,
+        exitCode: 0,
+      );
+      const parseFail = DispatchShellSpan(
+        callId: 'shell-cd-and',
+        command: 'cd app && flutter test test/a_test.dart',
+        startedAtMs: 900,
+        endedAtMs: 50000,
+        executionTimeMs: 80,
+        exitCode: 1,
+      );
+      expect(dispatchShellEffectiveEndMs(parseFail), 900 + 80);
+      expect(
+        dispatchReadyBlockedByShells([passed, parseFail], nowMs: 50000),
+        isNull,
+      );
+    });
+
+    test('仅有 cd && 短失败时仍拒绝，并提示不要用 &&', () {
+      const parseFail = DispatchShellSpan(
+        callId: 'shell-cd-and',
+        command: 'cd app && flutter test test/a_test.dart',
+        startedAtMs: 0,
+        endedAtMs: 100,
+        executionTimeMs: 80,
+        exitCode: 1,
+      );
+      expect(
+        dispatchReadyBlockedByShells([parseFail], nowMs: 1000),
+        contains('working_directory'),
+      );
+    });
+
+    test('无 executionTime 的滞后 cd && 失败也不覆盖成功验证', () {
+      const passed = DispatchShellSpan(
+        callId: 'shell-pass',
+        command: 'flutter test test/a_test.dart',
+        startedAtMs: 1000,
+        endedAtMs: 21000,
+        executionTimeMs: 20000,
+        exitCode: 0,
+      );
+      const parseFail = DispatchShellSpan(
+        callId: 'shell-cd-and',
+        command: 'cd app && flutter test test/a_test.dart',
+        startedAtMs: 900,
+        endedAtMs: 50000,
+        exitCode: 1,
+      );
+      expect(
+        dispatchReadyBlockedByShells([passed, parseFail], nowMs: 50000),
+        isNull,
+      );
+    });
   });
 
   group('ready_to_submit 门禁', () {

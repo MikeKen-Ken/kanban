@@ -38,22 +38,41 @@ export function isVerificationCommand(command: string): boolean {
   return VERIFICATION_MARKERS.some((marker) => text.includes(marker));
 }
 
+/** 实际结束时间优先 startedAt+executionTime，避免观察滞后把短失败排到成功测试之后。 */
 export function shellEffectiveEndMs(span: ShellSpan): number {
-  const ended = span.endedAtMs;
-  if (ended == null) return Number.MAX_SAFE_INTEGER;
   const exec = span.executionTimeMs ?? 0;
-  const started = span.startedAtMs;
-  return ended > started + exec ? ended : started + exec;
+  if (exec > 0) return span.startedAtMs + exec;
+  if (span.endedAtMs == null) return Number.MAX_SAFE_INTEGER;
+  return span.endedAtMs;
+}
+
+export function commandLooksLikeCdAndChain(command: string): boolean {
+  return /\bcd\b[^&\n]*&&/i.test(command);
+}
+
+export function isUneexecutedCdAndVerification(span: ShellSpan): boolean {
+  const code = span.exitCode;
+  if (code == null || code === 0) return false;
+  if (!commandLooksLikeCdAndChain(span.command)) return false;
+  if (!isVerificationCommand(span.command)) return false;
+  const exec = span.executionTimeMs;
+  if (exec != null && exec >= 3_000) return false;
+  return true;
 }
 
 export function readyBlockedByShells(
   spans: readonly ShellSpan[],
   nowMs: number,
 ): string | undefined {
+  const verification = spans.filter((span) => isVerificationCommand(span.command));
+  if (verification.length === 0) return undefined;
+  const authoritative = verification.filter(
+    (span) => !isUneexecutedCdAndVerification(span),
+  );
+  const pool = authoritative.length > 0 ? authoritative : verification;
   let lastVerification: ShellSpan | undefined;
   let lastEndMs = -1;
-  for (const span of spans) {
-    if (!isVerificationCommand(span.command)) continue;
+  for (const span of pool) {
     const endMs = shellEffectiveEndMs(span);
     if (lastVerification == null || endMs >= lastEndMs) {
       lastVerification = span;
@@ -69,10 +88,10 @@ export function readyBlockedByShells(
   }
   const code = lastVerification.exitCode;
   if (code != null && code !== 0) {
-    return (
-      `验证命令失败（exitCode=${code}）：${clip(lastVerification.command)}。` +
-      "请修复后重跑测试，再调用 ready_to_submit。"
-    );
+    const hint = commandLooksLikeCdAndChain(lastVerification.command)
+      ? "PowerShell 5.1 不支持 &&；请用 working_directory，不要写 cd ... &&。"
+      : "请修复后重跑测试，再调用 ready_to_submit。";
+    return `验证命令失败（exitCode=${code}）：${clip(lastVerification.command)}。${hint}`;
   }
   return undefined;
 }

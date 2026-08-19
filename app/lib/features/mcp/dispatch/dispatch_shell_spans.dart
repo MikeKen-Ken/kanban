@@ -71,25 +71,49 @@ String normalizeDispatchCallId(String? callId) {
   return parts.join('_');
 }
 
-/// 以 SDK 可能提前发出的 completed 为准：结束时间取
-/// max(endedAt, startedAt + executionTime)。只有 completed、没有 start 时，
-/// startedAt 会等于 endedAt，此时加上 executionTime，避免 13s 测试被当成 0.3s。
+/// 实际结束时间优先 `startedAt + executionTime`。
+/// SDK 可能提前 completed（endedAt 过早），Worker 观察也可能滞后（endedAt 过晚）；
+/// 二者都不能用来覆盖 SDK 给出的 executionTime。
 int dispatchShellEffectiveEndMs(DispatchShellSpan span) {
+  final exec = span.executionTimeMs ?? 0;
+  if (exec > 0) return span.startedAtMs + exec;
   final ended = span.endedAtMs;
   if (ended == null) return 0x7fffffffffffffff;
-  final exec = span.executionTimeMs ?? 0;
-  final started = span.startedAtMs;
-  return ended > started + exec ? ended : started + exec;
+  return ended;
+}
+
+/// Windows PowerShell 5.1 无法解析 `cd dir && cmd`，这类失败从未真正跑测试。
+bool commandLooksLikeCdAndChain(String command) {
+  return RegExp(r'\bcd\b[^&\n]*&&', caseSensitive: false).hasMatch(command);
+}
+
+bool isUneexecutedCdAndVerification(DispatchShellSpan span) {
+  final code = span.exitCode;
+  if (code == null || code == 0) return false;
+  if (!commandLooksLikeCdAndChain(span.command)) return false;
+  if (!isDispatchVerificationCommand(span.command)) return false;
+  final exec = span.executionTimeMs;
+  if (exec != null && exec >= 3000) return false;
+  return true;
 }
 
 String? dispatchReadyBlockedByShells(
   Iterable<DispatchShellSpan> spans, {
   required int nowMs,
 }) {
+  final verification = [
+    for (final span in spans)
+      if (isDispatchVerificationCommand(span.command)) span,
+  ];
+  if (verification.isEmpty) return null;
+  final authoritative = [
+    for (final span in verification)
+      if (!isUneexecutedCdAndVerification(span)) span,
+  ];
+  final pool = authoritative.isNotEmpty ? authoritative : verification;
   DispatchShellSpan? lastVerification;
   var lastEndMs = -1;
-  for (final span in spans) {
-    if (!isDispatchVerificationCommand(span.command)) continue;
+  for (final span in pool) {
     final endMs = dispatchShellEffectiveEndMs(span);
     if (lastVerification == null || endMs >= lastEndMs) {
       lastVerification = span;
@@ -103,8 +127,10 @@ String? dispatchReadyBlockedByShells(
   }
   final code = lastVerification.exitCode;
   if (code != null && code != 0) {
-    return '验证命令失败（exitCode=$code）：${_clip(lastVerification.command)}。'
-        '请修复后重跑测试，再调用 ready_to_submit。';
+    final hint = commandLooksLikeCdAndChain(lastVerification.command)
+        ? 'PowerShell 5.1 不支持 &&；请用 working_directory，不要写 cd ... &&。'
+        : '请修复后重跑测试，再调用 ready_to_submit。';
+    return '验证命令失败（exitCode=$code）：${_clip(lastVerification.command)}。$hint';
   }
   return null;
 }

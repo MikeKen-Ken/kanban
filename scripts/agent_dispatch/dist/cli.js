@@ -2467,24 +2467,47 @@ function isVerificationCommand(command) {
   return VERIFICATION_MARKERS.some((marker) => text.includes(marker));
 }
 function shellEffectiveEndMs(span) {
-  const ended = span.endedAtMs;
-  if (ended == null) return Number.MAX_SAFE_INTEGER;
   const exec = span.executionTimeMs ?? 0;
-  const started = span.startedAtMs;
-  return ended > started + exec ? ended : started + exec;
+  if (exec > 0) return span.startedAtMs + exec;
+  if (span.endedAtMs == null) return Number.MAX_SAFE_INTEGER;
+  return span.endedAtMs;
+}
+function commandLooksLikeCdAndChain(command) {
+  return /\bcd\b[^&\n]*&&/i.test(command);
+}
+function isUneexecutedCdAndVerification(span) {
+  const code = span.exitCode;
+  if (code == null || code === 0) return false;
+  if (!commandLooksLikeCdAndChain(span.command)) return false;
+  if (!isVerificationCommand(span.command)) return false;
+  const exec = span.executionTimeMs;
+  if (exec != null && exec >= 3e3) return false;
+  return true;
 }
 function readyBlockedByShells(spans, nowMs) {
+  const verification = spans.filter((span) => isVerificationCommand(span.command));
+  if (verification.length === 0) return void 0;
+  const authoritative = verification.filter(
+    (span) => !isUneexecutedCdAndVerification(span)
+  );
+  const pool = authoritative.length > 0 ? authoritative : verification;
   let lastVerification;
-  for (const span of spans) {
-    if (!isVerificationCommand(span.command)) continue;
-    lastVerification = span;
-    if (nowMs < shellEffectiveEndMs(span)) {
-      return `\u9A8C\u8BC1\u547D\u4EE4\u4ECD\u5728\u6267\u884C\uFF1A${clip2(span.command)}\u3002\u8BF7\u7B49\u5F85\u6D4B\u8BD5\u5B8C\u6210\u540E\u518D\u8C03\u7528 ready_to_submit\uFF0C\u4E0D\u8981\u4E0E Shell \u5E76\u884C\u3002`;
+  let lastEndMs = -1;
+  for (const span of pool) {
+    const endMs = shellEffectiveEndMs(span);
+    if (lastVerification == null || endMs >= lastEndMs) {
+      lastVerification = span;
+      lastEndMs = endMs;
     }
   }
-  const failed = lastVerification;
-  if (failed && failed.exitCode != null && failed.exitCode !== 0) {
-    return `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${failed.exitCode}\uFF09\uFF1A${clip2(failed.command)}\u3002\u8BF7\u4FEE\u590D\u540E\u91CD\u8DD1\u6D4B\u8BD5\uFF0C\u518D\u8C03\u7528 ready_to_submit\u3002`;
+  if (!lastVerification) return void 0;
+  if (nowMs < lastEndMs) {
+    return `\u9A8C\u8BC1\u547D\u4EE4\u4ECD\u5728\u6267\u884C\uFF1A${clip2(lastVerification.command)}\u3002\u8BF7\u7B49\u5F85\u6D4B\u8BD5\u5B8C\u6210\u540E\u518D\u8C03\u7528 ready_to_submit\uFF0C\u4E0D\u8981\u4E0E Shell \u5E76\u884C\u3002`;
+  }
+  const code = lastVerification.exitCode;
+  if (code != null && code !== 0) {
+    const hint = commandLooksLikeCdAndChain(lastVerification.command) ? "PowerShell 5.1 \u4E0D\u652F\u6301 &&\uFF1B\u8BF7\u7528 working_directory\uFF0C\u4E0D\u8981\u5199 cd ... &&\u3002" : "\u8BF7\u4FEE\u590D\u540E\u91CD\u8DD1\u6D4B\u8BD5\uFF0C\u518D\u8C03\u7528 ready_to_submit\u3002";
+    return `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${code}\uFF09\uFF1A${clip2(lastVerification.command)}\u3002${hint}`;
   }
   return void 0;
 }
@@ -3217,8 +3240,6 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
         return cancellation.isCancelled ? cancelledResult() : drainedResult();
       }
       const liveJob = readLiveJob(job);
-      const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
-      workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${roundLabel} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const peek = await mcp.callJson("peek_next_card", {
         ...liveJob.projectId ? { projectId: liveJob.projectId } : {}
       });
@@ -3246,6 +3267,8 @@ ${tree.output}`);
       if (claim.payload.found !== true) {
         return completedResult(processedCards, "claim \u65F6\u961F\u5217\u5DF2\u4E3A\u7A7A");
       }
+      const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
+      workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${roundLabel} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const cardId = requiredString(claim.payload, "cardId");
       const sessionId = requiredString(claim.payload, "sessionId");
       const agentEndpointUrl = requiredString(

@@ -7,6 +7,7 @@ import {
   toShellSpanReportPayload,
 } from "./cursor_shell_spans.ts";
 import {
+  isUneexecutedCdAndVerification,
   isVerificationCommand,
   readyBlockedByShells,
   shellEffectiveEndMs,
@@ -44,6 +45,45 @@ describe("verification_ready_gate", () => {
       ),
       undefined,
     );
+  });
+
+  it("滞后上报的 cd && 解析失败不得覆盖已通过的测试", () => {
+    const passed = {
+      callId: "pass",
+      command: "flutter test test/a_test.dart",
+      startedAtMs: 1_000,
+      endedAtMs: 21_000,
+      executionTimeMs: 20_000,
+      exitCode: 0,
+    };
+    const parseFail = {
+      callId: "cd-and",
+      command: "cd app && flutter test test/a_test.dart",
+      startedAtMs: 900,
+      endedAtMs: 50_000,
+      executionTimeMs: 80,
+      exitCode: 1,
+    };
+    assert.equal(shellEffectiveEndMs(parseFail), 900 + 80);
+    assert.equal(isUneexecutedCdAndVerification(parseFail), true);
+    assert.equal(readyBlockedByShells([passed, parseFail], 50_000), undefined);
+  });
+
+  it("仅有 cd && 短失败时仍拒绝", () => {
+    const blocked = readyBlockedByShells(
+      [
+        {
+          callId: "cd-and",
+          command: "cd app && flutter test test/a_test.dart",
+          startedAtMs: 0,
+          endedAtMs: 100,
+          executionTimeMs: 80,
+          exitCode: 1,
+        },
+      ],
+      1_000,
+    );
+    assert.match(blocked ?? "", /working_directory/);
   });
 
   it("node --test 与 flutter analyze 算验证命令", () => {
