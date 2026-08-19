@@ -178,6 +178,9 @@ Future<CallToolResult> mcpPickNextCard(
       ...card.agentDispatchOverridePayload(),
       if (card.commitRef != null && card.commitRef!.isNotEmpty)
         'commitRef': card.commitRef,
+      if (card.agentConversationMarkdown != null &&
+          card.agentConversationMarkdown!.trim().isNotEmpty)
+        'agentConversationMarkdown': card.agentConversationMarkdown,
     };
     if (!includeWorkItems) {
       return mcpJsonResult(payload);

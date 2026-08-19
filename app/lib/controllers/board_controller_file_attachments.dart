@@ -25,8 +25,14 @@ extension BoardControllerFileAttachments on BoardController {
       final store = attachmentStore;
       if (store == null) return '当前平台不支持文件附件';
 
+      int userFileCount(Iterable<CardFileAttachment> attachments) => attachments
+          .where(
+            (attachment) =>
+                attachment.fileName != KanbanCard.agentConversationFileName,
+          )
+          .length;
       final remaining =
-          KanbanCard.maxFileAttachments - target.fileAttachments.length;
+          KanbanCard.maxFileAttachments - userFileCount(target.fileAttachments);
       if (remaining <= 0) {
         return '每张卡片最多 ${KanbanCard.maxFileAttachments} 个文件';
       }
@@ -44,7 +50,9 @@ extension BoardControllerFileAttachments on BoardController {
 
       try {
         for (final file in picked) {
-          if (nextAttachments.length >= KanbanCard.maxFileAttachments) break;
+          if (userFileCount(nextAttachments) >= KanbanCard.maxFileAttachments) {
+            break;
+          }
           if (!allowOversized && file.bytes.length > maxCardFileBytes) {
             return '单个文件不能超过 ${maxCardFileBytes ~/ (1024 * 1024)} MB';
           }
@@ -143,7 +151,8 @@ extension BoardControllerFileAttachments on BoardController {
     );
     if (path == null) return '文件尚未同步到本机';
 
-    final opened = await card_file_opener.openCardFileAttachment(filePath: path);
+    final opened =
+        await card_file_opener.openCardFileAttachment(filePath: path);
     return opened ? null : '无法打开文件';
   }
 

@@ -1,5 +1,5 @@
 // src/cli.ts
-import { readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
+import { readFileSync as readFileSync8, writeFileSync as writeFileSync4 } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor as Cursor2 } from "@cursor/sdk";
 
@@ -634,14 +634,14 @@ function retryableText(value) {
 // src/run_codex.ts
 import { spawn as spawn2 } from "node:child_process";
 import {
-  existsSync as existsSync3,
+  existsSync as existsSync4,
   mkdtempSync as mkdtempSync2,
-  readFileSync as readFileSync2,
-  rmSync,
+  readFileSync as readFileSync3,
+  rmSync as rmSync2,
   writeFileSync as writeFileSync2
 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { dirname, join as join2 } from "node:path";
+import { dirname, join as join3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // src/cursor_token_usage.ts
@@ -1305,6 +1305,117 @@ function copyUserPath(from, to) {
   copyFileSync(from, to);
 }
 
+// src/interaction_bridge.ts
+import {
+  existsSync as existsSync3,
+  mkdirSync as mkdirSync2,
+  readFileSync as readFileSync2,
+  rmSync
+} from "node:fs";
+import { randomUUID } from "node:crypto";
+import { join as join2 } from "node:path";
+var INTERACTION_EVENT_PREFIX = "@@KANBAN_INTERACTION@@";
+function emitInteractionEvent(event) {
+  process.stdout.write(
+    `${INTERACTION_EVENT_PREFIX}${JSON.stringify({
+      ...event,
+      at: (/* @__PURE__ */ new Date()).toISOString()
+    })}
+`
+  );
+}
+function emitSessionStart(job) {
+  const items = workItems(job);
+  const text = items.length === 0 ? "\u5F00\u59CB\u5904\u7406\u672C\u5361\u3002" : items.map((item) => `- ${item}`).join("\n");
+  emitInteractionEvent({
+    type: "session",
+    projectId: job.projectId,
+    cardId: job.round.cardId,
+    sessionId: job.round.sessionId,
+    text
+  });
+}
+function emitAssistantMessage(job, text) {
+  const normalized = text.trim();
+  if (!normalized) return;
+  emitInteractionEvent({
+    type: "assistant",
+    projectId: job.projectId,
+    cardId: job.round.cardId,
+    sessionId: job.round.sessionId,
+    text: normalized
+  });
+}
+function createAskUserTool(job, cancellation) {
+  const interactionDir = job.interactionDir?.trim();
+  if (!interactionDir) return void 0;
+  mkdirSync2(interactionDir, { recursive: true });
+  return {
+    description: "\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u8C03\u7528\u3002\u5DE5\u5177\u4F1A\u6682\u505C\u5F53\u524D\u5361\u7247\uFF0C\u76F4\u5230\u7528\u6237\u5728\u770B\u677F\u5BF9\u8BDD\u4E2D\u56DE\u590D\u3002",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: {
+          type: "string",
+          description: "\u5411\u7528\u6237\u63D0\u51FA\u7684\u5B8C\u6574\u95EE\u9898\uFF0C\u4F7F\u7528\u7B80\u4F53\u4E2D\u6587\u3002"
+        }
+      },
+      required: ["question"],
+      additionalProperties: false
+    },
+    execute: async (args) => {
+      const question = stringArg(args.question);
+      if (!question) {
+        return { content: [{ type: "text", text: "\u95EE\u9898\u4E0D\u80FD\u4E3A\u7A7A" }], isError: true };
+      }
+      const requestId = randomUUID();
+      const replyPath = join2(interactionDir, `${requestId}.reply.json`);
+      emitInteractionEvent({
+        type: "question",
+        projectId: job.projectId,
+        cardId: job.round.cardId,
+        sessionId: job.round.sessionId,
+        requestId,
+        text: question
+      });
+      const answer = await waitForReply(replyPath, cancellation);
+      return answer;
+    }
+  };
+}
+async function waitForReply(replyPath, cancellation) {
+  while (true) {
+    if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
+      return "\u7528\u6237\u5DF2\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD\u3002";
+    }
+    if (existsSync3(replyPath)) {
+      try {
+        const decoded = JSON.parse(readFileSync2(replyPath, "utf8"));
+        const text = String(decoded.text ?? "").trim();
+        if (text) return text;
+      } catch {
+      } finally {
+        rmSync(replyPath, { force: true });
+      }
+    }
+    await new Promise((resolve2) => setTimeout(resolve2, 250));
+  }
+}
+function stringArg(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function workItems(job) {
+  const raw = job.round.cardContext?.workItems;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const text = String(item.text ?? "").trim();
+    return text ? [text] : [];
+  });
+}
+
 // src/worker_log.ts
 import { writeSync } from "node:fs";
 function workerLog(line, source = "worker", level = "info") {
@@ -1322,8 +1433,8 @@ function workerLogRecords(records) {
 
 // src/run_codex.ts
 function resolveCodexCommand() {
-  const packageRoot = join2(dirname(fileURLToPath(import.meta.url)), "..");
-  const bundledCli = join2(
+  const packageRoot = join3(dirname(fileURLToPath(import.meta.url)), "..");
+  const bundledCli = join3(
     packageRoot,
     "node_modules",
     "@openai",
@@ -1331,7 +1442,7 @@ function resolveCodexCommand() {
     "bin",
     "codex.js"
   );
-  if (existsSync3(bundledCli)) {
+  if (existsSync4(bundledCli)) {
     return {
       command: process.execPath,
       prefixArgs: [bundledCli],
@@ -1368,9 +1479,9 @@ async function runCodex(job, cancellation) {
   if (!mcpUrl) {
     return { ok: false, error: "\u672C\u8F6E claim \u7F3A\u5C11 scoped MCP \u7AEF\u70B9" };
   }
-  const temp = mkdtempSync2(join2(tmpdir2(), "kanban-codex-"));
-  const promptFile = join2(temp, "prompt.txt");
-  const lastMessageFile = join2(temp, "last.txt");
+  const temp = mkdtempSync2(join3(tmpdir2(), "kanban-codex-"));
+  const promptFile = join3(temp, "prompt.txt");
+  const lastMessageFile = join3(temp, "last.txt");
   try {
     writeFileSync2(promptFile, job.prompt, "utf8");
     const agentHome = createCodexAgentHome({
@@ -1389,6 +1500,7 @@ async function runCodex(job, cancellation) {
       model: job.model
     });
     workerLog(`Codex args=${args.join(" ")}`);
+    emitSessionStart(job);
     const code = await new Promise((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
       let child;
@@ -1434,7 +1546,7 @@ async function runCodex(job, cancellation) {
         reject(new Error("Codex stdin \u4E0D\u53EF\u7528"));
         return;
       }
-      child.stdin.write(readFileSync2(promptFile));
+      child.stdin.write(readFileSync3(promptFile));
       child.stdin.end();
       child.on("close", (exitCode) => {
         stdoutLines.flush();
@@ -1456,11 +1568,12 @@ async function runCodex(job, cancellation) {
     }
     let summary;
     try {
-      summary = readFileSync2(lastMessageFile, "utf8").trim();
+      summary = readFileSync3(lastMessageFile, "utf8").trim();
     } catch {
       summary = void 0;
     }
     workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
+    if (summary) emitAssistantMessage(job, summary);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
     }
@@ -1484,7 +1597,7 @@ async function runCodex(job, cancellation) {
     };
   } finally {
     try {
-      rmSync(temp, { recursive: true, force: true });
+      rmSync2(temp, { recursive: true, force: true });
     } catch {
     }
   }
@@ -1816,9 +1929,9 @@ var CursorShellSpanEmitter = class {
 };
 
 // src/run_cursor.ts
-import { mkdirSync as mkdirSync2 } from "node:fs";
+import { mkdirSync as mkdirSync3 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { join as join4 } from "node:path";
+import { join as join5 } from "node:path";
 import {
   Agent,
   CursorAgentError,
@@ -1826,9 +1939,9 @@ import {
 } from "@cursor/sdk";
 
 // src/cursor_mcp_servers.ts
-import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { join as join3 } from "node:path";
+import { join as join4 } from "node:path";
 var KANBAN_MCP_SERVER = "kanbanMCP";
 function scopedKanbanMcpServer(url) {
   return { type: "http", url: url.trim() };
@@ -1847,8 +1960,8 @@ function mergeCursorMcpServers(options) {
 function loadCursorMcpServers(options) {
   const home = options.homeDir ?? homedir2();
   const servers = mergeCursorMcpServers({
-    userJson: readOptionalFile(join3(home, ".cursor", "mcp.json")),
-    projectJson: readOptionalFile(join3(options.cwd, ".cursor", "mcp.json")),
+    userJson: readOptionalFile(join4(home, ".cursor", "mcp.json")),
+    projectJson: readOptionalFile(join4(options.cwd, ".cursor", "mcp.json")),
     scopedKanbanUrl: options.scopedKanbanUrl,
     projectMcpTags: options.projectMcpTags
   });
@@ -1915,9 +2028,9 @@ function expandEnvTemplates(value, env = process.env) {
   });
 }
 function readOptionalFile(path) {
-  if (!existsSync4(path)) return null;
+  if (!existsSync5(path)) return null;
   try {
-    return readFileSync3(path, "utf8");
+    return readFileSync4(path, "utf8");
   } catch {
     return null;
   }
@@ -1927,7 +2040,10 @@ function isRecord(value) {
 }
 
 // src/cursor_disallowed_tools.ts
-var CURSOR_WORKER_DISALLOWED_TOOLS = ["GetMcpTools"];
+var CURSOR_WORKER_DISALLOWED_TOOLS = [
+  "GetMcpTools",
+  "askQuestion"
+];
 var CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK = [];
 function fallbackDisallowedTools(err) {
   const message = err instanceof Error ? err.message : String(err);
@@ -2323,8 +2439,9 @@ async function runCursor(job, cancellation) {
     let toolCallCount = 0;
     const diagnostics = new AgentRunDiagnostics();
     const shellSpans = new CursorShellSpanEmitter();
-    const storeDir = join4(homedir3(), ".cursor", "kanban-agent-jsonl-store");
-    mkdirSync2(storeDir, { recursive: true });
+    const askUserTool = createAskUserTool(job, cancellation);
+    const storeDir = join5(homedir3(), ".cursor", "kanban-agent-jsonl-store");
+    mkdirSync3(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
       cwd: job.cwd,
       scopedKanbanUrl: agentMcpUrl,
@@ -2337,6 +2454,7 @@ async function runCursor(job, cancellation) {
       // 与 ~/.cursor/mcp.json 进入模型。
       settingSources: ["project"],
       store: new JsonlLocalAgentStore(storeDir),
+      ...askUserTool ? { customTools: { ask_user: askUserTool } } : {},
       // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
       autoReview: false,
       sandboxOptions: { enabled: job.enableSandbox === true }
@@ -2372,8 +2490,12 @@ async function runCursor(job, cancellation) {
         `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project\uFF08SDK \u626B\u63CF\u7528\u6237\u4E3B\u76EE\u5F55\u540E\u6309\u4ED3\u5E93\u8DEF\u5F84\u8FC7\u6EE4\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u6CE8\u5165\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
       );
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
+      emitSessionStart(job);
       const run = await agent.send({
-        text: job.prompt,
+        text: askUserTool ? `${job.prompt}
+
+## \u770B\u677F\u4EA4\u4E92
+\u9700\u8981\u7528\u6237\u786E\u8BA4\u65F6\u5FC5\u987B\u8C03\u7528 ask_user\uFF1B\u4E0D\u8981\u8C03\u7528 askQuestion\u3002ask_user \u4F1A\u6682\u505C\u672C\u8F6E\u5E76\u7B49\u5F85\u770B\u677F\u56DE\u590D\u3002` : job.prompt,
         images: job.round.images
       }, {
         mcpServers: mcp.servers,
@@ -2391,6 +2513,12 @@ async function runCursor(job, cancellation) {
             });
             if (described.lines.length > 0) {
               logLines(described.lines, described.source);
+            }
+            if (step.type === "assistantMessage") {
+              emitAssistantMessage(
+                job,
+                String(asRecord4(step.message)?.text ?? "")
+              );
             }
           } catch {
             logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
@@ -2419,7 +2547,7 @@ async function runCursor(job, cancellation) {
       logLine(
         `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
       );
-      if (result.usage) {
+      if (result.usage && toDashboardTokenUsage(result.usage).totalTokens > 0) {
         logLine(formatSessionTokenLog(result.usage, metrics));
       }
       if (cancellation?.isSkipRequested) {
@@ -2516,14 +2644,14 @@ async function waitBeforeRetry(attempt, reason, wait) {
 
 // src/session_context.ts
 import {
-  existsSync as existsSync5,
+  existsSync as existsSync6,
   mkdtempSync as mkdtempSync3,
-  readFileSync as readFileSync4,
-  rmSync as rmSync2,
+  readFileSync as readFileSync5,
+  rmSync as rmSync3,
   writeFileSync as writeFileSync3
 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import { isAbsolute, join as join5 } from "node:path";
+import { isAbsolute, join as join6 } from "node:path";
 
 // src/dispatch_scoped_tool_prompt.ts
 var DISPATCH_SCOPED_TOOL_NAMES = [
@@ -2595,13 +2723,13 @@ function wrapWorkerUserRules(text) {
 
 // src/session_context.ts
 function readBatchArchitecture(cwd) {
-  const path = join5(cwd, "docs", "Architecture.md");
-  if (!existsSync5(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
-  return readFileSync4(path, "utf8");
+  const path = join6(cwd, "docs", "Architecture.md");
+  if (!existsSync6(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
+  return readFileSync5(path, "utf8");
 }
 function createSessionContext(options) {
   const tempDir = mkdtempSync3(
-    join5(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
+    join6(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
   );
   const attachmentPaths = [];
   const payload = structuredClone(options.claim.payload);
@@ -2624,7 +2752,7 @@ function createSessionContext(options) {
   const imagePaths = [];
   for (let index = 0; index < options.claim.images.length; index += 1) {
     const image = options.claim.images[index];
-    const path = join5(
+    const path = join6(
       tempDir,
       `image-${index + 1}.${extensionForMime(image.mimeType)}`
     );
@@ -2669,7 +2797,7 @@ function createSessionContext(options) {
     attachmentPaths: [...attachmentPaths, ...imagePaths],
     tempDir,
     cleanup: () => {
-      rmSync2(tempDir, { recursive: true, force: true });
+      rmSync3(tempDir, { recursive: true, force: true });
     }
   };
 }
@@ -2685,7 +2813,7 @@ function safeFileName(value, fallback) {
   return normalized || fallback;
 }
 function uniquePath(root, fileName) {
-  const path = join5(root, fileName);
+  const path = join6(root, fileName);
   if (!isAbsolute(path)) throw new Error("\u4E34\u65F6\u9644\u4EF6\u8DEF\u5F84\u4E0D\u662F\u7EDD\u5BF9\u8DEF\u5F84");
   return path;
 }
@@ -2704,21 +2832,21 @@ function extensionForMime(mimeType) {
 
 // src/user_rules.ts
 import {
-  existsSync as existsSync6,
-  readFileSync as readFileSync5,
+  existsSync as existsSync7,
+  readFileSync as readFileSync6,
   readdirSync,
   statSync as statSync2
 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
-import { join as join6, relative } from "node:path";
+import { join as join7, relative } from "node:path";
 var RULE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".mdc"]);
-function readUserCursorRules(root = join6(homedir4(), ".cursor", "rules")) {
-  if (!existsSync6(root)) return { text: "", count: 0, bytes: 0 };
+function readUserCursorRules(root = join7(homedir4(), ".cursor", "rules")) {
+  if (!existsSync7(root)) return { text: "", count: 0, bytes: 0 };
   const paths = collectRulePaths(root).sort((a, b) => a.localeCompare(b));
   const sections = [];
   let bytes = 0;
   for (const path of paths) {
-    const content = readFileSync5(path, "utf8");
+    const content = readFileSync6(path, "utf8");
     bytes += Buffer.byteLength(content, "utf8");
     sections.push(
       [`## \u7528\u6237 Rule\uFF1A${relative(root, path).replaceAll("\\", "/")}`, "", content].join("\n")
@@ -2733,7 +2861,7 @@ function readUserCursorRules(root = join6(homedir4(), ".cursor", "rules")) {
 function collectRulePaths(root) {
   const result = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join6(root, entry.name);
+    const path = join7(root, entry.name);
     if (entry.isDirectory()) {
       result.push(...collectRulePaths(path));
       continue;
@@ -2747,7 +2875,7 @@ function collectRulePaths(root) {
 }
 
 // src/run_batch.ts
-import { readFileSync as readFileSync6 } from "node:fs";
+import { readFileSync as readFileSync7 } from "node:fs";
 var defaultDependencies = {
   connectMcp: async (endpoint) => {
     const client = new KanbanMcpClient();
@@ -2864,6 +2992,7 @@ ${tree.output}`);
             agentEndpointUrl,
             images: context.images,
             attachmentPaths: context.attachmentPaths,
+            cardContext: claim.payload,
             projectMcpTags: parseProjectMcpTags(claim.payload),
             reportShellSpan: async (span) => {
               await mcp.callJson(
@@ -3182,7 +3311,7 @@ function logClaimedCard(payload) {
 function readLiveJob(job) {
   if (!job.liveFile) return job;
   try {
-    const raw = JSON.parse(readFileSync6(job.liveFile, "utf8"));
+    const raw = JSON.parse(readFileSync7(job.liveFile, "utf8"));
     return applyLiveJobOverlay(job, raw);
   } catch {
     return job;
@@ -3290,7 +3419,7 @@ async function listModels(engine) {
 `);
 }
 async function runJob(jobPath) {
-  const job = JSON.parse(readFileSync7(jobPath, "utf8"));
+  const job = JSON.parse(readFileSync8(jobPath, "utf8"));
   if (!job.outPath) {
     throw new Error("job.outPath \u5FC5\u586B");
   }

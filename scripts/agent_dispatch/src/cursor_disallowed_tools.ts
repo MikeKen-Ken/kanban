@@ -1,7 +1,13 @@
 import type { ToolName } from "@cursor/sdk";
 
-/** Worker 禁用 MCP 目录发现，避免整表 schema 进上下文。不禁 task。 */
-export const CURSOR_WORKER_DISALLOWED_TOOLS: ToolName[] = ["GetMcpTools"];
+/**
+ * Worker 禁用 MCP 目录发现，并用可暂停的 ask_user 自定义工具替代无头
+ * askQuestion；不禁 task。
+ */
+export const CURSOR_WORKER_DISALLOWED_TOOLS: ToolName[] = [
+  "GetMcpTools",
+  "askQuestion",
+];
 
 export const CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK: ToolName[] = [];
 

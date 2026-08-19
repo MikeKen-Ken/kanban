@@ -9,6 +9,7 @@ import '../../controllers/board_controller.dart';
 import '../mcp/mcp_block_card.dart';
 import '../mcp/mcp_dispatch_card_gate.dart';
 import 'agent_dispatch_after_queue.dart';
+import 'agent_interaction.dart';
 import 'agent_dispatch_config.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_log.dart';
@@ -38,6 +39,8 @@ class AgentDispatchService {
   bool _drainAfterCurrentRequested = false;
   bool _isRunning = false;
   AgentWorkerProcess? _activeWorker;
+  BoardController? _boardController;
+  AgentInteractionEvent? _pendingInteraction;
   String? _activeWorkerToken;
   String? _activeRepoPath;
   List<AgentDispatchAfterStep> _afterQueue = const [];
@@ -47,9 +50,11 @@ class AgentDispatchService {
   final _logListeners = <void Function(AgentDispatchLogEntry entry)>{};
   final _runningListeners = <void Function()>{};
   final _progressListeners = <void Function()>{};
+  final _interactionListeners = <void Function()>{};
   final AgentDispatchLogBuffer _logBuffer = AgentDispatchLogBuffer();
   bool _logHydrated = false;
   Future<void> _logSaveQueue = Future.value();
+  Future<void> _conversationSaveQueue = Future.value();
   Timer? _logPersistTimer;
 
   bool get isRunning => _isRunning;
@@ -96,6 +101,50 @@ class AgentDispatchService {
   }
 
   AgentDispatchProgress get progress => _progress;
+
+  AgentInteractionEvent? get pendingInteraction => _pendingInteraction;
+
+  void addInteractionListener(void Function() listener) {
+    _interactionListeners.add(listener);
+  }
+
+  void removeInteractionListener(void Function() listener) {
+    _interactionListeners.remove(listener);
+  }
+
+  void _notifyInteraction() {
+    for (final listener in _interactionListeners.toList()) {
+      listener();
+    }
+  }
+
+  /// 回复当前卡片暂停中的 ask_user 问题。
+  Future<bool> submitInteractionReply(String text) async {
+    final event = _pendingInteraction;
+    final worker = _activeWorker;
+    final board = _boardController;
+    final requestId = event?.requestId;
+    if (event == null ||
+        worker == null ||
+        board == null ||
+        requestId == null ||
+        text.trim().isEmpty) {
+      return false;
+    }
+    final sent = await worker.submitInteractionReply(
+      requestId: requestId,
+      text: text,
+    );
+    if (!sent) return false;
+    _pendingInteraction = null;
+    _notifyInteraction();
+    await _enqueueConversationUpdate(
+      board,
+      event.cardId,
+      (current) => appendAgentConversationUserReply(current, text),
+    );
+    return true;
+  }
 
   void addLogListener(void Function(AgentDispatchLogEntry entry) listener) {
     _logListeners.add(listener);
@@ -287,6 +336,7 @@ class AgentDispatchService {
 
   Future<AgentWorkerResult> runOnce({
     required AgentDispatchRunOptions options,
+    required BoardController boardController,
     required String skillPath,
     required String mcpEndpoint,
     required Future<void> Function(String workerToken) closeScopedEndpoint,
@@ -304,6 +354,7 @@ class AgentDispatchService {
     _cancelRequested = false;
     _drainAfterCurrentRequested = false;
     _activeRepoPath = options.repoPath.trim();
+    _boardController = boardController;
     _afterQueue = List<AgentDispatchAfterStep>.unmodifiable(afterQueue);
     _runAfterQueueOnFailure = runAfterQueueOnFailure;
     _afterQueueHost = afterQueueHost;
@@ -333,6 +384,7 @@ class AgentDispatchService {
     try {
       final result = await _runOnceImpl(
         options: options,
+        boardController: boardController,
         skillPath: skillPath,
         mcpEndpoint: mcpEndpoint,
         closeScopedEndpoint: closeScopedEndpoint,
@@ -388,7 +440,11 @@ class AgentDispatchService {
       }
       return result;
     } finally {
+      await _conversationSaveQueue;
       _activeRepoPath = null;
+      _boardController = null;
+      _pendingInteraction = null;
+      _notifyInteraction();
       _afterQueue = const [];
       _afterQueueHost = null;
       _setProgress(_progress.copyWith(running: false));
@@ -398,6 +454,7 @@ class AgentDispatchService {
 
   Future<AgentWorkerResult> _runOnceImpl({
     required AgentDispatchRunOptions options,
+    required BoardController boardController,
     required String skillPath,
     required String mcpEndpoint,
     required Future<void> Function(String workerToken) closeScopedEndpoint,
@@ -507,6 +564,9 @@ class AgentDispatchService {
           _activeWorker = worker;
           if (_cancelRequested) unawaited(worker.stop());
         },
+        onInteraction: (event) {
+          _handleInteraction(boardController, event);
+        },
         onLog: (line) {
           if (_cancelRequested) return;
           final parsed = AgentDispatchLogEntry.parseWorkerLine(line);
@@ -564,6 +624,8 @@ class AgentDispatchService {
     _drainAfterCurrentRequested = false;
     _isRunning = false;
     _activeWorker = null;
+    _boardController = null;
+    _pendingInteraction = null;
     _activeWorkerToken = null;
     _activeRepoPath = null;
     _progress = AgentDispatchProgress.idle;
@@ -572,9 +634,60 @@ class AgentDispatchService {
     _logBuffer.clear();
     _logHydrated = false;
     _logSaveQueue = Future.value();
+    _conversationSaveQueue = Future.value();
     _logListeners.clear();
     _runningListeners.clear();
     _progressListeners.clear();
+    _interactionListeners.clear();
+  }
+
+  void _handleInteraction(
+    BoardController boardController,
+    AgentInteractionEvent event,
+  ) {
+    if (event.awaitsReply) {
+      _pendingInteraction = event;
+      _notifyInteraction();
+    }
+    unawaited(
+      _enqueueConversationUpdate(
+        boardController,
+        event.cardId,
+        (current) => appendAgentConversationEvent(current, event),
+      ),
+    );
+  }
+
+  Future<void> _enqueueConversationUpdate(
+    BoardController boardController,
+    String cardId,
+    String Function(String? current) update,
+  ) {
+    _conversationSaveQueue =
+        _conversationSaveQueue.catchError((_) {}).then((_) async {
+      try {
+        await boardController.runOnProject(projectId, () async {
+          final current =
+              boardController.findCardById(cardId)?.agentConversationMarkdown;
+          final error = await boardController.setCardAgentConversation(
+            cardId,
+            update(current),
+          );
+          if (error != null) {
+            _emitLog(
+              '保存卡片对话失败：$error',
+              level: AgentDispatchLogLevel.warning,
+            );
+          }
+        });
+      } catch (error) {
+        _emitLog(
+          '保存卡片对话异常：$error',
+          level: AgentDispatchLogLevel.warning,
+        );
+      }
+    });
+    return _conversationSaveQueue;
   }
 
   @visibleForTesting

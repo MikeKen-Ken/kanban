@@ -179,6 +179,7 @@ export async function runBatch(
             agentEndpointUrl,
             images: context.images,
             attachmentPaths: context.attachmentPaths,
+            cardContext: claim.payload,
             projectMcpTags: parseProjectMcpTags(claim.payload),
             reportShellSpan: async (span) => {
               await mcp.callJson(

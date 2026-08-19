@@ -23,6 +23,10 @@ import {
   type RoundDispatchJob,
 } from "./types.ts";
 import { isRetryableError } from "./retry.ts";
+import {
+  emitAssistantMessage,
+  emitSessionStart,
+} from "./interaction_bridge.ts";
 import { workerLog, workerLogRecords } from "./worker_log.ts";
 
 export function resolveCodexCommand(): {
@@ -117,6 +121,7 @@ export async function runCodex(
     });
 
     workerLog(`Codex args=${args.join(" ")}`);
+    emitSessionStart(job);
 
     const code = await new Promise<number>((resolvePromise, reject) => {
       const codex = resolveCodexCommand();
@@ -194,6 +199,7 @@ export async function runCodex(
     }
 
     workerLog(`Codex exec exitCode=${code} elapsedMs=${Date.now() - startedAt}`);
+    if (summary) emitAssistantMessage(job, summary);
     if (code === 0) {
       return { ok: true, summary: summary || "Codex 会话完成" };
     }

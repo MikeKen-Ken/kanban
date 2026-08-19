@@ -30,6 +30,11 @@ import {
 import { isRetryableError } from "./retry.ts";
 import { readyBlockedByShells } from "./verification_ready_gate.ts";
 import {
+  createAskUserTool,
+  emitAssistantMessage,
+  emitSessionStart,
+} from "./interaction_bridge.ts";
+import {
   resolveModelParams,
   type DispatchResult,
   type RoundDispatchJob,
@@ -280,6 +285,7 @@ export async function runCursor(
     let toolCallCount = 0;
     const diagnostics = new AgentRunDiagnostics();
     const shellSpans = new CursorShellSpanEmitter();
+    const askUserTool = createAskUserTool(job, cancellation);
     const storeDir = join(homedir(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
@@ -294,6 +300,7 @@ export async function runCursor(
       // 与 ~/.cursor/mcp.json 进入模型。
       settingSources: ["project"],
       store: new JsonlLocalAgentStore(storeDir),
+      ...(askUserTool ? { customTools: { ask_user: askUserTool } } : {}),
       // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
       autoReview: false,
       sandboxOptions: { enabled: job.enableSandbox === true },
@@ -333,8 +340,11 @@ export async function runCursor(
           `settingSources=project（SDK 扫描用户主目录后按仓库路径过滤；用户 Rule 已由 Worker 注入；保留项目规则 / Skill / Hooks）`,
       );
       logLine("本地会话已创建，开始执行…");
+      emitSessionStart(job);
       const run = await agent.send({
-        text: job.prompt,
+        text: askUserTool
+          ? `${job.prompt}\n\n## 看板交互\n需要用户确认时必须调用 ask_user；不要调用 askQuestion。ask_user 会暂停本轮并等待看板回复。`
+          : job.prompt,
         images: job.round.images,
       }, {
         mcpServers: mcp.servers,
@@ -352,6 +362,12 @@ export async function runCursor(
             });
             if (described.lines.length > 0) {
               logLines(described.lines, described.source);
+            }
+            if (step.type === "assistantMessage") {
+              emitAssistantMessage(
+                job,
+                String(asRecord(step.message)?.text ?? ""),
+              );
             }
           } catch {
             logLine("收到一步进度");

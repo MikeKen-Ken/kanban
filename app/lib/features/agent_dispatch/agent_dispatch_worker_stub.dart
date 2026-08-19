@@ -1,4 +1,5 @@
 import 'agent_dispatch_config.dart';
+import 'agent_interaction.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_worker_health.dart';
 
@@ -28,6 +29,12 @@ class AgentWorkerProcess {
   Future<void> requestSkipToNext() async {}
 
   Future<void> writeLiveOverrides(Map<String, dynamic> payload) async {}
+
+  Future<bool> submitInteractionReply({
+    required String requestId,
+    required String text,
+  }) async =>
+      false;
 }
 
 Future<AgentWorkerResult> runAgentWorkerJob({
@@ -47,6 +54,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
+  void Function(AgentInteractionEvent event)? onInteraction,
   void Function(AgentWorkerProcess process)? onProcessStarted,
 }) async {
   return const AgentWorkerResult(

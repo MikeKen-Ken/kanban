@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'agent_dispatch_config.dart';
+import 'agent_interaction.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_windows_job.dart';
 import 'agent_dispatch_worker_environment.dart';
@@ -35,11 +36,13 @@ class AgentWorkerProcess {
     String? drainFile,
     String? skipFile,
     String? liveFile,
+    String? interactionDir,
   })  : _windowsJob = windowsJob,
         _cancelFile = cancelFile,
         _drainFile = drainFile,
         _skipFile = skipFile,
-        _liveFile = liveFile;
+        _liveFile = liveFile,
+        _interactionDir = interactionDir;
 
   final Process _process;
   AgentDispatchWindowsJob? _windowsJob;
@@ -47,6 +50,7 @@ class AgentWorkerProcess {
   final String? _drainFile;
   final String? _skipFile;
   final String? _liveFile;
+  final String? _interactionDir;
   bool _stopRequested = false;
 
   /// 把工作台最新的默认平台 / 模型写给 Worker，下一张卡生效。
@@ -56,6 +60,30 @@ class AgentWorkerProcess {
     try {
       await File(liveFile).writeAsString(jsonEncode(payload));
     } catch (_) {}
+  }
+
+  /// 回复 Worker 中 ask_user 发起的问题；文件名仅使用 Worker 生成的 UUID。
+  Future<bool> submitInteractionReply({
+    required String requestId,
+    required String text,
+  }) async {
+    final dir = _interactionDir;
+    final id = requestId.trim();
+    final reply = text.trim();
+    if (dir == null ||
+        id.isEmpty ||
+        reply.isEmpty ||
+        !RegExp(r'^[a-zA-Z0-9-]+$').hasMatch(id)) {
+      return false;
+    }
+    try {
+      await Directory(dir).create(recursive: true);
+      final target = File(p.join(dir, '$id.reply.json'));
+      await target.writeAsString(jsonEncode({'text': reply}), flush: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// 在当前 Skill 会话结束后停止批次，不中断进行中的会话。
@@ -163,6 +191,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,
+  void Function(AgentInteractionEvent event)? onInteraction,
   void Function(AgentWorkerProcess process)? onProcessStarted,
 }) async {
   final cli = await resolveAgentDispatchCliPath(workerScriptPath);
@@ -187,6 +216,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   final drainFile = File(p.join(tempDir.path, 'drain'));
   final skipFile = File(p.join(tempDir.path, 'skip'));
   final liveFile = File(p.join(tempDir.path, 'live.json'));
+  final interactionDir = Directory(p.join(tempDir.path, 'interactions'));
   final job = <String, dynamic>{
     'engine': engine.name,
     'cwd': cwd,
@@ -209,6 +239,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     'drainFile': drainFile.path,
     'skipFile': skipFile.path,
     'liveFile': liveFile.path,
+    'interactionDir': interactionDir.path,
     'outPath': outFile.path,
   };
   await jobFile.writeAsString(jsonEncode(job));
@@ -249,12 +280,20 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       drainFile: drainFile.path,
       skipFile: skipFile.path,
       liveFile: liveFile.path,
+      interactionDir: interactionDir.path,
     );
     onProcessStarted?.call(workerProcess);
     process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen((line) => onLog?.call(line));
+        .listen((line) {
+      final event = parseAgentInteractionEvent(line);
+      if (event != null) {
+        onInteraction?.call(event);
+        return;
+      }
+      onLog?.call(line);
+    });
     process.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
@@ -556,8 +595,9 @@ WorkerEnvironmentBuild _workerEnvironment({
     processEnvironment: Platform.environment,
     nodeExecutable: nodeExecutable,
     cursorApiKey: cursorApiKey,
-    windowsRegistry:
-        Platform.isWindows ? (_windowsRegistryCache ??= readWindowsRegistryEnvironment()) : null,
+    windowsRegistry: Platform.isWindows
+        ? (_windowsRegistryCache ??= readWindowsRegistryEnvironment())
+        : null,
     totalPhysicalMemoryMb:
         Platform.isWindows ? readWindowsTotalPhysicalMemoryMb() : null,
   );

@@ -145,29 +145,30 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
   unawaited(
     service
         .runOnce(
-          options: options,
-          skillPath: next.resolveSkillPath(),
-          mcpEndpoint: board.mcpHost.endpointUrl,
-          closeScopedEndpoint: board.mcpHost.closeScopedEndpoint,
-          workerScriptPath: next.workerScriptPath,
-          queueSize: queueSize,
-          afterQueue: next.afterQueueFor(id),
-          runAfterQueueOnFailure: next.runAfterQueueOnFailureFor(id),
-          resolveAfterQueue: () async {
-            final latestPrefs = await SharedPreferences.getInstance();
-            final latest = latestPrefs.loadAgentDispatchSettings();
-            return (
-              steps: latest.afterQueueFor(id),
-              runOnFailure: latest.runAfterQueueOnFailureFor(id),
-            );
-          },
-          afterQueueHost: AgentDispatchAfterQueueHost(
-            uploadAll: board.uploadNow,
-            gitPush: () => gitPushWithRebase(repoPath: options.repoPath),
-            sleep: windowsSleepNow,
-            shutdown: windowsShutdownNow,
-          ),
-        )
+      options: options,
+      boardController: board,
+      skillPath: next.resolveSkillPath(),
+      mcpEndpoint: board.mcpHost.endpointUrl,
+      closeScopedEndpoint: board.mcpHost.closeScopedEndpoint,
+      workerScriptPath: next.workerScriptPath,
+      queueSize: queueSize,
+      afterQueue: next.afterQueueFor(id),
+      runAfterQueueOnFailure: next.runAfterQueueOnFailureFor(id),
+      resolveAfterQueue: () async {
+        final latestPrefs = await SharedPreferences.getInstance();
+        final latest = latestPrefs.loadAgentDispatchSettings();
+        return (
+          steps: latest.afterQueueFor(id),
+          runOnFailure: latest.runAfterQueueOnFailureFor(id),
+        );
+      },
+      afterQueueHost: AgentDispatchAfterQueueHost(
+        uploadAll: board.uploadNow,
+        gitPush: () => gitPushWithRebase(repoPath: options.repoPath),
+        sleep: windowsSleepNow,
+        shutdown: windowsShutdownNow,
+      ),
+    )
         .then((result) {
       if (result.ok) {
         service.appendLog(

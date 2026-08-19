@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/controllers/board_controller.dart';
 import 'package:kanban/features/kanban/verify_column.dart';
@@ -25,6 +26,11 @@ void main() {
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('kanban_pick_block_');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => tempDir.path,
+    );
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     controller = await BoardController.createForTest(
@@ -35,6 +41,11 @@ void main() {
 
   tearDown(() async {
     controller.dispose();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      null,
+    );
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);
     }
@@ -91,6 +102,36 @@ void main() {
     final doing = findDoingColumn(controller.board!.columns)!;
     expect(todo.cards.any((card) => card.id == cardId), isTrue);
     expect(doing.cards.any((card) => card.id == cardId), isFalse);
+  });
+
+  test('pick_next_card 注入已同步的 Agent Markdown 对话', () async {
+    final todoColumn =
+        controller.board!.columns.firstWhere((c) => c.id == 'todo');
+    final cardId = await controller.addCard(todoColumn.id, '继续对话');
+    expect(cardId, isNotNull);
+    expect(
+      await controller.setCardAgentConversation(
+        cardId!,
+        '## 会话\n\n### 用户\n继续修改',
+      ),
+      isNull,
+    );
+
+    final result = await mcpPickNextCard(controller);
+    final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
+    expect(
+      payload['agentConversationMarkdown'],
+      '## 会话\n\n### 用户\n继续修改\n',
+    );
+    final files = payload['fileAttachments'] as List<dynamic>;
+    final conversationFile = files.cast<Map<String, dynamic>>().singleWhere(
+          (file) => file['fileName'] == KanbanCard.agentConversationFileName,
+        );
+    expect(conversationFile['included'], isTrue);
+    expect(
+      utf8.decode(base64Decode(conversationFile['contentBase64'] as String)),
+      '## 会话\n\n### 用户\n继续修改\n',
+    );
   });
 
   test('peek_next_card 返回卡片 Agent 覆盖字段', () async {

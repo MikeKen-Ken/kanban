@@ -481,6 +481,7 @@ class KanbanCard {
     this.agentModelParamValues,
     this.agentAllowDirtyWorkspace,
     this.agentEnableSandbox,
+    this.agentConversationMarkdown,
     this.colorValue,
     this.conflictSide,
     this.conflictColumnId,
@@ -541,6 +542,9 @@ class KanbanCard {
   /// 本卡是否开启 Agent 沙箱；null 表示沿用工作台（默认关闭）。
   final bool? agentEnableSandbox;
 
+  /// 与本卡绑定的 Agent 对话记录。Markdown 正文随卡片和 WebDAV 同步。
+  final String? agentConversationMarkdown;
+
   /// 卡片背景色 ARGB；null 使用默认 Card 样式
   final int? colorValue;
 
@@ -555,6 +559,7 @@ class KanbanCard {
 
   static const maxAttachments = 9;
   static const maxFileAttachments = 20;
+  static const agentConversationFileName = 'Agent 对话.md';
 
   bool get hasConflict => conflictSide != null || conflictDeleted;
 
@@ -627,6 +632,7 @@ class KanbanCard {
     Object? agentModelParamValues = _sentinel,
     Object? agentAllowDirtyWorkspace = _sentinel,
     Object? agentEnableSandbox = _sentinel,
+    Object? agentConversationMarkdown = _sentinel,
     Object? colorValue = _sentinel,
     Object? conflictSide = _sentinel,
     Object? conflictColumnId = _sentinel,
@@ -636,9 +642,8 @@ class KanbanCard {
     return KanbanCard(
       id: id ?? this.id,
       title: title ?? this.title,
-      description: description == _sentinel
-          ? this.description
-          : description as String?,
+      description:
+          description == _sentinel ? this.description : description as String?,
       order: order ?? this.order,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -662,11 +667,9 @@ class KanbanCard {
       links: links ?? this.links,
       blockedByIds: blockedByIds ?? this.blockedByIds,
       relatedIds: relatedIds ?? this.relatedIds,
-      commitRef:
-          commitRef == _sentinel ? this.commitRef : commitRef as String?,
-      agentEngine: agentEngine == _sentinel
-          ? this.agentEngine
-          : agentEngine as String?,
+      commitRef: commitRef == _sentinel ? this.commitRef : commitRef as String?,
+      agentEngine:
+          agentEngine == _sentinel ? this.agentEngine : agentEngine as String?,
       agentModelId: agentModelId == _sentinel
           ? this.agentModelId
           : agentModelId as String?,
@@ -679,6 +682,9 @@ class KanbanCard {
       agentEnableSandbox: agentEnableSandbox == _sentinel
           ? this.agentEnableSandbox
           : agentEnableSandbox as bool?,
+      agentConversationMarkdown: agentConversationMarkdown == _sentinel
+          ? this.agentConversationMarkdown
+          : agentConversationMarkdown as String?,
       colorValue:
           colorValue == _sentinel ? this.colorValue : colorValue as int?,
       conflictSide: clearConflict
@@ -725,9 +731,9 @@ class KanbanCard {
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
       if (fileAttachments.isNotEmpty)
-        'fileAttachments':
-            fileAttachments.map((a) => a.toJson()).toList(),
-      if (links.isNotEmpty) 'links': links.map((link) => link.toJson()).toList(),
+        'fileAttachments': fileAttachments.map((a) => a.toJson()).toList(),
+      if (links.isNotEmpty)
+        'links': links.map((link) => link.toJson()).toList(),
       if (blockedByIds.isNotEmpty) 'blockedByIds': blockedByIds,
       if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
       if (commitRef != null && commitRef!.isNotEmpty) 'commitRef': commitRef,
@@ -739,8 +745,10 @@ class KanbanCard {
         'agentModelParamValues': agentModelParamValues,
       if (agentAllowDirtyWorkspace != null)
         'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
-      if (agentEnableSandbox != null)
-        'agentEnableSandbox': agentEnableSandbox,
+      if (agentEnableSandbox != null) 'agentEnableSandbox': agentEnableSandbox,
+      if (agentConversationMarkdown != null &&
+          agentConversationMarkdown!.isNotEmpty)
+        'agentConversationMarkdown': agentConversationMarkdown,
       if (colorValue != null) 'color': colorValue,
     };
     if (includeConflict) {
@@ -805,6 +813,7 @@ class KanbanCard {
       agentModelParamValues: _stringMap(json['agentModelParamValues']),
       agentAllowDirtyWorkspace: json['agentAllowDirtyWorkspace'] as bool?,
       agentEnableSandbox: json['agentEnableSandbox'] as bool?,
+      agentConversationMarkdown: json['agentConversationMarkdown'] as String?,
       colorValue: json['color'] as int?,
       conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
       conflictColumnId: json['conflictColumnId'] as String?,

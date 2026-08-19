@@ -11,6 +11,7 @@ import '../../settings/column_color_picker.dart';
 import '../../utils/ime_guard.dart';
 import '../../features/project/project_theme.dart';
 import '../completed_auto_clear/completed_auto_clear.dart';
+import '../agent_dispatch/card_agent_conversation_section.dart';
 import '../labels/label_editor_dialog.dart';
 import 'card_complete_motion.dart';
 import 'card_detail_actions_bar.dart';
@@ -1134,6 +1135,13 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             });
                           },
                         ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: CardAgentConversationSection(
+                            cardId: widget.card.id,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
                             Text('备注', style: theme.textTheme.titleSmall),

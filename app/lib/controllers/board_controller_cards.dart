@@ -150,8 +150,14 @@ extension BoardControllerCards on BoardController {
       final now = DateTime.now().millisecondsSinceEpoch;
       final duplicatedId = const Uuid().v4();
       final copiedAttachments = await _copyCardAttachments(source.attachments);
-      final copiedFileAttachments =
-          await _copyCardFileAttachments(source.fileAttachments);
+      final copiedFileAttachments = await _copyCardFileAttachments(
+        source.fileAttachments
+            .where(
+              (attachment) =>
+                  attachment.fileName != KanbanCard.agentConversationFileName,
+            )
+            .toList(),
+      );
       final duplicated = source.copyWith(
         id: duplicatedId,
         order: sourceColumn.cards.length,
@@ -173,6 +179,7 @@ extension BoardControllerCards on BoardController {
           for (final link in source.links)
             link.copyWith(id: const Uuid().v4(), createdAt: now),
         ],
+        agentConversationMarkdown: null,
         clearConflict: true,
       );
       final columns = board!.columns.map((column) {
@@ -352,12 +359,10 @@ extension BoardControllerCards on BoardController {
                 : (commitRef != null
                     ? abbreviateGitCommitRef(commitRef)
                     : card.commitRef),
-            agentEngine: clearAgentEngine
-                ? null
-                : (agentEngine ?? card.agentEngine),
-            agentModelId: clearAgentModelId
-                ? null
-                : (agentModelId ?? card.agentModelId),
+            agentEngine:
+                clearAgentEngine ? null : (agentEngine ?? card.agentEngine),
+            agentModelId:
+                clearAgentModelId ? null : (agentModelId ?? card.agentModelId),
             agentModelParamValues: clearAgentModelParamValues
                 ? null
                 : (agentModelParamValues ?? card.agentModelParamValues),
@@ -434,20 +439,17 @@ extension BoardControllerCards on BoardController {
               : (commitRef != null
                   ? abbreviateGitCommitRef(commitRef)
                   : original.commitRef);
-          final restoredAgentEngine = clearAgentEngine
-              ? null
-              : (agentEngine ?? original.agentEngine);
+          final restoredAgentEngine =
+              clearAgentEngine ? null : (agentEngine ?? original.agentEngine);
           final restoredAgentModelId = clearAgentModelId
               ? null
               : (agentModelId ?? original.agentModelId);
           final restoredAgentModelParamValues = clearAgentModelParamValues
               ? null
               : (agentModelParamValues ?? original.agentModelParamValues);
-          final restoredAgentAllowDirtyWorkspace =
-              clearAgentAllowDirtyWorkspace
-                  ? null
-                  : (agentAllowDirtyWorkspace ??
-                      original.agentAllowDirtyWorkspace);
+          final restoredAgentAllowDirtyWorkspace = clearAgentAllowDirtyWorkspace
+              ? null
+              : (agentAllowDirtyWorkspace ?? original.agentAllowDirtyWorkspace);
           final restoredAgentEnableSandbox = clearAgentEnableSandbox
               ? null
               : (agentEnableSandbox ?? original.agentEnableSandbox);
@@ -602,9 +604,8 @@ extension BoardControllerCards on BoardController {
         )) {
           final afterColumnId = findColumnIdForCard(cardId);
           final afterBoard = board;
-          final rework = afterBoard == null
-              ? null
-              : findReworkColumn(afterBoard.columns);
+          final rework =
+              afterBoard == null ? null : findReworkColumn(afterBoard.columns);
           if (afterColumnId != null &&
               rework != null &&
               afterColumnId != rework.id) {
@@ -642,6 +643,94 @@ extension BoardControllerCards on BoardController {
       }
     }
     return null;
+  }
+
+  /// 替换卡片的 Agent Markdown 对话记录，并维护可直接打开的文件附件镜像。
+  ///
+  /// 对话属于同步用户内容，但不进入普通详情编辑的撤销栈，避免高频 Agent
+  /// 消息挤掉用户的卡片编辑撤销记录。
+  Future<String?> setCardAgentConversation(
+    String cardId,
+    String markdown,
+  ) {
+    return _withBoardMutation(() async {
+      final current = board;
+      if (current == null) return '看板未就绪';
+      final target = findCardById(cardId);
+      if (target == null) return '卡片不存在：$cardId';
+      final normalized = markdown.trim();
+      final nextValue = normalized.isEmpty ? null : '$normalized\n';
+      if (target.agentConversationMarkdown == nextValue) return null;
+
+      var nextFileAttachments = target.fileAttachments;
+      final store = attachmentStore;
+      final projectId = activeProjectId;
+      final existingConversationFile = target.fileAttachments
+          .where(
+            (attachment) =>
+                attachment.fileName == KanbanCard.agentConversationFileName,
+          )
+          .firstOrNull;
+      if (store != null && projectId != null) {
+        if (nextValue == null && existingConversationFile != null) {
+          nextFileAttachments = target.fileAttachments
+              .where(
+                (attachment) => attachment.id != existingConversationFile.id,
+              )
+              .toList();
+          await store.deleteFileAttachment(
+            projectId: projectId,
+            attachmentId: existingConversationFile.id,
+          );
+        } else if (nextValue != null) {
+          final bytes = Uint8List.fromList(utf8.encode(nextValue));
+          if (existingConversationFile == null) {
+            final saved = await store.saveFile(
+              projectId: projectId,
+              sourceBytes: bytes,
+              fileName: KanbanCard.agentConversationFileName,
+              order: target.fileAttachments.length,
+            );
+            nextFileAttachments = [...target.fileAttachments, saved];
+          } else {
+            await store.writeFileBytes(
+              projectId: projectId,
+              attachmentId: existingConversationFile.id,
+              bytes: bytes,
+            );
+            nextFileAttachments = target.fileAttachments
+                .map(
+                  (attachment) => attachment.id == existingConversationFile.id
+                      ? attachment.copyWith(size: bytes.length)
+                      : attachment,
+                )
+                .toList();
+          }
+        }
+      }
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final columns = current.columns.map((column) {
+        return column.copyWith(
+          cards: column.cards.map((card) {
+            if (card.id != cardId) return card;
+            return card.copyWith(
+              agentConversationMarkdown: nextValue,
+              fileAttachments: nextFileAttachments,
+              updatedAt: now,
+            );
+          }).toList(),
+        );
+      }).toList();
+      await _persistAndSync(_bump(current.copyWith(columns: columns)));
+      await _recordActivity(
+        entityId: cardId,
+        entityTitle: target.title,
+        action: ActivityAction.updated,
+        details: const {'field': 'agentConversationMarkdown'},
+      );
+      return null;
+    });
   }
 
   /// 原子建立或解除两张卡的双向关联。
@@ -830,7 +919,8 @@ extension BoardControllerCards on BoardController {
     final now = DateTime.now();
     for (final column in [...board!.columns]) {
       for (final card in [...column.cards]) {
-        final effects = _BoardControllerBase._automationEngine.effectsForOverdue(
+        final effects =
+            _BoardControllerBase._automationEngine.effectsForOverdue(
           rules: projectSettings.automationRules,
           card: card,
           now: now,
@@ -844,6 +934,7 @@ extension BoardControllerCards on BoardController {
       }
     }
   }
+
   Future<String?> toggleCardCompleted(String columnId, String cardId) async {
     return _withBoardMutation(() async {
       if (board == null) return null;
@@ -929,7 +1020,8 @@ extension BoardControllerCards on BoardController {
   }) async {
     await _reminderScheduler.cancel(card.id);
     if (completed) {
-      final next = _BoardControllerBase._recurrenceService.createNextOccurrence(card);
+      final next =
+          _BoardControllerBase._recurrenceService.createNextOccurrence(card);
       if (next != null &&
           board != null &&
           !board!.columns.any(
@@ -1021,4 +1113,3 @@ extension BoardControllerCards on BoardController {
     });
   }
 }
-

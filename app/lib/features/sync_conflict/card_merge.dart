@@ -71,7 +71,8 @@ bool _attachmentsEq(List<CardAttachment> a, List<CardAttachment> b) {
   return true;
 }
 
-bool _fileAttachmentsEq(List<CardFileAttachment> a, List<CardFileAttachment> b) {
+bool _fileAttachmentsEq(
+    List<CardFileAttachment> a, List<CardFileAttachment> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i].id != b[i].id ||
@@ -122,7 +123,8 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       a.agentModelId == b.agentModelId &&
       _stringMapEq(a.agentModelParamValues, b.agentModelParamValues) &&
       a.agentAllowDirtyWorkspace == b.agentAllowDirtyWorkspace &&
-      a.agentEnableSandbox == b.agentEnableSandbox;
+      a.agentEnableSandbox == b.agentEnableSandbox &&
+      a.agentConversationMarkdown == b.agentConversationMarkdown;
 }
 
 KanbanCard stripConflict(KanbanCard card) {
@@ -258,7 +260,8 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
         remote.agentModelParamValues,
       ) ||
       local.agentAllowDirtyWorkspace != remote.agentAllowDirtyWorkspace ||
-      local.agentEnableSandbox != remote.agentEnableSandbox;
+      local.agentEnableSandbox != remote.agentEnableSandbox ||
+      local.agentConversationMarkdown != remote.agentConversationMarkdown;
 }
 
 KanbanCard _mergeFieldsAuto(KanbanCard local, KanbanCard remote) {
@@ -488,6 +491,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.agentEnableSandbox,
     eq: (a, b) => a == b,
   );
+  final agentConversationConflict = _fieldConflict(
+    base: base.card.agentConversationMarkdown,
+    local: loc.card.agentConversationMarkdown,
+    remote: rem.card.agentConversationMarkdown,
+    eq: (a, b) => a == b,
+  );
   final columnConflict = _fieldConflict(
     base: base.columnId,
     local: loc.columnId,
@@ -520,6 +529,7 @@ CardMergeResult mergeCardThreeWay({
       agentModelParamConflict ||
       agentAllowDirtyWorkspaceConflict ||
       agentEnableSandboxConflict ||
+      agentConversationConflict ||
       columnConflict;
 
   if (anyConflict) {
@@ -674,6 +684,11 @@ CardMergeResult mergeCardThreeWay({
     local: loc.card.agentEnableSandbox,
     remote: rem.card.agentEnableSandbox,
   );
+  final mergedAgentConversation = _threeWayValue(
+    base: base.card.agentConversationMarkdown,
+    local: loc.card.agentConversationMarkdown,
+    remote: rem.card.agentConversationMarkdown,
+  );
   final columnId = _threeWayValue(
     base: base.columnId,
     local: loc.columnId,
@@ -716,6 +731,7 @@ CardMergeResult mergeCardThreeWay({
     agentModelParamValues: mergedAgentModelParamValues,
     agentAllowDirtyWorkspace: mergedAgentAllowDirtyWorkspace,
     agentEnableSandbox: mergedAgentEnableSandbox,
+    agentConversationMarkdown: mergedAgentConversation,
     colorValue: mergedColor,
   );
 

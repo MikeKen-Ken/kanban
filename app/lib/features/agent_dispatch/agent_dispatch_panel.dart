@@ -634,6 +634,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     _appendLog('引擎：${options.engine.label}');
     final result = await _service.runOnce(
       options: options,
+      boardController: board,
       skillPath: next.resolveSkillPath(),
       mcpEndpoint: board.mcpHost.endpointUrl,
       closeScopedEndpoint: board.mcpHost.closeScopedEndpoint,
