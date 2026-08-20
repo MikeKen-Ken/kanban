@@ -122,6 +122,28 @@ void main() {
     expect(slept, isFalse);
   });
 
+  test('Windows 拒绝休眠请求时抛出失败', () async {
+    var command = '';
+    await expectLater(
+      windowsSleepNow(
+        runner: (executable, arguments) async {
+          expect(executable, 'powershell');
+          command = arguments.last;
+          return ProcessResult(1, 1, '', 'Windows 拒绝休眠请求');
+        },
+      ),
+      throwsA(
+        isA<Exception>().having(
+          (error) => '$error',
+          'message',
+          contains('Windows 拒绝休眠请求'),
+        ),
+      ),
+    );
+    expect(command, contains(r'$suspended'));
+    expect(command, contains('exit 1'));
+  }, skip: !Platform.isWindows);
+
   test('保存并加载完成后队列', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});

@@ -156,12 +156,16 @@ Future<void> abortStaleWindowsPowerAction() async {
   await Process.run('shutdown', ['/a']);
 }
 
-Future<void> windowsSleepNow() async {
+Future<void> windowsSleepNow({
+  Future<ProcessResult> Function(String executable, List<String> arguments)?
+      runner,
+}) async {
   if (!Platform.isWindows) {
     throw UnsupportedError('仅 Windows 支持休眠');
   }
   // 立即进入 S3 睡眠，不创建计划任务或延时关机，因此不会在下次开机重复执行。
-  final result = await Process.run(
+  // SetSuspendState 返回 false 时 PowerShell 默认仍以 0 退出，必须显式转为失败。
+  final result = await (runner ?? Process.run)(
     'powershell',
     const [
       '-NoProfile',
@@ -170,8 +174,10 @@ Future<void> windowsSleepNow() async {
       'Hidden',
       '-Command',
       'Add-Type -AssemblyName System.Windows.Forms; '
-          '[void][System.Windows.Forms.Application]::SetSuspendState('
-          '[System.Windows.Forms.PowerState]::Suspend, \$false, \$false)',
+          '\$suspended = [System.Windows.Forms.Application]::SetSuspendState('
+          '[System.Windows.Forms.PowerState]::Suspend, \$false, \$false); '
+          'if (-not \$suspended) { '
+          'Write-Error "Windows 拒绝休眠请求"; exit 1 }',
     ],
   );
   if (result.exitCode != 0) {
