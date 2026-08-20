@@ -17,7 +17,20 @@ export function extractCursorThinkingStepText(step: unknown): string {
   const record = asRecord(step);
   if (!record) return "";
   const type = String(record.type ?? "");
-  if (type && type !== "thinkingMessage" && type !== "thinking") return "";
+  const message = asRecord(record.message) ?? record;
+  if (
+    type &&
+    type !== "thinkingMessage" &&
+    type !== "thinking" &&
+    type !== "reasoning"
+  ) {
+    if (
+      typeof message.thinking !== "string" &&
+      typeof message.thinkingDurationMs !== "number"
+    ) {
+      return "";
+    }
+  }
   return extractThinkingText(record.message ?? record);
 }
 
@@ -39,10 +52,15 @@ export function extractCodexTranscriptMessage(
   const record = asRecord(event);
   if (!record) return undefined;
   const type = String(record.type ?? "");
-  if (type !== "item.completed") return undefined;
   const item = asRecord(record.item) ?? {};
   const itemType = String(item.type ?? item.item_type ?? "");
   const role = String(item.role ?? "");
+  if (itemType === "reasoning" || itemType === "thinking") {
+    if (type !== "item.completed" && type !== "item.updated") return undefined;
+    const thinking = extractThinkingText(item);
+    return thinking ? { role: "thinking", text: thinking } : undefined;
+  }
+  if (type !== "item.completed") return undefined;
   if (
     itemType === "user_message" ||
     itemType === "user" ||
@@ -58,10 +76,6 @@ export function extractCodexTranscriptMessage(
   ) {
     const text = extractAssistantText(item);
     return text ? { role: "assistant", text } : undefined;
-  }
-  if (itemType === "reasoning" || itemType === "thinking") {
-    const thinking = extractThinkingText(item);
-    return thinking ? { role: "thinking", text: thinking } : undefined;
   }
   return undefined;
 }
@@ -96,10 +110,33 @@ function extractThinkingText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   const record = asRecord(value);
   if (!record) return "";
-  for (const key of ["thinking", "text", "content"] as const) {
+  for (const key of ["thinking", "text"] as const) {
     const field = record[key];
     if (typeof field === "string" && field.trim()) return field.trim();
   }
+  const content = record.content;
+  if (Array.isArray(content)) {
+    const parts = content
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        const inner = asRecord(item);
+        if (!inner) return "";
+        const innerType = String(inner.type ?? "");
+        if (
+          innerType &&
+          innerType !== "thinking" &&
+          innerType !== "reasoning" &&
+          innerType !== "reasoning_text" &&
+          innerType !== "text"
+        ) {
+          return "";
+        }
+        return extractThinkingText(inner);
+      })
+      .filter((part) => part.length > 0);
+    if (parts.length > 0) return parts.join("\n").trim();
+  }
+  if (typeof content === "string" && content.trim()) return content.trim();
   return extractAssistantText(record);
 }
 

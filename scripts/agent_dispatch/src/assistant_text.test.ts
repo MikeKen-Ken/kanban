@@ -6,6 +6,7 @@ import {
   extractCodexTranscriptMessage,
   extractConversationMessages,
   extractCursorAssistantStepText,
+  extractCursorThinkingStepText,
 } from "./assistant_text.ts";
 
 describe("assistant_text", () => {
@@ -72,6 +73,7 @@ describe("assistant_text", () => {
             userMessage: { text: "请继续" },
             steps: [
               { type: "thinkingMessage", message: { text: "内部思考" } },
+              { type: "thinking", text: "第二段思考步骤" },
               {
                 type: "assistantMessage",
                 message: { text: "第一条助手。" },
@@ -88,6 +90,7 @@ describe("assistant_text", () => {
       [
         { role: "user", text: "请继续" },
         { role: "thinking", text: "内部思考" },
+        { role: "thinking", text: "第二段思考步骤" },
         { role: "assistant", text: "第一条助手。" },
         { role: "assistant", text: "第二条助手。" },
       ],
@@ -101,6 +104,33 @@ describe("assistant_text", () => {
         item: { type: "reasoning", text: "先核对落盘字段。" },
       }),
       { role: "thinking", text: "先核对落盘字段。" },
+    );
+    assert.deepEqual(
+      extractCodexTranscriptMessage({
+        type: "item.updated",
+        item: {
+          type: "reasoning",
+          content: [{ type: "reasoning_text", text: "流式思考步骤。" }],
+        },
+      }),
+      { role: "thinking", text: "流式思考步骤。" },
+    );
+  });
+
+  it("抽出 Cursor SDK thinking 消息与带 thinkingDurationMs 的步骤", () => {
+    assert.equal(
+      extractCursorThinkingStepText({
+        type: "thinking",
+        text: "SDK 思考步骤",
+      }),
+      "SDK 思考步骤",
+    );
+    assert.equal(
+      extractCursorThinkingStepText({
+        type: "unknownStep",
+        message: { thinking: "嵌套思考", thinkingDurationMs: 12 },
+      }),
+      "嵌套思考",
     );
   });
 });

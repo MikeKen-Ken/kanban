@@ -1,7 +1,7 @@
 # ADR-008：卡片 Agent 多轮交互与同步对话
 
 - Status: accepted
-- Date: 2026-08-19
+- Date: 2026-08-20
 
 ## 背景
 
@@ -29,9 +29,11 @@ ADR-003 禁止把完整对话放进仅本机 MCP 运行上下文；ADR-006 则�
    `workItems` 只含未完成验证反馈，不再把卡片最初的标题与备注当作当前任务。跨设备
    恢复依赖 Markdown，而不依赖本机 Cursor agentId。
 5. 对话记录不保存密钥、Worker token、scoped endpoint、临时附件路径或完整
-   tool 输出。保存用户消息、面向用户的助手消息，以及模型思考过程（Markdown
-   `### 思考`）。思考来自 Cursor `thinkingMessage` / 思考流与 Codex `reasoning`
-   条目；工具调用仍只进本机 Worker 日志。
+   tool 输出。必须保存用户消息、面向用户的助手消息，以及模型思考步骤；不得再
+   把思考从同步 Markdown 里滤掉。每一段思考写入独立的 `### 思考` 段落，按时间
+   顺序穿插在用户/助手正文之间。思考来源包括 Cursor `thinkingMessage` /
+   `thinking` 消息、`thinking-delta` 流，以及 Codex `reasoning` 条目。工具调用
+   仍只进本机 Worker 日志。
 6. Codex `exec` 当前仍是单次非交互进程：它上报并同步会话结果，运行后追问通过待返工
    新会话恢复 Markdown 上下文。进程内暂停问答仅在支持自定义等待工具的 Cursor SDK
    路径启用。

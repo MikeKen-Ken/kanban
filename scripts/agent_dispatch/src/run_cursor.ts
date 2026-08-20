@@ -270,12 +270,6 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
   }
 }
 
-function assistantTextsFromTurns(turns: readonly unknown[]): string[] {
-  return extractConversationMessages(turns)
-    .filter((item) => item.role === "assistant")
-    .map((item) => item.text);
-}
-
 function catalogParameterValues(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((item) => {
@@ -469,7 +463,7 @@ export async function runCursor(
             update && typeof update === "object" && "type" in update
               ? String((update as { type?: unknown }).type ?? "")
               : "";
-          if (type === "thinking-completed") {
+          if (type === "thinking-completed" || type === "thinking") {
             emitThinking(thinkingStream?.assembledText() ?? "");
           }
         },
@@ -526,8 +520,9 @@ export async function runCursor(
       let turns: unknown[] = [];
       try {
         turns = await run.conversation();
-        for (const text of assistantTextsFromTurns(turns)) {
-          emitAssistant(text);
+        for (const message of extractConversationMessages(turns)) {
+          if (message.role === "thinking") emitThinking(message.text);
+          if (message.role === "assistant") emitAssistant(message.text);
         }
       } catch {
         // 会话快照不可用时仍用 result.result 兜底。

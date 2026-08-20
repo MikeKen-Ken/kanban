@@ -134,6 +134,35 @@ void main() {
     expect('### 思考'.allMatches(markdown).length, 1);
   });
 
+  test('两段独立思考步骤会分成两个段落', () {
+    final first = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"thinking","cardId":"card-a","sessionId":"session-a",'
+      '"text":"先改 ADR。","at":"2026-08-20T08:00:00Z"}',
+    )!;
+    final assistant = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"assistant","cardId":"card-a","sessionId":"session-a",'
+      '"text":"中间结论","at":"2026-08-20T08:00:01Z"}',
+    )!;
+    final second = parseAgentInteractionEvent(
+      '@@KANBAN_INTERACTION@@'
+      '{"type":"thinking","cardId":"card-a","sessionId":"session-a",'
+      '"text":"再补思考步骤。","at":"2026-08-20T08:00:02Z"}',
+    )!;
+    final markdown = appendAgentConversationEvent(
+      appendAgentConversationEvent(
+        appendAgentConversationEvent(null, first),
+        assistant,
+      ),
+      second,
+    );
+    expect(markdown, contains('### 思考\n先改 ADR。'));
+    expect(markdown, contains('### 助手\n中间结论'));
+    expect(markdown, contains('### 思考\n再补思考步骤。'));
+    expect('### 思考'.allMatches(markdown).length, 2);
+  });
+
   test('快照可还原思考角色', () {
     final markdown = replaceAgentConversationSession(null, const [
       AgentConversationMessage(role: 'user', text: '继续处理'),

@@ -782,7 +782,12 @@ function extractCursorThinkingStepText(step) {
   const record = asRecord2(step);
   if (!record) return "";
   const type = String(record.type ?? "");
-  if (type && type !== "thinkingMessage" && type !== "thinking") return "";
+  const message = asRecord2(record.message) ?? record;
+  if (type && type !== "thinkingMessage" && type !== "thinking" && type !== "reasoning") {
+    if (typeof message.thinking !== "string" && typeof message.thinkingDurationMs !== "number") {
+      return "";
+    }
+  }
   return extractThinkingText(record.message ?? record);
 }
 function extractCodexAssistantEventText(event) {
@@ -793,10 +798,15 @@ function extractCodexTranscriptMessage(event) {
   const record = asRecord2(event);
   if (!record) return void 0;
   const type = String(record.type ?? "");
-  if (type !== "item.completed") return void 0;
   const item = asRecord2(record.item) ?? {};
   const itemType = String(item.type ?? item.item_type ?? "");
   const role = String(item.role ?? "");
+  if (itemType === "reasoning" || itemType === "thinking") {
+    if (type !== "item.completed" && type !== "item.updated") return void 0;
+    const thinking = extractThinkingText(item);
+    return thinking ? { role: "thinking", text: thinking } : void 0;
+  }
+  if (type !== "item.completed") return void 0;
   if (itemType === "user_message" || itemType === "user" || itemType === "message" && role === "user") {
     const text = extractAssistantText(item);
     return text ? { role: "user", text } : void 0;
@@ -804,10 +814,6 @@ function extractCodexTranscriptMessage(event) {
   if (itemType === "agent_message" || itemType === "assistant_message" || itemType === "message" && (role === "assistant" || role === "agent")) {
     const text = extractAssistantText(item);
     return text ? { role: "assistant", text } : void 0;
-  }
-  if (itemType === "reasoning" || itemType === "thinking") {
-    const thinking = extractThinkingText(item);
-    return thinking ? { role: "thinking", text: thinking } : void 0;
   }
   return void 0;
 }
@@ -838,10 +844,25 @@ function extractThinkingText(value) {
   if (typeof value === "string") return value.trim();
   const record = asRecord2(value);
   if (!record) return "";
-  for (const key of ["thinking", "text", "content"]) {
+  for (const key of ["thinking", "text"]) {
     const field = record[key];
     if (typeof field === "string" && field.trim()) return field.trim();
   }
+  const content = record.content;
+  if (Array.isArray(content)) {
+    const parts = content.map((item) => {
+      if (typeof item === "string") return item.trim();
+      const inner = asRecord2(item);
+      if (!inner) return "";
+      const innerType = String(inner.type ?? "");
+      if (innerType && innerType !== "thinking" && innerType !== "reasoning" && innerType !== "reasoning_text" && innerType !== "text") {
+        return "";
+      }
+      return extractThinkingText(inner);
+    }).filter((part) => part.length > 0);
+    if (parts.length > 0) return parts.join("\n").trim();
+  }
+  if (typeof content === "string" && content.trim()) return content.trim();
   return extractAssistantText(record);
 }
 function extractUserText(value) {
@@ -2575,8 +2596,16 @@ var CursorThinkingStream = class {
     if (!update || typeof update !== "object") return;
     const record = update;
     const type = typeof record.type === "string" ? record.type : "";
-    if (type === "thinking-delta" && typeof record.text === "string" && record.text) {
-      this.appendDelta(record.text);
+    const nested = record.message && typeof record.message === "object" ? record.message : void 0;
+    const deltaText = [record.text, record.delta, nested?.text].find(
+      (value) => typeof value === "string" && value.length > 0
+    );
+    if (type === "thinking" && deltaText) {
+      this.replaceAssembled(deltaText);
+      return;
+    }
+    if (type === "thinking-delta" && deltaText) {
+      this.appendDelta(deltaText);
       return;
     }
     if (type === "thinking-completed") {
@@ -2603,6 +2632,17 @@ var CursorThinkingStream = class {
     this.scheduled?.cancel();
     this.scheduled = void 0;
     this.flush(true);
+  }
+  replaceAssembled(text) {
+    if (this.blockComplete) {
+      this.assembled = "";
+      this.pending = "";
+      this.startedBlock = false;
+      this.streamed = false;
+      this.blockComplete = false;
+    }
+    this.assembled = text;
+    this.pending = "";
   }
   appendDelta(text) {
     if (this.blockComplete) {
@@ -2971,9 +3011,6 @@ function describeStep(step) {
     }
   }
 }
-function assistantTextsFromTurns(turns) {
-  return extractConversationMessages(turns).filter((item) => item.role === "assistant").map((item) => item.text);
-}
 function catalogParameterValues(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((item) => {
@@ -3142,7 +3179,7 @@ async function runCursor(job, cancellation) {
         onDelta: ({ update }) => {
           thinkingStream?.handleDelta(update);
           const type = update && typeof update === "object" && "type" in update ? String(update.type ?? "") : "";
-          if (type === "thinking-completed") {
+          if (type === "thinking-completed" || type === "thinking") {
             emitThinking(thinkingStream?.assembledText() ?? "");
           }
         },
@@ -3195,8 +3232,9 @@ async function runCursor(job, cancellation) {
       let turns = [];
       try {
         turns = await run.conversation();
-        for (const text of assistantTextsFromTurns(turns)) {
-          emitAssistant(text);
+        for (const message of extractConversationMessages(turns)) {
+          if (message.role === "thinking") emitThinking(message.text);
+          if (message.role === "assistant") emitAssistant(message.text);
         }
       } catch {
       }

@@ -39,10 +39,27 @@ export class CursorThinkingStream {
 
   handleDelta(update: unknown): void {
     if (!update || typeof update !== "object") return;
-    const record = update as { type?: unknown; text?: unknown; thinkingDurationMs?: unknown };
+    const record = update as {
+      type?: unknown;
+      text?: unknown;
+      delta?: unknown;
+      thinkingDurationMs?: unknown;
+      message?: unknown;
+    };
     const type = typeof record.type === "string" ? record.type : "";
-    if (type === "thinking-delta" && typeof record.text === "string" && record.text) {
-      this.appendDelta(record.text);
+    const nested =
+      record.message && typeof record.message === "object"
+        ? (record.message as { text?: unknown })
+        : undefined;
+    const deltaText = [record.text, record.delta, nested?.text].find(
+      (value): value is string => typeof value === "string" && value.length > 0,
+    );
+    if (type === "thinking" && deltaText) {
+      this.replaceAssembled(deltaText);
+      return;
+    }
+    if (type === "thinking-delta" && deltaText) {
+      this.appendDelta(deltaText);
       return;
     }
     if (type === "thinking-completed") {
@@ -72,6 +89,18 @@ export class CursorThinkingStream {
     this.scheduled?.cancel();
     this.scheduled = undefined;
     this.flush(true);
+  }
+
+  private replaceAssembled(text: string): void {
+    if (this.blockComplete) {
+      this.assembled = "";
+      this.pending = "";
+      this.startedBlock = false;
+      this.streamed = false;
+      this.blockComplete = false;
+    }
+    this.assembled = text;
+    this.pending = "";
   }
 
   private appendDelta(text: string): void {

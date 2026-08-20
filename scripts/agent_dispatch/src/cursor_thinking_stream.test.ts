@@ -44,4 +44,16 @@ describe("cursor_thinking_stream", () => {
     stream.handleDelta({ type: "thinking-completed", thinkingDurationMs: 0 });
     assert.equal(stream.consumeStreamedThinking(), false);
   });
+
+  it("接受 SDK thinking 消息与嵌套 text", () => {
+    const { stream } = collect();
+    stream.handleDelta({ type: "thinking", text: "完整思考步骤" });
+    assert.equal(stream.assembledText(), "完整思考步骤");
+    stream.handleDelta({
+      type: "thinking-delta",
+      message: { text: "后续一句" },
+    });
+    stream.handleDelta({ type: "thinking-completed", thinkingDurationMs: 0 });
+    assert.equal(stream.assembledText(), "完整思考步骤后续一句");
+  });
 });
