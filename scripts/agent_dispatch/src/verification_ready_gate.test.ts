@@ -11,6 +11,7 @@ import {
   isVerificationCommand,
   readyBlockedByShells,
   shellEffectiveEndMs,
+  shellObservedDurationMs,
 } from "./verification_ready_gate.ts";
 
 describe("verification_ready_gate", () => {
@@ -84,6 +85,56 @@ describe("verification_ready_gate", () => {
       1_000,
     );
     assert.match(blocked ?? "", /working_directory/);
+  });
+
+  it("flutter test 成功但耗时过短时拒绝", () => {
+    const blocked = readyBlockedByShells(
+      [
+        {
+          callId: "fast",
+          command:
+            "dart format a.dart; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; flutter test a_test.dart",
+          startedAtMs: 0,
+          endedAtMs: 600,
+          executionTimeMs: 600,
+          exitCode: 0,
+        },
+      ],
+      1_000,
+    );
+    assert.match(blocked ?? "", /耗时过短/);
+  });
+
+  it("无 executionTime 的秒退 flutter test 也拒绝", () => {
+    const span = {
+      callId: "fast",
+      command: "flutter test test/a_test.dart",
+      startedAtMs: 0,
+      endedAtMs: 600,
+      exitCode: 0,
+    };
+    assert.equal(shellObservedDurationMs(span), 600);
+    const blocked = readyBlockedByShells([span], 1_000);
+    assert.match(blocked ?? "", /working_directory/);
+  });
+
+  it("正常耗时的 flutter test 仍放行", () => {
+    assert.equal(
+      readyBlockedByShells(
+        [
+          {
+            callId: "ok",
+            command: "flutter test test/a_test.dart",
+            startedAtMs: 0,
+            endedAtMs: 8_000,
+            executionTimeMs: 8_000,
+            exitCode: 0,
+          },
+        ],
+        9_000,
+      ),
+      undefined,
+    );
   });
 
   it("node --test 与 flutter analyze 算验证命令", () => {

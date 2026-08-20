@@ -38,12 +38,36 @@ export function isVerificationCommand(command: string): boolean {
   return VERIFICATION_MARKERS.some((marker) => text.includes(marker));
 }
 
+/** 与 Dart `kDispatchImplausibleTestDurationMs` 保持一致。 */
+export const IMPLAUSIBLE_TEST_DURATION_MS = 2_000;
+
+export function isSlowTestCommand(command: string): boolean {
+  const text = command.toLowerCase();
+  return text.includes("flutter test") || text.includes("dart test");
+}
+
+/** 观察耗时：优先 SDK executionTime，否则 endedAt-startedAt；未知为 -1。 */
+export function shellObservedDurationMs(span: ShellSpan): number {
+  const exec = span.executionTimeMs ?? 0;
+  if (exec > 0) return exec;
+  if (span.endedAtMs == null) return -1;
+  return span.endedAtMs - span.startedAtMs;
+}
+
 /** 实际结束时间优先 startedAt+executionTime，避免观察滞后把短失败排到成功测试之后。 */
 export function shellEffectiveEndMs(span: ShellSpan): number {
   const exec = span.executionTimeMs ?? 0;
   if (exec > 0) return span.startedAtMs + exec;
   if (span.endedAtMs == null) return Number.MAX_SAFE_INTEGER;
   return span.endedAtMs;
+}
+
+export function isImplausiblyShortSuccessfulTest(span: ShellSpan): boolean {
+  if (!isSlowTestCommand(span.command)) return false;
+  if (span.exitCode != null && span.exitCode !== 0) return false;
+  const duration = shellObservedDurationMs(span);
+  if (duration < 0) return false;
+  return duration < IMPLAUSIBLE_TEST_DURATION_MS;
 }
 
 export function commandLooksLikeCdAndChain(command: string): boolean {
@@ -92,6 +116,15 @@ export function readyBlockedByShells(
       ? "PowerShell 5.1 不支持 &&；请用 working_directory，不要写 cd ... &&。"
       : "请修复后重跑测试，再调用 ready_to_submit。";
     return `验证命令失败（exitCode=${code}）：${clip(lastVerification.command)}。${hint}`;
+  }
+  if (isImplausiblyShortSuccessfulTest(lastVerification)) {
+    const duration = shellObservedDurationMs(lastVerification);
+    return (
+      `验证命令耗时过短（${duration}ms），不像真正跑完测试：` +
+      `${clip(lastVerification.command)}。` +
+      "请确认 working_directory 与相对路径一致，" +
+      "并等到 flutter test / dart test 实际结束后再 ready_to_submit。"
+    );
   }
   return undefined;
 }

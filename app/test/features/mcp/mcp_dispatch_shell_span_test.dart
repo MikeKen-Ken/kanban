@@ -161,6 +161,68 @@ void main() {
       );
     });
 
+    test('flutter test 成功但耗时过短时拒绝', () {
+      const span = DispatchShellSpan(
+        callId: 'shell-fast',
+        command:
+            'dart format a.dart; if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }; '
+            'flutter test a_test.dart',
+        startedAtMs: 0,
+        endedAtMs: 600,
+        executionTimeMs: 600,
+        exitCode: 0,
+      );
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 1000),
+        contains('耗时过短'),
+      );
+    });
+
+    test('无 executionTime 的秒退 flutter test 也拒绝', () {
+      const span = DispatchShellSpan(
+        callId: 'shell-fast',
+        command: 'flutter test test/a_test.dart',
+        startedAtMs: 0,
+        endedAtMs: 600,
+        exitCode: 0,
+      );
+      expect(dispatchShellObservedDurationMs(span), 600);
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 1000),
+        contains('working_directory'),
+      );
+    });
+
+    test('正常耗时的 flutter test 仍放行', () {
+      const span = DispatchShellSpan(
+        callId: 'shell-ok',
+        command: 'flutter test test/a_test.dart',
+        startedAtMs: 0,
+        endedAtMs: 8000,
+        executionTimeMs: 8000,
+        exitCode: 0,
+      );
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 9000),
+        isNull,
+      );
+    });
+
+    test('秒退的 flutter analyze 不按测试秒退拦截', () {
+      const span = DispatchShellSpan(
+        callId: 'analyze',
+        command: 'flutter analyze lib/a.dart',
+        startedAtMs: 0,
+        endedAtMs: 800,
+        executionTimeMs: 800,
+        exitCode: 0,
+      );
+      expect(
+        dispatchReadyBlockedByShells([span], nowMs: 1000),
+        isNull,
+      );
+    });
+
     test('无 executionTime 的滞后 cd && 失败也不覆盖成功验证', () {
       const passed = DispatchShellSpan(
         callId: 'shell-pass',

@@ -14,6 +14,7 @@ export function formatScopedKanbanToolPrompt(cardId: string): string {
     "scoped `kanbanMCP` 只注册下面三个工具。禁止 `GetMcpTools`、`tools/list` 或拉取其它看板工具目录。",
             "Cursor：直接 `CallMcpTool`；Codex：直接调用同名 MCP 工具。`cardId` 必须是注入值。",
             "禁止把 ready_to_submit 与 Shell（尤其是测试）放在同一批并行工具里。必须等测试命令返回 exitCode=0 之后，再单独调用 ready_to_submit。",
+            "Shell 的 working_directory 必须与命令里的相对路径一致：cwd 已是 app 时不要再写 app/lib。flutter test / dart test 秒退不得视为通过。",
     "",
     "```json",
     JSON.stringify(

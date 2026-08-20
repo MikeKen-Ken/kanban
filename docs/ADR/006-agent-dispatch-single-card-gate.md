@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-13
-- Updated: 2026-08-18
+- Updated: 2026-08-20
 
 ## 背景
 
@@ -60,6 +60,7 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
   用户 `config.toml` 中的 MCP，再写入 scoped `kanbanMCP`。复制 `AGENTS.md` 时覆盖
   「必须再打开 Architecture.md」：Worker 已注入全文，视为已读；不改用户磁盘上的原文。
 - 调度中 `ready_to_submit` / `block_card` / `submit_consultation` 只能操作本轮领取的卡片。
+- `ready_to_submit` 根据 Worker 上报的 Shell 时间线拒绝：验证仍在执行、exitCode≠0、或 `flutter test` / `dart test` 成功但耗时过短（路径/cwd 错误或 SDK 秒退 completed）。Dart 与 Worker TypeScript 使用同一套判定。
 - Worker 记录步骤、工具、重复工具与重复读取指标。
 - 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、move、complete、delete、
   commitRef、checklist 或 feedback 契约。

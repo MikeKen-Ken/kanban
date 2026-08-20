@@ -21,5 +21,6 @@ describe("dispatch_scoped_tool_prompt", () => {
     assert.match(text, /ready_to_submit/);
     assert.match(text, /CallMcpTool/);
     assert.match(text, /不要与 Shell 并行|禁止把 ready_to_submit 与 Shell/);
+    assert.match(text, /working_directory 必须与命令里的相对路径一致/);
   });
 });

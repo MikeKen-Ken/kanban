@@ -71,6 +71,23 @@ String normalizeDispatchCallId(String? callId) {
   return parts.join('_');
 }
 
+/// `flutter test` / `dart test` 冷启动通常远长于此；更短的成功退出多半没真正跑测试。
+const int kDispatchImplausibleTestDurationMs = 2000;
+
+bool isDispatchSlowTestCommand(String command) {
+  final text = command.toLowerCase();
+  return text.contains('flutter test') || text.contains('dart test');
+}
+
+/// 观察耗时：优先 SDK `executionTime`，否则 `endedAt - startedAt`；未知为 -1。
+int dispatchShellObservedDurationMs(DispatchShellSpan span) {
+  final exec = span.executionTimeMs ?? 0;
+  if (exec > 0) return exec;
+  final ended = span.endedAtMs;
+  if (ended == null) return -1;
+  return ended - span.startedAtMs;
+}
+
 /// 实际结束时间优先 `startedAt + executionTime`。
 /// SDK 可能提前 completed（endedAt 过早），Worker 观察也可能滞后（endedAt 过晚）；
 /// 二者都不能用来覆盖 SDK 给出的 executionTime。
@@ -80,6 +97,15 @@ int dispatchShellEffectiveEndMs(DispatchShellSpan span) {
   final ended = span.endedAtMs;
   if (ended == null) return 0x7fffffffffffffff;
   return ended;
+}
+
+bool isImplausiblyShortSuccessfulTest(DispatchShellSpan span) {
+  if (!isDispatchSlowTestCommand(span.command)) return false;
+  final code = span.exitCode;
+  if (code != null && code != 0) return false;
+  final duration = dispatchShellObservedDurationMs(span);
+  if (duration < 0) return false;
+  return duration < kDispatchImplausibleTestDurationMs;
 }
 
 /// Windows PowerShell 5.1 无法解析 `cd dir && cmd`，这类失败从未真正跑测试。
@@ -131,6 +157,13 @@ String? dispatchReadyBlockedByShells(
         ? 'PowerShell 5.1 不支持 &&；请用 working_directory，不要写 cd ... &&。'
         : '请修复后重跑测试，再调用 ready_to_submit。';
     return '验证命令失败（exitCode=$code）：${_clip(lastVerification.command)}。$hint';
+  }
+  if (isImplausiblyShortSuccessfulTest(lastVerification)) {
+    final duration = dispatchShellObservedDurationMs(lastVerification);
+    return '验证命令耗时过短（${duration}ms），不像真正跑完测试：'
+        '${_clip(lastVerification.command)}。'
+        '请确认 working_directory 与相对路径一致，'
+        '并等到 flutter test / dart test 实际结束后再 ready_to_submit。';
   }
   return null;
 }
