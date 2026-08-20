@@ -45,7 +45,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                 horizontal: 12,
                 vertical: 10,
               ),
-              hintText: '本机仓库根目录',
+              hintText: '本机仓库根目录，可不填',
               hintStyle: agentDispatchFieldHintStyle(theme),
               errorText: errorText,
               suffixIconConstraints: const BoxConstraints(

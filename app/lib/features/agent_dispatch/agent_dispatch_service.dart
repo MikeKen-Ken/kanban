@@ -463,10 +463,7 @@ class AgentDispatchService {
     void Function()? onWorkerInvoked,
   }) async {
     final repo = options.repoPath.trim();
-    if (repo.isEmpty) {
-      return const AgentWorkerResult(ok: false, error: '请填写代码仓库路径');
-    }
-    if (!await Directory(repo).exists()) {
+    if (repo.isNotEmpty && !await Directory(repo).exists()) {
       return AgentWorkerResult(ok: false, error: '仓库路径不存在：$repo');
     }
     final boundProjectId = options.projectId?.trim();
@@ -497,7 +494,11 @@ class AgentDispatchService {
     }
 
     log('项目：${options.projectTitle ?? boundProjectId}');
-    log('仓库：$repo');
+    if (repo.isEmpty) {
+      log('未指定代码仓库，Worker 使用系统临时目录作为工作目录');
+    } else {
+      log('仓库：$repo');
+    }
     log('策略：Worker 原子领卡，每张卡片创建一次独立 Agent 调用；上限 ${options.cardLimit.label}');
 
     String? cursorApiKey;
@@ -540,12 +541,12 @@ class AgentDispatchService {
     McpDispatchCardGate.instance.beginBatch(
       workerToken,
       projectId: boundProjectId,
-      repoPath: repo,
+      repoPath: repo.isEmpty ? null : repo,
     );
     try {
       result = await runAgentWorkerJob(
         engine: options.engine,
-        cwd: repo,
+        cwd: repo.isEmpty ? Directory.systemTemp.path : repo,
         prompt: prompt,
         mcpEndpoint: mcpEndpoint,
         projectId: boundProjectId,

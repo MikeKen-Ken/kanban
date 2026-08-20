@@ -613,11 +613,11 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final countInvalid =
         !_settings.cardLimitMax && (count == null || count < 1 || count > 999);
     setState(() {
-      _repoErrorText = repo.isEmpty ? '请填写代码仓库路径' : null;
+      _repoErrorText = null;
       _projectErrorText = projectMissing ? '项目不存在' : null;
       _countErrorText = countInvalid ? '请输入 1–999' : null;
     });
-    if (repo.isEmpty || projectMissing || countInvalid) {
+    if (projectMissing || countInvalid) {
       return;
     }
     final next = _settings
@@ -647,10 +647,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       projectTitleOf: (id) => board.manifest?.findById(id)?.title,
       catalogs: catalogs,
     );
-    if (options.repoPath.isEmpty) {
-      _appendLog('请填写代码仓库路径', level: AgentDispatchLogLevel.warning);
-      return;
-    }
     if (!board.mcpHost.isRunning) {
       _appendLog(
         '看板 MCP 未运行，Worker 无法只读检查队列；请先在设置中启用 MCP',
@@ -798,7 +794,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   ),
                 ),
               const AgentDispatchSectionHeader(
-                title: '代码仓库',
+                title: '代码仓库（可选）',
                 tone: AgentDispatchSectionTone.repository,
               ),
               AgentDispatchRepositoryField(

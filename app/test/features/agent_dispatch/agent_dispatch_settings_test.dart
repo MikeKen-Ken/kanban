@@ -157,7 +157,7 @@ disable-model-invocation: true
     expect(text, isNot(contains('（空：使用看板当前打开的项目）')));
   });
 
-  test('toRunOptions：仓库必填字段与 Max', () {
+  test('toRunOptions：仓库字段与 Max', () {
     const settings = AgentDispatchSettings(
       engine: AgentDispatchEngine.cursor,
       useProject: true,
@@ -190,6 +190,19 @@ disable-model-invocation: true
     expect(opts.engine, AgentDispatchEngine.cursor);
     expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
     expect(opts.engineDefaults['codex']?.modelId, isNull);
+  });
+
+  test('toRunOptions：未绑定仓库时路径可为空', () {
+    const settings = AgentDispatchSettings(
+      engine: AgentDispatchEngine.cursor,
+      useProject: true,
+      projectId: 'p1',
+      cardLimitMax: true,
+    );
+    expect(
+      settings.toRunOptions(projectTitleOf: (_) => null).repoPath,
+      '',
+    );
   });
 
   test('toRunOptions 使用当前选择的 AI 平台作为默认平台', () {

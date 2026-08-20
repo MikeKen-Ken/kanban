@@ -209,6 +209,8 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     return AgentWorkerResult(ok: false, error: health.error);
   }
 
+  final workerCwd =
+      cwd.trim().isEmpty ? Directory.systemTemp.path : cwd.trim();
   final tempDir = await Directory.systemTemp.createTemp('kanban_agent_');
   final jobFile = File(p.join(tempDir.path, 'job.json'));
   final outFile = File(p.join(tempDir.path, 'out.json'));
@@ -219,7 +221,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   final interactionDir = Directory(p.join(tempDir.path, 'interactions'));
   final job = <String, dynamic>{
     'engine': engine.name,
-    'cwd': cwd,
+    'cwd': workerCwd,
     'prompt': prompt,
     'mcpEndpoint': mcpEndpoint,
     'cardLimit': cardLimit,
@@ -272,8 +274,9 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       node,
       [cli, '--job', jobFile.path],
       // Cursor SDK 的内置 Shell 可能继承 Worker 进程目录，因此在进程边界
-      // 就将工作目录固定为用户选择的代码仓库。
-      workingDirectory: cwd,
+      // 就将工作目录固定为用户选择的代码仓库；未指定时用系统临时目录，
+      // 避免落到看板应用自身工作区。
+      workingDirectory: workerCwd,
       environment: workerEnv.environment,
     );
     final workerProcess = AgentWorkerProcess(

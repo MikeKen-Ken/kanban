@@ -98,7 +98,7 @@ class AgentDispatchRunOptions {
   /// 仅用于调度日志与面板展示；不写入 Skill 调用正文。
   final String? projectTitle;
 
-  /// Agent 工作目录（必填）。
+  /// Agent 工作目录；空表示不绑定代码仓库（纯提问仍可调度）。
   final String repoPath;
 
   final String? modelId;

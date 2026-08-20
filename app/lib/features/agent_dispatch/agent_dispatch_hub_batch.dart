@@ -76,11 +76,6 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
   if (projectMissing) {
     return const AgentDispatchHubBatchStartResult.validationFailed('项目不存在');
   }
-  if (repo.isEmpty) {
-    return const AgentDispatchHubBatchStartResult.validationFailed(
-      '请先打开工作台填写代码仓库路径',
-    );
-  }
   if (countInvalid) {
     return const AgentDispatchHubBatchStartResult.validationFailed(
       '卡片上限无效，请先在工作台调整为 1–999',
@@ -131,11 +126,6 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
     projectTitleOf: (pid) => board.manifest?.findById(pid)?.title,
     catalogs: catalogs,
   );
-  if (options.repoPath.isEmpty) {
-    return const AgentDispatchHubBatchStartResult.validationFailed(
-      '请先打开工作台填写代码仓库路径',
-    );
-  }
 
   var queueSize = 0;
   await board.runOnProject(id, () async {
