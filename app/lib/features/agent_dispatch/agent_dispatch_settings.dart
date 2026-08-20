@@ -122,11 +122,10 @@ class AgentDispatchSettings {
   /// 新建调度设置的默认模型。
   static const defaultModelId = 'composer-2.5';
 
-  /// 快速模式关闭，思考程度 Medium。
+  /// 快速模式关闭，思考程度 Medium（仅作目录未加载时的回退种子）。
   static const defaultModelParamValues = {
     'fast': 'false',
     'reasoning_effort': 'medium',
-    'context': '64k',
   };
 
   final AgentDispatchEngine engine;

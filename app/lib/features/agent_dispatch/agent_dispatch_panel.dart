@@ -160,12 +160,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         : resolveAgentDispatchModelId(cachedModels, forProject.modelId);
     final modelChanged = cachedModelId != forProject.modelId;
     AgentDispatchModelInfo? selected;
-    if (modelChanged) {
-      for (final model in cachedModels) {
-        if (model.id == cachedModelId) {
-          selected = model;
-          break;
-        }
+    for (final model in cachedModels) {
+      if (model.id == cachedModelId) {
+        selected = model;
+        break;
       }
     }
     final normalized = modelChanged
@@ -175,7 +173,12 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               selected?.parameters ?? const [],
             ),
           )
-        : forProject;
+        : forProject.copyWith(
+            modelParamValues: filterAgentDispatchModelParamValues(
+              forProject.modelParamValues,
+              selected?.parameters ?? const [],
+            ),
+          );
     if (!mounted) return;
     setState(() {
       _settings = normalized;
@@ -187,7 +190,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     });
     // 模型归一化，或首次打开时把该项目种子写入按项目槽位。
     if (modelChanged ||
-        !loaded.engineConfigByProject.containsKey(widget.projectId)) {
+        !loaded.engineConfigByProject.containsKey(widget.projectId) ||
+        normalized.modelParamValues != forProject.modelParamValues) {
       await _persist(normalized);
     }
     await _service.hydrateLog();
@@ -460,7 +464,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               ? preferredAgentDispatchModelParamValues(
                   selected?.parameters ?? const [],
                 )
-              : _settings.modelParamValues;
+              : filterAgentDispatchModelParamValues(
+                  _settings.modelParamValues,
+                  selected?.parameters ?? const [],
+                );
       setState(() {
         _models = uniqueModels;
         _busy = false;
@@ -588,7 +595,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           ? preferredAgentDispatchModelParamValues(
               selected?.parameters ?? const [],
             )
-          : switched.modelParamValues,
+          : filterAgentDispatchModelParamValues(
+              switched.modelParamValues,
+              selected?.parameters ?? const [],
+            ),
     );
     if (!mounted) return;
     setState(() {

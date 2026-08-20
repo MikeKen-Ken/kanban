@@ -162,13 +162,11 @@ class AgentDispatchModelInfo {
       id: json['id'] as String? ?? '',
       displayName: json['displayName'] as String?,
       description: json['description'] as String?,
-      parameters: withAgentDispatchContextParameter(
-        raw
-            .whereType<Map<String, dynamic>>()
-            .map(AgentDispatchModelParameter.fromJson)
-            .where((p) => p.id.isNotEmpty)
-            .toList(),
-      ),
+      parameters: raw
+          .whereType<Map<String, dynamic>>()
+          .map(AgentDispatchModelParameter.fromJson)
+          .where((p) => p.id.isNotEmpty)
+          .toList(),
       variants: (json['variants'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(AgentDispatchModelVariant.fromJson)
@@ -297,15 +295,6 @@ class AgentDispatchModelVariant {
       };
 }
 
-const agentDispatchContextParameter = AgentDispatchModelParameter(
-  id: 'context',
-  displayName: '上下文',
-  options: [
-    AgentDispatchModelParameterOption(value: '64k', displayName: '64k'),
-    AgentDispatchModelParameterOption(value: '272k', displayName: '272k'),
-  ],
-);
-
 bool isAgentDispatchContextParam(String id) =>
     id.toLowerCase().contains('context');
 
@@ -318,12 +307,3 @@ bool isAgentDispatchReasoningParam(String id) => switch (id) {
         true,
       _ => false,
     };
-
-List<AgentDispatchModelParameter> withAgentDispatchContextParameter(
-  List<AgentDispatchModelParameter> parameters,
-) {
-  if (parameters.any((item) => isAgentDispatchContextParam(item.id))) {
-    return parameters;
-  }
-  return [...parameters, agentDispatchContextParameter];
-}

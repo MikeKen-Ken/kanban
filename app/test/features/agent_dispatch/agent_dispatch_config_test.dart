@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_config.dart';
+import 'package:kanban/features/agent_dispatch/agent_dispatch_model_parameters.dart';
 
 void main() {
   group('AgentDispatchModelParameter.fromJson', () {
@@ -84,7 +85,7 @@ void main() {
     );
   });
 
-  test('模型目录缺上下文参数时补上 64k/272k', () {
+  test('模型目录只保留 Cursor API 声明的参数', () {
     final model = AgentDispatchModelInfo.fromJson({
       'id': 'gpt-5.5',
       'parameters': [
@@ -94,11 +95,22 @@ void main() {
         },
       ],
     });
-    expect(model.parameters.last.id, 'context');
-    expect(model.parameters.last.values, ['64k', '272k']);
+    expect(model.parameters.map((item) => item.id), ['model_reasoning_effort']);
+  });
+
+  test('filterAgentDispatchModelParamValues 去掉目录不存在的项', () {
+    const parameters = [
+      AgentDispatchModelParameter(
+        id: 'fast',
+        options: [AgentDispatchModelParameterOption(value: 'false')],
+      ),
+    ];
     expect(
-      withAgentDispatchContextParameter(model.parameters).length,
-      model.parameters.length,
+      filterAgentDispatchModelParamValues(
+        const {'fast': 'false', 'context': '64k'},
+        parameters,
+      ),
+      {'fast': 'false'},
     );
   });
 }

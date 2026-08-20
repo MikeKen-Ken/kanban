@@ -110,6 +110,20 @@ String _parameterLabel(AgentDispatchModelParameter parameter) =>
           : (parameter.displayName ?? parameter.id),
     };
 
+/// 只保留当前模型目录里存在的参数项。
+Map<String, String> filterAgentDispatchModelParamValues(
+  Map<String, String> values,
+  List<AgentDispatchModelParameter> parameters,
+) {
+  if (parameters.isEmpty) return Map<String, String>.from(values);
+  if (values.isEmpty) return const {};
+  final allowed = {for (final parameter in parameters) parameter.id};
+  return {
+    for (final entry in values.entries)
+      if (allowed.contains(entry.key)) entry.key: entry.value,
+  };
+}
+
 /// 快速模式关闭、思考程度 Medium；目录尚未加载时仍带上常见参数名。
 Map<String, String> preferredAgentDispatchModelParamValues(
   List<AgentDispatchModelParameter> parameters,
@@ -141,6 +155,5 @@ class AgentDispatchSettingsDefaults {
   static const modelParamValues = {
     'fast': 'false',
     'reasoning_effort': 'medium',
-    'context': '64k',
   };
 }

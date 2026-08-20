@@ -79,12 +79,6 @@ class _CardDetailAgentModelSectionState
     for (final parameter in parameters) {
       if (match(parameter.id)) return parameter;
     }
-    if (_selectedModel != null) return null;
-    for (final model in _models) {
-      for (final parameter in model.parameters) {
-        if (match(parameter.id)) return parameter;
-      }
-    }
     return null;
   }
 
@@ -215,10 +209,7 @@ class _CardDetailAgentModelSectionState
       }
     }
     final allowed = {
-      for (final parameter in withAgentDispatchContextParameter(
-        selected?.parameters ?? const [],
-      ))
-        parameter.id,
+      for (final parameter in selected?.parameters ?? const []) parameter.id,
     };
     final nextParams = <String, String>{
       for (final entry in widget.agentModelParamValues.entries)
@@ -241,8 +232,7 @@ class _CardDetailAgentModelSectionState
   Widget build(BuildContext context) {
     final fast = _isCodex ? null : _param((id) => id == 'fast');
     final reasoning = _param(isAgentDispatchReasoningParam);
-    final contextParam =
-        _param(isAgentDispatchContextParam) ?? agentDispatchContextParameter;
+    final contextParam = _param(isAgentDispatchContextParam);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -307,22 +297,24 @@ class _CardDetailAgentModelSectionState
                   onChanged: (value) => _onParam(reasoning.id, value),
                 ),
               ],
-              const SizedBox(width: 6),
-              _dropdown(
-                label: '上下文',
-                value:
-                    widget.agentModelParamValues[contextParam.id] ?? _inherit,
-                items: _items(
-                  options: [
-                    for (final option in contextParam.options)
-                      (
-                        value: option.value,
-                        label: option.displayName ?? option.value,
-                      ),
-                  ],
+              if (contextParam != null) ...[
+                const SizedBox(width: 6),
+                _dropdown(
+                  label: '上下文',
+                  value:
+                      widget.agentModelParamValues[contextParam.id] ?? _inherit,
+                  items: _items(
+                    options: [
+                      for (final option in contextParam.options)
+                        (
+                          value: option.value,
+                          label: option.displayName ?? option.value,
+                        ),
+                    ],
+                  ),
+                  onChanged: (value) => _onParam(contextParam.id, value),
                 ),
-                onChanged: (value) => _onParam(contextParam.id, value),
-              ),
+              ],
               const SizedBox(width: 6),
               _compactToggle(
                 label: '允许脏工作区',

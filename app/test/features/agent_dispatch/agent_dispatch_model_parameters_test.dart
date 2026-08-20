@@ -82,4 +82,14 @@ void main() {
       {'fast': 'false', 'reasoning_effort': 'medium', 'context': '64k'},
     );
   });
+
+  test('filterAgentDispatchModelParamValues 目录未加载时保留原值', () {
+    expect(
+      filterAgentDispatchModelParamValues(
+        const {'fast': 'false', 'context': '64k'},
+        const [],
+      ),
+      {'fast': 'false', 'context': '64k'},
+    );
+  });
 }

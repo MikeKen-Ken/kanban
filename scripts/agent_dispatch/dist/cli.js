@@ -2502,10 +2502,10 @@ function parseCursorSdkScanLog(line) {
 function formatCursorSdkScanNote(scan) {
   if (scan.kind === "skills") {
     const count2 = formatCount(scan.skillCount ?? scan.ruleCount);
-    return `SDK \u626B\u63CF Skill\uFF1A${count2}\uFF08\u542B\u672C\u673A ~/.cursor/skills-cursor \u5185\u7F6E\uFF09\uFF0C\u8FD9\u662F\u8FC7\u6EE4\u524D\u7684\u626B\u63CF\u6570\uFF1BsettingSources=project \u53EA\u6CE8\u5165\u4ED3\u5E93\u5185 Skill`;
+    return `SDK \u626B\u63CF Skill\uFF1A${count2}\uFF08\u542B\u672C\u673A ~/.cursor/skills-cursor \u5185\u7F6E\uFF09\uFF0C\u8FD9\u662F\u53EF\u4F9B Cursor \u6309\u89E6\u53D1\u6761\u4EF6\u9009\u62E9\u7684 Skill\uFF1B\u4E0D\u4F1A\u5C06\u5168\u90E8 Skill \u6B63\u6587\u540C\u65F6\u6CE8\u5165`;
   }
   const count = formatCount(scan.ruleCount);
-  return `SDK \u626B\u63CF Rule\uFF1A${count}\uFF0C\u8FD9\u662F\u8FC7\u6EE4\u524D\u7684\u626B\u63CF\u6570\uFF1BsettingSources=project \u53EA\u6CE8\u5165\u4ED3\u5E93\u5185\u89C4\u5219\uFF08\u7528\u6237 Rule \u5DF2\u7531 Worker \u5199\u5165 prompt\uFF09`;
+  return `SDK \u626B\u63CF Rule\uFF1A${count}\uFF0C\u8FD9\u662F\u8FC7\u6EE4\u524D\u7684\u626B\u63CF\u6570\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u5199\u5165 prompt\uFF1BSDK \u540C\u65F6\u52A0\u8F7D\u9879\u76EE\u4E0E\u7528\u6237\u8BBE\u7F6E\u5C42`;
 }
 function createCursorSdkScanLogBuffer(onNote) {
   let pending = "";
@@ -2786,11 +2786,29 @@ function isVerificationCommand(command) {
   const text = command.toLowerCase();
   return VERIFICATION_MARKERS.some((marker) => text.includes(marker));
 }
+var IMPLAUSIBLE_TEST_DURATION_MS = 2e3;
+function isSlowTestCommand(command) {
+  const text = command.toLowerCase();
+  return text.includes("flutter test") || text.includes("dart test");
+}
+function shellObservedDurationMs(span) {
+  const exec = span.executionTimeMs ?? 0;
+  if (exec > 0) return exec;
+  if (span.endedAtMs == null) return -1;
+  return span.endedAtMs - span.startedAtMs;
+}
 function shellEffectiveEndMs(span) {
   const exec = span.executionTimeMs ?? 0;
   if (exec > 0) return span.startedAtMs + exec;
   if (span.endedAtMs == null) return Number.MAX_SAFE_INTEGER;
   return span.endedAtMs;
+}
+function isImplausiblyShortSuccessfulTest(span) {
+  if (!isSlowTestCommand(span.command)) return false;
+  if (span.exitCode != null && span.exitCode !== 0) return false;
+  const duration = shellObservedDurationMs(span);
+  if (duration < 0) return false;
+  return duration < IMPLAUSIBLE_TEST_DURATION_MS;
 }
 function commandLooksLikeCdAndChain(command) {
   return /\bcd\b[^&\n]*&&/i.test(command);
@@ -2828,6 +2846,10 @@ function readyBlockedByShells(spans, nowMs) {
   if (code != null && code !== 0) {
     const hint = commandLooksLikeCdAndChain(lastVerification.command) ? "PowerShell 5.1 \u4E0D\u652F\u6301 &&\uFF1B\u8BF7\u7528 working_directory\uFF0C\u4E0D\u8981\u5199 cd ... &&\u3002" : "\u8BF7\u4FEE\u590D\u540E\u91CD\u8DD1\u6D4B\u8BD5\uFF0C\u518D\u8C03\u7528 ready_to_submit\u3002";
     return `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${code}\uFF09\uFF1A${clip2(lastVerification.command)}\u3002${hint}`;
+  }
+  if (isImplausiblyShortSuccessfulTest(lastVerification)) {
+    const duration = shellObservedDurationMs(lastVerification);
+    return `\u9A8C\u8BC1\u547D\u4EE4\u8017\u65F6\u8FC7\u77ED\uFF08${duration}ms\uFF09\uFF0C\u4E0D\u50CF\u771F\u6B63\u8DD1\u5B8C\u6D4B\u8BD5\uFF1A${clip2(lastVerification.command)}\u3002\u8BF7\u786E\u8BA4 working_directory \u4E0E\u76F8\u5BF9\u8DEF\u5F84\u4E00\u81F4\uFF0C\u5E76\u7B49\u5230 flutter test / dart test \u5B9E\u9645\u7ED3\u675F\u540E\u518D ready_to_submit\u3002`;
   }
   return void 0;
 }
@@ -3087,10 +3109,10 @@ async function runCursor(job, cancellation) {
     });
     const localOptions = {
       cwd: job.cwd,
-      // 用户 Rule 已由 Worker 完整注入。settingSources=project 仍会扫描
-      // 用户主目录，但按仓库路径过滤后再注入；不含 user，避免用户 Skill
-      // 与 ~/.cursor/mcp.json 进入模型。
-      settingSources: ["project"],
+      // 用户 Rule 已由 Worker 完整注入；同时启用 user 让 Cursor 按 Skill
+      // frontmatter 的 description / 触发条件自行选择用户 Skill，而非把所有
+      // Skill 正文拼进本卡 prompt。MCP 仍由 mcpServers 显式控制。
+      settingSources: ["project", "user"],
       store: new JsonlLocalAgentStore(storeDir),
       ...askUserTool ? { customTools: { ask_user: askUserTool } } : {},
       // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
@@ -3133,7 +3155,7 @@ async function runCursor(job, cancellation) {
         });
       }
       logLine(
-        `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project\uFF08SDK \u626B\u63CF\u7528\u6237\u4E3B\u76EE\u5F55\u540E\u6309\u4ED3\u5E93\u8DEF\u5F84\u8FC7\u6EE4\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u6CE8\u5165\uFF1B\u4FDD\u7559\u9879\u76EE\u89C4\u5219 / Skill / Hooks\uFF09`
+        `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project,user\uFF08\u7528\u6237\u4E0E\u9879\u76EE Skill \u7531 Cursor \u6309\u5404\u81EA\u89E6\u53D1\u6761\u4EF6\u9009\u62E9\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u6CE8\u5165\uFF1BMCP \u4EC5\u4F7F\u7528\u672C\u8F6E\u663E\u5F0F\u5408\u5E76\u7684\u670D\u52A1\u5668\uFF09`
       );
       logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
       thinkingStream = new CursorThinkingStream();
@@ -3370,6 +3392,7 @@ function formatScopedKanbanToolPrompt(cardId) {
     "scoped `kanbanMCP` \u53EA\u6CE8\u518C\u4E0B\u9762\u4E09\u4E2A\u5DE5\u5177\u3002\u7981\u6B62 `GetMcpTools`\u3001`tools/list` \u6216\u62C9\u53D6\u5176\u5B83\u770B\u677F\u5DE5\u5177\u76EE\u5F55\u3002",
     "Cursor\uFF1A\u76F4\u63A5 `CallMcpTool`\uFF1BCodex\uFF1A\u76F4\u63A5\u8C03\u7528\u540C\u540D MCP \u5DE5\u5177\u3002`cardId` \u5FC5\u987B\u662F\u6CE8\u5165\u503C\u3002",
     "\u7981\u6B62\u628A ready_to_submit \u4E0E Shell\uFF08\u5C24\u5176\u662F\u6D4B\u8BD5\uFF09\u653E\u5728\u540C\u4E00\u6279\u5E76\u884C\u5DE5\u5177\u91CC\u3002\u5FC5\u987B\u7B49\u6D4B\u8BD5\u547D\u4EE4\u8FD4\u56DE exitCode=0 \u4E4B\u540E\uFF0C\u518D\u5355\u72EC\u8C03\u7528 ready_to_submit\u3002",
+    "Shell \u7684 working_directory \u5FC5\u987B\u4E0E\u547D\u4EE4\u91CC\u7684\u76F8\u5BF9\u8DEF\u5F84\u4E00\u81F4\uFF1Acwd \u5DF2\u662F app \u65F6\u4E0D\u8981\u518D\u5199 app/lib\u3002flutter test / dart test \u79D2\u9000\u4E0D\u5F97\u89C6\u4E3A\u901A\u8FC7\u3002",
     "",
     "```json",
     JSON.stringify(
@@ -3424,6 +3447,16 @@ function wrapWorkerUserRules(text) {
   return [WORKER_USER_RULES_BEGIN, body, WORKER_USER_RULES_END].join("\n");
 }
 
+// src/worker_glob_policy.ts
+var DISPATCH_SEARCH_POLICY = `## \u641C\u7D22\u8303\u56F4\uFF08Worker\uFF09
+
+\u5B9A\u4F4D\u4EE3\u7801\u65F6 MUST \u7528 grep \u6216\u5E26\u6587\u4EF6\u540D/\u76EE\u5F55\u9650\u5B9A\u7684 glob\uFF0C\u5E76\u6307\u5B9A\u5B50\u76EE\u5F55\u3002
+MUST NOT \u5BF9\u4ED3\u5E93\u6839\u505A\u65E0\u754C glob\uFF08\`**\`\u3001\`**/*\`\u3001\`**/*.*\`\uFF09\u3002
+MUST NOT \u628A\u65E0\u754C glob \u4E0E grep \u5E76\u884C\uFF1Bgrep \u5DF2\u8FD4\u56DE\u5019\u9009\u6587\u4EF6\u65F6\u76F4\u63A5\u8BFB\u90A3\u4E9B\u8DEF\u5F84\u3002
+MUST NOT \u628A glob \u76EE\u6807\u6307\u5230 \`.git\`\u3001\`.svn\` \u6216 \`build\`\u3002
+\u5361\u7247\u91CC\u7684\u754C\u9762\u5165\u53E3\u6309\u4EA7\u54C1\u8868\u9762\u843D\u5230\u529F\u80FD\u76EE\u5F55\uFF1A\u770B\u677F\u5361\u7247\u8BE6\u60C5\uFF08\u542B\u6587\u4EF6\u9644\u4EF6\u4E09\u4E2A\u70B9\u83DC\u5355\uFF09\u5728 \`app/lib/features/kanban/\`\uFF1BAgent \u8C03\u5EA6\u7A97\u53E3\u672C\u8EAB\u624D\u5728 \`agent_dispatch/\`\u3002\u4E0D\u8981\u628A\u300C\u5DE5\u4F5C\u53F0\u300D\u9ED8\u8BA4\u7406\u89E3\u6210\u5FC5\u987B\u5148\u641C\u8C03\u5EA6\u76EE\u5F55\u3002
+`;
+
 // src/session_context.ts
 function readBatchArchitecture(cwd) {
   const path = join6(cwd, "docs", "Architecture.md");
@@ -3468,6 +3501,8 @@ function createSessionContext(options) {
     "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
     "",
     "\u672C\u8F6E\u5361\u7247\u5DF2\u9886\u53D6\u3002\u4EE5\u4E0B\u4E0A\u4E0B\u6587\u662F\u552F\u4E00\u4EFB\u52A1\u8303\u56F4\uFF1B\u4E0D\u8981\u518D\u6B21\u8BFB\u53D6 Skill \u6216\u9886\u53D6\u5176\u4ED6\u5361\u7247\u3002",
+    "",
+    DISPATCH_SEARCH_POLICY.trim(),
     "",
     "## \u5361\u7247\u4E0A\u4E0B\u6587\uFF08JSON\uFF09",
     "",
@@ -4040,10 +4075,6 @@ function formatListModelsError(err) {
 function writeResult(outPath, result) {
   writeFileSync5(outPath, JSON.stringify(result, null, 2), "utf8");
 }
-function withContextParameter(parameters) {
-  if (parameters.some((item) => isContextParamId(item.id))) return parameters;
-  return [...parameters, contextCatalogParameter()];
-}
 function normalizeModelParameterValues(input) {
   if (!Array.isArray(input)) return [];
   return input.map((item) => {
@@ -4101,15 +4132,13 @@ async function listModels(engine) {
       id: m.id,
       displayName: m.displayName,
       description: m.description,
-      parameters: withContextParameter(
-        (m.parameters ?? []).map((p) => ({
-          id: p.id,
-          displayName: p.displayName,
-          values: normalizeModelParameterValues(
-            p.values ?? p.enum
-          )
-        }))
-      ),
+      parameters: (m.parameters ?? []).map((p) => ({
+        id: p.id,
+        displayName: p.displayName,
+        values: normalizeModelParameterValues(
+          p.values ?? p.enum
+        )
+      })),
       variants: (m.variants ?? []).map((variant) => ({
         displayName: variant.displayName,
         description: variant.description,
