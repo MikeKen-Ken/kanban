@@ -26,6 +26,8 @@ export type DispatchJob = {
   allowDirtyWorkspace?: boolean;
   /** 为 true 时开启 Cursor SDK 沙箱；默认 false。 */
   enableSandbox?: boolean;
+  /** 为 true 时收尾工具成功落盘后主动结束 Agent 会话；默认 true。 */
+  terminateAfterDispatchTerminal?: boolean;
   /** @deprecated 旧字段，兼容 */
   effort?: string;
   /** Dart 侧 touch 此文件以请求立即停止 */
@@ -63,6 +65,10 @@ export function applyLiveJobOverlay(
     enableSandbox: typeof live.enableSandbox === "boolean"
       ? live.enableSandbox
       : job.enableSandbox,
+    terminateAfterDispatchTerminal:
+      typeof live.terminateAfterDispatchTerminal === "boolean"
+        ? live.terminateAfterDispatchTerminal
+        : job.terminateAfterDispatchTerminal,
   };
 }
 

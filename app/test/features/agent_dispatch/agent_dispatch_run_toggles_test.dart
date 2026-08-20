@@ -11,10 +11,12 @@ void main() {
             ignoreCardParams: false,
             allowDirtyWorkspace: false,
             enableSandbox: false,
+            terminateAfterDispatchTerminal: true,
             enabled: true,
             onIgnoreCardParamsChanged: _noop,
             onAllowDirtyWorkspaceChanged: _noop,
             onEnableSandboxChanged: _noop,
+            onTerminateAfterDispatchTerminalChanged: _noop,
           ),
         ),
       ),
@@ -23,7 +25,8 @@ void main() {
     expect(find.text('允许使用卡片参数'), findsOneWidget);
     expect(find.text('允许脏工作区'), findsOneWidget);
     expect(find.text('开沙箱'), findsOneWidget);
-    expect(find.byType(Checkbox), findsNWidgets(3));
+    expect(find.text('收尾后主动结束会话'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNWidgets(4));
     expect(find.byType(Switch), findsNothing);
     expect(find.byType(ToggleButtons), findsNothing);
     expect(find.textContaining('打开后忽略卡片'), findsNothing);
@@ -41,12 +44,14 @@ void main() {
                 ignoreCardParams: ignoreCardParams,
                 allowDirtyWorkspace: false,
                 enableSandbox: false,
+                terminateAfterDispatchTerminal: true,
                 enabled: true,
                 onIgnoreCardParamsChanged: (value) {
                   setState(() => ignoreCardParams = value);
                 },
                 onAllowDirtyWorkspaceChanged: _noop,
                 onEnableSandboxChanged: _noop,
+                onTerminateAfterDispatchTerminalChanged: _noop,
               );
             },
           ),

@@ -170,6 +170,7 @@ disable-model-invocation: true
       ignoreCardParams: true,
       allowDirtyWorkspace: true,
       enableSandbox: true,
+      terminateAfterDispatchTerminal: false,
     );
     final opts = settings.toRunOptions(
       projectTitleOf: (id) => id == 'p1' ? '项目甲' : null,
@@ -185,6 +186,7 @@ disable-model-invocation: true
     expect(opts.ignoreCardParams, isTrue);
     expect(opts.allowDirtyWorkspace, isTrue);
     expect(opts.enableSandbox, isTrue);
+    expect(opts.terminateAfterDispatchTerminal, isFalse);
     expect(opts.engine, AgentDispatchEngine.cursor);
     expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
     expect(opts.engineDefaults['codex']?.modelId, isNull);
@@ -288,6 +290,7 @@ disable-model-invocation: true
       modelParamValues: {'fast': 'false', 'effort': 'high'},
       allowDirtyWorkspace: true,
       enableSandbox: true,
+      terminateAfterDispatchTerminal: false,
     );
     final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
     expect(roundTrip.repoPath, '/tmp/x');
@@ -297,6 +300,7 @@ disable-model-invocation: true
     expect(roundTrip.ignoreCardParams, isFalse);
     expect(roundTrip.allowDirtyWorkspace, isTrue);
     expect(roundTrip.enableSandbox, isTrue);
+    expect(roundTrip.terminateAfterDispatchTerminal, isFalse);
     expect(original.toJson(), isNot(contains('cursorApiKey')));
   });
 
@@ -770,6 +774,7 @@ disable-model-invocation: true
       describeWorkerExitWithoutOutput(134),
       contains('堆内存耗尽'),
     );
-    expect(describeWorkerExitWithoutOutput(134), contains('KANBAN_WORKER_HEAP_MB'));
+    expect(describeWorkerExitWithoutOutput(134),
+        contains('KANBAN_WORKER_HEAP_MB'));
   });
 }

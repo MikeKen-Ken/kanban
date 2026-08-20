@@ -105,6 +105,7 @@ class AgentDispatchSettings {
     this.ignoreCardParams = false,
     this.allowDirtyWorkspace = false,
     this.enableSandbox = false,
+    this.terminateAfterDispatchTerminal = true,
     this.cardLimitMax = true,
     this.cardLimitCount = 1,
     this.afterQueue = const [],
@@ -153,6 +154,9 @@ class AgentDispatchSettings {
   /// 工作台默认：关闭时 Cursor SDK 不启用沙箱。
   final bool enableSandbox;
 
+  /// 收尾工具成功落盘后是否主动结束 Agent 会话；默认开启以保持既有调度行为。
+  final bool terminateAfterDispatchTerminal;
+
   final bool cardLimitMax;
   final int cardLimitCount;
 
@@ -191,6 +195,7 @@ class AgentDispatchSettings {
     bool? ignoreCardParams,
     bool? allowDirtyWorkspace,
     bool? enableSandbox,
+    bool? terminateAfterDispatchTerminal,
     bool? cardLimitMax,
     int? cardLimitCount,
     List<AgentDispatchAfterStep>? afterQueue,
@@ -217,6 +222,8 @@ class AgentDispatchSettings {
       ignoreCardParams: ignoreCardParams ?? this.ignoreCardParams,
       allowDirtyWorkspace: allowDirtyWorkspace ?? this.allowDirtyWorkspace,
       enableSandbox: enableSandbox ?? this.enableSandbox,
+      terminateAfterDispatchTerminal:
+          terminateAfterDispatchTerminal ?? this.terminateAfterDispatchTerminal,
       cardLimitMax: cardLimitMax ?? this.cardLimitMax,
       cardLimitCount: cardLimitCount ?? this.cardLimitCount,
       afterQueue: afterQueue ?? this.afterQueue,
@@ -462,6 +469,7 @@ class AgentDispatchSettings {
       ignoreCardParams: ignoreCardParams,
       allowDirtyWorkspace: allowDirtyWorkspace,
       enableSandbox: enableSandbox,
+      terminateAfterDispatchTerminal: terminateAfterDispatchTerminal,
       cardLimit: cardLimitMax
           ? AgentDispatchCardLimit.max
           : AgentDispatchCardLimit.count(cardLimitCount),
@@ -488,6 +496,7 @@ class AgentDispatchSettings {
         'ignoreCardParams': ignoreCardParams,
         'allowDirtyWorkspace': allowDirtyWorkspace,
         'enableSandbox': enableSandbox,
+        'terminateAfterDispatchTerminal': terminateAfterDispatchTerminal,
         'cardLimitMax': cardLimitMax,
         'cardLimitCount': cardLimitCount,
         if (afterQueue.isNotEmpty)
@@ -595,6 +604,8 @@ class AgentDispatchSettings {
       ignoreCardParams: json['ignoreCardParams'] as bool? ?? false,
       allowDirtyWorkspace: json['allowDirtyWorkspace'] as bool? ?? false,
       enableSandbox: json['enableSandbox'] as bool? ?? false,
+      terminateAfterDispatchTerminal:
+          json['terminateAfterDispatchTerminal'] as bool? ?? true,
       cardLimitMax: json['cardLimitMax'] as bool? ?? true,
       cardLimitCount: (json['cardLimitCount'] as num?)?.toInt() ??
           (json['maxCards'] as num?)?.toInt() ??

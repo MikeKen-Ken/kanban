@@ -238,7 +238,8 @@ function applyLiveJobOverlay(job, live) {
     engineDefaults: live.engineDefaults ?? job.engineDefaults,
     ignoreCardParams: typeof live.ignoreCardParams === "boolean" ? live.ignoreCardParams : job.ignoreCardParams,
     allowDirtyWorkspace: typeof live.allowDirtyWorkspace === "boolean" ? live.allowDirtyWorkspace : job.allowDirtyWorkspace,
-    enableSandbox: typeof live.enableSandbox === "boolean" ? live.enableSandbox : job.enableSandbox
+    enableSandbox: typeof live.enableSandbox === "boolean" ? live.enableSandbox : job.enableSandbox,
+    terminateAfterDispatchTerminal: typeof live.terminateAfterDispatchTerminal === "boolean" ? live.terminateAfterDispatchTerminal : job.terminateAfterDispatchTerminal
   };
 }
 function isReasoningParamId(id) {
@@ -2026,7 +2027,8 @@ async function runCodex(job, cancellation) {
         }
       };
       cancellation?.onCancel(killChild);
-      const terminalPoll = startPollingDispatchTerminal(
+      const terminalPoll = job.terminateAfterDispatchTerminal === false ? { stop() {
+      } } : startPollingDispatchTerminal(
         job.round.peekDispatchTerminal,
         (kind) => {
           stopAfterTerminal(`MCP ${kind}`);
@@ -3359,7 +3361,7 @@ async function runCursor(job, cancellation) {
             if (isShellSpanEvent(event)) {
               await job.round.reportShellSpan?.(event);
             }
-            if (isSuccessfulDispatchTerminalStep(step)) {
+            if (job.terminateAfterDispatchTerminal !== false && isSuccessfulDispatchTerminalStep(step)) {
               stopAfterTerminal("\u5DE5\u5177\u7ED3\u679C");
             }
           } catch (err) {
@@ -3379,7 +3381,8 @@ async function runCursor(job, cancellation) {
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => void 0);
       }
-      const terminalPoll = startPollingDispatchTerminal(
+      const terminalPoll = job.terminateAfterDispatchTerminal === false ? { stop() {
+      } } : startPollingDispatchTerminal(
         job.round.peekDispatchTerminal,
         (kind) => stopAfterTerminal(`MCP ${kind}`)
       );

@@ -337,4 +337,11 @@ describe("applyLiveJobOverlay", () => {
     assert.equal(live.cwd, job.cwd);
     assert.equal(live.cardLimit, job.cardLimit);
   });
+
+  it("保留运行中关闭收尾主动结束会话的设置", () => {
+    const live = applyLiveJobOverlay(job, {
+      terminateAfterDispatchTerminal: false,
+    });
+    assert.equal(live.terminateAfterDispatchTerminal, false);
+  });
 });

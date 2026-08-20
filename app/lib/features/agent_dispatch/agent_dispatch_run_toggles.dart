@@ -7,19 +7,23 @@ class AgentDispatchRunToggles extends StatelessWidget {
     required this.ignoreCardParams,
     required this.allowDirtyWorkspace,
     required this.enableSandbox,
+    required this.terminateAfterDispatchTerminal,
     required this.enabled,
     required this.onIgnoreCardParamsChanged,
     required this.onAllowDirtyWorkspaceChanged,
     required this.onEnableSandboxChanged,
+    required this.onTerminateAfterDispatchTerminalChanged,
   });
 
   final bool ignoreCardParams;
   final bool allowDirtyWorkspace;
   final bool enableSandbox;
+  final bool terminateAfterDispatchTerminal;
   final bool enabled;
   final ValueChanged<bool> onIgnoreCardParamsChanged;
   final ValueChanged<bool> onAllowDirtyWorkspaceChanged;
   final ValueChanged<bool> onEnableSandboxChanged;
+  final ValueChanged<bool> onTerminateAfterDispatchTerminalChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +49,12 @@ class AgentDispatchRunToggles extends StatelessWidget {
           value: enableSandbox,
           enabled: enabled,
           onChanged: onEnableSandboxChanged,
+        ),
+        _Toggle(
+          title: '收尾后主动结束会话',
+          value: terminateAfterDispatchTerminal,
+          enabled: enabled,
+          onChanged: onTerminateAfterDispatchTerminalChanged,
         ),
       ],
     );

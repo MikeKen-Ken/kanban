@@ -521,7 +521,8 @@ export async function runCursor(
             if (isShellSpanEvent(event)) {
               await job.round.reportShellSpan?.(event);
             }
-            if (isSuccessfulDispatchTerminalStep(step)) {
+            if (job.terminateAfterDispatchTerminal !== false &&
+                isSuccessfulDispatchTerminalStep(step)) {
               stopAfterTerminal("工具结果");
             }
           } catch (err) {
@@ -541,10 +542,12 @@ export async function runCursor(
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => undefined);
       }
-      const terminalPoll = startPollingDispatchTerminal(
-        job.round.peekDispatchTerminal,
-        (kind) => stopAfterTerminal(`MCP ${kind}`),
-      );
+      const terminalPoll = job.terminateAfterDispatchTerminal === false
+        ? { stop() {} }
+        : startPollingDispatchTerminal(
+          job.round.peekDispatchTerminal,
+          (kind) => stopAfterTerminal(`MCP ${kind}`),
+        );
       let result;
       let terminalEndedWithoutWait = false;
       try {

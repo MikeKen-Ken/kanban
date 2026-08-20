@@ -51,6 +51,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   bool ignoreCardParams = false,
   bool allowDirtyWorkspace = false,
   bool enableSandbox = false,
+  bool terminateAfterDispatchTerminal = true,
   String? cursorApiKey,
   String? workerScriptPath,
   void Function(String line)? onLog,

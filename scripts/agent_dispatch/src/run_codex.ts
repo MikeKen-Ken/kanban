@@ -180,13 +180,15 @@ export async function runCodex(
         }
       };
       cancellation?.onCancel(killChild);
-      const terminalPoll = startPollingDispatchTerminal(
-        job.round.peekDispatchTerminal,
-        (kind) => {
-          stopAfterTerminal(`MCP ${kind}`);
-          killChild();
-        },
-      );
+      const terminalPoll = job.terminateAfterDispatchTerminal === false
+        ? { stop() {} }
+        : startPollingDispatchTerminal(
+          job.round.peekDispatchTerminal,
+          (kind) => {
+            stopAfterTerminal(`MCP ${kind}`);
+            killChild();
+          },
+        );
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         terminalPoll.stop();
         resolvePromise(130);
