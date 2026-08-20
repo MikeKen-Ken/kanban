@@ -594,8 +594,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       if (updateError != null) throw StateError(updateError);
       if (removedAgentFollowUpTexts.isNotEmpty) {
         var markdown = _boardController
-            .findCardById(widget.card.id)
-            ?.agentConversationMarkdown;
+                .findCardById(widget.card.id)
+                ?.agentConversationMarkdown ??
+            '';
         for (final text in removedAgentFollowUpTexts) {
           markdown = removeAgentConversationUserReply(markdown, text);
         }
