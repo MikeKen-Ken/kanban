@@ -215,6 +215,7 @@ void main() {
   });
 
   testWidgets('日志窗口上方显示当前任务进度与实时状态', (tester) async {
+    final cardStarted = DateTime.now().subtract(const Duration(seconds: 11));
     final controller = TextEditingController(
       text: [
         '[09:00:00] [Worker] [信息] ──────── Worker 单卡轮次 1/12 ────────',
@@ -235,7 +236,7 @@ void main() {
             child: AgentDispatchLogPane(
               controller: controller,
               running: true,
-              progress: const AgentDispatchProgress(
+              progress: AgentDispatchProgress(
                 running: true,
                 processedCards: 0,
                 totalCards: 12,
@@ -243,6 +244,7 @@ void main() {
                 currentTitle: 'agent 工作台',
                 currentDetail: '显示进度与实时状态',
                 phaseLabel: '测试',
+                cardStartedAt: cardStarted,
               ),
               onClear: () {},
               onExport: (_) {},
@@ -266,7 +268,14 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('9秒'), findsOneWidget);
+    expect(find.text('9秒'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-dispatch-card-elapsed')),
+        matching: find.textContaining('秒'),
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('步骤 3'), findsOneWidget);
     expect(find.textContaining('cursor'), findsOneWidget);
   });

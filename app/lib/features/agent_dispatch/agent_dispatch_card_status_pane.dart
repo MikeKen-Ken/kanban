@@ -144,7 +144,13 @@ class _AgentDispatchCardStatusPaneState
           ],
           if (metrics != null) ...[
             const SizedBox(height: 8),
-            _MetricsRow(metrics: metrics, running: widget.running),
+            _MetricsRow(
+              metrics: metrics,
+              running: widget.running,
+              liveElapsedSeconds: widget.running
+                  ? widget.progress.cardElapsedSeconds()
+                  : null,
+            ),
           ],
         ],
       ),
@@ -153,10 +159,15 @@ class _AgentDispatchCardStatusPaneState
 }
 
 class _MetricsRow extends StatelessWidget {
-  const _MetricsRow({required this.metrics, required this.running});
+  const _MetricsRow({
+    required this.metrics,
+    required this.running,
+    this.liveElapsedSeconds,
+  });
 
   final AgentDispatchCardMetrics metrics;
   final bool running;
+  final int? liveElapsedSeconds;
 
   @override
   Widget build(BuildContext context) {
@@ -188,13 +199,16 @@ class _MetricsRow extends StatelessWidget {
       );
     }
 
-    if (metrics.elapsedSeconds != null) {
+    final elapsedSeconds = running && liveElapsedSeconds != null
+        ? liveElapsedSeconds
+        : metrics.elapsedSeconds;
+    if (elapsedSeconds != null) {
       chips.add(
         _MetricChip(
           key: const ValueKey('agent-dispatch-card-elapsed'),
           icon: Icons.timer_outlined,
           label: '运行',
-          value: formatAgentDispatchElapsed(metrics.elapsedSeconds!),
+          value: formatAgentDispatchElapsed(elapsedSeconds),
           color: theme.colorScheme.tertiary,
         ),
       );

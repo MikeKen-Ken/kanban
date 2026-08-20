@@ -70,6 +70,26 @@ void main() {
     expect(metrics.elapsedSeconds, 150);
   });
 
+  test('运行中忽略 Cursor 会话结束时的 elapsedMs，继续按日志时间戳估算', () {
+    final now = DateTime(2026, 8, 18, 9, 2, 30);
+    final log = [
+      '[09:00:00] [Worker] [信息] ──────── Worker 单卡轮次 1/1 ────────',
+      '[09:00:01] [系统] [信息] 当前卡片：测试卡片',
+      '[09:00:10] [Worker] [信息] Cursor run id=run-1 status=completed steps=3 tools=5 elapsedMs=9000',
+      '[09:00:20] [AI] [信息] 助手：仍在处理',
+    ].join('\n');
+
+    final metrics = AgentDispatchCardMetrics.parse(
+      log,
+      running: true,
+      now: now,
+    );
+
+    expect(metrics.elapsedSeconds, 150);
+    expect(metrics.steps, 3);
+    expect(metrics.toolCalls, 5);
+  });
+
   test('统计会话重试次数', () {
     final log = [
       '[09:00:00] [Worker] [信息] ──────── Worker 单卡轮次 1/1 ────────',

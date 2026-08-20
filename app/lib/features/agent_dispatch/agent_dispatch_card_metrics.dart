@@ -87,13 +87,19 @@ class AgentDispatchCardMetrics {
       }
     }
 
-    final elapsedSeconds = elapsedMs != null
-        ? (elapsedMs / 1000).ceil()
-        : _elapsedFromTimestamps(
-            logSlice,
-            running: running,
-            now: now ?? DateTime.now(),
-          );
+    final clock = now ?? DateTime.now();
+    final fromTimestamps = _elapsedFromTimestamps(
+      logSlice,
+      running: running,
+      now: clock,
+    );
+    // 运行中 Cursor/Codex 的 elapsedMs 是某次会话结束快照，不能当作本卡实时耗时。
+    final elapsedSeconds = running
+        ? fromTimestamps ??
+            (elapsedMs != null ? (elapsedMs / 1000).ceil() : null)
+        : elapsedMs != null
+            ? (elapsedMs / 1000).ceil()
+            : fromTimestamps;
 
     return AgentDispatchCardMetrics(
       token: token,
