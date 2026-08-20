@@ -3,9 +3,12 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'agent_dispatch_agent_shell.dart';
+import 'agent_dispatch_powershell_install.dart';
 import 'agent_dispatch_worker_heap.dart';
 
 export 'agent_dispatch_agent_shell.dart';
+export 'agent_dispatch_powershell_msi_install.dart';
+export 'agent_dispatch_powershell_install.dart';
 export 'agent_dispatch_worker_heap.dart';
 
 const _hkcuEnvironment = r'HKCU\Environment';
@@ -34,10 +37,14 @@ class WorkerEnvironmentBuild {
   const WorkerEnvironmentBuild({
     required this.environment,
     required this.summary,
+    this.error,
   });
 
   final Map<String, String> environment;
   final String summary;
+  final String? error;
+
+  bool get ok => error == null || error!.trim().isEmpty;
 }
 
 typedef RegQueryRunner = ({int exitCode, String stdout}) Function(
@@ -60,6 +67,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
   String? pathSeparator,
   int? totalPhysicalMemoryMb,
   ShellVersionRunner? shellVersionRunner,
+  PowerShellEnsureResult? powerShellEnsure,
 }) {
   final environment = <String, String>{
     for (final entry in processEnvironment.entries) entry.key: entry.value,
@@ -117,28 +125,37 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
 
   environment['Path'] = mergedPath;
   environment['PATH'] = mergedPath;
-  final gitBash = separator == ';'
-      ? resolveWindowsGitBash(
-          environment: environment,
-          separator: separator,
-          ctx: ctx,
-          fileExists: fileIsPresent,
-        )
-      : null;
-  if (gitBash != null) {
-    environment['SHELL'] = gitBash;
-    final gitBin = ctx.dirname(gitBash);
-    final withGitBin = mergePathEntries(
-      [gitBin, environment['Path'] ?? mergedPath],
+
+  PowerShellEnsureResult? resolvedEnsure = powerShellEnsure;
+  String? powerShell7;
+  String? powerShellError;
+  if (separator == ';') {
+    if (resolvedEnsure != null) {
+      powerShell7 = resolvedEnsure.executable;
+      if (!resolvedEnsure.ok) {
+        powerShellError = resolvedEnsure.error;
+      }
+    } else {
+      powerShell7 = resolveWindowsPowerShell7(
+        environment: environment,
+        separator: separator,
+        ctx: ctx,
+        fileExists: fileIsPresent,
+      );
+    }
+  }
+  if (powerShell7 != null) {
+    final pwshDir = ctx.dirname(powerShell7);
+    final withPwsh = mergePathEntries(
+      [pwshDir, environment['Path'] ?? mergedPath],
       separator: separator,
     );
-    environment['Path'] = withGitBin;
-    environment['PATH'] = withGitBin;
+    environment['Path'] = withPwsh;
+    environment['PATH'] = withPwsh;
   }
-  final agentShell = separator == ';'
+  final agentShell = separator == ';' && powerShell7 != null
       ? describeWindowsCursorAgentShell(
-          gitBash: gitBash,
-          powershellExecutable: _windowsPowerShellExecutable(environment, ctx),
+          powerShell7: powerShell7,
           readVersion: shellVersionRunner,
         )
       : null;
@@ -168,6 +185,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
       mergedWindowsPath: windowsRegistry?.hasPath ?? false,
       flutterBin: flutterBins.isEmpty ? null : flutterBins.first,
       agentShell: agentShell,
+      powerShellEnsure: resolvedEnsure,
       nodeHeapMb: parseNodeMaxOldSpaceSizeMb(environment['NODE_OPTIONS']),
       totalPhysicalMb: totalPhysicalMemoryMb,
       heapOverridden: parseNodeMaxOldSpaceSizeMb(
@@ -179,6 +197,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
               ) !=
               null,
     ),
+    error: powerShellError,
   );
 }
 
@@ -196,72 +215,6 @@ WindowsRegistryEnvironment readWindowsRegistryEnvironment({
     machineFlutterRoot: _queryRegValue(run, _hklmEnvironment, 'FLUTTER_ROOT'),
     userFlutterRoot: _queryRegValue(run, _hkcuEnvironment, 'FLUTTER_ROOT'),
   );
-}
-
-/// Cursor SDK 在 Windows 上若 `SHELL` 指向 Git Bash，会改用 bash（支持 `&&`），
-/// 而不是系统自带的 PowerShell 5.1。
-String? resolveWindowsGitBash({
-  required Map<String, String> environment,
-  required String separator,
-  required p.Context ctx,
-  required FileExists fileExists,
-}) {
-  final existing = _envValue(environment, 'SHELL');
-  if (existing != null &&
-      _looksLikeGitBash(existing) &&
-      fileExists(existing)) {
-    return existing;
-  }
-
-  final candidates = <String>[];
-  void add(String? path) {
-    final trimmed = path?.trim() ?? '';
-    if (trimmed.isEmpty) return;
-    candidates.add(trimmed);
-  }
-
-  final pathValue = _envValue(environment, 'Path') ??
-      _envValue(environment, 'PATH') ??
-      '';
-  for (final raw in pathValue.split(separator)) {
-    final dir = raw.trim();
-    if (dir.isEmpty) continue;
-    final base = ctx.basename(dir).toLowerCase();
-    if (base == 'cmd') {
-      add(ctx.join(ctx.dirname(dir), 'bin', 'bash.exe'));
-    } else if (base == 'bin') {
-      add(ctx.join(dir, 'bash.exe'));
-    }
-    add(ctx.join(dir, 'bash.exe'));
-  }
-
-  for (final name in const ['ProgramFiles', 'ProgramFiles(x86)']) {
-    final root = _envValue(environment, name);
-    if (root == null || root.trim().isEmpty) continue;
-    add(
-      ctx.join(
-        expandWindowsEnvVars(root, environment),
-        'Git',
-        'bin',
-        'bash.exe',
-      ),
-    );
-  }
-
-  final seen = <String>{};
-  for (final candidate in candidates) {
-    final key = candidate.toLowerCase();
-    if (!seen.add(key)) continue;
-    if (fileExists(candidate) && _looksLikeGitBash(candidate)) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-bool _looksLikeGitBash(String path) {
-  final normalized = path.replaceAll('\\', '/').toLowerCase();
-  return normalized.contains('git') && normalized.endsWith('bash.exe');
 }
 
 String mergePathEntries(
@@ -377,28 +330,11 @@ String? _firstNonEmpty(List<String?> values) {
   return null;
 }
 
-String _windowsPowerShellExecutable(
-  Map<String, String> environment,
-  p.Context ctx,
-) {
-  final root = _firstNonEmpty([
-    _envValue(environment, 'SystemRoot'),
-    _envValue(environment, 'WINDIR'),
-  ]);
-  if (root == null) return 'powershell.exe';
-  return ctx.join(
-    expandWindowsEnvVars(root, environment),
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe',
-  );
-}
-
 String _summary({
   required bool mergedWindowsPath,
   required String? flutterBin,
   WorkerAgentShell? agentShell,
+  PowerShellEnsureResult? powerShellEnsure,
   int? nodeHeapMb,
   int? totalPhysicalMb,
   required bool heapOverridden,
@@ -412,6 +348,9 @@ String _summary({
     buffer.write('已合并用户/系统 PATH');
   } else {
     buffer.write('沿用看板进程 PATH');
+  }
+  if (powerShellEnsure?.installAttempted == true) {
+    buffer.write('；${powerShellEnsure!.summaryFragment}');
   }
   if (agentShell != null) {
     buffer.write('；${agentShell.summaryFragment}');

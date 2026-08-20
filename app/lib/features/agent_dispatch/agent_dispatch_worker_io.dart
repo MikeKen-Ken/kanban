@@ -257,11 +257,17 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     }
     onLog?.call('启动 worker：$cli');
     onLog?.call('node：$node');
-    final workerEnv = _workerEnvironment(
+    final workerEnv = await _workerEnvironment(
       nodeExecutable: node,
       cursorApiKey: cursorApiKey,
     );
     onLog?.call(workerEnv.summary);
+    if (!workerEnv.ok) {
+      return AgentWorkerResult(
+        ok: false,
+        error: workerEnv.error,
+      );
+    }
     final process = await Process.start(
       node,
       [cli, '--job', jobFile.path],
@@ -658,10 +664,22 @@ String describeWorkerExitWithoutOutput(int code) {
 
 WindowsRegistryEnvironment? _windowsRegistryCache;
 
-WorkerEnvironmentBuild _workerEnvironment({
+Future<WorkerEnvironmentBuild> _workerEnvironment({
   required String nodeExecutable,
   String? cursorApiKey,
-}) {
+}) async {
+  PowerShellEnsureResult? powerShellEnsure;
+  if (Platform.isWindows &&
+      !parseKanbanSkipPowerShellEnsure(
+        Platform.environment['KANBAN_SKIP_PWSH_ENSURE'],
+      )) {
+    powerShellEnsure = await ensureWindowsPowerShell7(
+      environment: Platform.environment,
+      separator: ';',
+      ctx: p.windows,
+      fileExists: (path) => File(path).existsSync(),
+    );
+  }
   return buildWorkerEnvironment(
     processEnvironment: Platform.environment,
     nodeExecutable: nodeExecutable,
@@ -672,6 +690,7 @@ WorkerEnvironmentBuild _workerEnvironment({
     totalPhysicalMemoryMb:
         Platform.isWindows ? readWindowsTotalPhysicalMemoryMb() : null,
     shellVersionRunner: Platform.isWindows ? _readShellVersion : null,
+    powerShellEnsure: powerShellEnsure,
   );
 }
 

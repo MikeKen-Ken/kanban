@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_worker_environment.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   test('合并 PATH 时去重且先出现的优先', () {
@@ -215,94 +216,104 @@ HKEY_CURRENT_USER\\Environment
     expect(registry.hasPath, isTrue);
   });
 
-  test('Windows 上发现 Git Bash 时写入 SHELL 并前置其 bin', () {
+  test('Windows 上发现 PowerShell 7 时前置 pwsh 目录到 PATH', () {
+    const pwsh = r'C:\Users\me\AppData\Local\Microsoft\WindowsApps\pwsh.exe';
     final built = buildWorkerEnvironment(
       processEnvironment: const {
-        'Path': r'D:\Program Files\Git\cmd;C:\Windows',
-        'ProgramFiles': r'C:\Program Files',
-      },
-      nodeExecutable: r'C:\node\node.exe',
-      pathSeparator: ';',
-      fileExists: (path) =>
-          path == r'D:\Program Files\Git\bin\bash.exe',
-      shellVersionRunner: (executable, arguments) {
-        expect(executable, r'D:\Program Files\Git\bin\bash.exe');
-        expect(arguments, ['--version']);
-        return (
-          exitCode: 0,
-          stdout: 'GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)\n',
-        );
-      },
-    );
-
-    expect(built.environment['SHELL'], r'D:\Program Files\Git\bin\bash.exe');
-    expect(
-      built.environment['Path']!.startsWith(r'D:\Program Files\Git\bin;'),
-      isTrue,
-    );
-    expect(
-      built.summary,
-      contains(
-        r'Cursor Agent 终端：Git Bash 5.2.37（D:\Program Files\Git\bin\bash.exe）',
-      ),
-    );
-  });
-
-  test('未找到 Git Bash 时不改 SHELL，并记录系统 PowerShell 版本', () {
-    final powershell = r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe';
-    final built = buildWorkerEnvironment(
-      processEnvironment: const {
+        'LOCALAPPDATA': r'C:\Users\me\AppData\Local',
         'Path': r'C:\Windows',
-        'ProgramFiles': r'C:\Program Files',
         'SystemRoot': r'C:\Windows',
       },
       nodeExecutable: r'C:\node\node.exe',
       pathSeparator: ';',
-      fileExists: (_) => false,
+      fileExists: (path) => path == pwsh,
       shellVersionRunner: (executable, arguments) {
-        expect(executable, powershell);
+        expect(executable, pwsh);
         expect(arguments, contains(r'$PSVersionTable.PSVersion.ToString()'));
-        return (exitCode: 0, stdout: '5.1.26100.6584\r\n');
+        return (exitCode: 0, stdout: '7.6.5\r\n');
       },
     );
 
-    expect(built.environment.containsKey('SHELL'), isFalse);
-    expect(built.summary, isNot(contains('Git Bash')));
+    expect(
+      built.environment['Path']!.startsWith(
+        r'C:\Users\me\AppData\Local\Microsoft\WindowsApps;',
+      ),
+      isTrue,
+    );
     expect(
       built.summary,
-      contains(
-        'Cursor Agent 终端：Windows PowerShell 5.1.26100.6584（$powershell）',
-      ),
+      contains('Cursor Agent 终端：PowerShell 7 7.6.5（$pwsh）'),
     );
+    expect(built.ok, isTrue);
   });
 
-  test('已有 Git Bash 的 SHELL 保持原值', () {
-    const shell = r'E:\tools\Git\bin\bash.exe';
+  test('缺少 PowerShell 7 时通过 winget 安装，不再回退 5.1', () {
+    const pwsh = r'C:\Program Files\PowerShell\7\pwsh.exe';
     final built = buildWorkerEnvironment(
       processEnvironment: const {
+        'ProgramFiles': r'C:\Program Files',
         'Path': r'C:\Windows',
-        'SHELL': shell,
       },
       nodeExecutable: r'C:\node\node.exe',
       pathSeparator: ';',
-      fileExists: (path) => path == shell,
+      powerShellEnsure: PowerShellEnsureResult(
+        executable: pwsh,
+        installAttempted: true,
+        installMethod: 'winget',
+      ),
+      fileExists: (path) => path == pwsh,
+      shellVersionRunner: (executable, arguments) {
+        expect(executable, pwsh);
+        return (exitCode: 0, stdout: '7.6.5\r\n');
+      },
     );
 
-    expect(built.environment['SHELL'], shell);
-    expect(built.environment['Path']!.startsWith(r'E:\tools\Git\bin;'), isTrue);
+    expect(built.ok, isTrue);
+    expect(built.summary, contains('已通过 winget 安装 PowerShell 7'));
     expect(
       built.summary,
-      contains('Cursor Agent 终端：Git Bash（$shell，版本未知）'),
+      contains('Cursor Agent 终端：PowerShell 7 7.6.5（$pwsh）'),
     );
   });
 
-  test('解析 bash 与 PowerShell 版本输出', () {
-    expect(
-      parseBashVersion(
-        'GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)',
+  test('winget 安装失败时不回退 Windows PowerShell 5.1', () {
+    final built = buildWorkerEnvironment(
+      processEnvironment: const {
+        'ProgramFiles': r'C:\Program Files',
+        'Path': r'C:\Windows',
+      },
+      nodeExecutable: r'C:\node\node.exe',
+      pathSeparator: ';',
+      powerShellEnsure: const PowerShellEnsureResult(
+        installAttempted: true,
+        error: '未找到 PowerShell 7，自动安装也失败。',
       ),
-      '5.2.37',
+      fileExists: (_) => false,
     );
+
+    expect(built.ok, isFalse);
+    expect(built.error, contains('自动安装也失败'));
+    expect(built.summary, isNot(contains('Windows PowerShell')));
+  });
+
+  test('解析 PowerShell 版本输出', () {
+    expect(parsePowerShellVersion('7.6.5\r\n'), '7.6.5');
     expect(parsePowerShellVersion('5.1.26100.6584\r\n'), '5.1.26100.6584');
+  });
+
+  test('resolveWindowsPowerShell7 按 Cursor 终端配置顺序解析', () {
+    expect(
+      resolveWindowsPowerShell7(
+        environment: const {
+          'LOCALAPPDATA': r'C:\Users\me\AppData\Local',
+          'ProgramFiles': r'C:\Program Files',
+        },
+        separator: ';',
+        ctx: p.Context(style: p.Style.windows),
+        fileExists: (path) =>
+            path == r'C:\Program Files\PowerShell\7\pwsh.exe',
+      ),
+      r'C:\Program Files\PowerShell\7\pwsh.exe',
+    );
   });
 }

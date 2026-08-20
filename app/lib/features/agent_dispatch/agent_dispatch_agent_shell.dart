@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as p;
+
 /// Cursor Agent 实际选用的终端，供调度日志展示名称与版本。
 class WorkerAgentShell {
   const WorkerAgentShell({
@@ -25,31 +27,23 @@ typedef ShellVersionRunner = ({int exitCode, String stdout}) Function(
   List<String> arguments,
 );
 
-/// Windows 上 Cursor SDK 的终端：优先 Git Bash，否则为系统 PowerShell 5.1。
+typedef ShellFileExists = bool Function(String path);
+
+/// Windows 上 Cursor SDK 的终端：PowerShell 7（pwsh）。
+///
+/// Cursor Agent 不读取 IDE 的 terminal 设置，而是在 PATH 中查找 `pwsh`；
+/// 因此 Worker 需把 pwsh 所在目录前置到 PATH，才能稳定选中 PS7。
 WorkerAgentShell describeWindowsCursorAgentShell({
-  required String? gitBash,
-  required String powershellExecutable,
+  required String powerShell7,
   ShellVersionRunner? readVersion,
 }) {
-  final bash = gitBash?.trim() ?? '';
-  if (bash.isNotEmpty) {
-    return WorkerAgentShell(
-      displayName: 'Git Bash',
-      executable: bash,
-      version: readShellVersion(
-        readVersion,
-        bash,
-        const ['--version'],
-        parseBashVersion,
-      ),
-    );
-  }
+  final executable = powerShell7.trim();
   return WorkerAgentShell(
-    displayName: 'Windows PowerShell',
-    executable: powershellExecutable,
+    displayName: 'PowerShell 7',
+    executable: executable,
     version: readShellVersion(
       readVersion,
-      powershellExecutable,
+      executable,
       const [
         '-NoProfile',
         '-NonInteractive',
@@ -59,6 +53,70 @@ WorkerAgentShell describeWindowsCursorAgentShell({
       parsePowerShellVersion,
     ),
   );
+}
+
+/// 按 Cursor 集成终端「PowerShell 7」配置的候选顺序解析 pwsh.exe。
+String? resolveWindowsPowerShell7({
+  required Map<String, String> environment,
+  required String separator,
+  required p.Context ctx,
+  required ShellFileExists fileExists,
+}) {
+  final candidates = <String>[];
+  void add(String? path) {
+    final trimmed = path?.trim() ?? '';
+    if (trimmed.isEmpty) return;
+    candidates.add(trimmed);
+  }
+
+  final localAppData = _envValue(environment, 'LOCALAPPDATA');
+  if (localAppData != null && localAppData.trim().isNotEmpty) {
+    add(
+      ctx.join(
+        _expandWindowsEnvVars(localAppData, environment),
+        'Microsoft',
+        'WindowsApps',
+        'pwsh.exe',
+      ),
+    );
+  }
+
+  for (final name in const ['ProgramFiles', 'ProgramFiles(x86)']) {
+    final root = _envValue(environment, name);
+    if (root == null || root.trim().isEmpty) continue;
+    add(
+      ctx.join(
+        _expandWindowsEnvVars(root, environment),
+        'PowerShell',
+        '7',
+        'pwsh.exe',
+      ),
+    );
+  }
+
+  final pathValue = _envValue(environment, 'Path') ??
+      _envValue(environment, 'PATH') ??
+      '';
+  for (final raw in pathValue.split(separator)) {
+    final dir = raw.trim();
+    if (dir.isEmpty) continue;
+    add(ctx.join(dir, 'pwsh.exe'));
+  }
+
+  final seen = <String>{};
+  for (final candidate in candidates) {
+    final key = candidate.toLowerCase();
+    if (!seen.add(key)) continue;
+    if (fileExists(candidate) && _looksLikePwsh(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+bool _looksLikePwsh(String path) {
+  final normalized = path.replaceAll('\\', '/').toLowerCase();
+  return normalized.endsWith('pwsh.exe');
 }
 
 String? readShellVersion(
@@ -77,14 +135,6 @@ String? readShellVersion(
   }
 }
 
-String? parseBashVersion(String stdout) {
-  final match = RegExp(
-    r'version\s+(\d+\.\d+(?:\.\d+)?)',
-    caseSensitive: false,
-  ).firstMatch(stdout);
-  return match?.group(1);
-}
-
 String? parsePowerShellVersion(String stdout) {
   final line = stdout
       .split(RegExp(r'\r?\n'))
@@ -93,4 +143,22 @@ String? parsePowerShellVersion(String stdout) {
   if (line.isEmpty) return null;
   if (!RegExp(r'^\d+\.\d+').hasMatch(line)) return null;
   return line;
+}
+
+String? _envValue(Map<String, String> environment, String name) {
+  final direct = environment[name];
+  if (direct != null) return direct;
+  for (final entry in environment.entries) {
+    if (entry.key.toLowerCase() == name.toLowerCase()) return entry.value;
+  }
+  return null;
+}
+
+String _expandWindowsEnvVars(String raw, Map<String, String> environment) {
+  if (!raw.contains('%')) return raw;
+  return raw.replaceAllMapped(RegExp(r'%([^%]+)%'), (match) {
+    final name = match.group(1)!;
+    final value = _envValue(environment, name);
+    return (value == null || value.isEmpty) ? match.group(0)! : value;
+  });
 }
