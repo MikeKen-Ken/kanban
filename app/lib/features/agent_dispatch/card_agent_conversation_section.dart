@@ -218,10 +218,10 @@ class _CardAgentConversationDialogState
       child: Stack(
         children: [
           Positioned.fill(
-            child: GestureDetector(
+            child: Listener(
               key: const ValueKey('card-agent-conversation-barrier'),
-              behavior: HitTestBehavior.opaque,
-              onTap: _onBarrierTap,
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) => _onBarrierTap(),
             ),
           ),
           AlertDialog(
