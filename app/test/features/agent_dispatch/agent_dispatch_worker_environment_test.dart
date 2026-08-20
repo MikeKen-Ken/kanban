@@ -225,6 +225,14 @@ HKEY_CURRENT_USER\\Environment
       pathSeparator: ';',
       fileExists: (path) =>
           path == r'D:\Program Files\Git\bin\bash.exe',
+      shellVersionRunner: (executable, arguments) {
+        expect(executable, r'D:\Program Files\Git\bin\bash.exe');
+        expect(arguments, ['--version']);
+        return (
+          exitCode: 0,
+          stdout: 'GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)\n',
+        );
+      },
     );
 
     expect(built.environment['SHELL'], r'D:\Program Files\Git\bin\bash.exe');
@@ -232,23 +240,40 @@ HKEY_CURRENT_USER\\Environment
       built.environment['Path']!.startsWith(r'D:\Program Files\Git\bin;'),
       isTrue,
     );
-    expect(built.summary, contains('Git Bash'));
-    expect(built.summary, contains(r'D:\Program Files\Git\bin\bash.exe'));
+    expect(
+      built.summary,
+      contains(
+        r'Cursor Agent 终端：Git Bash 5.2.37（D:\Program Files\Git\bin\bash.exe）',
+      ),
+    );
   });
 
-  test('未找到 Git Bash 时不改 SHELL', () {
+  test('未找到 Git Bash 时不改 SHELL，并记录系统 PowerShell 版本', () {
+    final powershell = r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe';
     final built = buildWorkerEnvironment(
       processEnvironment: const {
         'Path': r'C:\Windows',
         'ProgramFiles': r'C:\Program Files',
+        'SystemRoot': r'C:\Windows',
       },
       nodeExecutable: r'C:\node\node.exe',
       pathSeparator: ';',
       fileExists: (_) => false,
+      shellVersionRunner: (executable, arguments) {
+        expect(executable, powershell);
+        expect(arguments, contains(r'$PSVersionTable.PSVersion.ToString()'));
+        return (exitCode: 0, stdout: '5.1.26100.6584\r\n');
+      },
     );
 
     expect(built.environment.containsKey('SHELL'), isFalse);
     expect(built.summary, isNot(contains('Git Bash')));
+    expect(
+      built.summary,
+      contains(
+        'Cursor Agent 终端：Windows PowerShell 5.1.26100.6584（$powershell）',
+      ),
+    );
   });
 
   test('已有 Git Bash 的 SHELL 保持原值', () {
@@ -265,5 +290,19 @@ HKEY_CURRENT_USER\\Environment
 
     expect(built.environment['SHELL'], shell);
     expect(built.environment['Path']!.startsWith(r'E:\tools\Git\bin;'), isTrue);
+    expect(
+      built.summary,
+      contains('Cursor Agent 终端：Git Bash（$shell，版本未知）'),
+    );
+  });
+
+  test('解析 bash 与 PowerShell 版本输出', () {
+    expect(
+      parseBashVersion(
+        'GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)',
+      ),
+      '5.2.37',
+    );
+    expect(parsePowerShellVersion('5.1.26100.6584\r\n'), '5.1.26100.6584');
   });
 }

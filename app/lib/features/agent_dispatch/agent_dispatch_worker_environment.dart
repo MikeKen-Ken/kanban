@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'agent_dispatch_agent_shell.dart';
 import 'agent_dispatch_worker_heap.dart';
 
+export 'agent_dispatch_agent_shell.dart';
 export 'agent_dispatch_worker_heap.dart';
 
 const _hkcuEnvironment = r'HKCU\Environment';
@@ -57,6 +59,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
   FileExists? fileExists,
   String? pathSeparator,
   int? totalPhysicalMemoryMb,
+  ShellVersionRunner? shellVersionRunner,
 }) {
   final environment = <String, String>{
     for (final entry in processEnvironment.entries) entry.key: entry.value,
@@ -132,6 +135,13 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
     environment['Path'] = withGitBin;
     environment['PATH'] = withGitBin;
   }
+  final agentShell = separator == ';'
+      ? describeWindowsCursorAgentShell(
+          gitBash: gitBash,
+          powershellExecutable: _windowsPowerShellExecutable(environment, ctx),
+          readVersion: shellVersionRunner,
+        )
+      : null;
   if (flutterRoot != null && flutterRoot.trim().isNotEmpty) {
     environment['FLUTTER_ROOT'] = expandWindowsEnvVars(flutterRoot, environment);
   } else if (flutterBins.isNotEmpty) {
@@ -157,7 +167,7 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
     summary: _summary(
       mergedWindowsPath: windowsRegistry?.hasPath ?? false,
       flutterBin: flutterBins.isEmpty ? null : flutterBins.first,
-      gitBash: gitBash,
+      agentShell: agentShell,
       nodeHeapMb: parseNodeMaxOldSpaceSizeMb(environment['NODE_OPTIONS']),
       totalPhysicalMb: totalPhysicalMemoryMb,
       heapOverridden: parseNodeMaxOldSpaceSizeMb(
@@ -367,10 +377,28 @@ String? _firstNonEmpty(List<String?> values) {
   return null;
 }
 
+String _windowsPowerShellExecutable(
+  Map<String, String> environment,
+  p.Context ctx,
+) {
+  final root = _firstNonEmpty([
+    _envValue(environment, 'SystemRoot'),
+    _envValue(environment, 'WINDIR'),
+  ]);
+  if (root == null) return 'powershell.exe';
+  return ctx.join(
+    expandWindowsEnvVars(root, environment),
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe',
+  );
+}
+
 String _summary({
   required bool mergedWindowsPath,
   required String? flutterBin,
-  String? gitBash,
+  WorkerAgentShell? agentShell,
   int? nodeHeapMb,
   int? totalPhysicalMb,
   required bool heapOverridden,
@@ -385,8 +413,8 @@ String _summary({
   } else {
     buffer.write('沿用看板进程 PATH');
   }
-  if (gitBash != null && gitBash.trim().isNotEmpty) {
-    buffer.write('；Cursor Agent Shell 使用 Git Bash（$gitBash）');
+  if (agentShell != null) {
+    buffer.write('；${agentShell.summaryFragment}');
   }
   if (nodeHeapMb != null) {
     buffer.write('；Node 堆上限 ${nodeHeapMb}MB');

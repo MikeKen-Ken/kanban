@@ -671,7 +671,25 @@ WorkerEnvironmentBuild _workerEnvironment({
         : null,
     totalPhysicalMemoryMb:
         Platform.isWindows ? readWindowsTotalPhysicalMemoryMb() : null,
+    shellVersionRunner: Platform.isWindows ? _readShellVersion : null,
   );
+}
+
+({int exitCode, String stdout}) _readShellVersion(
+  String executable,
+  List<String> arguments,
+) {
+  try {
+    final result = Process.runSync(
+      executable,
+      arguments,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    return (exitCode: result.exitCode, stdout: result.stdout.toString());
+  } catch (_) {
+    return (exitCode: 1, stdout: '');
+  }
 }
 
 Future<String?> _resolveNodeExecutable({
