@@ -3483,7 +3483,10 @@ async function runCursor(job, cancellation) {
       return { ok: result.status === "finished", summary };
     } finally {
       stopScanLog();
-      if (agent) await settleWithin(8e3, agent[Symbol.asyncDispose]());
+      if (agent) {
+        const disposeMs = cancellation?.isCancelled || cancellation?.isSkipRequested ? 500 : 8e3;
+        await settleWithin(disposeMs, agent[Symbol.asyncDispose]());
+      }
     }
   } catch (err) {
     if (cancellation?.isSkipRequested) {

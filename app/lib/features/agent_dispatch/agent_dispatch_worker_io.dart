@@ -114,9 +114,8 @@ class AgentWorkerProcess {
       try {
         await File(cancelFile).writeAsString('');
       } catch (_) {}
-      // 给 Worker 协作式停止（run.cancel / cancelFile）留出短暂窗口。
-      await Future<void>.delayed(const Duration(milliseconds: 400));
     }
+    // 立即停止：Windows Job + taskkill 会终止 Worker 与子进程树，不再等待协作式 cancel。
     _windowsJob?.dispose();
     _windowsJob = null;
     if (Platform.isWindows) {
@@ -127,7 +126,7 @@ class AgentWorkerProcess {
       );
       return;
     }
-    _process.kill(ProcessSignal.sigterm);
+    _process.kill(ProcessSignal.sigkill);
   }
 
   /// Worker 正常结束后释放 Job 句柄；若仍有意外存活的子进程则一并终止。

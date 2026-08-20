@@ -129,8 +129,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     );
   }
 
-  void _onServiceRunningChanged() {
-    if (!mounted) return;
+  void _syncRunningFromService() {
     final running = _service.isRunning;
     setState(() {
       _running = running;
@@ -146,6 +145,11 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     } else {
       _stopHeartbeat();
     }
+  }
+
+  void _onServiceRunningChanged() {
+    if (!mounted) return;
+    _syncRunningFromService();
   }
 
   Future<void> _bootstrap() async {
@@ -698,6 +702,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       ),
     );
     if (!mounted) return;
+    _syncRunningFromService();
     if (result.ok) {
       _appendLog(result.summary ?? '完成', level: AgentDispatchLogLevel.success);
     } else if (result.error == '已取消') {
@@ -1090,7 +1095,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     await _service.requestSkipToNext(
                       boardController: context.read<BoardController>(),
                     );
-                    if (mounted) setState(() {});
+                    if (mounted) _syncRunningFromService();
                   },
             child: Text(_skipping ? '正在切换…' : '下一个'),
           ),
@@ -1104,7 +1109,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                       level: AgentDispatchLogLevel.warning,
                     );
                     await _service.requestDrainAfterCurrent();
-                    if (mounted) setState(() {});
+                    if (mounted) _syncRunningFromService();
                   },
             child: Text(_drainPending ? '当前会话后停止中…' : '当前会话后停止'),
           ),
@@ -1118,7 +1123,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                       level: AgentDispatchLogLevel.warning,
                     );
                     await _service.requestCancel();
-                    if (mounted) setState(() {});
+                    if (mounted) _syncRunningFromService();
                   },
             child: Text(_stopping ? '正在停止…' : '立即停止'),
           ),

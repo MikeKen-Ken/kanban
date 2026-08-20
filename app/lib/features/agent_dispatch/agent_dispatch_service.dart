@@ -293,6 +293,8 @@ class AgentDispatchService {
   Future<void> requestCancel() async {
     _cancelRequested = true;
     _markNoFurtherCards();
+    _pendingInteraction = null;
+    _notifyInteraction();
     final worker = _activeWorker;
     if (worker != null) await worker.stop();
   }
@@ -441,7 +443,11 @@ class AgentDispatchService {
       }
       return result;
     } finally {
-      await _conversationSaveQueue;
+      if (_cancelRequested) {
+        unawaited(_conversationSaveQueue.catchError((_) {}));
+      } else {
+        await _conversationSaveQueue;
+      }
       _activeRepoPath = null;
       _boardController = null;
       _pendingInteraction = null;
@@ -568,6 +574,7 @@ class AgentDispatchService {
           if (_cancelRequested) unawaited(worker.stop());
         },
         onInteraction: (event) {
+          if (_cancelRequested) return;
           _handleInteraction(boardController, event);
         },
         onLog: (line) {
@@ -654,6 +661,7 @@ class AgentDispatchService {
     BoardController boardController,
     AgentInteractionEvent event,
   ) {
+    if (_cancelRequested) return;
     if (event.awaitsReply) {
       _pendingInteraction = event;
       _notifyInteraction();
