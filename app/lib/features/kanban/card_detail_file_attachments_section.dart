@@ -24,7 +24,14 @@ IconData iconForFileAttachment(String fileName) {
     'txt' || 'md' || 'markdown' => Icons.description_outlined,
     'pdf' => Icons.picture_as_pdf_outlined,
     'json' || 'yaml' || 'yml' || 'xml' => Icons.data_object_outlined,
-    'dart' || 'js' || 'ts' || 'py' || 'sh' || 'ps1' || 'bat' || 'cmd' =>
+    'dart' ||
+    'js' ||
+    'ts' ||
+    'py' ||
+    'sh' ||
+    'ps1' ||
+    'bat' ||
+    'cmd' =>
       Icons.terminal_outlined,
     'zip' => Icons.folder_zip_outlined,
     _ => Icons.insert_drive_file_outlined,
@@ -102,6 +109,20 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
     showAppSnackBar(context, message: error);
   }
 
+  Future<void> _openAttachmentDirectory(
+    BuildContext context,
+    CardFileAttachment attachment,
+  ) async {
+    final error =
+        await context.read<BoardController>().openCardFileAttachmentDirectory(
+              columnId,
+              cardId,
+              attachment.id,
+            );
+    if (!context.mounted || error == null) return;
+    showAppSnackBar(context, message: error);
+  }
+
   Future<void> _removeAttachment(
     BuildContext context,
     String attachmentId,
@@ -115,7 +136,10 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
           attachmentId,
         );
     if (!context.mounted) return;
-    final updated = context.read<BoardController>().board?.columns
+    final updated = context
+        .read<BoardController>()
+        .board
+        ?.columns
         .where((col) => col.id == columnId)
         .expand((col) => col.cards)
         .where((card) => card.id == cardId)
@@ -154,8 +178,7 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () =>
-                      context.read<BoardController>().mergeNow(),
+                  onPressed: () => context.read<BoardController>().mergeNow(),
                   child: const Text('合并同步'),
                 ),
               ],
@@ -187,6 +210,8 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
                     onSelected: (action) async {
                       if (action == 'open') {
                         await _openAttachment(context, attachment);
+                      } else if (action == 'directory') {
+                        await _openAttachmentDirectory(context, attachment);
                       } else if (action == 'delete') {
                         await _removeAttachment(context, attachment.id);
                       }
@@ -198,6 +223,15 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
                           child: ListTile(
                             leading: Icon(Icons.open_in_new_outlined),
                             title: Text('打开'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      if (!missing)
+                        const PopupMenuItem(
+                          value: 'directory',
+                          child: ListTile(
+                            leading: Icon(Icons.folder_open_outlined),
+                            title: Text('打开所在文件夹'),
                             contentPadding: EdgeInsets.zero,
                           ),
                         ),
@@ -217,7 +251,9 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
                       ),
                     ],
                   ),
-                  onTap: missing ? null : () => _openAttachment(context, attachment),
+                  onTap: missing
+                      ? null
+                      : () => _openAttachment(context, attachment),
                 ),
               );
             },
