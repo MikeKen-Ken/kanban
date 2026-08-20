@@ -111,13 +111,17 @@ class _CardAgentConversationDialogState
       Navigator.of(context).pop();
       return;
     }
-    await _send();
+    // 先关闭界面，再在后台完成持久化，避免空白处点击一直等待磁盘写入。
+    await _send(closeDialogImmediately: true);
   }
 
-  Future<void> _send() async {
+  Future<void> _send({bool closeDialogImmediately = false}) async {
     final text = _input.text.trim();
     if (_sending || text.isEmpty) return;
     setState(() => _sending = true);
+    if (closeDialogImmediately && mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
     try {
       final pending = _service.pendingInteraction;
       if (pending?.cardId == widget.cardId) {
