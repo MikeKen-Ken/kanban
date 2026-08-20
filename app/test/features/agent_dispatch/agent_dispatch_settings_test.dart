@@ -25,6 +25,7 @@ void main() {
     expect(settings.ignoreCardParams, isFalse);
     expect(settings.allowDirtyWorkspace, isFalse);
     expect(settings.enableSandbox, isFalse);
+    expect(settings.requireTests, isFalse);
     expect(
       settings.toRunOptions(projectTitleOf: (_) => null).cardLimit,
       isA<AgentDispatchCardLimitMax>(),
@@ -50,6 +51,7 @@ void main() {
     expect(settings.cardLimitMax, isTrue);
     expect(settings.allowDirtyWorkspace, isFalse);
     expect(settings.enableSandbox, isFalse);
+    expect(settings.requireTests, isFalse);
   });
 
   test('加载设置时记住是否勾选全部以及张数', () {
@@ -170,6 +172,7 @@ disable-model-invocation: true
       ignoreCardParams: true,
       allowDirtyWorkspace: true,
       enableSandbox: true,
+      requireTests: true,
       terminateAfterDispatchTerminal: false,
     );
     final opts = settings.toRunOptions(
@@ -186,6 +189,7 @@ disable-model-invocation: true
     expect(opts.ignoreCardParams, isTrue);
     expect(opts.allowDirtyWorkspace, isTrue);
     expect(opts.enableSandbox, isTrue);
+    expect(opts.requireTests, isTrue);
     expect(opts.terminateAfterDispatchTerminal, isFalse);
     expect(opts.engine, AgentDispatchEngine.cursor);
     expect(opts.engineDefaults['cursor']?.modelId, 'composer-2.5');
@@ -290,6 +294,7 @@ disable-model-invocation: true
       modelParamValues: {'fast': 'false', 'effort': 'high'},
       allowDirtyWorkspace: true,
       enableSandbox: true,
+      requireTests: true,
       terminateAfterDispatchTerminal: false,
     );
     final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
@@ -300,6 +305,7 @@ disable-model-invocation: true
     expect(roundTrip.ignoreCardParams, isFalse);
     expect(roundTrip.allowDirtyWorkspace, isTrue);
     expect(roundTrip.enableSandbox, isTrue);
+    expect(roundTrip.requireTests, isTrue);
     expect(roundTrip.terminateAfterDispatchTerminal, isFalse);
     expect(original.toJson(), isNot(contains('cursorApiKey')));
   });

@@ -338,9 +338,9 @@ class _CardDetailAgentModelSectionState
               ),
               _compactToggle(
                 label: '需要测试',
-                value: widget.agentRequireTests != false,
+                value: widget.agentRequireTests == true,
                 onChanged: (value) => _emit(
-                  agentRequireTests: value ? null : false,
+                  agentRequireTests: value ? true : null,
                 ),
               ),
             ],

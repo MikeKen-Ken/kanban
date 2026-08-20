@@ -97,6 +97,7 @@ class AgentDispatchService {
       'ignoreCardParams': options.ignoreCardParams,
       'allowDirtyWorkspace': options.allowDirtyWorkspace,
       'enableSandbox': options.enableSandbox,
+      'requireTests': options.requireTests,
       'terminateAfterDispatchTerminal': options.terminateAfterDispatchTerminal,
     }));
   }
@@ -565,6 +566,7 @@ class AgentDispatchService {
         ignoreCardParams: options.ignoreCardParams,
         allowDirtyWorkspace: options.allowDirtyWorkspace,
         enableSandbox: options.enableSandbox,
+        requireTests: options.requireTests,
         terminateAfterDispatchTerminal: options.terminateAfterDispatchTerminal,
         cursorApiKey: cursorApiKey,
         workerScriptPath: workerScriptPath,

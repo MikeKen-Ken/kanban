@@ -345,6 +345,14 @@ describe("applyLiveJobOverlay", () => {
     assert.equal(merged.requireTests, false);
   });
 
+  it("卡片开启测试时覆盖工作台默认", () => {
+    const merged = mergeJobWithCardOverrides(
+      { ...job, requireTests: false },
+      { agentRequireTests: true },
+    );
+    assert.equal(merged.requireTests, true);
+  });
+
   it("禁止卡片参数时仍要求测试", () => {
     const merged = mergeJobWithCardOverrides(
       { ...job, ignoreCardParams: true },

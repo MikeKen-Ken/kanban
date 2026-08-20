@@ -331,7 +331,7 @@ function mergeJobWithCardOverrides(job, claim) {
     modelParams: [...byId.values()],
     allowDirtyWorkspace: job.allowDirtyWorkspace === true || isTrueFlag(claim.agentAllowDirtyWorkspace),
     enableSandbox: job.enableSandbox === true || isTrueFlag(claim.agentEnableSandbox),
-    requireTests: claim.agentRequireTests === false ? false : job.requireTests
+    requireTests: claim.agentRequireTests === false ? false : isTrueFlag(claim.agentRequireTests) ? true : job.requireTests
   };
 }
 function isTrueFlag(raw) {

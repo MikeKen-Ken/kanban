@@ -35,6 +35,16 @@ void main() {
     expect(find.text('允许脏工作区'), findsOneWidget);
     expect(find.text('开沙箱'), findsOneWidget);
     expect(find.text('需要测试'), findsOneWidget);
+    final requireTestsCheckbox = tester.widgetList<Checkbox>(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text('需要测试'),
+          matching: find.byType(InkWell),
+        ),
+        matching: find.byType(Checkbox),
+      ),
+    );
+    expect(requireTestsCheckbox.single.value, isFalse);
     expect(find.textContaining('未提交改动'), findsNothing);
     expect(find.textContaining('沿用工作台'), findsNothing);
     expect(find.byType(SwitchListTile), findsNothing);

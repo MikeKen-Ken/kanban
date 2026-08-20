@@ -1,28 +1,32 @@
 import 'package:flutter/material.dart';
 
-/// 工作台运行开关：卡片覆盖、脏工作区与沙箱策略。
+/// 工作台运行开关：卡片覆盖、脏工作区、沙箱与测试策略。
 class AgentDispatchRunToggles extends StatelessWidget {
   const AgentDispatchRunToggles({
     super.key,
     required this.ignoreCardParams,
     required this.allowDirtyWorkspace,
     required this.enableSandbox,
+    required this.requireTests,
     required this.terminateAfterDispatchTerminal,
     required this.enabled,
     required this.onIgnoreCardParamsChanged,
     required this.onAllowDirtyWorkspaceChanged,
     required this.onEnableSandboxChanged,
+    required this.onRequireTestsChanged,
     required this.onTerminateAfterDispatchTerminalChanged,
   });
 
   final bool ignoreCardParams;
   final bool allowDirtyWorkspace;
   final bool enableSandbox;
+  final bool requireTests;
   final bool terminateAfterDispatchTerminal;
   final bool enabled;
   final ValueChanged<bool> onIgnoreCardParamsChanged;
   final ValueChanged<bool> onAllowDirtyWorkspaceChanged;
   final ValueChanged<bool> onEnableSandboxChanged;
+  final ValueChanged<bool> onRequireTestsChanged;
   final ValueChanged<bool> onTerminateAfterDispatchTerminalChanged;
 
   @override
@@ -49,6 +53,12 @@ class AgentDispatchRunToggles extends StatelessWidget {
           value: enableSandbox,
           enabled: enabled,
           onChanged: onEnableSandboxChanged,
+        ),
+        _Toggle(
+          title: '需要测试',
+          value: requireTests,
+          enabled: enabled,
+          onChanged: onRequireTestsChanged,
         ),
         _Toggle(
           title: '收尾后主动结束会话',

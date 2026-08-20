@@ -88,6 +88,7 @@ class AgentDispatchRunOptions {
     this.ignoreCardParams = false,
     this.allowDirtyWorkspace = false,
     this.enableSandbox = false,
+    this.requireTests = false,
     this.terminateAfterDispatchTerminal = true,
   });
 
@@ -118,6 +119,9 @@ class AgentDispatchRunOptions {
 
   /// 为 true 时开启 Cursor SDK 沙箱；默认 false。
   final bool enableSandbox;
+
+  /// 为 true 时要求 Agent 执行自动化测试；默认 false。
+  final bool requireTests;
 
   /// 为 true 时，收尾工具成功落盘后主动结束 Agent 会话；默认 true。
   final bool terminateAfterDispatchTerminal;

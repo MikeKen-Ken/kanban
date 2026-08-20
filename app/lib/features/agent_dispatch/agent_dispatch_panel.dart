@@ -247,6 +247,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           ignoreCardParams: synced.ignoreCardParams,
           allowDirtyWorkspace: synced.allowDirtyWorkspace,
           enableSandbox: synced.enableSandbox,
+          requireTests: synced.requireTests,
           terminateAfterDispatchTerminal: synced.terminateAfterDispatchTerminal,
           cardLimitMax: synced.cardLimitMax,
           cardLimitCount: synced.cardLimitCount,
@@ -965,6 +966,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 ignoreCardParams: _settings.ignoreCardParams,
                 allowDirtyWorkspace: _settings.allowDirtyWorkspace,
                 enableSandbox: _settings.enableSandbox,
+                requireTests: _settings.requireTests,
                 terminateAfterDispatchTerminal:
                     _settings.terminateAfterDispatchTerminal,
                 enabled: !_busy,
@@ -976,6 +978,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 ),
                 onEnableSandboxChanged: (value) => _persist(
                   _settings.copyWith(enableSandbox: value),
+                ),
+                onRequireTestsChanged: (value) => _persist(
+                  _settings.copyWith(requireTests: value),
                 ),
                 onTerminateAfterDispatchTerminalChanged: (value) => _persist(
                   _settings.copyWith(terminateAfterDispatchTerminal: value),

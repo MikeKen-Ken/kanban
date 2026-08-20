@@ -543,7 +543,7 @@ class KanbanCard {
   /// 本卡是否开启 Agent 沙箱；null 表示沿用工作台（默认关闭）。
   final bool? agentEnableSandbox;
 
-  /// 本卡是否要求 Agent 执行自动化测试；null 表示需要测试（兼容旧卡）。
+  /// 本卡是否要求 Agent 执行自动化测试；null 表示沿用工作台默认。
   final bool? agentRequireTests;
 
   /// 与本卡绑定的 Agent 对话记录。Markdown 正文随卡片和 WebDAV 同步。
