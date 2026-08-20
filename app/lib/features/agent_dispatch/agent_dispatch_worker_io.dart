@@ -7,6 +7,7 @@ import 'agent_dispatch_config.dart';
 import 'agent_interaction.dart';
 import 'agent_dispatch_usage.dart';
 import 'agent_dispatch_windows_job.dart';
+import 'agent_dispatch_powershell_install.dart';
 import 'agent_dispatch_worker_environment.dart';
 import 'agent_dispatch_worker_memory.dart';
 import 'agent_worker_health.dart';
@@ -210,8 +211,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     return AgentWorkerResult(ok: false, error: health.error);
   }
 
-  final workerCwd =
-      cwd.trim().isEmpty ? Directory.systemTemp.path : cwd.trim();
+  final workerCwd = cwd.trim().isEmpty ? Directory.systemTemp.path : cwd.trim();
   final tempDir = await Directory.systemTemp.createTemp('kanban_agent_');
   final jobFile = File(p.join(tempDir.path, 'job.json'));
   final outFile = File(p.join(tempDir.path, 'out.json'));
@@ -435,7 +435,8 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
   final environment = (await _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
-  )).environment;
+  ))
+      .environment;
   onLog?.call('拉取模型列表…');
   final result = await Process.run(
     node,
@@ -485,7 +486,8 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
   final environment = (await _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
-  )).environment;
+  ))
+      .environment;
   onLog?.call('拉取 Cursor 额度…');
   final result = await Process.run(
     node,
@@ -682,7 +684,18 @@ Future<WorkerEnvironmentBuild> _workerEnvironment({
       environment: Platform.environment,
       separator: ';',
       ctx: p.windows,
-      fileExists: (path) => File(path).existsSync(),
+      fileExists: (path) => canRunWindowsExecutable(
+        path,
+        arguments: path.toLowerCase().endsWith('pwsh.exe')
+            ? const <String>[
+                '-NoLogo',
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                r'exit 0',
+              ]
+            : const <String>['--version'],
+      ),
     );
   }
   return buildWorkerEnvironment(

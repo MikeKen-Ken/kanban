@@ -90,6 +90,20 @@ String? resolveWingetExecutable({
   return null;
 }
 
+/// Windows 应用执行别名可能是 reparse point，Dart 的 File.existsSync()
+/// 在部分 GUI 进程中无法可靠识别；此时通过实际启动结果确认可用性。
+bool canRunWindowsExecutable(
+  String executable, {
+  List<String> arguments = const <String>[],
+}) {
+  try {
+    final result = Process.runSync(executable, arguments);
+    return result.exitCode == 0;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// 确保本机可用 PowerShell 7：已安装则直接返回；否则 winget → MSI 依次尝试。
 Future<PowerShellEnsureResult> ensureWindowsPowerShell7({
   required Map<String, String> environment,
