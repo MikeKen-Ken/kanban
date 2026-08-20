@@ -9,8 +9,9 @@ export type CursorSdkScanLog = {
 
 /**
  * SDK 本地运行会先扫描用户主目录（含内置 `skills-cursor`），再按
- * `settingSources` 的 allowedRoots 过滤。`project` 只有仓库路径，
- * 用户 Skill / 用户 Rule 不会作为 SDK 层进入模型。
+ * `settingSources` 的 allowedRoots 过滤。Worker 启用 `project,user`：
+ * SDK 会保留用户和仓库中的 Skill，并按其 frontmatter 触发条件选择；
+ * 用户 Rule 仍会由 Worker 注入完整文本。
  */
 export function parseCursorSdkScanLog(line: string): CursorSdkScanLog | undefined {
   const text = line.trim();
@@ -35,13 +36,13 @@ export function formatCursorSdkScanNote(scan: CursorSdkScanLog): string {
     const count = formatCount(scan.skillCount ?? scan.ruleCount);
     return (
       `SDK 扫描 Skill：${count}（含本机 ~/.cursor/skills-cursor 内置），` +
-      "这是过滤前的扫描数；settingSources=project 只注入仓库内 Skill"
+      "这是可供 Cursor 按触发条件选择的 Skill；不会将全部 Skill 正文同时注入"
     );
   }
   const count = formatCount(scan.ruleCount);
   return (
     `SDK 扫描 Rule：${count}，这是过滤前的扫描数；` +
-    "settingSources=project 只注入仓库内规则（用户 Rule 已由 Worker 写入 prompt）"
+    "用户 Rule 已由 Worker 写入 prompt；SDK 同时加载项目与用户设置层"
   );
 }
 

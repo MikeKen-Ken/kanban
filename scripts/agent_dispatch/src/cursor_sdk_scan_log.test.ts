@@ -19,7 +19,7 @@ describe("parseCursorSdkScanLog", () => {
     });
     assert.match(
       formatCursorSdkScanNote(scan!),
-      /SDK 扫描 Skill：24 个.*过滤前的扫描数.*只注入仓库内 Skill/,
+      /SDK 扫描 Skill：24 个.*触发条件选择.*不会将全部 Skill 正文同时注入/,
     );
   });
 
@@ -42,20 +42,20 @@ describe("parseCursorSdkScanLog", () => {
 describe("isAllowedByProjectSettingSource", () => {
   const project = "C:/Users/me/Projects/kanban";
 
-  it("丢掉用户主目录的内置 Skill 与用户 Rule", () => {
+  it("启用 user 设置层后保留用户主目录的内置 Skill 与用户 Rule", () => {
     assert.equal(
       isAllowedByProjectSettingSource(
         "C:\\Users\\me\\.cursor\\skills-cursor\\canvas\\SKILL.md",
-        [project],
+        [project, "C:/Users/me"],
       ),
-      false,
+      true,
     );
     assert.equal(
       isAllowedByProjectSettingSource(
         "C:/Users/me/.cursor/rules/common/language.mdc",
-        [project],
+        [project, "C:/Users/me"],
       ),
-      false,
+      true,
     );
   });
 

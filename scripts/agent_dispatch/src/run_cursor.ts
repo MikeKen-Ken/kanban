@@ -362,10 +362,10 @@ export async function runCursor(
     });
     const localOptions: LocalAgentOptions = {
       cwd: job.cwd,
-      // 用户 Rule 已由 Worker 完整注入。settingSources=project 仍会扫描
-      // 用户主目录，但按仓库路径过滤后再注入；不含 user，避免用户 Skill
-      // 与 ~/.cursor/mcp.json 进入模型。
-      settingSources: ["project"],
+      // 用户 Rule 已由 Worker 完整注入；同时启用 user 让 Cursor 按 Skill
+      // frontmatter 的 description / 触发条件自行选择用户 Skill，而非把所有
+      // Skill 正文拼进本卡 prompt。MCP 仍由 mcpServers 显式控制。
+      settingSources: ["project", "user"],
       store: new JsonlLocalAgentStore(storeDir),
       ...(askUserTool ? { customTools: { ask_user: askUserTool } } : {}),
       // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
@@ -412,7 +412,8 @@ export async function runCursor(
           `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
           `kanbanMCP 强制为 scoped（${agentMcpUrl}）；` +
           `禁用工具=${disallowedTools.join(",") || "无"}；` +
-          `settingSources=project（SDK 扫描用户主目录后按仓库路径过滤；用户 Rule 已由 Worker 注入；保留项目规则 / Skill / Hooks）`,
+          `settingSources=project,user（用户与项目 Skill 由 Cursor 按各自触发条件选择；` +
+            `用户 Rule 已由 Worker 注入；MCP 仅使用本轮显式合并的服务器）`,
       );
       logLine("本地会话已创建，开始执行…");
       thinkingStream = new CursorThinkingStream();
