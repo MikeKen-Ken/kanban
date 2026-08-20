@@ -411,7 +411,7 @@ void main() {
     );
   });
 
-  test('rebase 冲突时 abort 且不 push、不 force', () async {
+  test('merge 冲突时 abort 且不 push、不 force', () async {
     final commands = <List<String>>[];
     await expectLater(
       gitPushWithRebase(
@@ -419,9 +419,12 @@ void main() {
         runner: (executable, arguments, {workingDirectory, environment}) async {
           commands.add(arguments);
           expect(_gitArgHasForceForTest(arguments), isFalse);
-          if (arguments.first == 'rebase') {
+          if (arguments.first == 'merge') {
             if (arguments.contains('--abort')) {
               return ProcessResult(1, 0, '', '');
+            }
+            if (arguments.contains('--ff-only')) {
+              return _scriptedGit(arguments, aheadBehind: '1\t2\n');
             }
             return ProcessResult(1, 1, '', 'CONFLICT\n');
           }
@@ -486,7 +489,7 @@ void main() {
     expect(commands.any((args) => args.first == 'merge'), isTrue);
   });
 
-  test('分叉时 rebase 成功后再普通 push', () async {
+  test('分叉时 merge 成功后再普通 push', () async {
     final commands = <List<String>>[];
     var countCalls = 0;
     await gitPushWithRebase(
@@ -494,9 +497,12 @@ void main() {
       runner: (executable, arguments, {workingDirectory, environment}) async {
         commands.add(arguments);
         expect(_gitArgHasForceForTest(arguments), isFalse);
-        if (arguments.first == 'rebase') {
-          expect(arguments, ['rebase', '@{u}']);
-          return ProcessResult(1, 0, '', '');
+        if (arguments.first == 'merge') {
+          if (arguments.contains('--no-edit')) {
+            expect(arguments, ['merge', '--no-edit', '@{u}']);
+            return ProcessResult(1, 0, '', '');
+          }
+          return _scriptedGit(arguments);
         }
         if (arguments.first == 'push') {
           return ProcessResult(1, 0, '', '');

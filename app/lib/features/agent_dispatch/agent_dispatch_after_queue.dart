@@ -241,7 +241,7 @@ bool _gitArgHasForce(List<String> arguments) {
   );
 }
 
-/// 在工作区干净时 fetch，必要时 rebase，再普通 push。冲突则 abort，永不 force。
+/// 在工作区干净时 fetch，必要时 merge（可快进则快进），再普通 push。冲突则 abort，永不 force。
 Future<void> gitPushWithRebase({
   required String repoPath,
   AgentDispatchGitRunner? runner,
@@ -331,14 +331,14 @@ Future<void> gitPushWithRebase({
     if (ahead == 0) {
       await gitOk(['merge', '--ff-only', '@{u}'], '快进到上游');
     } else {
-      final rebase = await git(['rebase', '@{u}']);
-      if (rebase.exitCode != 0) {
-        await git(['rebase', '--abort']);
-        final detail = _gitText(rebase);
+      final merge = await git(['merge', '--no-edit', '@{u}']);
+      if (merge.exitCode != 0) {
+        await git(['merge', '--abort']);
+        final detail = _gitText(merge);
         throw Exception(
           detail.isEmpty
-              ? 'rebase 冲突或失败，已 abort，未推送'
-              : 'rebase 冲突或失败，已 abort，未推送：$detail',
+              ? 'merge 冲突或失败，已 abort，未推送'
+              : 'merge 冲突或失败，已 abort，未推送：$detail',
         );
       }
     }
@@ -346,7 +346,7 @@ Future<void> gitPushWithRebase({
   }
 
   if (behind > 0) {
-    throw Exception('rebase 后仍落后上游，已中止推送');
+    throw Exception('merge 后仍落后上游，已中止推送');
   }
   if (ahead == 0) return;
 
