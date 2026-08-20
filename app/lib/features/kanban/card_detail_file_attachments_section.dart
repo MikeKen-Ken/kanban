@@ -5,6 +5,7 @@ import '../attachments/attachment_add_flow.dart';
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
+import 'card_detail_file_attachment_overflow.dart';
 
 String formatFileAttachmentSize(int bytes) {
   if (bytes <= 0) return '';
@@ -216,40 +217,10 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
                         await _removeAttachment(context, attachment.id);
                       }
                     },
-                    itemBuilder: (ctx) => [
-                      if (!missing)
-                        const PopupMenuItem(
-                          value: 'open',
-                          child: ListTile(
-                            leading: Icon(Icons.open_in_new_outlined),
-                            title: Text('打开'),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      if (!missing)
-                        const PopupMenuItem(
-                          value: 'directory',
-                          child: ListTile(
-                            leading: Icon(Icons.folder_open_outlined),
-                            title: Text('打开所在文件夹'),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: ListTile(
-                          leading: Icon(
-                            Icons.delete_outline,
-                            color: theme.colorScheme.error,
-                          ),
-                          title: Text(
-                            '删除文件',
-                            style: TextStyle(color: theme.colorScheme.error),
-                          ),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
+                    itemBuilder: (ctx) => cardFileAttachmentOverflowItems(
+                      missing: missing,
+                      colors: theme.colorScheme,
+                    ),
                   ),
                   onTap: missing
                       ? null

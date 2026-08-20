@@ -10,6 +10,7 @@ import { isAbsolute, join } from "node:path";
 import { formatScopedKanbanToolPrompt } from "./dispatch_scoped_tool_prompt.ts";
 import type { ParsedClaimResult } from "./mcp_client.ts";
 import { wrapWorkerUserRules } from "./user_rule_canary.ts";
+import { DISPATCH_SEARCH_POLICY } from "./worker_glob_policy.ts";
 
 export type SessionContext = {
   prompt: string;
@@ -76,6 +77,8 @@ export function createSessionContext(options: {
     "# Worker 注入的本轮上下文",
     "",
     "本轮卡片已领取。以下上下文是唯一任务范围；不要再次读取 Skill 或领取其他卡片。",
+    "",
+    DISPATCH_SEARCH_POLICY.trim(),
     "",
     "## 卡片上下文（JSON）",
     "",

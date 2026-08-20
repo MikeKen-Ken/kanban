@@ -59,6 +59,9 @@ describe("session_context", () => {
       assert.match(context.prompt, /GetMcpTools/);
       assert.match(context.prompt, /card-a/);
       assert.match(context.prompt, /开发前必读 Architecture\.md/);
+      assert.match(context.prompt, /MUST NOT 对仓库根做无界 glob/);
+      assert.match(context.prompt, /\.svn/);
+      assert.match(context.prompt, /features\/kanban/);
       assert.equal(
         readFileSync(context.attachmentPaths[0]!, "utf8"),
         "附件内容",
