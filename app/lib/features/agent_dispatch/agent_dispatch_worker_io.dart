@@ -427,10 +427,10 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
       (cursorApiKey == null || cursorApiKey.trim().isEmpty)) {
     throw StateError('尚未配置 Cursor API Key');
   }
-  final environment = _workerEnvironment(
+  final environment = (await _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
-  ).environment;
+  )).environment;
   onLog?.call('拉取模型列表…');
   final result = await Process.run(
     node,
@@ -477,10 +477,10 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
   if (cursorApiKey == null || cursorApiKey.trim().isEmpty) {
     throw StateError('尚未配置 Cursor API Key');
   }
-  final environment = _workerEnvironment(
+  final environment = (await _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
-  ).environment;
+  )).environment;
   onLog?.call('拉取 Cursor 额度…');
   final result = await Process.run(
     node,

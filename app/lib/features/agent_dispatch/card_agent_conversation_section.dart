@@ -52,6 +52,7 @@ Future<void> showCardAgentConversationDialog({
 }) {
   return showDialog<void>(
     context: context,
+    barrierDismissible: false,
     builder: (_) => _CardAgentConversationDialog(
       cardId: cardId,
       onSubmittedClose: onSubmittedClose,
@@ -101,6 +102,15 @@ class _CardAgentConversationDialogState
     _service.removeInteractionListener(_refresh);
     _input.dispose();
     super.dispose();
+  }
+
+  Future<void> _onBarrierTap() async {
+    if (_sending) return;
+    if (_input.text.trim().isEmpty) {
+      Navigator.of(context).pop();
+      return;
+    }
+    await _send();
   }
 
   Future<void> _send() async {
@@ -184,96 +194,111 @@ class _CardAgentConversationDialogState
     final pending = _service.pendingInteraction;
     final waiting = pending?.cardId == widget.cardId;
     final size = MediaQuery.sizeOf(context);
-    return AlertDialog(
-      title: Text(waiting ? 'Agent 等待回复' : 'Agent 对话'),
-      content: SizedBox(
-        width: (size.width - 80).clamp(420.0, 860.0).toDouble(),
-        height: (size.height - 180).clamp(360.0, 720.0).toDouble(),
-        child: Column(
-          children: [
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: history.isEmpty
-                    ? const Center(child: Text('暂无对话记录'))
-                    : Markdown(
-                        data: history,
-                        selectable: true,
-                        padding: const EdgeInsets.all(16),
+    return SizedBox.expand(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              key: const ValueKey('card-agent-conversation-barrier'),
+              behavior: HitTestBehavior.opaque,
+              onTap: _onBarrierTap,
+            ),
+          ),
+          AlertDialog(
+            title: Text(waiting ? 'Agent 等待回复' : 'Agent 对话'),
+            content: SizedBox(
+              width: (size.width - 80).clamp(420.0, 860.0).toDouble(),
+              height: (size.height - 180).clamp(360.0, 720.0).toDouble(),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      child: history.isEmpty
+                          ? const Center(child: Text('暂无对话记录'))
+                          : Markdown(
+                              data: history,
+                              selectable: true,
+                              padding: const EdgeInsets.all(16),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (waiting && pending != null)
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: AgentInteractionPrompt(
+                          event: pending,
+                          onReply: (text) async {
+                            final sent = await _service.submitInteractionReply(
+                              text,
+                            );
+                            if (!sent && mounted) {
+                              showAppSnackBar(
+                                context,
+                                message: '回复发送失败，请确认 Worker 仍在运行',
+                              );
+                              return false;
+                            }
+                            if (sent && mounted) {
+                              _input.clear();
+                              final closer = widget.onSubmittedClose;
+                              Navigator.of(context, rootNavigator: true).pop();
+                              await closer?.call();
+                            }
+                            return sent;
+                          },
+                        ),
+                      ),
+                    )
+                  else ...[
+                    Text(
+                      '提交追问会写入同步 Markdown，并把卡片加入待返工；下次调度继续处理。',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      key: const ValueKey('card-agent-conversation-input'),
+                      controller: _input,
+                      enabled: !_sending,
+                      minLines: 2,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        hintText: '补充约束或继续追问…',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) => _send(),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            if (waiting && pending != null)
-              Flexible(
-                child: SingleChildScrollView(
-                  child: AgentInteractionPrompt(
-                    event: pending,
-                    onReply: (text) async {
-                      final sent = await _service.submitInteractionReply(text);
-                      if (!sent && mounted) {
-                        showAppSnackBar(
-                          context,
-                          message: '回复发送失败，请确认 Worker 仍在运行',
-                        );
-                        return false;
-                      }
-                      if (sent && mounted) {
-                        _input.clear();
-                        final closer = widget.onSubmittedClose;
-                        Navigator.of(context, rootNavigator: true).pop();
-                        await closer?.call();
-                      }
-                      return sent;
-                    },
-                  ),
+            actions: [
+              if (hasMarkdownFile)
+                OutlinedButton.icon(
+                  onPressed: _openMarkdownFile,
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('打开 Markdown 文件'),
                 ),
-              )
-            else ...[
-              Text(
-                '提交追问会写入同步 Markdown，并把卡片加入待返工；下次调度继续处理。',
-                style: Theme.of(context).textTheme.bodySmall,
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('关闭'),
               ),
-              const SizedBox(height: 8),
-              TextField(
-                key: const ValueKey('card-agent-conversation-input'),
-                controller: _input,
-                enabled: !_sending,
-                minLines: 2,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  hintText: '补充约束或继续追问…',
-                  border: OutlineInputBorder(),
+              if (!waiting)
+                FilledButton.icon(
+                  onPressed: _sending ? null : _send,
+                  icon: const Icon(Icons.send, size: 18),
+                  label: Text(_sending ? '发送中…' : '提交追问'),
                 ),
-                onSubmitted: (_) => _send(),
-              ),
             ],
-          ],
-        ),
+          ),
+        ],
       ),
-      actions: [
-        if (hasMarkdownFile)
-          OutlinedButton.icon(
-            onPressed: _openMarkdownFile,
-            icon: const Icon(Icons.open_in_new, size: 18),
-            label: const Text('打开 Markdown 文件'),
-          ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('关闭'),
-        ),
-        if (!waiting)
-          FilledButton.icon(
-            onPressed: _sending ? null : _send,
-            icon: const Icon(Icons.send, size: 18),
-            label: Text(_sending ? '发送中…' : '提交追问'),
-          ),
-      ],
     );
   }
 }

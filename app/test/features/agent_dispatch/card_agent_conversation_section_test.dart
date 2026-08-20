@@ -132,4 +132,96 @@ void main() {
     expect(find.text('提交追问'), findsNothing);
     expect(parentClosed, isFalse);
   });
+
+  testWidgets('输入非空时点空白等同提交追问', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    var parentClosed = false;
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: controller,
+        child: MaterialApp(
+          home: Scaffold(
+            body: CardAgentConversationSection(
+              cardId: cardId,
+              onSubmittedClose: () async {
+                parentClosed = true;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('card-agent-conversation-open')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.enterText(
+      find.byKey(const ValueKey('card-agent-conversation-input')),
+      '点空白也要提交',
+    );
+    expect(find.text('点空白也要提交'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      final barrier = tester.getRect(
+        find.byKey(const ValueKey('card-agent-conversation-barrier')),
+      );
+      await tester.tapAt(barrier.topLeft + const Offset(8, 8));
+      await tester.pump();
+      await Future<void>.delayed(const Duration(seconds: 3));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final live = controller.findCardById(cardId)!;
+    expect(
+      live.verificationFeedback.map((item) => item.text).toList(),
+      contains('Agent 追问：点空白也要提交'),
+    );
+    expect(parentClosed, isTrue);
+    expect(live.agentConversationMarkdown, contains('点空白也要提交'));
+    expect(controller.findColumnIdForCard(cardId), 'rework');
+  });
+
+  testWidgets('输入为空时点空白只关闭对话', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    var parentClosed = false;
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: controller,
+        child: MaterialApp(
+          home: Scaffold(
+            body: CardAgentConversationSection(
+              cardId: cardId,
+              onSubmittedClose: () async {
+                parentClosed = true;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('card-agent-conversation-open')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final emptyBarrier = tester.getRect(
+      find.byKey(const ValueKey('card-agent-conversation-barrier')),
+    );
+    await tester.tapAt(emptyBarrier.topLeft + const Offset(8, 8));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('提交追问'), findsNothing);
+    expect(parentClosed, isFalse);
+    expect(controller.findCardById(cardId)!.verificationFeedback, isEmpty);
+    expect(controller.findColumnIdForCard(cardId), 'todo');
+  });
 }
