@@ -303,6 +303,8 @@ extension BoardControllerCards on BoardController {
     bool clearAgentAllowDirtyWorkspace = false,
     bool? agentEnableSandbox,
     bool clearAgentEnableSandbox = false,
+    bool? agentRequireTests,
+    bool clearAgentRequireTests = false,
     int? colorValue,
     bool clearColor = false,
   }) async {
@@ -372,6 +374,9 @@ extension BoardControllerCards on BoardController {
             agentEnableSandbox: clearAgentEnableSandbox
                 ? null
                 : (agentEnableSandbox ?? card.agentEnableSandbox),
+            agentRequireTests: clearAgentRequireTests
+                ? null
+                : (agentRequireTests ?? card.agentRequireTests),
             colorValue: clearColor ? null : (colorValue ?? card.colorValue),
             updatedAt: now,
           );
@@ -453,6 +458,9 @@ extension BoardControllerCards on BoardController {
           final restoredAgentEnableSandbox = clearAgentEnableSandbox
               ? null
               : (agentEnableSandbox ?? original.agentEnableSandbox);
+          final restoredAgentRequireTests = clearAgentRequireTests
+              ? null
+              : (agentRequireTests ?? original.agentRequireTests);
           final restoredColor =
               clearColor ? null : (colorValue ?? original.colorValue);
           _pushUndo(
@@ -494,6 +502,8 @@ extension BoardControllerCards on BoardController {
                     original.agentAllowDirtyWorkspace == null,
                 agentEnableSandbox: original.agentEnableSandbox,
                 clearAgentEnableSandbox: original.agentEnableSandbox == null,
+                agentRequireTests: original.agentRequireTests,
+                clearAgentRequireTests: original.agentRequireTests == null,
                 colorValue: original.colorValue,
                 clearColor: original.colorValue == null,
               );
@@ -536,6 +546,8 @@ extension BoardControllerCards on BoardController {
                     restoredAgentAllowDirtyWorkspace == null,
                 agentEnableSandbox: restoredAgentEnableSandbox,
                 clearAgentEnableSandbox: restoredAgentEnableSandbox == null,
+                agentRequireTests: restoredAgentRequireTests,
+                clearAgentRequireTests: restoredAgentRequireTests == null,
                 colorValue: restoredColor,
                 clearColor: restoredColor == null,
               );

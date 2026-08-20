@@ -94,6 +94,7 @@ void main() {
       agentModelId: 'composer-2.5',
       agentAllowDirtyWorkspace: true,
       agentEnableSandbox: true,
+      agentRequireTests: false,
       agentModelParamValues: const {'fast': 'true'},
     );
     final projectId = controller.activeProjectId!;
@@ -117,6 +118,7 @@ void main() {
     expect(payload['agentModelParamValues'], {'fast': 'true'});
     expect(payload['agentAllowDirtyWorkspace'], isTrue);
     expect(payload['agentEnableSandbox'], isTrue);
+    expect(payload['agentRequireTests'], isFalse);
     expect(payload['agentEndpointUrl'], 'http://127.0.0.1:19000/mcp');
     expect(payload['sessionId'], isNotEmpty);
   });

@@ -40,7 +40,7 @@
 - WIP 配置
 - 提醒时间与重复规则
 - 卡片外链、依赖与关联
-- 卡片 Agent 覆盖（引擎、模型、参数、是否允许脏工作区）
+- 卡片 Agent 覆盖（引擎、模型、参数、是否允许脏工作区、是否需要自动化测试）
 - 卡片 Agent Markdown 对话记录（卡片字段为权威文本，并维护 `Agent 对话.md` 文件附件镜像）
 - 泳道分组与自动化规则
 
@@ -89,7 +89,7 @@
 - `undo/`：可撤销命令与本机撤销栈
 - `templates/`：卡片模板与复制
 - `reminders/`：提醒、重复规则和平台调度
-- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）。本地会话加载用户与项目规则 / Skill / Hooks。默认只注入本卡 scoped `kanbanMCP`；Hub / Aseprite / Chrome DevTools / Tavily / Unity / Cocos / Node REPL 等附加 MCP 由当前项目的 `ProjectSettings.agentMcpTags` 决定，按项目主题合并用户对应 MCP，不再使用卡片标签开关。Worker 向会话注入 scoped 收尾工具 schema，并禁用 `GetMcpTools`，避免模型再拉取 MCP 目录。工作台本机开关「收尾后主动结束会话」默认开启：`ready_to_submit` / `submit_consultation` / `block_card` 在 MCP 落盘成功后，Worker 会取消 Cursor SDK run 或结束 Codex 进程，避免模型继续搜改；关闭时会等待 Agent 自然结束，以获取更多会话日志。卡片是否咨询只看 `consultation` 标签（注入 `cardKind`）；未打标签即为实施卡。Worker prompt 拒绝仓库根无界 glob（`**/*` 等），并禁止以 `.git` / `.svn` / `build` 为 glob 目标；定位应定向 grep，不得与无界 glob 并行空等。`ready_to_submit` 根据 Worker 上报的 Shell 时间线拒绝未结束、失败、或 `flutter test` / `dart test` 成功但耗时过短（不像真正跑完）的验证。无界 glob 的硬拦截放在本机用户 Cursor Hook（`%USERPROFILE%\.cursor\hooks`），不进本仓库。Cursor 运行中通过 `ask_user` 暂停并等待卡片对话回复；对话以卡片 Markdown 同步，历史追问通过待返工新 claim 恢复上下文。`kanban-complete-tasks` 仅供 Worker 注入（不改磁盘原文，prompt 只剥 YAML frontmatter）。Codex 隔离 home 会改写用户 `AGENTS.md` 副本，使「先读 Architecture.md」视为已由注入满足。
+- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）。本地会话加载用户与项目规则 / Skill / Hooks。默认只注入本卡 scoped `kanbanMCP`；Hub / Aseprite / Chrome DevTools / Tavily / Unity / Cocos / Node REPL 等附加 MCP 由当前项目的 `ProjectSettings.agentMcpTags` 决定，按项目主题合并用户对应 MCP，不再使用卡片标签开关。Worker 向会话注入 scoped 收尾工具 schema，并禁用 `GetMcpTools`，避免模型再拉取 MCP 目录。工作台本机开关「收尾后主动结束会话」默认开启：`ready_to_submit` / `submit_consultation` / `block_card` 在 MCP 落盘成功后，Worker 会取消 Cursor SDK run 或结束 Codex 进程，避免模型继续搜改；关闭时会等待 Agent 自然结束，以获取更多会话日志。卡片可单独关闭「需要测试」；缺省仍需要自动化测试，关闭时 Skill 会跳过自动化测试并在完成声明中记录原因。卡片是否咨询只看 `consultation` 标签（注入 `cardKind`）；未打标签即为实施卡。Worker prompt 拒绝仓库根无界 glob（`**/*` 等），并禁止以 `.git` / `.svn` / `build` 为 glob 目标；定位应定向 grep，不得与无界 glob 并行空等。`ready_to_submit` 根据 Worker 上报的 Shell 时间线拒绝未结束、失败、或 `flutter test` / `dart test` 成功但耗时过短（不像真正跑完）的验证。无界 glob 的硬拦截放在本机用户 Cursor Hook（`%USERPROFILE%\.cursor\hooks`），不进本仓库。Cursor 运行中通过 `ask_user` 暂停并等待卡片对话回复；对话以卡片 Markdown 同步，历史追问通过待返工新 claim 恢复上下文。`kanban-complete-tasks` 仅供 Worker 注入（不改磁盘原文，prompt 只剥 YAML frontmatter）。Codex 隔离 home 会改写用户 `AGENTS.md` 副本，使「先读 Architecture.md」视为已由注入满足。
 - `mcp/`：Windows 内嵌 MCP 与 Cursor/Codex 一键配置（仅本机）
 - `statistics/`：只读统计
 - `wip/`：列上限策略
@@ -124,4 +124,4 @@
 - Windows 快捷键、右键菜单和通知需要平台验证。
 - Android 通知权限、TalkBack、窄屏布局与长按拖拽需要平台验证。
 - 人类开发阶段与 CI：至少运行 `flutter analyze` 和相关测试；最终运行全部测试与 Windows/Android 构建。
-- Agent 在会话内跑与本卡改动直接相关的定向检查，通过后才能声明完成；不要把测试命令交给 Worker 代跑，也不要把上一条的全量 `flutter analyze` / 全量测试当作默认收尾。卡住、超时不得当成通过；未做的 UI 验证须标明未执行。`ready_to_submit` 时若测试命令仍按其 `executionTime` 未结束（含 SDK 提前 completed），或最后一次有效测试失败，必须拒绝。结束时间以 `startedAt + executionTime` 为准；PowerShell 无法执行的 `cd ... &&` 短失败不得覆盖已通过的验证。
+- `agentRequireTests` 缺省或为 true 的卡片，Agent 在会话内跑与本卡改动直接相关的定向测试，通过后才能声明完成；为 false 时不要求自动化测试，但仍应执行必要的格式化、类型检查或用户明确的验收，并在声明中记录「本卡已配置无需测试」。不要把测试命令交给 Worker 代跑，也不要把上一条的全量 `flutter analyze` / 全量测试当作默认收尾。卡住、超时不得当成通过；未做的 UI 验证须标明未执行。`ready_to_submit` 时若已执行测试命令仍按其 `executionTime` 未结束（含 SDK 提前 completed），或最后一次有效测试失败，必须拒绝。结束时间以 `startedAt + executionTime` 为准；PowerShell 无法执行的 `cd ... &&` 短失败不得覆盖已通过的验证。

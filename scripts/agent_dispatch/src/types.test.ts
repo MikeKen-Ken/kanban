@@ -338,6 +338,21 @@ describe("applyLiveJobOverlay", () => {
     assert.equal(live.cardLimit, job.cardLimit);
   });
 
+  it("卡片关闭测试时覆盖默认需要测试", () => {
+    const merged = mergeJobWithCardOverrides(job, {
+      agentRequireTests: false,
+    });
+    assert.equal(merged.requireTests, false);
+  });
+
+  it("禁止卡片参数时仍要求测试", () => {
+    const merged = mergeJobWithCardOverrides(
+      { ...job, ignoreCardParams: true },
+      { agentRequireTests: false },
+    );
+    assert.notEqual(merged.requireTests, false);
+  });
+
   it("保留运行中关闭收尾主动结束会话的设置", () => {
     const live = applyLiveJobOverlay(job, {
       terminateAfterDispatchTerminal: false,

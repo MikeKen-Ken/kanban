@@ -25,4 +25,11 @@ describe("dispatch_scoped_tool_prompt", () => {
     assert.match(text, /cardKind=consultation/);
     assert.match(text, /working_directory 必须与命令里的相对路径一致/);
   });
+
+  it("本卡关闭测试时注入跳过自动化测试与声明原因", () => {
+    const text = formatScopedKanbanToolPrompt("card-z", false);
+    assert.match(text, /本卡已配置为无需测试/);
+    assert.match(text, /manualVerificationReason=本卡已配置无需测试/);
+    assert.doesNotMatch(text, /必须等测试命令返回 exitCode=0/);
+  });
 });

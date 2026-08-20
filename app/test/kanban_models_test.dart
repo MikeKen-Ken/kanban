@@ -175,6 +175,7 @@ void main() {
     expect(unset.toJson().containsKey('agentModelParamValues'), isFalse);
     expect(unset.toJson().containsKey('agentAllowDirtyWorkspace'), isFalse);
     expect(unset.toJson().containsKey('agentEnableSandbox'), isFalse);
+    expect(unset.toJson().containsKey('agentRequireTests'), isFalse);
     expect(unset.toJson().containsKey('agentAllowHighReasoning'), isFalse);
 
     final card = KanbanCard(
@@ -186,6 +187,7 @@ void main() {
       agentModelId: 'composer-2.5',
       agentAllowDirtyWorkspace: true,
       agentEnableSandbox: true,
+      agentRequireTests: false,
       agentModelParamValues: const {
         'fast': 'true',
         'reasoning_effort': 'high',
@@ -197,6 +199,7 @@ void main() {
     expect(restored.agentModelId, 'composer-2.5');
     expect(restored.agentAllowDirtyWorkspace, isTrue);
     expect(restored.agentEnableSandbox, isTrue);
+    expect(restored.agentRequireTests, isFalse);
     expect(restored.agentModelParamValues, {
       'fast': 'true',
       'reasoning_effort': 'high',
@@ -204,13 +207,17 @@ void main() {
     });
     expect(restored.copyWith(agentEngine: null).agentEngine, isNull);
     expect(
-      restored.copyWith(agentAllowDirtyWorkspace: null).agentAllowDirtyWorkspace,
+      restored
+          .copyWith(agentAllowDirtyWorkspace: null)
+          .agentAllowDirtyWorkspace,
       isNull,
     );
     expect(
       restored.copyWith(agentEnableSandbox: null).agentEnableSandbox,
       isNull,
     );
+    expect(
+        restored.copyWith(agentRequireTests: null).agentRequireTests, isNull);
 
     final legacy = KanbanCard.fromJson({
       'id': 'card-3',

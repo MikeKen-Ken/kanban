@@ -30,6 +30,7 @@ class CardReference {
     this.agentModelParamValues,
     this.agentAllowDirtyWorkspace,
     this.agentEnableSandbox,
+    this.agentRequireTests,
     this.source,
   });
 
@@ -59,6 +60,7 @@ class CardReference {
   final Map<String, String>? agentModelParamValues;
   final bool? agentAllowDirtyWorkspace;
   final bool? agentEnableSandbox;
+  final bool? agentRequireTests;
 
   /// 外链摘要：`{id, url, title?}`
   final List<Map<String, dynamic>> links;
@@ -98,6 +100,7 @@ class CardReference {
           'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
         if (agentEnableSandbox != null)
           'agentEnableSandbox': agentEnableSandbox,
+        if (agentRequireTests != null) 'agentRequireTests': agentRequireTests,
         if (links.isNotEmpty) 'links': links,
       };
 
@@ -130,14 +133,18 @@ class CardReference {
           json['commitRef'] is String ? json['commitRef'] as String : null,
       agentEngine:
           json['agentEngine'] is String ? json['agentEngine'] as String : null,
-      agentModelId:
-          json['agentModelId'] is String ? json['agentModelId'] as String : null,
+      agentModelId: json['agentModelId'] is String
+          ? json['agentModelId'] as String
+          : null,
       agentModelParamValues: _stringMap(json['agentModelParamValues']),
       agentAllowDirtyWorkspace: json['agentAllowDirtyWorkspace'] is bool
           ? json['agentAllowDirtyWorkspace'] as bool
           : null,
       agentEnableSandbox: json['agentEnableSandbox'] is bool
           ? json['agentEnableSandbox'] as bool
+          : null,
+      agentRequireTests: json['agentRequireTests'] is bool
+          ? json['agentRequireTests'] as bool
           : null,
       links: _linkMaps(json['links']),
     );

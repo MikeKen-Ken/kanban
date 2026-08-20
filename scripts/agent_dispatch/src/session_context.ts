@@ -31,6 +31,7 @@ export function createSessionContext(options: {
   architecture: string;
   userRules?: string;
   claim: ParsedClaimResult;
+  requireTests?: boolean;
   tempRoot?: string;
 }): SessionContext {
   const tempDir = mkdtempSync(
@@ -88,7 +89,10 @@ export function createSessionContext(options: {
     JSON.stringify(payload, null, 2),
     "```",
     "",
-    formatScopedKanbanToolPrompt(cardIdFromPayload(payload)),
+    formatScopedKanbanToolPrompt(
+      cardIdFromPayload(payload),
+      options.requireTests !== false,
+    ),
     "",
     "## 临时附件绝对路径",
     "",

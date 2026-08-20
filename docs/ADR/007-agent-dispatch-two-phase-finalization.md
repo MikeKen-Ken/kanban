@@ -12,9 +12,7 @@ Agent 直接提交 Git 并移动卡片会把“声明完成、验证、提交、
 ## 决策
 
 1. Agent 只能通过 scoped `ready_to_submit` 声明完成，显式给出
-   `completedChecklistIds`、`completedFeedbackIds`。验证在 Agent 会话内完成且必须通过，
-   不得把 `verificationCommands` 交给 Worker 代跑。无法自动验证时才给
-   `manualVerificationReason`。该调用只持久化，不提交 Git、不勾选完成项、不移动卡片。
+   `completedChecklistIds`、`completedFeedbackIds`。卡片 `agentRequireTests` 缺省或为 true 时，验证在 Agent 会话内完成且必须通过；为 false 时不要求自动化测试，但必须传 `manualVerificationReason=本卡已配置无需测试`。不得把 `verificationCommands` 交给 Worker 代跑。该调用只持久化，不提交 Git、不勾选完成项、不移动卡片。
 2. ready 中的完成项 id 必须属于 claim 时冻结的未完成范围。空列表表示本轮不完成该类
    项目，不得隐式勾选全部。
 3. 本机 pending 记录按会话保存，状态为 `declared`、`validated`、`committing`、

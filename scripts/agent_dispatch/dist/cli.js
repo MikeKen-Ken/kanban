@@ -239,6 +239,7 @@ function applyLiveJobOverlay(job, live) {
     ignoreCardParams: typeof live.ignoreCardParams === "boolean" ? live.ignoreCardParams : job.ignoreCardParams,
     allowDirtyWorkspace: typeof live.allowDirtyWorkspace === "boolean" ? live.allowDirtyWorkspace : job.allowDirtyWorkspace,
     enableSandbox: typeof live.enableSandbox === "boolean" ? live.enableSandbox : job.enableSandbox,
+    requireTests: typeof live.requireTests === "boolean" ? live.requireTests : job.requireTests,
     terminateAfterDispatchTerminal: typeof live.terminateAfterDispatchTerminal === "boolean" ? live.terminateAfterDispatchTerminal : job.terminateAfterDispatchTerminal
   };
 }
@@ -329,7 +330,8 @@ function mergeJobWithCardOverrides(job, claim) {
     model,
     modelParams: [...byId.values()],
     allowDirtyWorkspace: job.allowDirtyWorkspace === true || isTrueFlag(claim.agentAllowDirtyWorkspace),
-    enableSandbox: job.enableSandbox === true || isTrueFlag(claim.agentEnableSandbox)
+    enableSandbox: job.enableSandbox === true || isTrueFlag(claim.agentEnableSandbox),
+    requireTests: claim.agentRequireTests === false ? false : job.requireTests
   };
 }
 function isTrueFlag(raw) {
@@ -3562,14 +3564,14 @@ var DISPATCH_SCOPED_TOOL_NAMES = [
   "ready_to_submit",
   "submit_consultation"
 ];
-function formatScopedKanbanToolPrompt(cardId) {
+function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
   const id = cardId.trim() || "<\u6CE8\u5165\u7684 cardId>";
   return [
     "## \u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177\uFF08\u5DF2\u6CE8\u5165 schema\uFF09",
     "",
     "scoped `kanbanMCP` \u53EA\u6CE8\u518C\u4E0B\u9762\u4E09\u4E2A\u5DE5\u5177\u3002\u7981\u6B62 `GetMcpTools`\u3001`tools/list` \u6216\u62C9\u53D6\u5176\u5B83\u770B\u677F\u5DE5\u5177\u76EE\u5F55\u3002",
     "Cursor\uFF1A\u76F4\u63A5 `CallMcpTool`\uFF1BCodex\uFF1A\u76F4\u63A5\u8C03\u7528\u540C\u540D MCP \u5DE5\u5177\u3002`cardId` \u5FC5\u987B\u662F\u6CE8\u5165\u503C\u3002",
-    "\u7981\u6B62\u628A ready_to_submit \u4E0E Shell\uFF08\u5C24\u5176\u662F\u6D4B\u8BD5\uFF09\u653E\u5728\u540C\u4E00\u6279\u5E76\u884C\u5DE5\u5177\u91CC\u3002\u5FC5\u987B\u7B49\u6D4B\u8BD5\u547D\u4EE4\u8FD4\u56DE exitCode=0 \u4E4B\u540E\uFF0C\u518D\u5355\u72EC\u8C03\u7528 ready_to_submit\u3002",
+    requireTests ? "\u7981\u6B62\u628A ready_to_submit \u4E0E Shell\uFF08\u5C24\u5176\u662F\u6D4B\u8BD5\uFF09\u653E\u5728\u540C\u4E00\u6279\u5E76\u884C\u5DE5\u5177\u91CC\u3002\u5FC5\u987B\u7B49\u6D4B\u8BD5\u547D\u4EE4\u8FD4\u56DE exitCode=0 \u4E4B\u540E\uFF0C\u518D\u5355\u72EC\u8C03\u7528 ready_to_submit\u3002" : "\u672C\u5361\u5DF2\u914D\u7F6E\u4E3A\u65E0\u9700\u6D4B\u8BD5\uFF1A\u4E0D\u8981\u6267\u884C\u81EA\u52A8\u5316\u6D4B\u8BD5\uFF1B\u5B8C\u6210\u5B9E\u73B0\u540E\u5728 ready_to_submit \u4F20 manualVerificationReason=\u672C\u5361\u5DF2\u914D\u7F6E\u65E0\u9700\u6D4B\u8BD5\u3002",
     "ready_to_submit / submit_consultation / block_card \u4E00\u65E6\u8FD4\u56DE\u6210\u529F\uFF0C\u7ACB\u5373\u505C\u6B62\u4E00\u5207\u5DE5\u5177\uFF1BWorker \u4F1A\u7ED3\u675F\u672C\u4F1A\u8BDD\u3002\u7981\u6B62\u518D\u6B21\u641C\u7D22\u3001\u4FEE\u6539\u6216\u91CD\u505A\u4EFB\u52A1\u3002",
     "\u5361\u7247\u7C7B\u578B\u53EA\u770B\u6CE8\u5165 JSON \u7684 cardKind / labels\uFF1AcardKind=consultation \u6216 labels \u542B consultation \u624D\u662F\u54A8\u8BE2\u5361\uFF1B\u5426\u5219\u4E00\u5F8B\u662F\u5B9E\u65BD\u5361\u3002\u7981\u6B62\u6839\u636E\u6807\u9898\u6216\u5907\u6CE8\u50CF\u4E0D\u50CF\u95EE\u9898\u6765\u6539\u5224\u3002",
     "Shell \u7684 working_directory \u5FC5\u987B\u4E0E\u547D\u4EE4\u91CC\u7684\u76F8\u5BF9\u8DEF\u5F84\u4E00\u81F4\uFF1Acwd \u5DF2\u662F app \u65F6\u4E0D\u8981\u518D\u5199 app/lib\u3002flutter test / dart test \u79D2\u9000\u4E0D\u5F97\u89C6\u4E3A\u901A\u8FC7\u3002",
@@ -3692,7 +3694,10 @@ function createSessionContext(options) {
     JSON.stringify(payload, null, 2),
     "```",
     "",
-    formatScopedKanbanToolPrompt(cardIdFromPayload(payload)),
+    formatScopedKanbanToolPrompt(
+      cardIdFromPayload(payload),
+      options.requireTests !== false
+    ),
     "",
     "## \u4E34\u65F6\u9644\u4EF6\u7EDD\u5BF9\u8DEF\u5F84",
     "",
@@ -3895,13 +3900,14 @@ ${tree.output}`);
             `scoped MCP \u5DE5\u5177\u95E8\u7981\u5931\u8D25\uFF1A\u5B9E\u9645=${tools.join(",")}\uFF0C\u671F\u671B=${DISPATCH_SCOPED_TOOL_NAMES.join(",")}`
           );
         }
+        const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         context = dependencies.createContext({
           basePrompt: job.prompt,
           architecture,
           userRules: userRules.text,
-          claim
+          claim,
+          requireTests: overridden.requireTests !== false
         });
-        const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob = {
           ...overridden,
@@ -3946,6 +3952,7 @@ ${tree.output}`);
         };
         logModelOverride(liveJob, roundJob, cardId);
         logClaimedCard(claim.payload);
+        workerLog(`\u672C\u5361\u6D4B\u8BD5\uFF1A${roundJob.requireTests === false ? "\u65E0\u9700" : "\u9700\u8981"}`);
         workerLog("Worker \u6B63\u5728\u5B9E\u65BD\u5F53\u524D\u5361\u7247");
         const agentResult = await runAgentWithRetry(
           dependencies.runAgent,

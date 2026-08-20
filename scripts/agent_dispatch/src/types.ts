@@ -20,12 +20,14 @@ export type DispatchJob = {
   projectId?: string;
   cardLimit: number;
   workerToken: string;
-  /** 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区 / 沙箱开关，只用工作台默认。 */
+  /** 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区 / 沙箱 / 测试开关，只用工作台默认。 */
   ignoreCardParams?: boolean;
   /** 为 true 时工作区有未提交改动仍可领取；默认 false。 */
   allowDirtyWorkspace?: boolean;
   /** 为 true 时开启 Cursor SDK 沙箱；默认 false。 */
   enableSandbox?: boolean;
+  /** 为 false 时，本卡不要求执行自动化测试；缺省为 true。 */
+  requireTests?: boolean;
   /** 为 true 时收尾工具成功落盘后主动结束 Agent 会话；默认 true。 */
   terminateAfterDispatchTerminal?: boolean;
   /** @deprecated 旧字段，兼容 */
@@ -65,6 +67,9 @@ export function applyLiveJobOverlay(
     enableSandbox: typeof live.enableSandbox === "boolean"
       ? live.enableSandbox
       : job.enableSandbox,
+    requireTests: typeof live.requireTests === "boolean"
+      ? live.requireTests
+      : job.requireTests,
     terminateAfterDispatchTerminal:
       typeof live.terminateAfterDispatchTerminal === "boolean"
         ? live.terminateAfterDispatchTerminal
@@ -242,6 +247,7 @@ export function mergeJobWithCardOverrides(
       isTrueFlag(claim.agentAllowDirtyWorkspace),
     enableSandbox: job.enableSandbox === true ||
       isTrueFlag(claim.agentEnableSandbox),
+    requireTests: claim.agentRequireTests === false ? false : job.requireTests,
   };
 }
 

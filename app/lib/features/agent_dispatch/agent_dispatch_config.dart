@@ -110,7 +110,7 @@ class AgentDispatchRunOptions {
   /// 各平台工作台默认；卡片指定其它平台时回退到对应项，而不是当前平台。
   final Map<String, AgentDispatchEngineRunDefaults> engineDefaults;
 
-  /// 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区 / 沙箱开关，只用工作台默认。
+  /// 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区 / 沙箱 / 测试开关，只用工作台默认。
   final bool ignoreCardParams;
 
   /// 为 true 时工作区有未提交改动仍可领取；默认 false。

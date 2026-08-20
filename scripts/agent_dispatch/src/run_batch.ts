@@ -41,6 +41,7 @@ export type RunBatchDependencies = {
     architecture: string;
     userRules?: string;
     claim: ParsedClaimResult;
+    requireTests?: boolean;
   }): SessionContext;
   runAgent(
     job: RoundDispatchJob,
@@ -163,13 +164,14 @@ export async function runBatch(
           );
         }
 
+        const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         context = dependencies.createContext({
           basePrompt: job.prompt,
           architecture,
           userRules: userRules.text,
           claim,
+          requireTests: overridden.requireTests !== false,
         });
-        const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob: RoundDispatchJob = {
           ...overridden,
@@ -214,6 +216,7 @@ export async function runBatch(
         };
         logModelOverride(liveJob, roundJob, cardId);
         logClaimedCard(claim.payload);
+        workerLog(`本卡测试：${roundJob.requireTests === false ? "无需" : "需要"}`);
         workerLog("Worker 正在实施当前卡片");
 
         const agentResult = await runAgentWithRetry(

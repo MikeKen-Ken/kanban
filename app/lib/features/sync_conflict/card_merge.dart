@@ -124,6 +124,7 @@ bool cardsContentEqual(KanbanCard a, KanbanCard b) {
       _stringMapEq(a.agentModelParamValues, b.agentModelParamValues) &&
       a.agentAllowDirtyWorkspace == b.agentAllowDirtyWorkspace &&
       a.agentEnableSandbox == b.agentEnableSandbox &&
+      a.agentRequireTests == b.agentRequireTests &&
       a.agentConversationMarkdown == b.agentConversationMarkdown;
 }
 
@@ -261,6 +262,7 @@ bool _hasOverlappingFieldConflict(KanbanCard local, KanbanCard remote) {
       ) ||
       local.agentAllowDirtyWorkspace != remote.agentAllowDirtyWorkspace ||
       local.agentEnableSandbox != remote.agentEnableSandbox ||
+      local.agentRequireTests != remote.agentRequireTests ||
       local.agentConversationMarkdown != remote.agentConversationMarkdown;
 }
 
@@ -491,6 +493,12 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.card.agentEnableSandbox,
     eq: (a, b) => a == b,
   );
+  final agentRequireTestsConflict = _fieldConflict(
+    base: base.card.agentRequireTests,
+    local: loc.card.agentRequireTests,
+    remote: rem.card.agentRequireTests,
+    eq: (a, b) => a == b,
+  );
   final agentConversationConflict = _fieldConflict(
     base: base.card.agentConversationMarkdown,
     local: loc.card.agentConversationMarkdown,
@@ -529,6 +537,7 @@ CardMergeResult mergeCardThreeWay({
       agentModelParamConflict ||
       agentAllowDirtyWorkspaceConflict ||
       agentEnableSandboxConflict ||
+      agentRequireTestsConflict ||
       agentConversationConflict ||
       columnConflict;
 
@@ -684,6 +693,11 @@ CardMergeResult mergeCardThreeWay({
     local: loc.card.agentEnableSandbox,
     remote: rem.card.agentEnableSandbox,
   );
+  final mergedAgentRequireTests = _threeWayValue(
+    base: base.card.agentRequireTests,
+    local: loc.card.agentRequireTests,
+    remote: rem.card.agentRequireTests,
+  );
   final mergedAgentConversation = _threeWayValue(
     base: base.card.agentConversationMarkdown,
     local: loc.card.agentConversationMarkdown,
@@ -731,6 +745,7 @@ CardMergeResult mergeCardThreeWay({
     agentModelParamValues: mergedAgentModelParamValues,
     agentAllowDirtyWorkspace: mergedAgentAllowDirtyWorkspace,
     agentEnableSandbox: mergedAgentEnableSandbox,
+    agentRequireTests: mergedAgentRequireTests,
     agentConversationMarkdown: mergedAgentConversation,
     colorValue: mergedColor,
   );

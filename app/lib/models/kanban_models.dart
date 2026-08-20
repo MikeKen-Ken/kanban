@@ -481,6 +481,7 @@ class KanbanCard {
     this.agentModelParamValues,
     this.agentAllowDirtyWorkspace,
     this.agentEnableSandbox,
+    this.agentRequireTests,
     this.agentConversationMarkdown,
     this.colorValue,
     this.conflictSide,
@@ -541,6 +542,9 @@ class KanbanCard {
 
   /// 本卡是否开启 Agent 沙箱；null 表示沿用工作台（默认关闭）。
   final bool? agentEnableSandbox;
+
+  /// 本卡是否要求 Agent 执行自动化测试；null 表示需要测试（兼容旧卡）。
+  final bool? agentRequireTests;
 
   /// 与本卡绑定的 Agent 对话记录。Markdown 正文随卡片和 WebDAV 同步。
   final String? agentConversationMarkdown;
@@ -632,6 +636,7 @@ class KanbanCard {
     Object? agentModelParamValues = _sentinel,
     Object? agentAllowDirtyWorkspace = _sentinel,
     Object? agentEnableSandbox = _sentinel,
+    Object? agentRequireTests = _sentinel,
     Object? agentConversationMarkdown = _sentinel,
     Object? colorValue = _sentinel,
     Object? conflictSide = _sentinel,
@@ -682,6 +687,9 @@ class KanbanCard {
       agentEnableSandbox: agentEnableSandbox == _sentinel
           ? this.agentEnableSandbox
           : agentEnableSandbox as bool?,
+      agentRequireTests: agentRequireTests == _sentinel
+          ? this.agentRequireTests
+          : agentRequireTests as bool?,
       agentConversationMarkdown: agentConversationMarkdown == _sentinel
           ? this.agentConversationMarkdown
           : agentConversationMarkdown as String?,
@@ -746,6 +754,7 @@ class KanbanCard {
       if (agentAllowDirtyWorkspace != null)
         'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
       if (agentEnableSandbox != null) 'agentEnableSandbox': agentEnableSandbox,
+      if (agentRequireTests != null) 'agentRequireTests': agentRequireTests,
       if (agentConversationMarkdown != null &&
           agentConversationMarkdown!.isNotEmpty)
         'agentConversationMarkdown': agentConversationMarkdown,
@@ -813,6 +822,7 @@ class KanbanCard {
       agentModelParamValues: _stringMap(json['agentModelParamValues']),
       agentAllowDirtyWorkspace: json['agentAllowDirtyWorkspace'] as bool?,
       agentEnableSandbox: json['agentEnableSandbox'] as bool?,
+      agentRequireTests: json['agentRequireTests'] as bool?,
       agentConversationMarkdown: json['agentConversationMarkdown'] as String?,
       colorValue: json['color'] as int?,
       conflictSide: sideRaw == null ? null : KanbanCard.fromJson(sideRaw),
@@ -866,6 +876,7 @@ class KanbanCard {
           'agentAllowDirtyWorkspace': agentAllowDirtyWorkspace,
         if (agentEnableSandbox != null)
           'agentEnableSandbox': agentEnableSandbox,
+        if (agentRequireTests != null) 'agentRequireTests': agentRequireTests,
       };
 }
 

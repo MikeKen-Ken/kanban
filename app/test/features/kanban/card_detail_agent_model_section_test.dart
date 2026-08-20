@@ -17,12 +17,14 @@ void main() {
             agentModelParamValues: const {},
             agentAllowDirtyWorkspace: null,
             agentEnableSandbox: null,
+            agentRequireTests: null,
             onChanged: ({
               agentEngine,
               agentModelId,
               agentModelParamValues = const {},
               agentAllowDirtyWorkspace,
               agentEnableSandbox,
+              agentRequireTests,
             }) {},
           ),
         ),
@@ -32,15 +34,18 @@ void main() {
 
     expect(find.text('允许脏工作区'), findsOneWidget);
     expect(find.text('开沙箱'), findsOneWidget);
+    expect(find.text('需要测试'), findsOneWidget);
     expect(find.textContaining('未提交改动'), findsNothing);
     expect(find.textContaining('沿用工作台'), findsNothing);
     expect(find.byType(SwitchListTile), findsNothing);
 
     final row = tester.widget<Row>(
-      find.descendant(
-        of: find.byType(CardDetailAgentModelSection),
-        matching: find.byType(Row),
-      ).first,
+      find
+          .descendant(
+            of: find.byType(CardDetailAgentModelSection),
+            matching: find.byType(Row),
+          )
+          .first,
     );
     expect(row.children.length, greaterThan(4));
 

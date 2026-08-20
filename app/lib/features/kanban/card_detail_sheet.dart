@@ -117,6 +117,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   late Map<String, String> _agentModelParamValues;
   bool? _agentAllowDirtyWorkspace;
   bool? _agentEnableSandbox;
+  bool? _agentRequireTests;
   int? _colorValue;
   final _checklistInput = TextEditingController();
   final _verificationFeedbackInput = TextEditingController();
@@ -177,6 +178,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     };
     _agentAllowDirtyWorkspace = widget.card.agentAllowDirtyWorkspace;
     _agentEnableSandbox = widget.card.agentEnableSandbox;
+    _agentRequireTests = widget.card.agentRequireTests;
     _colorValue = widget.card.colorValue;
     bindImeGuard(_textControllers);
     _boardController = context.read<BoardController>();
@@ -366,6 +368,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (_agentEnableSandbox != widget.card.agentEnableSandbox) {
       return true;
     }
+    if (_agentRequireTests != widget.card.agentRequireTests) return true;
     return false;
   }
 
@@ -461,7 +464,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         _agentModelId != null ||
         _agentModelParamValues.isNotEmpty ||
         _agentAllowDirtyWorkspace != null ||
-        _agentEnableSandbox != null) {
+        _agentEnableSandbox != null ||
+        _agentRequireTests != null) {
       return true;
     }
     return false;
@@ -543,6 +547,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     );
     final agentAllowDirtyWorkspace = _agentAllowDirtyWorkspace;
     final agentEnableSandbox = _agentEnableSandbox;
+    final agentRequireTests = _agentRequireTests;
     final colorValue = _colorValue;
     final clearColor = _colorValue == null;
 
@@ -588,6 +593,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         clearAgentAllowDirtyWorkspace: agentAllowDirtyWorkspace == null,
         agentEnableSandbox: agentEnableSandbox,
         clearAgentEnableSandbox: agentEnableSandbox == null,
+        agentRequireTests: agentRequireTests,
+        clearAgentRequireTests: agentRequireTests == null,
         colorValue: colorValue,
         clearColor: clearColor,
       );
@@ -1156,12 +1163,14 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           agentModelParamValues: _agentModelParamValues,
                           agentAllowDirtyWorkspace: _agentAllowDirtyWorkspace,
                           agentEnableSandbox: _agentEnableSandbox,
+                          agentRequireTests: _agentRequireTests,
                           onChanged: ({
                             agentEngine,
                             agentModelId,
                             agentModelParamValues = const {},
                             agentAllowDirtyWorkspace,
                             agentEnableSandbox,
+                            agentRequireTests,
                           }) {
                             _safeSetState(() {
                               _agentEngine = agentEngine;
@@ -1170,6 +1179,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _agentAllowDirtyWorkspace =
                                   agentAllowDirtyWorkspace;
                               _agentEnableSandbox = agentEnableSandbox;
+                              _agentRequireTests = agentRequireTests;
                             });
                           },
                         ),

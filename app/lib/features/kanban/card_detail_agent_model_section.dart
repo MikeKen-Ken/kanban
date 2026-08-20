@@ -14,6 +14,7 @@ class CardDetailAgentModelSection extends StatefulWidget {
     required this.agentModelParamValues,
     required this.agentAllowDirtyWorkspace,
     required this.agentEnableSandbox,
+    required this.agentRequireTests,
     required this.onChanged,
   });
 
@@ -22,12 +23,14 @@ class CardDetailAgentModelSection extends StatefulWidget {
   final Map<String, String> agentModelParamValues;
   final bool? agentAllowDirtyWorkspace;
   final bool? agentEnableSandbox;
+  final bool? agentRequireTests;
   final void Function({
     String? agentEngine,
     String? agentModelId,
     Map<String, String> agentModelParamValues,
     bool? agentAllowDirtyWorkspace,
     bool? agentEnableSandbox,
+    bool? agentRequireTests,
   }) onChanged;
 
   @override
@@ -161,6 +164,7 @@ class _CardDetailAgentModelSectionState
     Map<String, String>? agentModelParamValues,
     Object? agentAllowDirtyWorkspace = _omit,
     Object? agentEnableSandbox = _omit,
+    Object? agentRequireTests = _omit,
   }) {
     widget.onChanged(
       agentEngine: identical(agentEngine, _omit)
@@ -177,6 +181,9 @@ class _CardDetailAgentModelSectionState
       agentEnableSandbox: identical(agentEnableSandbox, _omit)
           ? widget.agentEnableSandbox
           : agentEnableSandbox as bool?,
+      agentRequireTests: identical(agentRequireTests, _omit)
+          ? widget.agentRequireTests
+          : agentRequireTests as bool?,
     );
   }
 
@@ -283,8 +290,7 @@ class _CardDetailAgentModelSectionState
                 const SizedBox(width: 6),
                 _dropdown(
                   label: '推理程度',
-                  value:
-                      widget.agentModelParamValues[reasoning.id] ?? _inherit,
+                  value: widget.agentModelParamValues[reasoning.id] ?? _inherit,
                   items: _items(
                     options: [
                       for (final option in reasoning.options)
@@ -328,6 +334,13 @@ class _CardDetailAgentModelSectionState
                 value: widget.agentEnableSandbox == true,
                 onChanged: (value) => _emit(
                   agentEnableSandbox: value ? true : null,
+                ),
+              ),
+              _compactToggle(
+                label: '需要测试',
+                value: widget.agentRequireTests != false,
+                onChanged: (value) => _emit(
+                  agentRequireTests: value ? null : false,
                 ),
               ),
             ],
