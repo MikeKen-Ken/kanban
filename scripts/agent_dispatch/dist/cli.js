@@ -3402,11 +3402,13 @@ async function runCursor(job, cancellation) {
       );
       const metrics = diagnostics.snapshot();
       logLine(formatAgentRunDiagnostics(metrics));
+      const cancellationReason = endedByTerminal ? "dispatch_terminal" : cancellation?.isSkipRequested ? "user_skip" : cancellation?.isCancelled ? "user_cancelled" : result.status === "cancelled" ? "sdk_cancelled" : void 0;
       logLine(
-        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
+        `Cursor run id=${result.id} status=${result.status}` + (cancellationReason ? ` reason=${cancellationReason}` : "") + ` steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`
       );
-      if (result.usage && toDashboardTokenUsage(result.usage).totalTokens > 0) {
-        logLine(formatSessionTokenLog(result.usage, metrics));
+      const usage = result.usage ?? run.usage;
+      if (usage && toDashboardTokenUsage(usage).totalTokens > 0) {
+        logLine(formatSessionTokenLog(usage, metrics));
       }
       if (cancellation?.isSkipRequested) {
         logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u8DF3\u8FC7", "worker");

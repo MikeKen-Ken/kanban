@@ -565,11 +565,25 @@ export async function runCursor(
       );
       const metrics = diagnostics.snapshot();
       logLine(formatAgentRunDiagnostics(metrics));
+      const cancellationReason =
+        endedByTerminal
+          ? "dispatch_terminal"
+          : cancellation?.isSkipRequested
+            ? "user_skip"
+            : cancellation?.isCancelled
+              ? "user_cancelled"
+              : result.status === "cancelled"
+                ? "sdk_cancelled"
+                : undefined;
       logLine(
-        `Cursor run id=${result.id} status=${result.status} steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
+        `Cursor run id=${result.id} status=${result.status}` +
+          (cancellationReason ? ` reason=${cancellationReason}` : "") +
+          ` steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
       );
-      if (result.usage && toDashboardTokenUsage(result.usage).totalTokens > 0) {
-        logLine(formatSessionTokenLog(result.usage, metrics));
+      // 主动收尾时 SDK 结果可能没有 usage，但 run 句柄仍保留累计用量。
+      const usage = result.usage ?? run.usage;
+      if (usage && toDashboardTokenUsage(usage).totalTokens > 0) {
+        logLine(formatSessionTokenLog(usage, metrics));
       }
       if (cancellation?.isSkipRequested) {
         logLine("Cursor 会话已由用户跳过", "worker");
