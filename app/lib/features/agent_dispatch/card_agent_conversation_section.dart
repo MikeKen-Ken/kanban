@@ -182,6 +182,26 @@ class _CardAgentConversationDialogState
     }
   }
 
+  Future<void> _openMarkdownDirectory() async {
+    final card = _board.findCardById(widget.cardId);
+    final columnId = _board.findColumnIdForCard(widget.cardId);
+    final file = card?.fileAttachments
+        .where(
+          (attachment) =>
+              attachment.fileName == KanbanCard.agentConversationFileName,
+        )
+        .firstOrNull;
+    if (columnId == null || file == null) return;
+    final error = await _board.openCardFileAttachmentDirectory(
+      columnId,
+      widget.cardId,
+      file.id,
+    );
+    if (error != null && mounted) {
+      showAppSnackBar(context, message: error);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final card = _board.findCardById(widget.cardId);
@@ -281,6 +301,16 @@ class _CardAgentConversationDialogState
             actions: [
               if (hasMarkdownFile)
                 OutlinedButton.icon(
+                  key: const ValueKey(
+                    'card-agent-conversation-open-markdown-directory',
+                  ),
+                  onPressed: _openMarkdownDirectory,
+                  icon: const Icon(Icons.folder_open_outlined, size: 18),
+                  label: const Text('打开所在文件夹'),
+                ),
+              if (hasMarkdownFile)
+                OutlinedButton.icon(
+                  key: const ValueKey('card-agent-conversation-open-markdown'),
                   onPressed: _openMarkdownFile,
                   icon: const Icon(Icons.open_in_new, size: 18),
                   label: const Text('打开 Markdown 文件'),

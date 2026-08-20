@@ -156,6 +156,45 @@ extension BoardControllerFileAttachments on BoardController {
     return opened ? null : '无法打开文件';
   }
 
+  Future<String?> openCardFileAttachmentDirectory(
+    String columnId,
+    String cardId,
+    String attachmentId,
+  ) async {
+    if (activeProjectId == null) return '看板未就绪';
+    final store = attachmentStore;
+    if (store == null) return '当前平台不支持文件附件';
+
+    KanbanCard? target;
+    for (final col in board?.columns ?? const <KanbanColumn>[]) {
+      if (col.id != columnId) continue;
+      for (final card in col.cards) {
+        if (card.id == cardId) {
+          target = card;
+          break;
+        }
+      }
+    }
+    if (target == null) return '卡片不存在';
+    if (!target.fileAttachments.any((a) => a.id == attachmentId)) {
+      return '文件不存在';
+    }
+    if (isAttachmentMissing(attachmentId)) {
+      return '文件尚未同步到本机';
+    }
+
+    final path = await store.localFilePath(
+      projectId: activeProjectId!,
+      attachmentId: attachmentId,
+    );
+    if (path == null) return '文件尚未同步到本机';
+
+    final opened = await card_file_opener.openCardFileAttachmentDirectory(
+      filePath: path,
+    );
+    return opened ? null : '无法打开文件所在文件夹';
+  }
+
   List<CardFileAttachment> _reindexFileAttachments(
     List<CardFileAttachment> attachments,
   ) {
