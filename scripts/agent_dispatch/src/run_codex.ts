@@ -24,6 +24,9 @@ import {
 } from "./types.ts";
 import { isRetryableError } from "./retry.ts";
 import {
+  startPollingDispatchTerminal,
+} from "./dispatch_terminal.ts";
+import {
   emitAssistantMessage,
   emitConversationSnapshot,
   emitSessionStart,
@@ -135,6 +138,12 @@ export async function runCodex(
     const sessionUser = sessionStartText(job);
     if (sessionUser) live.push({ role: "user", text: sessionUser });
     const fromTurns: ConversationTranscriptMessage[] = [];
+    let endedByTerminal = false;
+    const stopAfterTerminal = (reason: string): void => {
+      if (endedByTerminal) return;
+      endedByTerminal = true;
+      workerLog(`收尾工具已成功（${reason}），正在结束 Codex 会话`);
+    };
 
     const emittedAssistant = new Set<string>();
     const emittedThinking = new Set<string>();
@@ -171,7 +180,15 @@ export async function runCodex(
         }
       };
       cancellation?.onCancel(killChild);
+      const terminalPoll = startPollingDispatchTerminal(
+        job.round.peekDispatchTerminal,
+        (kind) => {
+          stopAfterTerminal(`MCP ${kind}`);
+          killChild();
+        },
+      );
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
+        terminalPoll.stop();
         resolvePromise(130);
         return;
       }
@@ -203,8 +220,12 @@ export async function runCodex(
       child.stderr?.on("data", (buf: Buffer) => {
         stderrLines.push(buf);
       });
-      child.on("error", reject);
+      child.on("error", (err) => {
+        terminalPoll.stop();
+        reject(err);
+      });
       if (!child.stdin) {
+        terminalPoll.stop();
         reject(new Error("Codex stdin 不可用"));
         return;
       }
@@ -213,11 +234,12 @@ export async function runCodex(
       child.on("close", (exitCode) => {
         stdoutLines.flush();
         stderrLines.flush();
+        terminalPoll.stop();
         if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
           resolvePromise(130);
           return;
         }
-        resolvePromise(exitCode ?? 1);
+        resolvePromise(endedByTerminal ? 0 : (exitCode ?? 1));
       });
     });
 

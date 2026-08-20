@@ -26,6 +26,10 @@ import {
   isShellSpanEvent,
 } from "./cursor_shell_spans.ts";
 import {
+  isSuccessfulDispatchTerminalStep,
+  startPollingDispatchTerminal,
+} from "./dispatch_terminal.ts";
+import {
   AgentRunDiagnostics,
   formatAgentRunDiagnostics,
 } from "./run_diagnostics.ts";
@@ -451,6 +455,14 @@ export async function runCursor(
           }),
         );
       };
+      let endedByTerminal = false;
+      let runCancel: (() => Promise<void>) | undefined;
+      const stopAfterTerminal = (reason: string): void => {
+        if (endedByTerminal) return;
+        endedByTerminal = true;
+        logLine(`收尾工具已成功（${reason}），正在结束 Cursor 会话`);
+        void runCancel?.().catch(() => undefined);
+      };
       const run = await agent.send({
         text: askUserTool
           ? `${job.prompt}\n\n## 看板交互\n需要用户确认、补充需求或选择方案时必须调用 ask_user；不要调用 askQuestion，也不要只在助手正文里口头列出选项。有 2–4 个互斥方案时必须传入 choices，看板会在最近运行界面弹出选项菜单并等待回复。`
@@ -504,6 +516,9 @@ export async function runCursor(
             if (isShellSpanEvent(event)) {
               await job.round.reportShellSpan?.(event);
             }
+            if (isSuccessfulDispatchTerminalStep(step)) {
+              stopAfterTerminal("工具结果");
+            }
           } catch (err) {
             logLine(
               `上报 Shell 时间线失败：${err instanceof Error ? err.message : String(err)}`,
@@ -514,10 +529,23 @@ export async function runCursor(
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => undefined);
       });
+      runCancel = () => run.cancel();
+      if (endedByTerminal) {
+        await run.cancel().catch(() => undefined);
+      }
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => undefined);
       }
-      const result = await run.wait();
+      const terminalPoll = startPollingDispatchTerminal(
+        job.round.peekDispatchTerminal,
+        (kind) => stopAfterTerminal(`MCP ${kind}`),
+      );
+      let result;
+      try {
+        result = await run.wait();
+      } finally {
+        terminalPoll.stop();
+      }
       let turns: unknown[] = [];
       try {
         turns = await run.conversation();
@@ -547,7 +575,28 @@ export async function runCursor(
         logLine("Cursor 会话已由用户跳过", "worker");
         return { ok: false, error: "已跳过" };
       }
-      if (cancellation?.isCancelled || result.status === "cancelled") {
+      if (cancellation?.isCancelled && !endedByTerminal) {
+        logLine("Cursor 会话已由用户停止", "worker");
+        return { ok: false, error: "已取消" };
+      }
+      if (endedByTerminal) {
+        const readyAt = shellSpans.lastReadyStartedAtMs();
+        if (readyAt != null) {
+          const blocked = readyBlockedByShells(shellSpans.snapshot(), readyAt);
+          if (blocked) {
+            logLine(blocked);
+            return { ok: false, error: blocked };
+          }
+        }
+        return {
+          ok: true,
+          summary:
+            typeof result.result === "string"
+              ? result.result
+              : "收尾工具已成功，已结束会话",
+        };
+      }
+      if (result.status === "cancelled") {
         logLine("Cursor 会话已由用户停止", "worker");
         return { ok: false, error: "已取消" };
       }

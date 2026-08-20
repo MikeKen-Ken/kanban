@@ -192,6 +192,24 @@ export async function runBatch(
                 }),
               );
             },
+            peekDispatchTerminal: async () => {
+              const status = await mcp.callJson("dispatch_agent_session_status", {
+                workerToken: job.workerToken,
+              });
+              const pending = asRecord(status.pending);
+              if (String(pending?.status ?? "") === "declared") {
+                return "declared";
+              }
+              const projectId = String(
+                status.projectId ?? claim.payload.projectId ?? job.projectId ?? "",
+              ).trim();
+              const latest = await mcp.callJson("get_card", {
+                cardId,
+                ...(projectId ? { projectId } : {}),
+              });
+              const state = cardState(latest);
+              return state === "active" ? "none" : state;
+            },
           },
         };
         logModelOverride(liveJob, roundJob, cardId);

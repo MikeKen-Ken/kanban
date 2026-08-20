@@ -62,6 +62,8 @@ describe("session_context", () => {
       assert.match(context.prompt, /MUST NOT 对仓库根做无界 glob/);
       assert.match(context.prompt, /\.svn/);
       assert.match(context.prompt, /features\/kanban/);
+      assert.match(context.prompt, /cardKind/);
+      assert.match(context.prompt, /一律为实施卡|否则为实施卡/);
       assert.equal(
         readFileSync(context.attachmentPaths[0]!, "utf8"),
         "附件内容",

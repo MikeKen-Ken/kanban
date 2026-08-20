@@ -78,6 +78,8 @@ export function createSessionContext(options: {
     "",
     "本轮卡片已领取。以下上下文是唯一任务范围；不要再次读取 Skill 或领取其他卡片。",
     "",
+    "卡片类型只由 JSON 的 `cardKind` 与 `labels` 决定：`consultation` 为咨询卡，否则为实施卡。未打咨询标签时，即使标题像提问、没有清单，也必须当实施卡做完并 `ready_to_submit`。不要自行改判。",
+    "",
     DISPATCH_SEARCH_POLICY.trim(),
     "",
     "## 卡片上下文（JSON）",

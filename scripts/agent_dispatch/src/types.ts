@@ -91,6 +91,13 @@ export type RoundContext = {
     executionTimeMs?: number;
     exitCode?: number;
   }) => Promise<void>;
+  /**
+   * 收尾工具已在 MCP 落盘后的会话状态。Worker 用来结束 SDK run，
+   * 避免 ready_to_submit 成功后模型继续搜改。
+   */
+  peekDispatchTerminal?: () => Promise<
+    "none" | "declared" | "verify" | "blocked"
+  >;
 };
 
 export type RoundDispatchJob = DispatchJob & {

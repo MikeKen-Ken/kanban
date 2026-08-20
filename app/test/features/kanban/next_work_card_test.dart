@@ -12,6 +12,7 @@ KanbanCard _card({
   List<ChecklistItem> checklist = const [],
   List<ChecklistItem> verificationFeedback = const [],
   String? commitRef,
+  List<String> labels = const [],
 }) {
   final created = createdAt ?? updatedAt;
   return KanbanCard(
@@ -25,6 +26,7 @@ KanbanCard _card({
     checklist: checklist,
     verificationFeedback: verificationFeedback,
     commitRef: commitRef,
+    labels: labels,
   );
 }
 
@@ -282,6 +284,21 @@ void main() {
     ]);
     expect(buildCardCommitMessage(card), '新功能\n\n说明\n\n- 子任务');
     expect(buildCardWorkScope(card)['workMode'], 'normal');
+    expect(buildCardWorkScope(card)['cardKind'], 'implementation');
+  });
+
+  test('未打咨询标签一律是实施卡，仅 consultation 为咨询卡', () {
+    final plain = _card(id: 'q', title: '这是一个问题吗', updatedAt: 1);
+    expect(cardKindForDispatch(plain), 'implementation');
+    expect(buildCardWorkScope(plain)['cardKind'], 'implementation');
+    final consult = _card(
+      id: 'c',
+      title: '问一下架构',
+      updatedAt: 1,
+      labels: const ['consultation'],
+    );
+    expect(cardKindForDispatch(consult), 'consultation');
+    expect(buildCardWorkScope(consult)['cardKind'], 'consultation');
   });
 
   test('countWorkQueueCards 统计待返工、待办与进行中未完成卡', () {

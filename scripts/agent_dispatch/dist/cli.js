@@ -1532,6 +1532,96 @@ function copyUserPath(from, to) {
   copyFileSync(from, to);
 }
 
+// src/dispatch_terminal.ts
+var DISPATCH_TERMINAL_TOOL_NAMES = [
+  "ready_to_submit",
+  "submit_consultation",
+  "block_card"
+];
+function asRecord4(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function pickString2(record, ...keys) {
+  if (!record) return "";
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+function toolPayload(step) {
+  return asRecord4(step.message) ?? asRecord4(step.toolCall) ?? asRecord4(step.call) ?? asRecord4(step.tool) ?? asRecord4(asRecord4(step.message)?.toolCall) ?? asRecord4(asRecord4(step.message)?.call);
+}
+function dispatchTerminalToolName(step) {
+  const record = asRecord4(step);
+  if (!record) return void 0;
+  const message = toolPayload(record);
+  const nested = asRecord4(message?.args) ?? asRecord4(message?.arguments) ?? asRecord4(message?.input) ?? asRecord4(message?.params);
+  const name = pickString2(message, "toolName", "name") || pickString2(nested, "toolName", "name");
+  const type = pickString2(message, "type") || pickString2(record, "type");
+  if (DISPATCH_TERMINAL_TOOL_NAMES.includes(name)) {
+    return name;
+  }
+  if (type === "mcp") {
+    const nestedName = pickString2(nested, "toolName", "name");
+    if (DISPATCH_TERMINAL_TOOL_NAMES.includes(
+      nestedName
+    )) {
+      return nestedName;
+    }
+  }
+  return void 0;
+}
+function resultLooksFailed(result) {
+  const status = String(result.status ?? "").toLowerCase();
+  if (status === "error" || status === "failed") return true;
+  if (result.isError === true) return true;
+  const value = asRecord4(result.value) ?? result;
+  if (value.ok === false) return true;
+  return false;
+}
+function resultLooksSuccess(result) {
+  if (resultLooksFailed(result)) return false;
+  const status = String(result.status ?? "").toLowerCase();
+  if (status === "success" || status === "ok" || status === "completed") {
+    return true;
+  }
+  const value = asRecord4(result.value) ?? result;
+  return value.ok === true;
+}
+function isSuccessfulDispatchTerminalStep(step) {
+  if (!dispatchTerminalToolName(step)) return false;
+  const record = asRecord4(step);
+  const message = record ? toolPayload(record) : void 0;
+  const result = asRecord4(message?.result) ?? asRecord4(message?.output);
+  if (!result) return false;
+  return resultLooksSuccess(result);
+}
+function startPollingDispatchTerminal(peek, onHit, intervalMs = 750) {
+  if (!peek) return { stop() {
+  } };
+  let stopped = false;
+  const tick = async () => {
+    while (!stopped) {
+      try {
+        const kind = await peek();
+        if (kind !== "none") {
+          onHit(kind);
+          return;
+        }
+      } catch {
+      }
+      await sleep(intervalMs);
+    }
+  };
+  void tick();
+  return {
+    stop() {
+      stopped = true;
+    }
+  };
+}
+
 // src/interaction_bridge.ts
 import {
   existsSync as existsSync3,
@@ -1897,6 +1987,12 @@ async function runCodex(job, cancellation) {
     const sessionUser = sessionStartText(job);
     if (sessionUser) live.push({ role: "user", text: sessionUser });
     const fromTurns = [];
+    let endedByTerminal = false;
+    const stopAfterTerminal = (reason) => {
+      if (endedByTerminal) return;
+      endedByTerminal = true;
+      workerLog(`\u6536\u5C3E\u5DE5\u5177\u5DF2\u6210\u529F\uFF08${reason}\uFF09\uFF0C\u6B63\u5728\u7ED3\u675F Codex \u4F1A\u8BDD`);
+    };
     const emittedAssistant = /* @__PURE__ */ new Set();
     const emittedThinking = /* @__PURE__ */ new Set();
     const emitAssistant = (text) => {
@@ -1930,7 +2026,15 @@ async function runCodex(job, cancellation) {
         }
       };
       cancellation?.onCancel(killChild);
+      const terminalPoll = startPollingDispatchTerminal(
+        job.round.peekDispatchTerminal,
+        (kind) => {
+          stopAfterTerminal(`MCP ${kind}`);
+          killChild();
+        }
+      );
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
+        terminalPoll.stop();
         resolvePromise(130);
         return;
       }
@@ -1961,8 +2065,12 @@ async function runCodex(job, cancellation) {
       child.stderr?.on("data", (buf) => {
         stderrLines.push(buf);
       });
-      child.on("error", reject);
+      child.on("error", (err) => {
+        terminalPoll.stop();
+        reject(err);
+      });
       if (!child.stdin) {
+        terminalPoll.stop();
         reject(new Error("Codex stdin \u4E0D\u53EF\u7528"));
         return;
       }
@@ -1971,11 +2079,12 @@ async function runCodex(job, cancellation) {
       child.on("close", (exitCode) => {
         stdoutLines.flush();
         stderrLines.flush();
+        terminalPoll.stop();
         if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
           resolvePromise(130);
           return;
         }
-        resolvePromise(exitCode ?? 1);
+        resolvePromise(endedByTerminal ? 0 : exitCode ?? 1);
       });
     });
     if (cancellation?.isSkipRequested) {
@@ -2204,10 +2313,10 @@ async function withTimeout(operation, timeoutMs, work) {
 }
 
 // src/cursor_shell_spans.ts
-function asRecord4(value) {
+function asRecord5(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-function pickString2(record, ...keys) {
+function pickString3(record, ...keys) {
   if (!record) return "";
   for (const key of keys) {
     const value = record[key];
@@ -2232,17 +2341,17 @@ function isShellName(name) {
 function normalizeDispatchCallId(callId) {
   return (callId ?? "").trim().split(/\s+/).filter((part) => part.length > 0).join("_");
 }
-function toolPayload(step) {
-  return asRecord4(step.message) ?? asRecord4(step.toolCall) ?? asRecord4(step.call) ?? asRecord4(step.tool) ?? asRecord4(asRecord4(step.message)?.toolCall) ?? asRecord4(asRecord4(step.message)?.call);
+function toolPayload2(step) {
+  return asRecord5(step.message) ?? asRecord5(step.toolCall) ?? asRecord5(step.call) ?? asRecord5(step.tool) ?? asRecord5(asRecord5(step.message)?.toolCall) ?? asRecord5(asRecord5(step.message)?.call);
 }
 function extractCommand(message) {
-  const nested = asRecord4(message.args) ?? asRecord4(message.arguments) ?? asRecord4(message.input) ?? asRecord4(message.params);
-  return pickString2(message, "command", "cmd", "shellCommand") || pickString2(nested, "command", "cmd", "shellCommand");
+  const nested = asRecord5(message.args) ?? asRecord5(message.arguments) ?? asRecord5(message.input) ?? asRecord5(message.params);
+  return pickString3(message, "command", "cmd", "shellCommand") || pickString3(nested, "command", "cmd", "shellCommand");
 }
 function extractResult(message) {
-  const result = asRecord4(message.result) ?? asRecord4(message.output) ?? asRecord4(message.value);
+  const result = asRecord5(message.result) ?? asRecord5(message.output) ?? asRecord5(message.value);
   if (!result) return void 0;
-  const value = asRecord4(result.value) ?? result;
+  const value = asRecord5(result.value) ?? result;
   const executionTimeMs = pickNumber(
     value,
     "executionTime",
@@ -2250,25 +2359,25 @@ function extractResult(message) {
     "execution_time_ms"
   );
   const exitCode = pickNumber(value, "exitCode", "exit_code");
-  if (executionTimeMs == null && exitCode == null && asRecord4(message.result) == null) {
+  if (executionTimeMs == null && exitCode == null && asRecord5(message.result) == null) {
     return void 0;
   }
   return { executionTimeMs, exitCode };
 }
 function extractCallId(record, message) {
   return normalizeDispatchCallId(
-    pickString2(message, "call_id", "callId", "id") || pickString2(record, "call_id", "callId")
+    pickString3(message, "call_id", "callId", "id") || pickString3(record, "call_id", "callId")
   );
 }
 function isReadyToSubmitStep(step) {
-  const record = asRecord4(step);
+  const record = asRecord5(step);
   if (!record) return false;
-  const message = toolPayload(record);
-  const nested = asRecord4(message?.args) ?? asRecord4(message?.arguments);
-  const toolName = pickString2(message, "toolName", "name") || pickString2(nested, "toolName", "name");
-  const type = pickString2(message, "type") || pickString2(record, "type");
+  const message = toolPayload2(record);
+  const nested = asRecord5(message?.args) ?? asRecord5(message?.arguments);
+  const toolName = pickString3(message, "toolName", "name") || pickString3(nested, "toolName", "name");
+  const type = pickString3(message, "type") || pickString3(record, "type");
   if (toolName === "ready_to_submit") return true;
-  return type === "mcp" && pickString2(nested, "toolName") === "ready_to_submit";
+  return type === "mcp" && pickString3(nested, "toolName") === "ready_to_submit";
 }
 function isShellSpanEvent(event) {
   if (!event || !("phase" in event)) return false;
@@ -2306,19 +2415,19 @@ var CursorShellSpanEmitter = class {
   seq = 0;
   lastReadyAtMs;
   observe(step, nowMs) {
-    const record = asRecord4(step);
+    const record = asRecord5(step);
     if (!record) return void 0;
     if (isReadyToSubmitStep(record)) {
-      const message2 = toolPayload(record);
-      const hasResult = asRecord4(message2?.result) != null;
+      const message2 = toolPayload2(record);
+      const hasResult = asRecord5(message2?.result) != null;
       if (!hasResult) this.lastReadyAtMs = nowMs;
       return { kind: "ready", startedAtMs: nowMs };
     }
-    const message = toolPayload(record);
+    const message = toolPayload2(record);
     if (!message) return void 0;
-    const name = pickString2(message, "name", "toolName", "functionName", "type") || pickString2(record, "name", "toolName");
-    const type = pickString2(record, "type") || pickString2(message, "type");
-    if (!isShellName(name) && type !== "shell" && pickString2(message, "type") !== "shell") {
+    const name = pickString3(message, "name", "toolName", "functionName", "type") || pickString3(record, "name", "toolName");
+    const type = pickString3(record, "type") || pickString3(message, "type");
+    if (!isShellName(name) && type !== "shell" && pickString3(message, "type") !== "shell") {
       return void 0;
     }
     const command = extractCommand(message);
@@ -2886,10 +2995,10 @@ function expandMultiline2(prefix, body) {
   }
   return result;
 }
-function asRecord5(value) {
+function asRecord6(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-function pickString3(message, ...keys) {
+function pickString4(message, ...keys) {
   if (!message) return "";
   for (const key of keys) {
     const value = message[key];
@@ -2902,7 +3011,7 @@ function parseJsonRecord(value) {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return void 0;
   try {
-    return asRecord5(JSON.parse(trimmed));
+    return asRecord6(JSON.parse(trimmed));
   } catch {
     return void 0;
   }
@@ -2914,13 +3023,13 @@ function usefulJson2(value, max = 4e3) {
   if (!text || text === "{}" || text === "[]" || text === "null") return "";
   return text;
 }
-function toolPayload2(step) {
-  return asRecord5(step.message) ?? asRecord5(step.toolCall) ?? asRecord5(step.call) ?? asRecord5(step.tool) ?? asRecord5(asRecord5(step.message)?.toolCall) ?? asRecord5(asRecord5(step.message)?.call);
+function toolPayload3(step) {
+  return asRecord6(step.message) ?? asRecord6(step.toolCall) ?? asRecord6(step.call) ?? asRecord6(step.tool) ?? asRecord6(asRecord6(step.message)?.toolCall) ?? asRecord6(asRecord6(step.message)?.call);
 }
 function extractToolDetail(payload) {
   if (!payload) return "";
-  const nested = asRecord5(payload.args) ?? asRecord5(payload.arguments) ?? asRecord5(payload.input) ?? asRecord5(payload.params) ?? asRecord5(asRecord5(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord5(payload.function)?.arguments);
-  const command = pickString3(
+  const nested = asRecord6(payload.args) ?? asRecord6(payload.arguments) ?? asRecord6(payload.input) ?? asRecord6(payload.params) ?? asRecord6(asRecord6(payload.function)?.arguments) ?? parseJsonRecord(payload.args) ?? parseJsonRecord(payload.arguments) ?? parseJsonRecord(asRecord6(payload.function)?.arguments);
+  const command = pickString4(
     payload,
     "command",
     "cmd",
@@ -2932,7 +3041,7 @@ function extractToolDetail(payload) {
   );
   if (command) return command;
   if (nested) {
-    const nestedCommand = pickString3(
+    const nestedCommand = pickString4(
       nested,
       "command",
       "cmd",
@@ -2960,9 +3069,9 @@ function isShellTool(name) {
   return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
 }
 function describeStep(step) {
-  const record = asRecord5(step) ?? {};
+  const record = asRecord6(step) ?? {};
   const type = String(record.type ?? "unknown");
-  const message = toolPayload2(record);
+  const message = toolPayload3(record);
   switch (type) {
     case "assistantMessage":
       return {
@@ -2970,14 +3079,14 @@ function describeStep(step) {
         source: "ai"
       };
     case "thinkingMessage": {
-      const text = pickString3(message, "text", "thinking", "content");
+      const text = pickString4(message, "text", "thinking", "content");
       return {
         lines: text ? expandMultiline2("\u601D\u8003\uFF1A", text) : [],
         source: "ai"
       };
     }
     case "toolCall": {
-      const toolName = pickString3(message, "name", "toolName", "functionName", "type") || pickString3(record, "name", "toolName") || "tool";
+      const toolName = pickString4(message, "name", "toolName", "functionName", "type") || pickString4(record, "name", "toolName") || "tool";
       const detail = extractToolDetail(message);
       if (!detail) {
         return {
@@ -3002,7 +3111,7 @@ function describeStep(step) {
       };
     }
     case "toolResult": {
-      const toolName = pickString3(message, "name", "toolName", "type") || "tool";
+      const toolName = pickString4(message, "name", "toolName", "type") || "tool";
       const result = message?.result ?? message?.output ?? message?.content ?? message?.text;
       if (result === void 0) {
         return { lines: [], source: "mcp" };
@@ -3016,7 +3125,7 @@ function describeStep(step) {
     }
     case "shellConversationTurn":
     case "shell": {
-      const command = extractToolDetail(message) || pickString3(message, "command", "text");
+      const command = extractToolDetail(message) || pickString4(message, "command", "text");
       if (!command) return { lines: [], source: "shell" };
       return {
         lines: expandMultiline2("\u547D\u4EE4\uFF1A", command),
@@ -3190,6 +3299,14 @@ async function runCursor(job, cancellation) {
           })
         );
       };
+      let endedByTerminal = false;
+      let runCancel;
+      const stopAfterTerminal = (reason) => {
+        if (endedByTerminal) return;
+        endedByTerminal = true;
+        logLine(`\u6536\u5C3E\u5DE5\u5177\u5DF2\u6210\u529F\uFF08${reason}\uFF09\uFF0C\u6B63\u5728\u7ED3\u675F Cursor \u4F1A\u8BDD`);
+        void runCancel?.().catch(() => void 0);
+      };
       const run = await agent.send({
         text: askUserTool ? `${job.prompt}
 
@@ -3237,6 +3354,9 @@ async function runCursor(job, cancellation) {
             if (isShellSpanEvent(event)) {
               await job.round.reportShellSpan?.(event);
             }
+            if (isSuccessfulDispatchTerminalStep(step)) {
+              stopAfterTerminal("\u5DE5\u5177\u7ED3\u679C");
+            }
           } catch (err) {
             logLine(
               `\u4E0A\u62A5 Shell \u65F6\u95F4\u7EBF\u5931\u8D25\uFF1A${err instanceof Error ? err.message : String(err)}`
@@ -3247,10 +3367,23 @@ async function runCursor(job, cancellation) {
       cancellation?.onCancel(() => {
         void run.cancel().catch(() => void 0);
       });
+      runCancel = () => run.cancel();
+      if (endedByTerminal) {
+        await run.cancel().catch(() => void 0);
+      }
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => void 0);
       }
-      const result = await run.wait();
+      const terminalPoll = startPollingDispatchTerminal(
+        job.round.peekDispatchTerminal,
+        (kind) => stopAfterTerminal(`MCP ${kind}`)
+      );
+      let result;
+      try {
+        result = await run.wait();
+      } finally {
+        terminalPoll.stop();
+      }
       let turns = [];
       try {
         turns = await run.conversation();
@@ -3279,7 +3412,25 @@ async function runCursor(job, cancellation) {
         logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u8DF3\u8FC7", "worker");
         return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
       }
-      if (cancellation?.isCancelled || result.status === "cancelled") {
+      if (cancellation?.isCancelled && !endedByTerminal) {
+        logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u505C\u6B62", "worker");
+        return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+      }
+      if (endedByTerminal) {
+        const readyAt2 = shellSpans.lastReadyStartedAtMs();
+        if (readyAt2 != null) {
+          const blocked = readyBlockedByShells(shellSpans.snapshot(), readyAt2);
+          if (blocked) {
+            logLine(blocked);
+            return { ok: false, error: blocked };
+          }
+        }
+        return {
+          ok: true,
+          summary: typeof result.result === "string" ? result.result : "\u6536\u5C3E\u5DE5\u5177\u5DF2\u6210\u529F\uFF0C\u5DF2\u7ED3\u675F\u4F1A\u8BDD"
+        };
+      }
+      if (result.status === "cancelled") {
         logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u505C\u6B62", "worker");
         return { ok: false, error: "\u5DF2\u53D6\u6D88" };
       }
@@ -3392,6 +3543,8 @@ function formatScopedKanbanToolPrompt(cardId) {
     "scoped `kanbanMCP` \u53EA\u6CE8\u518C\u4E0B\u9762\u4E09\u4E2A\u5DE5\u5177\u3002\u7981\u6B62 `GetMcpTools`\u3001`tools/list` \u6216\u62C9\u53D6\u5176\u5B83\u770B\u677F\u5DE5\u5177\u76EE\u5F55\u3002",
     "Cursor\uFF1A\u76F4\u63A5 `CallMcpTool`\uFF1BCodex\uFF1A\u76F4\u63A5\u8C03\u7528\u540C\u540D MCP \u5DE5\u5177\u3002`cardId` \u5FC5\u987B\u662F\u6CE8\u5165\u503C\u3002",
     "\u7981\u6B62\u628A ready_to_submit \u4E0E Shell\uFF08\u5C24\u5176\u662F\u6D4B\u8BD5\uFF09\u653E\u5728\u540C\u4E00\u6279\u5E76\u884C\u5DE5\u5177\u91CC\u3002\u5FC5\u987B\u7B49\u6D4B\u8BD5\u547D\u4EE4\u8FD4\u56DE exitCode=0 \u4E4B\u540E\uFF0C\u518D\u5355\u72EC\u8C03\u7528 ready_to_submit\u3002",
+    "ready_to_submit / submit_consultation / block_card \u4E00\u65E6\u8FD4\u56DE\u6210\u529F\uFF0C\u7ACB\u5373\u505C\u6B62\u4E00\u5207\u5DE5\u5177\uFF1BWorker \u4F1A\u7ED3\u675F\u672C\u4F1A\u8BDD\u3002\u7981\u6B62\u518D\u6B21\u641C\u7D22\u3001\u4FEE\u6539\u6216\u91CD\u505A\u4EFB\u52A1\u3002",
+    "\u5361\u7247\u7C7B\u578B\u53EA\u770B\u6CE8\u5165 JSON \u7684 cardKind / labels\uFF1AcardKind=consultation \u6216 labels \u542B consultation \u624D\u662F\u54A8\u8BE2\u5361\uFF1B\u5426\u5219\u4E00\u5F8B\u662F\u5B9E\u65BD\u5361\u3002\u7981\u6B62\u6839\u636E\u6807\u9898\u6216\u5907\u6CE8\u50CF\u4E0D\u50CF\u95EE\u9898\u6765\u6539\u5224\u3002",
     "Shell \u7684 working_directory \u5FC5\u987B\u4E0E\u547D\u4EE4\u91CC\u7684\u76F8\u5BF9\u8DEF\u5F84\u4E00\u81F4\uFF1Acwd \u5DF2\u662F app \u65F6\u4E0D\u8981\u518D\u5199 app/lib\u3002flutter test / dart test \u79D2\u9000\u4E0D\u5F97\u89C6\u4E3A\u901A\u8FC7\u3002",
     "",
     "```json",
@@ -3501,6 +3654,8 @@ function createSessionContext(options) {
     "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
     "",
     "\u672C\u8F6E\u5361\u7247\u5DF2\u9886\u53D6\u3002\u4EE5\u4E0B\u4E0A\u4E0B\u6587\u662F\u552F\u4E00\u4EFB\u52A1\u8303\u56F4\uFF1B\u4E0D\u8981\u518D\u6B21\u8BFB\u53D6 Skill \u6216\u9886\u53D6\u5176\u4ED6\u5361\u7247\u3002",
+    "",
+    "\u5361\u7247\u7C7B\u578B\u53EA\u7531 JSON \u7684 `cardKind` \u4E0E `labels` \u51B3\u5B9A\uFF1A`consultation` \u4E3A\u54A8\u8BE2\u5361\uFF0C\u5426\u5219\u4E3A\u5B9E\u65BD\u5361\u3002\u672A\u6253\u54A8\u8BE2\u6807\u7B7E\u65F6\uFF0C\u5373\u4F7F\u6807\u9898\u50CF\u63D0\u95EE\u3001\u6CA1\u6709\u6E05\u5355\uFF0C\u4E5F\u5FC5\u987B\u5F53\u5B9E\u65BD\u5361\u505A\u5B8C\u5E76 `ready_to_submit`\u3002\u4E0D\u8981\u81EA\u884C\u6539\u5224\u3002",
     "",
     DISPATCH_SEARCH_POLICY.trim(),
     "",
@@ -3741,6 +3896,24 @@ ${tree.output}`);
                   span
                 })
               );
+            },
+            peekDispatchTerminal: async () => {
+              const status2 = await mcp.callJson("dispatch_agent_session_status", {
+                workerToken: job.workerToken
+              });
+              const pending2 = asRecord7(status2.pending);
+              if (String(pending2?.status ?? "") === "declared") {
+                return "declared";
+              }
+              const projectId2 = String(
+                status2.projectId ?? claim.payload.projectId ?? job.projectId ?? ""
+              ).trim();
+              const latest2 = await mcp.callJson("get_card", {
+                cardId,
+                ...projectId2 ? { projectId: projectId2 } : {}
+              });
+              const state2 = cardState(latest2);
+              return state2 === "active" ? "none" : state2;
             }
           }
         };
@@ -3818,7 +3991,7 @@ ${afterSkip.output}`,
           ...projectId ? { projectId } : {}
         });
         const state = cardState(latest);
-        const pending = asRecord6(status.pending);
+        const pending = asRecord7(status.pending);
         if (state === "blocked") {
           return {
             ok: false,
@@ -3911,7 +4084,7 @@ async function recoverPendingSessions(mcp, job) {
   const pending = Array.isArray(listed.pending) ? listed.pending : [];
   let processedCards = 0;
   for (const raw of pending) {
-    const record = asRecord6(raw);
+    const record = asRecord7(raw);
     if (!record) continue;
     const sessionId = requiredString(record, "sessionId");
     const recovered = await mcp.callJson("dispatch_recover", {
@@ -4016,7 +4189,7 @@ function requiredString(record, key) {
   if (!value) throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${key} \u4E0D\u80FD\u4E3A\u7A7A`);
   return value;
 }
-function asRecord6(value) {
+function asRecord7(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function completedResult(processedCards, reason) {
@@ -4032,7 +4205,7 @@ function logClaimedCard(payload) {
   let title = "";
   const details = [];
   for (const raw of items) {
-    const record = asRecord6(raw);
+    const record = asRecord7(raw);
     if (!record) continue;
     const kind = String(record.kind ?? "");
     const text = String(record.text ?? "").trim();

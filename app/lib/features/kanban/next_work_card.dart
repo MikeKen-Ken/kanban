@@ -108,11 +108,21 @@ int countRemainingDispatchQueue(
   return total - 1;
 }
 
+/// 咨询卡标签；未打此标签的卡片一律按实施卡调度。
+const dispatchConsultationLabel = 'consultation';
+
+/// `consultation` → 咨询；其它（含无标签）→ 实施。只看标签，不看标题或备注口吻。
+String cardKindForDispatch(KanbanCard card) =>
+    card.labels.contains(dispatchConsultationLabel)
+        ? 'consultation'
+        : 'implementation';
+
 /// 本轮实施范围（仅文本；附件由 MCP 层内联二进制）。
 Map<String, dynamic> buildCardWorkScope(KanbanCard card) {
   final rework = isReworkWorkMode(card);
   return {
     'workMode': rework ? 'rework' : 'normal',
+    'cardKind': cardKindForDispatch(card),
     'workItems': buildCardWorkItems(card),
     if (card.labels.isNotEmpty) 'labels': card.labels,
     if (card.commitRef != null && card.commitRef!.isNotEmpty)
