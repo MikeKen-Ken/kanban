@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 const agentInteractionEventPrefix = '@@KANBAN_INTERACTION@@';
+const agentFollowUpFeedbackPrefix = 'Agent 追问：';
 final _conversationSnapshotFilePattern = RegExp(
   r'^conversation-snapshot-[a-zA-Z0-9._-]+\.json$',
 );
@@ -169,6 +170,40 @@ String appendAgentConversationUserReply(String? current, String text) {
     ..writeln('### 用户')
     ..write(normalized);
   return '${buffer.toString().trimRight()}\n';
+}
+
+/// 删除最后一段与追问正文完全匹配的用户消息，和追加追问保持 LIFO 对称。
+String removeAgentConversationUserReply(String? current, String text) {
+  final normalized = text.trim();
+  final markdown = current ?? '';
+  if (normalized.isEmpty || markdown.trim().isEmpty) return markdown;
+
+  final sections = RegExp(r'^### 用户\s*$', multiLine: true).allMatches(markdown);
+  for (final section in sections.toList().reversed) {
+    final nextSection = RegExp(
+      r'^### \S',
+      multiLine: true,
+    ).firstMatch(markdown.substring(section.end));
+    final end =
+        nextSection == null ? markdown.length : section.end + nextSection.start;
+    final body = markdown.substring(section.end, end).trim();
+    if (body != normalized) continue;
+
+    var start = section.start;
+    while (start > 0 &&
+        (markdown[start - 1] == '\n' || markdown[start - 1] == '\r')) {
+      start--;
+    }
+    var removalEnd = end;
+    while (removalEnd < markdown.length &&
+        (markdown[removalEnd] == '\n' || markdown[removalEnd] == '\r')) {
+      removalEnd++;
+    }
+    final remaining = '${markdown.substring(0, start)}'
+        '${markdown.substring(removalEnd)}';
+    return remaining.trim().isEmpty ? '' : '${remaining.trimRight()}\n';
+  }
+  return markdown;
 }
 
 final _sessionHeaderLinePattern = RegExp(r'^## 会话[^\n]*', multiLine: true);
@@ -344,4 +379,3 @@ List<String> inferAgentInteractionChoices(String question) {
 }
 
 final _choiceLinePattern = RegExp(r'^\s*(?:\d+[\.、\)]|[-*•])\s+(.+)$');
-

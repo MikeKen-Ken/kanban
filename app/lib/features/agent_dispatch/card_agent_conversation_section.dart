@@ -8,6 +8,7 @@ import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import 'agent_dispatch_registry.dart';
 import 'agent_dispatch_service.dart';
+import 'agent_interaction.dart';
 import 'agent_interaction_prompt.dart';
 
 class CardAgentConversationSection extends StatelessWidget {
@@ -133,7 +134,7 @@ class _CardAgentConversationDialogState
         }
         final feedback = ChecklistItem(
           id: const Uuid().v4(),
-          text: 'Agent 追问：$text',
+          text: '$agentFollowUpFeedbackPrefix$text',
         );
         final error = await _board.updateCardFull(
           columnId,
@@ -142,7 +143,7 @@ class _CardAgentConversationDialogState
         );
         if (error != null) throw StateError(error);
         final live = _board.findCardById(widget.cardId);
-        final markdown = _appendUserMessage(
+        final markdown = appendAgentConversationUserReply(
           live?.agentConversationMarkdown,
           text,
         );
@@ -331,13 +332,4 @@ class _CardAgentConversationDialogState
       ),
     );
   }
-}
-
-String _appendUserMessage(String? current, String text) {
-  final buffer = StringBuffer((current ?? '').trimRight());
-  if (buffer.isNotEmpty) buffer.write('\n\n');
-  buffer
-    ..writeln('### 用户')
-    ..write(text.trim());
-  return '${buffer.toString().trimRight()}\n';
 }

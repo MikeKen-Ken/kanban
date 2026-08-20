@@ -23,6 +23,33 @@ void main() {
     );
   });
 
+  test('删除追问会移除最后一个对应的用户对话段', () {
+    const original = '## 会话 2026-08-20 10:00\n\n'
+        '### 用户\n'
+        '初始任务\n\n'
+        '### 助手\n'
+        '请补充约束。\n\n'
+        '### 用户\n'
+        '补充约束\n\n'
+        '### 用户\n'
+        '补充约束\n';
+
+    final markdown = removeAgentConversationUserReply(original, '补充约束');
+
+    expect(markdown, contains('### 用户\n初始任务'));
+    expect(markdown, contains('### 助手\n请补充约束。'));
+    expect(RegExp(r'### 用户\n补充约束').allMatches(markdown).length, 1);
+  });
+
+  test('删除不存在的追问时保持对话不变', () {
+    const original = '### 用户\n保留的追问\n';
+
+    expect(
+      removeAgentConversationUserReply(original, '不存在的追问'),
+      original,
+    );
+  });
+
   test('问题正文里的编号列表会还原为点选选项', () {
     final event = parseAgentInteractionEvent(
       '@@KANBAN_INTERACTION@@'

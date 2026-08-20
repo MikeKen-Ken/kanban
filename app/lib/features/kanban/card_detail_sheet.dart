@@ -12,6 +12,7 @@ import '../../utils/ime_guard.dart';
 import '../../features/project/project_theme.dart';
 import '../completed_auto_clear/completed_auto_clear.dart';
 import '../agent_dispatch/card_agent_conversation_section.dart';
+import '../agent_dispatch/agent_interaction.dart';
 import '../labels/label_editor_dialog.dart';
 import 'card_complete_motion.dart';
 import 'card_detail_actions_bar.dart';
@@ -520,6 +521,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final checklist = List<ChecklistItem>.from(_checklist);
     final verificationFeedback =
         List<ChecklistItem>.from(_verificationFeedback);
+    final removedAgentFollowUpTexts = widget.card.verificationFeedback
+        .where(
+          (original) =>
+              original.text.startsWith(agentFollowUpFeedbackPrefix) &&
+              !verificationFeedback.any((next) => next.id == original.id),
+        )
+        .map(
+          (item) => item.text.substring(agentFollowUpFeedbackPrefix.length),
+        )
+        .toList();
     final attachments = List<CardAttachment>.from(_attachments);
     final fileAttachments = List<CardFileAttachment>.from(_fileAttachments);
     final links = List<CardLink>.from(_links);
@@ -581,6 +592,19 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         clearColor: clearColor,
       );
       if (updateError != null) throw StateError(updateError);
+      if (removedAgentFollowUpTexts.isNotEmpty) {
+        var markdown = _boardController
+            .findCardById(widget.card.id)
+            ?.agentConversationMarkdown;
+        for (final text in removedAgentFollowUpTexts) {
+          markdown = removeAgentConversationUserReply(markdown, text);
+        }
+        final historyError = await _boardController.setCardAgentConversation(
+          widget.card.id,
+          markdown,
+        );
+        if (historyError != null) throw StateError(historyError);
+      }
       await _moveToReworkIfNewFeedbackAdded(verificationFeedback);
     } catch (_) {
       _persisted = false;
