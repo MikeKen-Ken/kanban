@@ -457,10 +457,15 @@ export async function runCursor(
       };
       let endedByTerminal = false;
       let runCancel: (() => Promise<void>) | undefined;
+      let resolveTerminalReached: (() => void) | undefined;
+      const terminalReached = new Promise<void>((resolve) => {
+        resolveTerminalReached = resolve;
+      });
       const stopAfterTerminal = (reason: string): void => {
         if (endedByTerminal) return;
         endedByTerminal = true;
         logLine(`收尾工具已成功（${reason}），正在结束 Cursor 会话`);
+        resolveTerminalReached?.();
         void runCancel?.().catch(() => undefined);
       };
       const run = await agent.send({
@@ -531,7 +536,7 @@ export async function runCursor(
       });
       runCancel = () => run.cancel();
       if (endedByTerminal) {
-        await run.cancel().catch(() => undefined);
+        void run.cancel().catch(() => undefined);
       }
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => undefined);
@@ -541,20 +546,38 @@ export async function runCursor(
         (kind) => stopAfterTerminal(`MCP ${kind}`),
       );
       let result;
+      let terminalEndedWithoutWait = false;
       try {
-        result = await run.wait();
+        const winner = await Promise.race([
+          run.wait().then((value) => ({ kind: "result" as const, value })),
+          terminalReached.then(() => ({ kind: "terminal" as const })),
+        ]);
+        if (winner.kind === "terminal") {
+          terminalEndedWithoutWait = true;
+          // 正常收尾不再等待 SDK 的取消完成；最多给它几秒写入最终 usage。
+          await settleWithin(3000, run.cancel());
+          result = {
+            id: run.id,
+            status: "cancelled" as const,
+            usage: run.usage,
+          };
+        } else {
+          result = winner.value;
+        }
       } finally {
         terminalPoll.stop();
       }
       let turns: unknown[] = [];
-      try {
-        turns = await run.conversation();
-        for (const message of extractConversationMessages(turns)) {
-          if (message.role === "thinking") emitThinking(message.text);
-          if (message.role === "assistant") emitAssistant(message.text);
+      if (!terminalEndedWithoutWait) {
+        try {
+          turns = await run.conversation();
+          for (const message of extractConversationMessages(turns)) {
+            if (message.role === "thinking") emitThinking(message.text);
+            if (message.role === "assistant") emitAssistant(message.text);
+          }
+        } catch {
+          // 会话快照不可用时仍用 result.result 兜底。
         }
-      } catch {
-        // 会话快照不可用时仍用 result.result 兜底。
       }
       if (typeof result.result === "string") {
         emitAssistant(result.result);

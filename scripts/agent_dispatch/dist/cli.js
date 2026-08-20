@@ -3301,10 +3301,15 @@ async function runCursor(job, cancellation) {
       };
       let endedByTerminal = false;
       let runCancel;
+      let resolveTerminalReached;
+      const terminalReached = new Promise((resolve2) => {
+        resolveTerminalReached = resolve2;
+      });
       const stopAfterTerminal = (reason) => {
         if (endedByTerminal) return;
         endedByTerminal = true;
         logLine(`\u6536\u5C3E\u5DE5\u5177\u5DF2\u6210\u529F\uFF08${reason}\uFF09\uFF0C\u6B63\u5728\u7ED3\u675F Cursor \u4F1A\u8BDD`);
+        resolveTerminalReached?.();
         void runCancel?.().catch(() => void 0);
       };
       const run = await agent.send({
@@ -3369,7 +3374,7 @@ async function runCursor(job, cancellation) {
       });
       runCancel = () => run.cancel();
       if (endedByTerminal) {
-        await run.cancel().catch(() => void 0);
+        void run.cancel().catch(() => void 0);
       }
       if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
         await run.cancel().catch(() => void 0);
@@ -3379,19 +3384,36 @@ async function runCursor(job, cancellation) {
         (kind) => stopAfterTerminal(`MCP ${kind}`)
       );
       let result;
+      let terminalEndedWithoutWait = false;
       try {
-        result = await run.wait();
+        const winner = await Promise.race([
+          run.wait().then((value) => ({ kind: "result", value })),
+          terminalReached.then(() => ({ kind: "terminal" }))
+        ]);
+        if (winner.kind === "terminal") {
+          terminalEndedWithoutWait = true;
+          await settleWithin(3e3, run.cancel());
+          result = {
+            id: run.id,
+            status: "cancelled",
+            usage: run.usage
+          };
+        } else {
+          result = winner.value;
+        }
       } finally {
         terminalPoll.stop();
       }
       let turns = [];
-      try {
-        turns = await run.conversation();
-        for (const message of extractConversationMessages(turns)) {
-          if (message.role === "thinking") emitThinking(message.text);
-          if (message.role === "assistant") emitAssistant(message.text);
+      if (!terminalEndedWithoutWait) {
+        try {
+          turns = await run.conversation();
+          for (const message of extractConversationMessages(turns)) {
+            if (message.role === "thinking") emitThinking(message.text);
+            if (message.role === "assistant") emitAssistant(message.text);
+          }
+        } catch {
         }
-      } catch {
       }
       if (typeof result.result === "string") {
         emitAssistant(result.result);
