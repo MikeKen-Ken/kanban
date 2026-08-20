@@ -157,10 +157,10 @@ class AgentDispatchSettings {
   final bool cardLimitMax;
   final int cardLimitCount;
 
-  /// 旧版全局完成后队列；仅当尚未有任何按项目配置时作为回退。
+  /// 旧版全局完成后队列；仅在其原关联项目尚未配置项目队列时作为回退。
   final List<AgentDispatchAfterStep> afterQueue;
 
-  /// 旧版全局「失败后仍执行」；仅当尚未有任何按项目配置时作为回退。
+  /// 旧版全局「失败后仍执行」；仅在其原关联项目尚未配置项目队列时作为回退。
   final bool runAfterQueueOnFailure;
 
   /// 各项目独立的完成后队列；避免项目之间推送等动作互相覆盖。
@@ -255,12 +255,18 @@ class AgentDispatchSettings {
       afterQueueByProject.isNotEmpty ||
       runAfterQueueOnFailureByProject.isNotEmpty;
 
-  /// 解析某项目完成后队列：有项目配置用项目的；尚无任何项目配置时回退旧全局值。
+  /// 旧全局队列只能回退给其原关联项目，避免未配置的看板继承推送等动作。
+  bool _usesLegacyAfterQueueFor(String? projectId) =>
+      !_hasPerProjectAfterQueue &&
+      projectId != null &&
+      projectId == this.projectId;
+
+  /// 解析某项目完成后队列：有项目配置用项目的，否则仅回退其关联的旧全局值。
   List<AgentDispatchAfterStep> afterQueueFor(String? projectId) {
     if (projectId != null && afterQueueByProject.containsKey(projectId)) {
       return afterQueueByProject[projectId]!;
     }
-    if (!_hasPerProjectAfterQueue) return afterQueue;
+    if (_usesLegacyAfterQueueFor(projectId)) return afterQueue;
     return const [];
   }
 
@@ -270,7 +276,7 @@ class AgentDispatchSettings {
         runAfterQueueOnFailureByProject.containsKey(projectId)) {
       return runAfterQueueOnFailureByProject[projectId]!;
     }
-    if (!_hasPerProjectAfterQueue) return runAfterQueueOnFailure;
+    if (_usesLegacyAfterQueueFor(projectId)) return runAfterQueueOnFailure;
     return true;
   }
 

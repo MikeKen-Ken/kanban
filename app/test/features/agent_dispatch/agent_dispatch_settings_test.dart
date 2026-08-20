@@ -391,14 +391,16 @@ disable-model-invocation: true
     expect(next.repoPath, '/legacy');
   });
 
-  test('完成后队列按项目隔离，互不覆盖', () {
+  test('完成后队列按项目隔离，旧全局队列不影响其它项目', () {
     const settings = AgentDispatchSettings(
+      projectId: 'a',
       afterQueue: [AgentDispatchAfterStep.gitPush],
     );
 
-    // 尚无按项目配置时，仍回退旧全局值
+    // 尚无按项目配置时，旧全局值只回退给其原关联项目。
     expect(settings.afterQueueFor('a'), [AgentDispatchAfterStep.gitPush]);
-    expect(settings.afterQueueFor('b'), [AgentDispatchAfterStep.gitPush]);
+    expect(settings.afterQueueFor('b'), isEmpty);
+    expect(settings.runAfterQueueOnFailureFor('b'), isTrue);
 
     final withA = settings.bindAfterQueueToProject(
       'a',
@@ -406,7 +408,7 @@ disable-model-invocation: true
       runOnFailure: true,
     );
     expect(withA.afterQueueFor('a'), [AgentDispatchAfterStep.gitPush]);
-    // 任一项目已写入后，未配置的项目不再继承全局推送
+    // 任一项目已写入后，未配置的项目不会继承全局推送。
     expect(withA.afterQueueFor('b'), isEmpty);
     expect(withA.runAfterQueueOnFailureFor('b'), isTrue);
 
