@@ -43,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final syncError = controller.syncError;
       final attachmentWarning = controller.attachmentSyncWarning;
       if (status == SyncStatus.error && syncError != null) {
-        showAppSnackBar(context, message: '同步失败：$syncError');
+        showAppSnackBar(context, message: 'Sync failed: $syncError');
       } else if (status == SyncStatus.success && attachmentWarning != null) {
         showAppSnackBar(context, message: attachmentWarning);
       }
@@ -61,11 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     showAppSnackBar(
       context,
-      message: id == null ? '添加失败，请检查目标列' : '已添加「${draft.title}」',
+      message: id == null
+          ? 'Failed to add; check the target column'
+          : 'Added "${draft.title}"',
       action: id == null
           ? null
           : SnackBarAction(
-              label: '撤销',
+              label: 'Undo',
               onPressed: () => context.read<BoardController>().undoLastAction(),
             ),
     );
@@ -80,9 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       message: undone
           ? label == null
-              ? '已撤销上一项操作'
-              : '已撤销：$label'
-          : '没有可撤销的操作',
+              ? 'Undid the previous action'
+              : 'Undid: $label'
+          : 'There is nothing to undo',
     );
   }
 
@@ -95,9 +97,9 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       message: redone
           ? label == null
-              ? '已重做上一项操作'
-              : '已重做：$label'
-          : '没有可重做的操作',
+              ? 'Redid the previous action'
+              : 'Redid: $label'
+          : 'There is nothing to redo',
     );
   }
 
@@ -109,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final controller = context.read<BoardController>();
     final cancelled = controller.cancelSync();
     if (!cancelled || !mounted) return;
-    showAppSnackBar(context, message: '已取消同步');
+    showAppSnackBar(context, message: 'Sync canceled');
   }
 
   Future<void> _openCalendar() async {
@@ -138,23 +140,23 @@ class _HomeScreenState extends State<HomeScreen> {
             final title = await showDialog<String>(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: const Text('新建当天任务'),
+                title: const Text('Create task for this day'),
                 content: TextField(
                   controller: titleController,
                   autofocus: true,
-                  decoration: const InputDecoration(labelText: '标题'),
+                  decoration: const InputDecoration(labelText: 'Title'),
                   onSubmitted: (_) =>
                       Navigator.pop(ctx, titleController.text.trim()),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('取消'),
+                    child: const Text('Cancel'),
                   ),
                   FilledButton(
                     onPressed: () =>
                         Navigator.pop(ctx, titleController.text.trim()),
-                    child: const Text('创建'),
+                    child: const Text('Create'),
                   ),
                 ],
               ),
@@ -184,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
       controller.projectSettings.copyWith(swimlaneMode: next),
     );
     if (!mounted) return;
-    showAppSnackBar(context, message: '泳道：${next.label}');
+    showAppSnackBar(context, message: 'Swimlane: ${next.label}');
   }
 
   Future<void> _openSearch() async {
@@ -228,7 +230,8 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((card) => card.id == reference.cardId)
         .firstOrNull;
     if (card == null) {
-      showAppSnackBar(context, message: '这张卡片已被删除或移动，请刷新后重试');
+      showAppSnackBar(context,
+          message: 'This card was deleted or moved. Refresh and try again');
       return;
     }
     await showCardDetailSheet(
@@ -299,21 +302,21 @@ class _HomeScreenState extends State<HomeScreen> {
     final title = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('新建列'),
+        title: const Text('Create column'),
         content: TextFormField(
           autofocus: true,
-          decoration: const InputDecoration(hintText: '列名称'),
+          decoration: const InputDecoration(hintText: 'Column name'),
           onChanged: (value) => draftTitle = value,
           onFieldSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, draftTitle.trim()),
-            child: const Text('创建'),
+            child: const Text('Create'),
           ),
         ],
       ),
@@ -356,189 +359,189 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: controller.hasDisplayableBackground
-              ? Colors.transparent
-              : null,
+          backgroundColor:
+              controller.hasDisplayableBackground ? Colors.transparent : null,
           appBar: AppBar(
-          title: const ProjectSwitcher(),
-          actions: [
-            if (!compact)
-              IconButton(
-                tooltip: controller.canUndo
-                    ? '撤销：${controller.undoLabel ?? '上一项操作'}'
-                    : '没有可撤销的操作',
-                icon: const Icon(Icons.undo),
-                onPressed: controller.canUndo ? _undoWithFeedback : null,
-              ),
-            if (!compact)
-              IconButton(
-                tooltip: controller.canRedo
-                    ? '重做：${controller.redoLabel ?? '上一项操作'}'
-                    : '没有可重做的操作',
-                icon: const Icon(Icons.redo),
-                onPressed: controller.canRedo ? _redoWithFeedback : null,
-              ),
-            if (!compact)
-              IconButton(
-                tooltip: '新建列',
-                icon: const Icon(Icons.add),
-                onPressed: () => _addColumn(context),
-              ),
-            if (!compact)
-              IconButton(
-                tooltip: '日历',
-                icon: const Icon(Icons.calendar_month_outlined),
-                onPressed: _openCalendar,
-              ),
-            if (!compact)
-              IconButton(
-                tooltip: '泳道：${controller.projectSettings.swimlaneMode.label}',
-                icon: Icon(
-                  controller.projectSettings.swimlaneMode == SwimlaneMode.none
-                      ? Icons.view_agenda_outlined
-                      : Icons.view_agenda,
+            title: const ProjectSwitcher(),
+            actions: [
+              if (!compact)
+                IconButton(
+                  tooltip: controller.canUndo
+                      ? 'Undo: ${controller.undoLabel ?? 'previous action'}'
+                      : 'There is nothing to undo',
+                  icon: const Icon(Icons.undo),
+                  onPressed: controller.canUndo ? _undoWithFeedback : null,
                 ),
-                onPressed: _cycleSwimlaneMode,
-              ),
-            if (!compact)
-              IconButton(
-                tooltip: '搜索',
-                icon: const Icon(Icons.search),
-                onPressed: _openSearch,
-              ),
-            if (!compact)
-              IconButton(
-                tooltip: '回收站',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: _openTrash,
-              ),
-            if (!compact) const RemoteActionsToolbarButton(),
-            Selector<BoardController,
-                (SyncStatus, String?, int, DateTime?, SyncProgress?, int)>(
-              selector: (_, c) => (
-                c.syncStatus,
-                c.syncError,
-                c.unresolvedConflictCount,
-                c.lastSyncedAt,
-                c.syncProgress,
-                c.pendingSyncUploadCount,
-              ),
-              builder: (context, data, _) => SyncActionsSwitcher(
-                status: data.$1,
-                error: data.$2,
-                conflictCount: data.$3,
-                lastSyncedAt: data.$4,
-                progress: data.$5,
-                pendingUploadCount: data.$6,
-                compact: compact,
-                onConflictTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ConflictCenterScreen(),
-                    ),
-                  );
-                },
-                onCancel: data.$1 == SyncStatus.syncing ? _cancelSync : null,
-              ),
-            ),
-            if (!compact)
-              IconButton(
-                tooltip: '设置',
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: _openSettings,
-              ),
-            if (compact)
-              PopupMenuButton<String>(
-                tooltip: '更多操作',
-                onSelected: _handleCompactAction,
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'search',
-                    child: ListTile(
-                      leading: Icon(Icons.search),
-                      title: Text('搜索'),
-                    ),
+              if (!compact)
+                IconButton(
+                  tooltip: controller.canRedo
+                      ? 'Redo: ${controller.redoLabel ?? 'previous action'}'
+                      : 'There is nothing to redo',
+                  icon: const Icon(Icons.redo),
+                  onPressed: controller.canRedo ? _redoWithFeedback : null,
+                ),
+              if (!compact)
+                IconButton(
+                  tooltip: 'Create column',
+                  icon: const Icon(Icons.add),
+                  onPressed: () => _addColumn(context),
+                ),
+              if (!compact)
+                IconButton(
+                  tooltip: 'Calendar',
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  onPressed: _openCalendar,
+                ),
+              if (!compact)
+                IconButton(
+                  tooltip:
+                      'Swimlane: ${controller.projectSettings.swimlaneMode.label}',
+                  icon: Icon(
+                    controller.projectSettings.swimlaneMode == SwimlaneMode.none
+                        ? Icons.view_agenda_outlined
+                        : Icons.view_agenda,
                   ),
-                  const PopupMenuItem(
-                    value: 'calendar',
-                    child: ListTile(
-                      leading: Icon(Icons.calendar_month_outlined),
-                      title: Text('日历'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'swimlane',
-                    child: ListTile(
-                      leading: const Icon(Icons.view_agenda_outlined),
-                      title: Text(
-                        '泳道：${controller.projectSettings.swimlaneMode.label}',
+                  onPressed: _cycleSwimlaneMode,
+                ),
+              if (!compact)
+                IconButton(
+                  tooltip: 'Search',
+                  icon: const Icon(Icons.search),
+                  onPressed: _openSearch,
+                ),
+              if (!compact)
+                IconButton(
+                  tooltip: 'Trash',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _openTrash,
+                ),
+              if (!compact) const RemoteActionsToolbarButton(),
+              Selector<BoardController,
+                  (SyncStatus, String?, int, DateTime?, SyncProgress?, int)>(
+                selector: (_, c) => (
+                  c.syncStatus,
+                  c.syncError,
+                  c.unresolvedConflictCount,
+                  c.lastSyncedAt,
+                  c.syncProgress,
+                  c.pendingSyncUploadCount,
+                ),
+                builder: (context, data, _) => SyncActionsSwitcher(
+                  status: data.$1,
+                  error: data.$2,
+                  conflictCount: data.$3,
+                  lastSyncedAt: data.$4,
+                  progress: data.$5,
+                  pendingUploadCount: data.$6,
+                  compact: compact,
+                  onConflictTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ConflictCenterScreen(),
+                      ),
+                    );
+                  },
+                  onCancel: data.$1 == SyncStatus.syncing ? _cancelSync : null,
+                ),
+              ),
+              if (!compact)
+                IconButton(
+                  tooltip: 'Settings',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: _openSettings,
+                ),
+              if (compact)
+                PopupMenuButton<String>(
+                  tooltip: 'More actions',
+                  onSelected: _handleCompactAction,
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'search',
+                      child: ListTile(
+                        leading: Icon(Icons.search),
+                        title: Text('Search'),
                       ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'undo',
-                    enabled: controller.canUndo,
-                    child: ListTile(
-                      leading: const Icon(Icons.undo),
-                      title: Text(
-                        controller.canUndo
-                            ? '撤销：${controller.undoLabel ?? '上一项操作'}'
-                            : '没有可撤销的操作',
+                    const PopupMenuItem(
+                      value: 'calendar',
+                      child: ListTile(
+                        leading: Icon(Icons.calendar_month_outlined),
+                        title: Text('Calendar'),
                       ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'redo',
-                    enabled: controller.canRedo,
-                    child: ListTile(
-                      leading: const Icon(Icons.redo),
-                      title: Text(
-                        controller.canRedo
-                            ? '重做：${controller.redoLabel ?? '上一项操作'}'
-                            : '没有可重做的操作',
+                    PopupMenuItem(
+                      value: 'swimlane',
+                      child: ListTile(
+                        leading: const Icon(Icons.view_agenda_outlined),
+                        title: Text(
+                          'Swimlane: ${controller.projectSettings.swimlaneMode.label}',
+                        ),
                       ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'column',
-                    child: ListTile(
-                      leading: Icon(Icons.add),
-                      title: Text('新建列'),
+                    PopupMenuItem(
+                      value: 'undo',
+                      enabled: controller.canUndo,
+                      child: ListTile(
+                        leading: const Icon(Icons.undo),
+                        title: Text(
+                          controller.canUndo
+                              ? 'Undo: ${controller.undoLabel ?? 'previous action'}'
+                              : 'There is nothing to undo',
+                        ),
+                      ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'trash',
-                    child: ListTile(
-                      leading: Icon(Icons.delete_outline),
-                      title: Text('回收站'),
+                    PopupMenuItem(
+                      value: 'redo',
+                      enabled: controller.canRedo,
+                      child: ListTile(
+                        leading: const Icon(Icons.redo),
+                        title: Text(
+                          controller.canRedo
+                              ? 'Redo: ${controller.redoLabel ?? 'previous action'}'
+                              : 'There is nothing to redo',
+                        ),
+                      ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'settings',
-                    child: ListTile(
-                      leading: Icon(Icons.settings_outlined),
-                      title: Text('设置'),
+                    const PopupMenuItem(
+                      value: 'column',
+                      child: ListTile(
+                        leading: Icon(Icons.add),
+                        title: Text('Create column'),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _quickCapture,
-          icon: const Icon(Icons.add),
-          label: const Text('快速添加'),
-        ),
-        body: _buildBoardBody(
-          compact: compact,
-          wallpaperIds: controller.displayableWallpaperIds,
-          activeWallpaperId: controller.projectSettings.wallpaperActiveId,
-          wallpaperPlaybackMode:
-              controller.projectSettings.wallpaperPlaybackMode,
-          wallpaperIntervalSeconds:
-              controller.projectSettings.wallpaperIntervalSeconds,
-          overlayOpacity: controller.projectSettings.backgroundOverlayOpacity,
-        ),
+                    const PopupMenuItem(
+                      value: 'trash',
+                      child: ListTile(
+                        leading: Icon(Icons.delete_outline),
+                        title: Text('Trash'),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'settings',
+                      child: ListTile(
+                        leading: Icon(Icons.settings_outlined),
+                        title: Text('Settings'),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _quickCapture,
+            icon: const Icon(Icons.add),
+            label: const Text('Quick add'),
+          ),
+          body: _buildBoardBody(
+            compact: compact,
+            wallpaperIds: controller.displayableWallpaperIds,
+            activeWallpaperId: controller.projectSettings.wallpaperActiveId,
+            wallpaperPlaybackMode:
+                controller.projectSettings.wallpaperPlaybackMode,
+            wallpaperIntervalSeconds:
+                controller.projectSettings.wallpaperIntervalSeconds,
+            overlayOpacity: controller.projectSettings.backgroundOverlayOpacity,
+          ),
         ),
       ),
     );
@@ -560,7 +563,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final board = controller.board;
         if (board == null) {
-          return Center(child: Text(controller.errorMessage ?? '加载失败'));
+          return Center(child: Text(controller.errorMessage ?? 'Load failed'));
         }
 
         if (board.columns.isEmpty) {
@@ -696,12 +699,12 @@ class _EmptyBoardState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              '先创建第一列',
+              'Create your first column',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 6),
             Text(
-              '创建列后，就可以用右下角的“快速添加”录入卡片',
+              'After creating a column, use "Quick add" in the lower-right corner to add cards',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -709,7 +712,7 @@ class _EmptyBoardState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onCreateColumn,
               icon: const Icon(Icons.add),
-              label: const Text('创建第一列'),
+              label: const Text('Create first column'),
             ),
           ],
         ),

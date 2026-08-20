@@ -51,7 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     showAppSnackBar(
       context,
-      message: saved ? '完整备份已导出' : '已取消导出',
+      message: saved ? 'Full backup exported' : 'Export canceled',
     );
   }
 
@@ -61,16 +61,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('恢复完整备份？'),
-        content: const Text('当前工作区会被备份内容替换，恢复前将自动创建时间点备份。'),
+        title: const Text('Restore full backup?'),
+        content: const Text(
+            'The current workspace will be replaced by the backup. A point-in-time backup will be created first.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('恢复'),
+            child: const Text('Restore'),
           ),
         ],
       ),
@@ -79,31 +80,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await context.read<BoardController>().restoreBackupArchive(bytes);
       if (!mounted) return;
-      showAppSnackBar(context, message: '备份已恢复');
+      showAppSnackBar(context, message: 'Backup restored');
     } on FormatException catch (error) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '备份无效：${error.message}');
+      showAppSnackBar(context, message: 'Invalid backup: ${error.message}');
     }
   }
 
   String _webDavSubtitle(bool enabled, String serverUrl) {
-    if (!enabled) return '未启用 · 连接配置仅保存在本机';
+    if (!enabled)
+      return 'Disabled · connection settings are stored locally only';
     final host = serverUrl.trim();
-    if (host.isEmpty) return '已启用 · 尚未填写服务器地址 · 连接配置仅保存在本机';
-    return '已启用 · $host · 手动上传/下载/合并';
+    if (host.isEmpty)
+      return 'Enabled · server address is not set · connection settings are stored locally only';
+    return 'Enabled · $host · manual upload/download/merge';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           SettingsNavigationCard(
             icon: Icons.touch_app_outlined,
-            title: '交互',
-            subtitle: '仅保存在本机，不同步',
+            title: 'Interaction',
+            subtitle: 'Stored locally only; not synced',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -115,10 +118,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           SettingsNavigationCard(
             icon: Icons.palette_outlined,
-            title: '外观与提醒',
-            subtitle: '仅保存在本机',
+            title: 'Appearance & reminders',
+            subtitle: 'Stored locally only',
             onTap: () => _openCategory(
-              title: '外观与提醒',
+              title: 'Appearance & reminders',
               children: [
                 Selector<BoardController, ThemeMode>(
                   selector: (_, controller) => controller.appSettings.themeMode,
@@ -126,17 +129,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     segments: const [
                       ButtonSegment(
                         value: ThemeMode.system,
-                        label: Text('跟随系统'),
+                        label: Text('System'),
                         icon: Icon(Icons.brightness_auto_outlined),
                       ),
                       ButtonSegment(
                         value: ThemeMode.light,
-                        label: Text('浅色'),
+                        label: Text('Light'),
                         icon: Icon(Icons.light_mode_outlined),
                       ),
                       ButtonSegment(
                         value: ThemeMode.dark,
-                        label: Text('深色'),
+                        label: Text('Dark'),
                         icon: Icon(Icons.dark_mode_outlined),
                       ),
                     ],
@@ -154,27 +157,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Divider(),
                 SettingsNavigationTile(
                   icon: Icons.notifications_active_outlined,
-                  title: '启用任务提醒',
-                  subtitle: '首次启动会申请通知权限；也可在此重新启用',
+                  title: 'Enable task reminders',
+                  subtitle:
+                      'Notification permission is requested on first launch; you can enable it again here',
                   onTap: () async {
                     final result = await context
                         .read<BoardController>()
                         .enableRemindersFromSettings();
                     if (!context.mounted) return;
                     final message = switch (result) {
-                      NotificationPermissionResult.enabled => '通知已启用，提醒已重新安排',
+                      NotificationPermissionResult.enabled =>
+                        'Notifications enabled and reminders rescheduled',
                       NotificationPermissionResult.openedSystemSettings =>
-                        '请在系统设置中允许通知后返回',
+                        'Allow notifications in system settings, then return',
                       NotificationPermissionResult.denied =>
-                        '未能开启通知，请在系统设置中允许本应用通知',
+                        'Could not enable notifications. Allow this app in system settings',
                     };
                     showAppSnackBar(context, message: message);
                   },
                 ),
                 SettingsNavigationTile(
                   icon: Icons.insights_outlined,
-                  title: '工作区统计',
-                  subtitle: '查看任务总量、逾期和完成趋势',
+                  title: 'Workspace statistics',
+                  subtitle:
+                      'View task totals, overdue items, and completion trends',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -191,9 +197,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             selector: (_, c) => c.appSettings.customLabels.length,
             builder: (context, count, _) => SettingsNavigationCard(
               icon: Icons.label_outline,
-              title: '标签',
-              subtitle:
-                  count > 0 ? '$count 个自定义标签 · 随工作区同步' : '新增、改名、改色或删除 · 随工作区同步',
+              title: 'Labels',
+              subtitle: count > 0
+                  ? '$count custom labels · synced with the workspace'
+                  : 'Add, rename, recolor, or delete · synced with the workspace',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -206,16 +213,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           SettingsNavigationCard(
             icon: Icons.inventory_2_outlined,
-            title: '导入与导出',
-            subtitle: '包含全部项目、设置、共享内容和附件',
+            title: 'Import & export',
+            subtitle:
+                'Includes all projects, settings, shared content, and attachments',
             onTap: () => _openCategory(
-              title: '导入与导出',
+              title: 'Import & export',
               children: [
                 if (context.read<BoardController>().backupHistorySupported)
                   SettingsNavigationTile(
                     icon: Icons.history_toggle_off,
-                    title: '时间点备份',
-                    subtitle: '每 10 分钟自动备份 · 可清理过期文件',
+                    title: 'Point-in-time backup',
+                    subtitle:
+                        'Automatic backup every 10 minutes · expired files can be cleaned up',
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -226,14 +235,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 SettingsNavigationTile(
                   icon: Icons.file_upload_outlined,
-                  title: '导出完整备份',
-                  subtitle: '保存为 .kanban-backup 文件',
+                  title: 'Export full backup',
+                  subtitle: 'Save as a .kanban-backup file',
                   onTap: _exportBackup,
                 ),
                 SettingsNavigationTile(
                   icon: Icons.file_download_outlined,
-                  title: '恢复完整备份',
-                  subtitle: '将替换当前工作区',
+                  title: 'Restore full backup',
+                  subtitle: 'Replaces the current workspace',
                   onTap: _importBackup,
                 ),
               ],
@@ -244,15 +253,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             selector: (_, c) => c.projectSettings.doneColumnName,
             builder: (context, doneColumnName, _) => SettingsNavigationCard(
               icon: Icons.folder_outlined,
-              title: '当前项目',
-              subtitle: '设置会随项目同步到 WebDAV',
+              title: 'Current project',
+              subtitle: 'Settings sync to WebDAV with the project',
               onTap: () => _openCategory(
-                title: '当前项目',
+                title: 'Current project',
                 children: [
                   SettingsNavigationTile(
                     icon: Icons.tune_outlined,
-                    title: '项目设置',
-                    subtitle: '已完成列：$doneColumnName',
+                    title: 'Project settings',
+                    subtitle: 'Done column: $doneColumnName',
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -263,8 +272,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   SettingsNavigationTile(
                     icon: Icons.history,
-                    title: '活动历史',
-                    subtitle: '查看当前项目最近的卡片变更',
+                    title: 'Activity history',
+                    subtitle: 'View recent card changes in the current project',
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -280,17 +289,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           SettingsNavigationCard(
             icon: Icons.delete_outline,
-            title: '回收站',
-            subtitle: '已删除的卡片、列、项目可在此还原',
+            title: 'Trash',
+            subtitle:
+                'Deleted cards, columns, and projects can be restored here',
             onTap: () => _openCategory(
-              title: '回收站',
+              title: 'Trash',
               children: [
                 Selector<BoardController, int>(
                   selector: (_, c) => c.trashItemCount,
                   builder: (context, count, _) => SettingsNavigationTile(
                     icon: Icons.restore_from_trash_outlined,
-                    title: '打开回收站',
-                    subtitle: count > 0 ? '$count 项待处理' : '回收站为空',
+                    title: 'Open trash',
+                    subtitle:
+                        count > 0 ? '$count items pending' : 'Trash is empty',
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -309,9 +320,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icons.warning_amber_outlined,
                       color: Theme.of(context).colorScheme.primary,
                     ),
-                    title: const Text('删除前确认'),
+                    title: const Text('Confirm before deleting'),
                     subtitle: Text(
-                      confirm ? '删除卡片前会弹出确认对话框' : '关闭：右键/详情删除直接进入回收站',
+                      confirm
+                          ? 'A confirmation dialog appears before deleting a card'
+                          : 'Off: delete from the context menu or details goes directly to Trash',
                     ),
                     value: confirm,
                     onChanged: (value) {
@@ -338,11 +351,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Icons.auto_delete_outlined,
                         color: Theme.of(context).colorScheme.primary,
                       ),
-                      title: const Text('自动清空已完成'),
+                      title: const Text('Auto-clear completed'),
                       subtitle: Text(
                         days <= 0
-                            ? '关闭：不会自动删除已完成卡片'
-                            : '超过 $days 天的已完成卡片会移入回收站',
+                            ? 'Off: completed cards are not deleted automatically'
+                            : 'Completed cards older than $days days move to Trash',
                       ),
                       trailing: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
@@ -351,7 +364,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             for (final option in options)
                               DropdownMenuItem(
                                 value: option,
-                                child: Text(completedAutoClearDaysLabel(option)),
+                                child:
+                                    Text(completedAutoClearDaysLabel(option)),
                               ),
                           ],
                           onChanged: (value) {
@@ -380,17 +394,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final enabled = controller.appSettings.mcpEnabled;
                 final host = controller.mcpHost;
                 final status = !enabled
-                    ? '已关闭'
+                    ? 'Disabled'
                     : host.isRunning
-                        ? '运行中'
+                        ? 'Running'
                         : (host.status == KanbanMcpStatus.error
-                            ? '启动失败'
-                            : '未运行');
+                            ? 'Failed to start'
+                            : 'Not running');
                 return SettingsNavigationCard(
                   icon: Icons.hub_outlined,
-                  title: 'MCP / AI 控制',
+                  title: 'MCP / AI control',
                   subtitle:
-                      '$status · ${McpConstants.endpointUrl(controller.appSettings.mcpPort)} · 本机配置，不同步',
+                      '$status · ${McpConstants.endpointUrl(controller.appSettings.mcpPort)} · local configuration, not synced',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -411,7 +425,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final (enabled, serverUrl) = state;
               return SettingsNavigationCard(
                 icon: Icons.cloud_outlined,
-                title: 'WebDAV 同步',
+                title: 'WebDAV sync',
                 subtitle: _webDavSubtitle(enabled, serverUrl),
                 onTap: () {
                   Navigator.of(context).push(
@@ -426,8 +440,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           SettingsNavigationCard(
             icon: Icons.system_update_alt_outlined,
-            title: '检查更新',
-            subtitle: '从 GitHub Release 获取；Android 安装 APK，Windows 同目录覆盖后重启',
+            title: 'Check for updates',
+            subtitle:
+                'Get releases from GitHub; install the APK on Android, or replace the Windows directory and restart',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -468,20 +483,20 @@ class _InteractionSettingsPageState extends State<_InteractionSettingsPage> {
   }
 
   String get _dragDurationLabel {
-    if (_dragLongPressMs <= 0) return '即时拖拽';
+    if (_dragLongPressMs <= 0) return 'Immediate drag';
     return '${_dragLongPressMs}ms';
   }
 
   @override
   Widget build(BuildContext context) {
     return SettingsCategoryScreen(
-      title: '交互',
+      title: 'Interaction',
       children: [
         SettingsSliderRow(
-          title: '拖拽按压时长',
+          title: 'Drag press duration',
           description: _dragLongPressMs <= 0
-              ? '按住并移动即可拖动；长按打开转移/删除菜单'
-              : '按住 ${_dragLongPressMs}ms 后拖动；安卓等触控用卡片「⋯」或详情「转移到…」',
+              ? 'Hold and move to drag; long-press to open the transfer/delete menu'
+              : 'Hold for ${_dragLongPressMs}ms, then drag; on touch devices use the card menu or Details > Transfer',
           value: _dragLongPressMs.toDouble(),
           valueLabel: _dragDurationLabel,
           min: 0,
@@ -494,4 +509,3 @@ class _InteractionSettingsPageState extends State<_InteractionSettingsPage> {
     );
   }
 }
-

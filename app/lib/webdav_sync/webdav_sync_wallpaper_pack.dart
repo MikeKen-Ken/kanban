@@ -9,7 +9,7 @@ mixin _WebDavSyncWallpaperPack
         _WebDavSyncAttachments {
   Future<void> _pushWallpaperPack() async {
     if (_syncInFlight || _pushInFlight) {
-      print('跳过壁纸上传：已有同步进行中');
+      print('Skipping wallpaper upload: sync already in progress');
       return;
     }
     final config = await _loadConfig();
@@ -62,7 +62,7 @@ mixin _WebDavSyncWallpaperPack
       }
     } catch (e) {
       if (!_shouldCommit(runId)) {
-        print('壁纸上传已取消，忽略错误：$e');
+        print('Wallpaper upload canceled; ignoring error: $e');
       } else {
         _noteFailure(e);
         _setStatus(SyncStatus.error, error: e.toString());
@@ -77,7 +77,7 @@ mixin _WebDavSyncWallpaperPack
 
   Future<void> _pullWallpaperPack() async {
     if (_syncInFlight || _pushInFlight) {
-      print('跳过壁纸下载：已有同步进行中');
+      print('Skipping wallpaper download: sync already in progress');
       return;
     }
     final config = await _loadConfig();
@@ -124,7 +124,7 @@ mixin _WebDavSyncWallpaperPack
       }
     } catch (e) {
       if (!_shouldCommit(runId)) {
-        print('壁纸下载已取消，忽略错误：$e');
+        print('Wallpaper download canceled; ignoring error: $e');
       } else {
         _noteFailure(e);
         _setStatus(SyncStatus.error, error: e.toString());

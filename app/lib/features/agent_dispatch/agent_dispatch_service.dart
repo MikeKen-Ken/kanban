@@ -322,15 +322,15 @@ class AgentDispatchService {
           boardController,
           cardId: cardId,
           projectId: status?.projectId ?? projectId,
-          reason: blockReason ?? '用户点击「下一个」跳过',
+          reason: blockReason ?? 'Skipped by the user using "Next"',
         );
         if (blockResult.isError == true) {
           _emitLog(
-            '移入阻塞中失败，仍将终止当前会话',
+            'Failed to block the card; the current session will still end',
             level: AgentDispatchLogLevel.warning,
           );
         } else {
-          _emitLog('已将卡片 $cardId 移入阻塞中');
+          _emitLog('Moved card $cardId to Blocked');
         }
       }
     }
@@ -353,7 +353,8 @@ class AgentDispatchService {
     void Function(AgentDispatchLogEntry entry)? onLog,
   }) async {
     if (_isRunning) {
-      return const AgentWorkerResult(ok: false, error: '已有批次在运行');
+      return const AgentWorkerResult(
+          ok: false, error: 'A batch is already running');
     }
     _cancelRequested = false;
     _drainAfterCurrentRequested = false;
@@ -402,7 +403,7 @@ class AgentDispatchService {
           resolved = await resolveAfterQueue();
         } catch (error) {
           _emitLog(
-            '完成后队列：读取最新配置失败，回退运行中快照：$error',
+            'After-run queue: failed to read the latest configuration; using the running snapshot: $error',
             level: AgentDispatchLogLevel.warning,
           );
         }
@@ -425,7 +426,7 @@ class AgentDispatchService {
       if (shouldRunAfterQueue && _afterQueueHost != null) {
         if (!result.ok) {
           _emitLog(
-            '完成后队列：批次未成功，仍按「失败后仍执行」继续',
+            'After-run queue: batch failed; continuing because "run after failure" is enabled',
             level: AgentDispatchLogLevel.warning,
           );
         }
@@ -437,7 +438,7 @@ class AgentDispatchService {
           );
         } catch (error) {
           _emitLog(
-            '完成后队列中断：$error',
+            'After-run queue interrupted: $error',
             level: AgentDispatchLogLevel.error,
           );
         }
@@ -472,21 +473,24 @@ class AgentDispatchService {
   }) async {
     final repo = options.repoPath.trim();
     if (repo.isNotEmpty && !await Directory(repo).exists()) {
-      return AgentWorkerResult(ok: false, error: '仓库路径不存在：$repo');
+      return AgentWorkerResult(
+          ok: false, error: 'Repository path does not exist: $repo');
     }
     final boundProjectId = options.projectId?.trim();
     if (boundProjectId == null || boundProjectId.isEmpty) {
-      return const AgentWorkerResult(ok: false, error: '缺少看板项目');
+      return const AgentWorkerResult(
+          ok: false, error: 'Kanban project is missing');
     }
     if (boundProjectId != projectId) {
-      return const AgentWorkerResult(ok: false, error: '批次项目与工作台不一致');
+      return const AgentWorkerResult(
+          ok: false, error: 'Batch project does not match the workspace');
     }
 
     final skillFile = File(skillPath);
     if (!await skillFile.exists()) {
       return AgentWorkerResult(
         ok: false,
-        error: '未找到 Skill：$skillPath',
+        error: 'Skill not found: $skillPath',
       );
     }
     final skillMarkdown = await skillFile.readAsString();
@@ -501,13 +505,13 @@ class AgentDispatchService {
       onLog?.call(entry);
     }
 
-    log('项目：${options.projectTitle ?? boundProjectId}');
+    log('Project: ${options.projectTitle ?? boundProjectId}');
     if (repo.isEmpty) {
-      log('未指定代码仓库，Worker 使用系统临时目录作为工作目录');
+      log('No repository specified; Worker is using the system temporary directory');
     } else {
-      log('仓库：$repo');
+      log('Repository: $repo');
     }
-    log('策略：Worker 原子领卡，每张卡片创建一次独立 Agent 调用；上限 ${options.cardLimit.label}');
+    log('Strategy: Worker atomically claims cards and creates one scoped Agent call per card; limit ${options.cardLimit.label}');
 
     String? cursorApiKey;
     try {
@@ -516,18 +520,20 @@ class AgentDispatchService {
       if (options.engine == AgentDispatchEngine.cursor) {
         return AgentWorkerResult(
           ok: false,
-          error: '读取 Cursor API Key 的系统安全存储失败：$error',
+          error:
+              'Failed to read the Cursor API key from secure storage: $error',
         );
       }
       log(
-        '读取 Cursor API Key 失败：$error；本批次默认不是 Cursor，仅当卡片指定 Cursor 时才会失败',
+        'Failed to read the Cursor API key: $error; this batch is not using Cursor by default',
         level: AgentDispatchLogLevel.warning,
       );
     }
     if (options.engine == AgentDispatchEngine.cursor && cursorApiKey == null) {
       return const AgentWorkerResult(
         ok: false,
-        error: '尚未配置 Cursor API Key，请先在 Agent 调度面板中安全保存',
+        error:
+            'Cursor API key is not configured; save it securely in the Agent dispatch panel first',
       );
     }
 
@@ -542,8 +548,8 @@ class AgentDispatchService {
       skillMarkdown: skillMarkdown,
       projectId: boundProjectId,
     );
-    log('批次 id：$runId');
-    log('Worker 每轮先原子领取卡片，再启动绑定卡片的 scoped Agent 会话');
+    log('Batch ID: $runId');
+    log('Each Worker round atomically claims a card before starting its scoped Agent session');
     final stopwatch = Stopwatch()..start();
     late AgentWorkerResult result;
     McpDispatchCardGate.instance.beginBatch(
@@ -590,13 +596,14 @@ class AgentDispatchService {
         },
       );
     } catch (error) {
-      result = AgentWorkerResult(ok: false, error: 'Worker 启动或通信失败：$error');
+      result = AgentWorkerResult(
+          ok: false, error: 'Worker startup or communication failed: $error');
     } finally {
       try {
         await closeScopedEndpoint(workerToken);
       } catch (error) {
         log(
-          '回收 scoped MCP 端点失败：$error',
+          'Failed to clean up the scoped MCP endpoint: $error',
           level: AgentDispatchLogLevel.warning,
         );
       } finally {
@@ -610,23 +617,25 @@ class AgentDispatchService {
       _setProgress(
         applyWorkerProgressLog(
           _progress,
-          '已处理 ${result.processedCards} 张',
+          'Processed ${result.processedCards} cards',
         ),
       );
     }
     if (_cancelRequested) {
-      log('Worker 批次已由用户终止', level: AgentDispatchLogLevel.warning);
-      return const AgentWorkerResult(ok: false, error: '已取消');
+      log('Worker batch was terminated by the user',
+          level: AgentDispatchLogLevel.warning);
+      return const AgentWorkerResult(ok: false, error: 'Canceled');
     }
     log(
-      'Worker 退出：exitCode=${result.exitCode ?? '未知'}，'
-      '已处理 ${result.processedCards ?? 0} 张，耗时 ${stopwatch.elapsed.inSeconds} 秒',
+      'Worker exited: exitCode=${result.exitCode ?? 'unknown'}, '
+      'processed ${result.processedCards ?? 0} cards in ${stopwatch.elapsed.inSeconds} seconds',
       level: result.ok
           ? AgentDispatchLogLevel.success
           : AgentDispatchLogLevel.error,
     );
     if (!result.ok) {
-      log(result.error ?? 'Worker 批次失败', level: AgentDispatchLogLevel.error);
+      log(result.error ?? 'Worker batch failed',
+          level: AgentDispatchLogLevel.error);
     }
     return result;
   }

@@ -20,8 +20,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // 取消可能残留的延时关机，避免开机后立刻休眠。
   unawaited(abortStaleWindowsPowerAction());
-  // 卡片/详情里的 DateFormat.*('zh_CN') 依赖 locale 数据；未初始化会变成超高 ErrorWidget
-  await initializeDateFormatting('zh_CN');
+  await initializeDateFormatting('en_US');
   final controller = await BoardController.create();
   // 先出首帧再初始化提醒：Windows 上通知插件在 runApp 前 await 会挂起，窗口永不 Show
   runApp(KanbanApp(controller: controller));
@@ -101,7 +100,7 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
           final boardController = context.read<BoardController>();
           final preset = projectThemeForId(selected.themeId);
           return MaterialApp(
-            title: '看板',
+            title: 'Kanban',
             debugShowCheckedModeBanner: false,
             navigatorKey: _navigatorKey,
             builder: (context, child) => CallbackShortcuts(
@@ -116,7 +115,7 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
             theme: buildKanbanTheme(preset, Brightness.light),
             darkTheme: buildKanbanTheme(preset, Brightness.dark),
             themeMode: selected.themeMode,
-            locale: const Locale('zh', 'CN'),
+            locale: const Locale('en', 'US'),
             home: selected.onboardingDone
                 ? const HomeScreen()
                 : OnboardingScreen(
@@ -136,13 +135,13 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
 String syncStatusLabel(SyncStatus status) {
   switch (status) {
     case SyncStatus.idle:
-      return '待命';
+      return 'Idle';
     case SyncStatus.syncing:
-      return '同步中…';
+      return 'Syncing…';
     case SyncStatus.success:
-      return '已同步';
+      return 'Synced';
     case SyncStatus.error:
-      return '同步失败';
+      return 'Sync failed';
   }
 }
 
@@ -167,9 +166,9 @@ String syncStatusWithLastSuccessLabel(
   if (status == SyncStatus.error) {
     return syncStatusLabel(status);
   }
-  final base = '已同步 ${formatSyncTime(lastSyncedAt)}';
+  final base = 'Synced ${formatSyncTime(lastSyncedAt)}';
   if (pendingUploadCount <= 0) return base;
-  return '$base · 待同步 $pendingUploadCount';
+  return '$base · $pendingUploadCount pending';
 }
 
 /// 窄屏顶栏使用的同步摘要，保留状态与最近成功同步日期。
@@ -186,12 +185,12 @@ String compactSyncStatusLabel(
       ? null
       : formatSyncTime(lastSyncedAt).split(' ').first;
   if (status == SyncStatus.error) {
-    return date == null ? '同步失败' : '同步失败 · $date';
+    return date == null ? 'Sync failed' : 'Sync failed · $date';
   }
   if (date == null) return syncStatusLabel(status);
-  final base = '已同步 $date';
+  final base = 'Synced $date';
   if (pendingUploadCount <= 0) return base;
-  return '待同步 $pendingUploadCount · $date';
+  return '$pendingUploadCount pending · $date';
 }
 
 IconData syncStatusIcon(SyncStatus status) {

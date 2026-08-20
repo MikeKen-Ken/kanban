@@ -25,7 +25,8 @@ mixin _WebDavSyncPull
       if (reuseFrom != null &&
           remoteIndex != null &&
           syncIndexMatchesWorkspace(remoteIndex, reuseFrom)) {
-        print('拉取：远端 sync_index 与 SyncBase 一致，跳过全部 JSON 下载');
+        print(
+            'Pull: remote sync_index matches SyncBase; skipping all JSON downloads');
         _setProgress(
           SyncProgress(
             phase: SyncPhase.downloading,
@@ -206,7 +207,8 @@ mixin _WebDavSyncPull
       }
 
       if (skipped > 0) {
-        print('拉取：跳过 $skipped 个未变更 JSON，下载 $downloaded 个');
+        print(
+            'Pull: skipped $skipped unchanged JSON files and downloaded $downloaded');
       }
 
       return ProjectWorkspaceSnapshot(
@@ -298,7 +300,8 @@ mixin _WebDavSyncPull
     bool replaceLocal = false,
   }) async {
     if (!userInitiated) {
-      print('已忽略自动拉取：仅手动下载或合并会读取云端');
+      print(
+          'Automatic pull ignored: only manual download or merge reads the cloud');
       return;
     }
 
@@ -313,7 +316,7 @@ mixin _WebDavSyncPull
     if (!config.enabled || !config.isConfigured) return;
 
     if (_cancelRequested) {
-      print('跳过拉取：同步已取消');
+      print('Skipping pull: sync was canceled');
       _clearCancelFlag();
       return;
     }
@@ -341,8 +344,7 @@ mixin _WebDavSyncPull
           client,
           KanbanPaths.remoteLiveWorkspaceMarkerPath(base),
         );
-        if (marker != null &&
-            marker.id == KanbanPaths.liveWorkspaceArchiveId) {
+        if (marker != null && marker.id == KanbanPaths.liveWorkspaceArchiveId) {
           final knownSha = _syncBaseStore.loadLiveWorkspaceSha256();
           if (!replaceLocal &&
               knownSha != null &&
@@ -409,9 +411,9 @@ mixin _WebDavSyncPull
         mergedPkg = await _withLocalTransaction(() async {
           final latestPkg = await _captureBackupPackage();
           final next = _workspaceJsonEquals(
-                latestPkg.workspace,
-                localPkg.workspace,
-              )
+            latestPkg.workspace,
+            localPkg.workspace,
+          )
               ? mergedPkg
               : _mergeBackupPackages(
                   local: latestPkg,
@@ -465,14 +467,14 @@ mixin _WebDavSyncPull
       _syncInFlight = false;
       await _pushNow(force: true, package: mergedPkg);
     } on SyncCancelledException {
-      print('拉取同步已中止');
+      print('Pull sync aborted');
       if (status == SyncStatus.syncing) {
         _setStatus(SyncStatus.idle);
       }
       unawaited(refreshPendingUploadCount());
     } catch (e) {
       if (!_shouldCommit(runId)) {
-        print('拉取同步已取消，忽略错误：$e');
+        print('Pull sync canceled; ignoring error: $e');
         unawaited(refreshPendingUploadCount());
       } else {
         _noteFailure(e);

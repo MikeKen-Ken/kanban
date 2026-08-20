@@ -33,7 +33,8 @@ mixin _WebDavSyncPush
     final config = await _loadConfig();
     if (!config.enabled || !config.isConfigured) return;
     if (!force) {
-      print('已忽略自动推送：仅手动上传或合并回写会写入云端');
+      print(
+          'Automatic push ignored: only manual upload or merge write-back updates the cloud');
       return;
     }
 
@@ -41,7 +42,7 @@ mixin _WebDavSyncPush
     if (client == null) return;
 
     if (_cancelRequested) {
-      print('跳过推送：同步已取消');
+      print('Skipping push: sync was canceled');
       _clearCancelFlag();
       return;
     }
@@ -107,7 +108,8 @@ mixin _WebDavSyncPush
           uploaded: workspaceSnapshot,
           latest: latest,
         )) {
-          print('推送后本地已有新变更，已推进 SyncBase，排队增量推送');
+          print(
+              'New local changes appeared after push; advanced SyncBase and queued an incremental push');
           _pushPending = true;
           _pushPendingForce = _pushPendingForce || force;
         }
@@ -118,14 +120,14 @@ mixin _WebDavSyncPush
       _setStatus(SyncStatus.success);
       unawaited(refreshPendingUploadCount());
     } on SyncCancelledException {
-      print('推送同步已中止');
+      print('Push sync aborted');
       if (status == SyncStatus.syncing) {
         _setStatus(SyncStatus.idle);
       }
       unawaited(refreshPendingUploadCount());
     } catch (e) {
       if (!_shouldCommit(runId)) {
-        print('推送同步已取消，忽略错误：$e');
+        print('Push sync canceled; ignoring error: $e');
         unawaited(refreshPendingUploadCount());
       } else {
         _noteFailure(e);

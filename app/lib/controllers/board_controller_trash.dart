@@ -137,7 +137,7 @@ extension BoardControllerTrash on BoardController {
         count++;
       }
       if (count > 0) {
-        debugPrint('回收站自动清理：$count 项已永久删除');
+        debugPrint('Automatic trash cleanup: permanently deleted $count items');
       }
       return count;
     } finally {
@@ -352,7 +352,8 @@ extension BoardControllerTrash on BoardController {
         await store.deleteAttachment(projectId: projectId, attachmentId: id);
       }
       for (final id in refs.fileIds) {
-        await store.deleteFileAttachment(projectId: projectId, attachmentId: id);
+        await store.deleteFileAttachment(
+            projectId: projectId, attachmentId: id);
       }
     }
   }
@@ -374,4 +375,3 @@ extension BoardControllerTrash on BoardController {
     _markWorkspaceChanged();
   }
 }
-

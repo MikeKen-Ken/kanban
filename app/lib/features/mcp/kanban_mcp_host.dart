@@ -82,12 +82,12 @@ class KanbanMcpHost extends ChangeNotifier {
       _server = server;
       boundPort = server.boundPort;
       status = KanbanMcpStatus.running;
-      debugPrint('看板 MCP 已监听 $endpointUrl');
+      debugPrint('Kanban MCP listening at $endpointUrl');
     } catch (error) {
       await _closeServers();
       status = KanbanMcpStatus.error;
       lastError ??= error.toString();
-      debugPrint('看板 MCP 启动失败：$lastError');
+      debugPrint('Kanban MCP failed to start: $lastError');
     }
     notifyListeners();
   }
@@ -107,7 +107,7 @@ class KanbanMcpHost extends ChangeNotifier {
       try {
         await scopedServer.stop();
       } catch (error) {
-        debugPrint('调度 scoped MCP 停止失败：$error');
+        debugPrint('Failed to stop scoped MCP dispatcher: $error');
       }
     }
     final server = _server;
@@ -116,7 +116,7 @@ class KanbanMcpHost extends ChangeNotifier {
       try {
         await server.stop();
       } catch (error) {
-        debugPrint('看板 MCP 停止失败：$error');
+        debugPrint('Failed to stop Kanban MCP: $error');
       }
     }
   }
@@ -165,7 +165,7 @@ class KanbanMcpHost extends ChangeNotifier {
       await server.start();
       _scopedServersByToken[workerToken] = server;
       final endpoint = McpConstants.agentEndpointUrl(server.boundPort);
-      debugPrint('调度 scoped MCP 已监听 $endpoint');
+      debugPrint('Scoped MCP dispatcher listening at $endpoint');
       return endpoint;
     } catch (error) {
       lastError = '调度 scoped MCP 启动失败：$error';
@@ -180,7 +180,7 @@ class KanbanMcpHost extends ChangeNotifier {
     try {
       await server.stop();
     } catch (error) {
-      debugPrint('调度 scoped MCP 停止失败：$error');
+      debugPrint('Failed to stop scoped MCP dispatcher: $error');
     }
   }
 

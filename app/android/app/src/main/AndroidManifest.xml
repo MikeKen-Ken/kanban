@@ -48,7 +48,7 @@
         <receiver
             android:name=".KanbanHomeWidgetProvider"
             android:exported="false"
-            android:label="看板">
+            android:label="Kanban">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

@@ -17,18 +17,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _pages = [
     (
       icon: Icons.dashboard_customize_outlined,
-      title: '按你的流程组织任务',
-      description: '创建列和卡片，拖动调整进度；列可设置软性在制品上限。',
+      title: 'Organize tasks your way',
+      description:
+          'Create columns and cards, then drag to track progress. Columns can have a soft WIP limit.',
     ),
     (
       icon: Icons.calendar_month_outlined,
-      title: '按日期安排任务',
-      description: '在日历中查看到期日、选中今天即可看到当日任务，也可用组合筛选缩小范围。',
+      title: 'Plan by date',
+      description:
+          "View due dates in the calendar, select today to see today's tasks, or narrow the list with combined filters.",
     ),
     (
       icon: Icons.cloud_sync_outlined,
-      title: '在设备间保持一致',
-      description: '在设置中配置 WebDAV，即可同步项目、标签、保存视图、模板和活动历史。',
+      title: 'Stay in sync across devices',
+      description:
+          'Configure WebDAV in Settings to sync projects, labels, saved views, templates, and activity history.',
     ),
   ];
 
@@ -60,7 +63,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: _completing ? null : widget.onCompleted,
-                child: const Text('跳过'),
+                child: const Text('Skip'),
               ),
             ),
             Expanded(
@@ -131,7 +134,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           dimension: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(_page == _pages.length - 1 ? '开始使用' : '下一步'),
+                      : Text(
+                          _page == _pages.length - 1 ? 'Get started' : 'Next'),
                 ),
               ),
             ),

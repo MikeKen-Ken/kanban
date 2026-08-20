@@ -45,7 +45,7 @@ String? formatEpochMsAsLocalDateTime(int epochMs) {
       '${two(local.hour)}:${two(local.minute)}';
 }
 
-const _weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 String _weekdayLabel(int weekday) => _weekdayLabels[weekday - DateTime.monday];
 
@@ -79,17 +79,17 @@ String? formatSmartCompactDateTime(int epochMs, {DateTime? now}) {
   final sameMonth =
       local.year == reference.year && local.month == reference.month;
   if (sameMonth) {
-    return '${local.day}日 $weekday $time';
+    return '${local.day} $weekday $time';
   }
 
   if (local.year == reference.year) {
-    return '${local.month}月${local.day}日 $weekday $time';
+    return '${local.month}/${local.day} $weekday $time';
   }
 
-  return '${local.year}年${local.month}月${local.day}日 $weekday $time';
+  return '${local.year}/${local.month}/${local.day} $weekday $time';
 }
 
-/// 卡片详情只读时间元信息（简体中文）。全无效时返回 null。
+/// Read-only timestamp metadata for the card details view.
 String? formatCardDetailTimestamps({
   required int createdAt,
   required int updatedAt,
@@ -98,12 +98,12 @@ String? formatCardDetailTimestamps({
 }) {
   final parts = <String>[];
   final created = formatSmartCompactDateTime(createdAt, now: now);
-  if (created != null) parts.add('创建于 $created');
+  if (created != null) parts.add('Created $created');
   final updated = formatSmartCompactDateTime(updatedAt, now: now);
-  if (updated != null) parts.add('更新于 $updated');
+  if (updated != null) parts.add('Updated $updated');
   if (completedAt != null) {
     final done = formatSmartCompactDateTime(completedAt, now: now);
-    if (done != null) parts.add('完成于 $done');
+    if (done != null) parts.add('Completed $done');
   }
   if (parts.isEmpty) return null;
   return parts.join(' · ');

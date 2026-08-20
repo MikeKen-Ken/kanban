@@ -21,9 +21,9 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
     if (inFlight) {
       _cancelRequested = true;
       _syncRunId++;
-      print('已请求取消同步');
+      print('Sync cancellation requested');
     } else {
-      print('已取消排队中的同步');
+      print('Queued sync canceled');
     }
 
     if (status == SyncStatus.syncing) {
@@ -114,7 +114,7 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
       );
       _setPendingUploadCount(count);
     } on Object catch (e) {
-      print('刷新待同步数量失败：$e');
+      print('Failed to refresh pending sync count: $e');
     }
     return pendingUploadCount;
   }

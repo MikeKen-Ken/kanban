@@ -9,7 +9,7 @@ extension BoardControllerLifecycle on BoardController {
       }
       await _rescheduleReminders();
     } catch (error) {
-      debugPrint('初始化任务提醒失败：$error');
+      debugPrint('Failed to initialize task reminders: $error');
     }
   }
 
@@ -44,7 +44,7 @@ extension BoardControllerLifecycle on BoardController {
           ? NotificationPermissionResult.openedSystemSettings
           : NotificationPermissionResult.denied;
     } catch (error) {
-      debugPrint('启用任务提醒失败：$error');
+      debugPrint('Failed to enable task reminders: $error');
       return NotificationPermissionResult.denied;
     }
   }
@@ -68,7 +68,7 @@ extension BoardControllerLifecycle on BoardController {
       await _reminderScheduler.rescheduleAll(workspace.boards);
     } catch (error) {
       // 启动时未等待；测试销毁临时目录或控制器已释放时不应变成未捕获异常。
-      debugPrint('调度提醒时工作区不可用：$error');
+      debugPrint('Workspace unavailable while scheduling reminders: $error');
     }
   }
 

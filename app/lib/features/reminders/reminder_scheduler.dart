@@ -25,8 +25,8 @@ class ReminderScheduler {
   bool _initialized = false;
   bool _initializeAttempted = false;
 
-  AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
-      .resolvePlatformSpecificImplementation<
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
 
   Future<void> initialize() async {
@@ -42,15 +42,14 @@ class ReminderScheduler {
       ),
     );
     try {
-      await _plugin
-          .initialize(settings: settings)
-          .timeout(_initializeTimeout);
+      await _plugin.initialize(settings: settings).timeout(_initializeTimeout);
       await _ensureAndroidChannel();
       _initialized = true;
     } on TimeoutException {
-      debugPrint('初始化本地通知超时（已跳过，不影响启动）');
+      debugPrint(
+          'Local notification initialization timed out; skipped without affecting startup');
     } catch (error) {
-      debugPrint('初始化本地通知失败：$error');
+      debugPrint('Failed to initialize local notifications: $error');
     }
   }
 
@@ -86,10 +85,11 @@ class ReminderScheduler {
       await _settingsChannel.invokeMethod<void>('openNotificationSettings');
       return true;
     } on MissingPluginException {
-      debugPrint('打开通知设置失败：未注册平台通道');
+      debugPrint(
+          'Failed to open notification settings: platform channel is not registered');
       return false;
     } on PlatformException catch (error) {
-      debugPrint('打开通知设置失败：$error');
+      debugPrint('Failed to open notification settings: $error');
       return false;
     }
   }

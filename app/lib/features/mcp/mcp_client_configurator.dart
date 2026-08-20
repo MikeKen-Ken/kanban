@@ -76,7 +76,7 @@ abstract final class McpClientConfigurator {
         message: '已写入 $label 配置，请重启 $label 后启用 MCP',
       );
     } catch (error) {
-      debugPrint('一键配置 MCP 失败：$error');
+      debugPrint('One-click MCP configuration failed: $error');
       return McpConfigureResult(
         ok: false,
         path: path,
