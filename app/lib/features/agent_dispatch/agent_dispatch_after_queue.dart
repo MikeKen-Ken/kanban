@@ -163,7 +163,7 @@ Future<void> windowsSleepNow({
   if (!Platform.isWindows) {
     throw UnsupportedError('仅 Windows 支持休眠');
   }
-  // 立即进入 S3 睡眠，不创建计划任务或延时关机，因此不会在下次开机重复执行。
+  // 立即进入休眠，不创建计划任务或延时关机，因此不会在下次开机重复执行。
   // SetSuspendState 返回 false 时 PowerShell 默认仍以 0 退出，必须显式转为失败。
   final result = await (runner ?? Process.run)(
     'powershell',
@@ -175,7 +175,7 @@ Future<void> windowsSleepNow({
       '-Command',
       'Add-Type -AssemblyName System.Windows.Forms; '
           '\$suspended = [System.Windows.Forms.Application]::SetSuspendState('
-          '[System.Windows.Forms.PowerState]::Suspend, \$false, \$false); '
+          '[System.Windows.Forms.PowerState]::Hibernate, \$false, \$false); '
           'if (-not \$suspended) { '
           'Write-Error "Windows 拒绝休眠请求"; exit 1 }',
     ],

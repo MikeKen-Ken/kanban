@@ -141,6 +141,7 @@ void main() {
       ),
     );
     expect(command, contains(r'$suspended'));
+    expect(command, contains('PowerState]::Hibernate'));
     expect(command, contains('exit 1'));
   }, skip: !Platform.isWindows);
 
