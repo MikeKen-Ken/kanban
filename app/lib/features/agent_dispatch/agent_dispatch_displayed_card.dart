@@ -54,7 +54,8 @@ class AgentDispatchDisplayedCard {
       );
     }
 
-    final task = tasks.where((item) => item.ordinal == selectedOrdinal).firstOrNull;
+    final task =
+        tasks.where((item) => item.ordinal == selectedOrdinal).firstOrNull;
     if (task == null) {
       return AgentDispatchDisplayedCard(
         progress: live,
@@ -83,9 +84,11 @@ class AgentDispatchDisplayedCard {
   ) {
     if (!batchRunning || tasks.isEmpty) return null;
     if (live.currentRound > 0) {
-      final byRound = tasks.where((task) => task.roundIndex == live.currentRound);
+      final byRound =
+          tasks.where((task) => task.roundIndex == live.currentRound);
       if (byRound.isNotEmpty) return byRound.last.ordinal;
-      final byOrdinal = tasks.where((task) => task.ordinal == live.currentRound);
+      final byOrdinal =
+          tasks.where((task) => task.ordinal == live.currentRound);
       if (byOrdinal.isNotEmpty) return byOrdinal.last.ordinal;
     }
     return tasks.last.ordinal;
@@ -120,8 +123,8 @@ class AgentDispatchDisplayedCard {
   }
 
   static String _historicalPhase(String phase) {
-    const inProgress = {'', '领取', '实施', '重试', '提交'};
-    if (inProgress.contains(phase.trim())) return '已完成';
+    const inProgress = {'', 'Claim', 'Implement', 'Retry', 'Submit'};
+    if (inProgress.contains(phase.trim())) return 'Completed';
     return phase.trim();
   }
 }

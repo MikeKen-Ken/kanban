@@ -67,6 +67,53 @@ class AgentDispatchLogEntry {
     return (match?.group(1) ?? line).trim();
   }
 
+  /// Converts system-generated log text for display without changing the raw
+  /// Chinese protocol markers used by progress parsing and persisted history.
+  static String displayLine(String line) {
+    var displayed = line
+        .replaceAll('[系统]', '[System]')
+        .replaceAll('[信息]', '[Info]')
+        .replaceAll('[成功]', '[Success]')
+        .replaceAll('[警告]', '[Warning]')
+        .replaceAll('[失败]', '[Error]')
+        .replaceAll('[命令]', '[Command]');
+    const replacements = <String, String>{
+      'Worker 批次启动：': 'Worker batch started: ',
+      'Worker 已连接完整看板 MCP，正在恢复未完成收尾':
+          'Worker connected to Kanban MCP; recovering unfinished finalization',
+      '当前无更多卡片': 'No more cards',
+      'claim 时队列已为空': 'The queue was empty during claim',
+      'Worker 正在实施当前卡片': 'Worker is implementing the current card',
+      'Worker 正在提交当前卡片': 'Worker is submitting the current card',
+      'Worker 正在提交并送交验证': 'Worker is submitting and sending for verification',
+      'Worker 已关闭完整看板 MCP 连接': 'Worker closed the Kanban MCP connection',
+      '验证已由 Agent 会话完成，Worker 不再复跑测试':
+          'Verification completed in the Agent session; Worker will not rerun tests',
+      'Worker 批次完成：': 'Worker batch complete: ',
+      '当前卡片：': 'Current card: ',
+      '当前任务：': 'Current task: ',
+      '引擎：': 'Engine: ',
+      '由调度总览启动': 'Started from Dispatch overview',
+      '已停止运行': 'Run stopped',
+      '本地会话已创建，开始执行…': 'Local session created; starting execution…',
+      '收尾工具已成功': 'Finalization tool succeeded',
+      '思考完成（': 'Thinking completed (',
+      ' 秒）': 's)',
+      '已处理 ': 'Processed ',
+      ' 张': ' card(s)',
+      '已恢复 pending 会话': 'Recovered pending session',
+      '第 ': 'Attempt ',
+      ' 次 Agent 会话失败': ' Agent session failed',
+      '自动重试': 'automatic retry',
+      '完成后队列：开始': 'After-completion queue started',
+      '完成后队列：已完成': 'After-completion queue completed',
+    };
+    for (final entry in replacements.entries) {
+      displayed = displayed.replaceAll(entry.key, entry.value);
+    }
+    return displayed;
+  }
+
   /// 没有具体内容的进度行不展示，避免刷屏。
   static bool isLowValue(String line) {
     final message = messageOf(line);
@@ -145,20 +192,20 @@ class AgentDispatchLogEntry {
 
 extension AgentDispatchLogLevelLabel on AgentDispatchLogLevel {
   String get label => switch (this) {
-        AgentDispatchLogLevel.info => '信息',
-        AgentDispatchLogLevel.success => '成功',
-        AgentDispatchLogLevel.warning => '警告',
-        AgentDispatchLogLevel.error => '失败',
+        AgentDispatchLogLevel.info => 'Info',
+        AgentDispatchLogLevel.success => 'Success',
+        AgentDispatchLogLevel.warning => 'Warning',
+        AgentDispatchLogLevel.error => 'Error',
       };
 }
 
 extension AgentDispatchLogSourceLabel on AgentDispatchLogSource {
   String get label => switch (this) {
-        AgentDispatchLogSource.system => '系统',
+        AgentDispatchLogSource.system => 'System',
         AgentDispatchLogSource.worker => 'Worker',
         AgentDispatchLogSource.ai => 'AI',
         AgentDispatchLogSource.mcp => 'MCP',
-        AgentDispatchLogSource.shell => '命令',
+        AgentDispatchLogSource.shell => 'Command',
       };
 }
 
@@ -222,7 +269,7 @@ class AgentDispatchLogTask {
   final int end;
 
   String get label {
-    final head = '第 $ordinal 个任务';
+    final head = 'Task $ordinal';
     if (title.isNotEmpty) return '$head · $title';
     if (roundTotal > 0) return '$head · $roundIndex/$roundTotal';
     return '$head · $roundIndex';

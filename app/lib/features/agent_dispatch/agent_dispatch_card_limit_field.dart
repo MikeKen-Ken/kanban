@@ -28,7 +28,7 @@ class AgentDispatchCardLimitField extends StatelessWidget {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text('卡片上限', style: theme.textTheme.labelLarge),
+        Text('Card limit', style: theme.textTheme.labelLarge),
         InkWell(
           onTap: enabled ? () => onMaxChanged(!useMax) : null,
           child: Row(
@@ -40,11 +40,11 @@ class AgentDispatchCardLimitField extends StatelessWidget {
                     enabled ? (value) => onMaxChanged(value ?? false) : null,
                 visualDensity: VisualDensity.compact,
               ),
-              const Text('全部（Max）'),
+              const Text('All (Max)'),
             ],
           ),
         ),
-        const Text('张数'),
+        const Text('cards'),
         SizedBox(
           width: 88,
           child: TextField(

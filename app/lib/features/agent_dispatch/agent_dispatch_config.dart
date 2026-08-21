@@ -26,7 +26,7 @@ sealed class AgentDispatchCardLimit {
       AgentDispatchCardLimitCount(n.clamp(1, 999));
 
   String get label => switch (this) {
-        AgentDispatchCardLimitMax() => 'Max（全部）',
+        AgentDispatchCardLimitMax() => 'Max (all)',
         AgentDispatchCardLimitCount(:final count) => '$count',
       };
 }

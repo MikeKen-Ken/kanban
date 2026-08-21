@@ -23,10 +23,10 @@ AgentDispatchAfterQueueHost _host({
 
 void main() {
   test('按钮文案使用短标签', () {
-    expect(AgentDispatchAfterStep.webdavUpload.label, '上传');
-    expect(AgentDispatchAfterStep.gitPush.label, '推送');
-    expect(AgentDispatchAfterStep.sleep.label, '休眠');
-    expect(AgentDispatchAfterStep.shutdown.label, '关机');
+    expect(AgentDispatchAfterStep.webdavUpload.label, 'Upload');
+    expect(AgentDispatchAfterStep.gitPush.label, 'Push');
+    expect(AgentDispatchAfterStep.sleep.label, 'Sleep');
+    expect(AgentDispatchAfterStep.shutdown.label, 'Shut down');
   });
 
   test('解析完成后队列时去重并保持顺序', () {
@@ -166,15 +166,17 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final settings = const AgentDispatchSettings().bindAfterQueueToProject(
-      'proj-a',
-      steps: const [AgentDispatchAfterStep.gitPush],
-      runOnFailure: true,
-    ).bindAfterQueueToProject(
-      'proj-b',
-      steps: const [AgentDispatchAfterStep.webdavUpload],
-      runOnFailure: false,
-    );
+    final settings = const AgentDispatchSettings()
+        .bindAfterQueueToProject(
+          'proj-a',
+          steps: const [AgentDispatchAfterStep.gitPush],
+          runOnFailure: true,
+        )
+        .bindAfterQueueToProject(
+          'proj-b',
+          steps: const [AgentDispatchAfterStep.webdavUpload],
+          runOnFailure: false,
+        );
 
     await prefs.saveAgentDispatchSettings(settings);
     final loaded = prefs.loadAgentDispatchSettings();
@@ -342,10 +344,10 @@ void main() {
       ),
     );
 
-    expect(find.text('上传'), findsOneWidget);
-    expect(find.text('推送'), findsOneWidget);
-    expect(find.text('休眠'), findsOneWidget);
-    expect(find.text('关机'), findsOneWidget);
+    expect(find.text('Upload'), findsOneWidget);
+    expect(find.text('Push'), findsOneWidget);
+    expect(find.text('Sleep'), findsOneWidget);
+    expect(find.text('Shut down'), findsOneWidget);
     expect(find.text('失败后仍执行'), findsOneWidget);
     expect(find.text('添加上传'), findsNothing);
     expect(find.text('WebDAV 全量上传'), findsNothing);

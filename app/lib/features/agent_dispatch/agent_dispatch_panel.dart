@@ -342,7 +342,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         return;
       }
       final elapsed = DateTime.now().difference(started).inSeconds;
-      _appendLog('仍在运行（已 $elapsed 秒），等待当前独立调用返回…');
+      _appendLog(
+          'Still running ($elapsed seconds elapsed); waiting for the current call…');
       setState(() {});
     });
   }
@@ -364,13 +365,14 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   Future<void> _exportLog(String log) async {
     final exported = await exportAgentDispatchLog(log);
     if (!mounted) return;
-    showAppSnackBar(context, message: exported ? '调度记录已导出' : '已取消导出');
+    showAppSnackBar(context,
+        message: exported ? 'Dispatch log exported' : 'Export cancelled');
   }
 
   Future<void> _copyLog(String log) async {
     await Clipboard.setData(ClipboardData(text: log));
     if (!mounted) return;
-    showAppSnackBar(context, message: '调度记录已复制');
+    showAppSnackBar(context, message: 'Dispatch log copied');
   }
 
   Future<void> _refreshSkillPreview() async {
@@ -385,8 +387,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (!mounted) return;
     setState(() {
       _workerStatus = health.ok
-          ? '健康：${health.summary}\n${health.workerRoot}'
-          : '${health.error ?? 'Worker 健康检查失败'}\n${health.summary}';
+          ? 'Healthy: ${health.summary}\n${health.workerRoot}'
+          : '${health.error ?? 'Worker health check failed'}\n${health.summary}';
     });
   }
 
@@ -412,14 +414,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       _settings.resolveSkillPath(),
     );
     if (!opened) {
-      _appendLog('无法打开 Skill 所在目录', level: AgentDispatchLogLevel.warning);
+      _appendLog('Unable to open Skill directory',
+          level: AgentDispatchLogLevel.warning);
     }
   }
 
   Future<void> _fixWorker() async {
     if (_busy) return;
     setState(() => _busy = true);
-    _appendLog('开始修复 Worker…');
+    _appendLog('Starting Worker repair…');
     final result = await ensureAgentDispatchWorker(
       workerScriptPath: _settings.workerScriptPath,
       onLog: (l) {
@@ -484,7 +487,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         uniqueModels,
         engine: _settings.engine,
       );
-      _appendLog('已加载 ${uniqueModels.length} 个模型');
+      _appendLog('Loaded ${uniqueModels.length} model(s)');
       await _persist(_settings.copyWith(
         modelId: selectedId,
         modelParamValues: nextParams,
@@ -498,7 +501,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           hasCache: _models.isNotEmpty,
         );
       });
-      _appendLog('拉取模型失败：$e', level: AgentDispatchLogLevel.error);
+      _appendLog('Failed to load models: $e',
+          level: AgentDispatchLogLevel.error);
     }
   }
 
@@ -550,7 +554,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       setState(() {
         _usageBusy = false;
         _usage = AgentDispatchUsageSnapshot(
-          message: '账号信息刷新失败：$e',
+          message: 'Failed to refresh account information: $e',
         );
       });
     }
@@ -630,8 +634,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         !_settings.cardLimitMax && (count == null || count < 1 || count > 999);
     setState(() {
       _repoErrorText = null;
-      _projectErrorText = projectMissing ? '项目不存在' : null;
-      _countErrorText = countInvalid ? '请输入 1–999' : null;
+      _projectErrorText = projectMissing ? 'Project not found' : null;
+      _countErrorText = countInvalid ? 'Enter a value from 1 to 999' : null;
     });
     if (projectMissing || countInvalid) {
       return;
@@ -665,7 +669,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     );
     if (!board.mcpHost.isRunning) {
       _appendLog(
-        '看板 MCP 未运行，Worker 无法只读检查队列；请先在设置中启用 MCP',
+        'Kanban MCP is not running, so Worker cannot inspect the queue; enable MCP in Settings first',
         level: AgentDispatchLogLevel.warning,
       );
       return;
@@ -681,9 +685,9 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     });
     _startHeartbeat();
     _appendLog(
-      '\n—— ${DateTime.now().toLocal().toString().substring(0, 19)} 新运行 ——',
+      '\n—— ${DateTime.now().toLocal().toString().substring(0, 19)} new run ——',
     );
-    _appendLog('引擎：${options.engine.label}');
+    _appendLog('Engine: ${options.engine.label}');
     final result = await _service.runOnce(
       options: options,
       boardController: board,
@@ -705,9 +709,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (!mounted) return;
     _syncRunningFromService();
     if (result.ok) {
-      _appendLog(result.summary ?? '完成', level: AgentDispatchLogLevel.success);
+      _appendLog(result.summary ?? 'Complete',
+          level: AgentDispatchLogLevel.success);
     } else if (result.error == '已取消') {
-      _appendLog('已停止运行', level: AgentDispatchLogLevel.warning);
+      _appendLog('Run stopped', level: AgentDispatchLogLevel.warning);
     }
   }
 
@@ -721,19 +726,19 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('仓库已被其它项目占用'),
+        title: const Text('Repository is used by another project'),
         content: Text(
-          '项目「$otherTitle」正在同一仓库运行：\n$repo\n\n'
-          '并行可能导致互相改到同一批文件。仍要继续吗？',
+          'Project "$otherTitle" is already running in this repository:\n$repo\n\n'
+          'Running in parallel may modify the same files. Continue anyway?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('仍要运行'),
+            child: const Text('Run anyway'),
           ),
         ],
       ),
@@ -770,7 +775,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
 
     return AlertDialog(
       insetPadding: const EdgeInsets.all(24),
-      title: Text('Agent 调度工作台 · $projectTitle'),
+      title: Text('Agent Dispatch workspace · $projectTitle'),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       content: SizedBox(
@@ -781,7 +786,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const AgentDispatchSectionHeader(
-                title: '引擎',
+                title: 'Engine',
                 tone: AgentDispatchSectionTone.configuration,
               ),
               const SizedBox(height: 8),
@@ -789,8 +794,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 key: ValueKey('engine-${_settings.engine}'),
                 initialValue: _settings.engine,
                 decoration: const InputDecoration(
-                  labelText: 'AI 平台',
-                  helperText: '未指定平台的卡片使用此项',
+                  labelText: 'AI platform',
+                  helperText: 'Cards without a specified platform use this',
                 ),
                 items: [
                   for (final e in AgentDispatchEngine.values)
@@ -811,7 +816,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   ),
                 ),
               const AgentDispatchSectionHeader(
-                title: '代码仓库（可选）',
+                title: 'Repository (optional)',
                 tone: AgentDispatchSectionTone.repository,
               ),
               AgentDispatchRepositoryField(
@@ -831,7 +836,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
               ),
               const SizedBox(height: 12),
               const AgentDispatchSectionHeader(
-                title: 'Git 提交身份',
+                title: 'Git commit identity',
                 tone: AgentDispatchSectionTone.identity,
               ),
               const SizedBox(height: 8),
@@ -876,10 +881,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     child: _models.isEmpty
                         ? InputDecorator(
                             decoration: agentDispatchCompactDropdownDecoration(
-                              '模型',
+                              'Model',
                             ),
                             child: Text(
-                              '尚未加载',
+                              'Not loaded yet',
                               style: agentDispatchCompactDropdownStyle(context),
                             ),
                           )
@@ -893,7 +898,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                             isExpanded: true,
                             style: agentDispatchCompactDropdownStyle(context),
                             decoration:
-                                agentDispatchCompactDropdownDecoration('模型'),
+                                agentDispatchCompactDropdownDecoration('Model'),
                             items: [
                               for (final m in _models)
                                 DropdownMenuItem(
@@ -958,7 +963,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
-                    child: Text(_busy ? '刷新中…' : '刷新'),
+                    child: Text(_busy ? 'Refreshing…' : 'Refresh'),
                   ),
                 ],
               ),
@@ -1040,7 +1045,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    '尚未加载模型目录；请点击「刷新」手动拉取',
+                    'Model catalog is not loaded; click "Refresh" to load it',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -1048,7 +1053,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'Cursor API 未为此模型提供可调参数',
+                    'Cursor API provides no adjustable parameters for this model',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -1081,11 +1086,11 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       actions: [
         const TextButton(
           onPressed: AgentDispatchWindow.backToHub,
-          child: Text('返回总览'),
+          child: Text('Back to overview'),
         ),
         const TextButton(
           onPressed: AgentDispatchWindow.hide,
-          child: Text('关闭'),
+          child: Text('Close'),
         ),
         if (_running) ...[
           TextButton(
@@ -1094,7 +1099,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 : () async {
                     setState(() => _skipping = true);
                     _appendLog(
-                      '正在将当前卡片移入阻塞中并切换到下一张…',
+                      'Moving the current card to Blocked and switching to the next…',
                       level: AgentDispatchLogLevel.warning,
                     );
                     await _service.requestSkipToNext(
@@ -1102,7 +1107,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                     );
                     if (mounted) _syncRunningFromService();
                   },
-            child: Text(_skipping ? '正在切换…' : '下一个'),
+            child: Text(_skipping ? 'Switching…' : 'Next'),
           ),
           TextButton(
             onPressed: _drainPending || _stopping || _skipping
@@ -1110,13 +1115,15 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 : () async {
                     setState(() => _drainPending = true);
                     _appendLog(
-                      '将在当前会话结束后停止批次…',
+                      'The batch will stop after the current session…',
                       level: AgentDispatchLogLevel.warning,
                     );
                     await _service.requestDrainAfterCurrent();
                     if (mounted) _syncRunningFromService();
                   },
-            child: Text(_drainPending ? '当前会话后停止中…' : '当前会话后停止'),
+            child: Text(_drainPending
+                ? 'Stopping after current session…'
+                : 'Stop after current session'),
           ),
           TextButton(
             onPressed: _stopping || _skipping
@@ -1124,13 +1131,13 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 : () async {
                     setState(() => _stopping = true);
                     _appendLog(
-                      '正在立即停止当前 SDK/CLI 会话…',
+                      'Stopping the current SDK/CLI session now…',
                       level: AgentDispatchLogLevel.warning,
                     );
                     await _service.requestCancel();
                     if (mounted) _syncRunningFromService();
                   },
-            child: Text(_stopping ? '正在停止…' : '立即停止'),
+            child: Text(_stopping ? 'Stopping…' : 'Stop now'),
           ),
         ],
         FilledButton.icon(
@@ -1145,7 +1152,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.play_arrow),
-          label: Text(_running ? '运行中…' : '运行'),
+          label: Text(_running ? 'Running…' : 'Run'),
         ),
       ],
     );
@@ -1157,16 +1164,20 @@ String _modelRefreshFailureMessage({
   required bool hasCache,
 }) {
   final text = '$error'.toLowerCase();
-  final suffix = hasCache ? '，继续使用上次成功加载的模型目录' : '';
+  final suffix = hasCache
+      ? '; continuing to use the last successfully loaded model catalog'
+      : '';
   if (text.contains('networkerror') ||
       text.contains('fetch failed') ||
       text.contains('connect timeout')) {
-    return 'Cursor API 网络连接失败$suffix；无需重新输入 Key';
+    return 'Cursor API network connection failed$suffix; no need to re-enter the Key';
   }
   if (text.contains('authenticationerror') ||
       text.contains('invalid api key') ||
       text.contains('unauthorized')) {
-    return 'Cursor API Key 认证失败，请重新保存有效的 Key$suffix';
+    return 'Cursor API Key authentication failed; save a valid Key again$suffix';
   }
-  return hasCache ? '刷新失败，继续使用上次成功加载的模型目录' : '刷新失败，未能加载模型目录；请查看下方日志';
+  return hasCache
+      ? 'Refresh failed; continuing to use the last successfully loaded model catalog'
+      : 'Refresh failed; the model catalog could not be loaded; see the log below';
 }

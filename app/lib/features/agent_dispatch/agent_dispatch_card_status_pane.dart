@@ -64,7 +64,7 @@ class _AgentDispatchCardStatusPaneState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final phase = widget.progress.phaseLabel.trim().isEmpty
-        ? (widget.running ? '运行中' : '空闲')
+        ? (widget.running ? 'Running' : 'Idle')
         : widget.progress.phaseLabel;
     final title = widget.progress.currentTitle.trim();
     final detail = widget.progress.currentDetail.trim();
@@ -98,8 +98,7 @@ class _AgentDispatchCardStatusPaneState
               const SizedBox(width: 8),
               Container(
                 key: const ValueKey('agent-dispatch-task-phase'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(999),
@@ -119,14 +118,14 @@ class _AgentDispatchCardStatusPaneState
                   key: const ValueKey('agent-dispatch-jump-running-card'),
                   onPressed: widget.onJumpToRunning,
                   icon: const Icon(Icons.play_circle_outline, size: 18),
-                  label: const Text('运行中卡片'),
+                  label: const Text('Running cards'),
                 ),
               ],
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            title.isEmpty ? '暂无进行中的卡片' : title,
+            title.isEmpty ? 'No active card' : title,
             key: const ValueKey('agent-dispatch-task-title'),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
@@ -147,9 +146,8 @@ class _AgentDispatchCardStatusPaneState
             _MetricsRow(
               metrics: metrics,
               running: widget.running,
-              liveElapsedSeconds: widget.running
-                  ? widget.progress.cardElapsedSeconds()
-                  : null,
+              liveElapsedSeconds:
+                  widget.running ? widget.progress.cardElapsedSeconds() : null,
             ),
           ],
         ],
@@ -182,8 +180,8 @@ class _MetricsRow extends StatelessWidget {
           icon: Icons.token_outlined,
           label: 'Token',
           value: formatAgentDispatchTokenCount(token.totalTokens),
-          hint: '输入 ${formatAgentDispatchTokenCount(token.inputTokens)} · '
-              '输出 ${formatAgentDispatchTokenCount(token.outputTokens)}',
+          hint: 'Input ${formatAgentDispatchTokenCount(token.inputTokens)} · '
+              'output ${formatAgentDispatchTokenCount(token.outputTokens)}',
           color: theme.colorScheme.primary,
         ),
       );
@@ -193,7 +191,7 @@ class _MetricsRow extends StatelessWidget {
           key: const ValueKey('agent-dispatch-card-token'),
           icon: Icons.token_outlined,
           label: 'Token',
-          value: '统计中',
+          value: 'Loading',
           color: theme.colorScheme.primary,
         ),
       );
@@ -207,7 +205,7 @@ class _MetricsRow extends StatelessWidget {
         _MetricChip(
           key: const ValueKey('agent-dispatch-card-elapsed'),
           icon: Icons.timer_outlined,
-          label: '运行',
+          label: 'Runs',
           value: formatAgentDispatchElapsed(elapsedSeconds),
           color: theme.colorScheme.tertiary,
         ),
@@ -216,13 +214,13 @@ class _MetricsRow extends StatelessWidget {
 
     if (metrics.steps != null || metrics.toolCalls != null) {
       final parts = <String>[];
-      if (metrics.steps != null) parts.add('步骤 ${metrics.steps}');
-      if (metrics.toolCalls != null) parts.add('工具 ${metrics.toolCalls}');
+      if (metrics.steps != null) parts.add('Steps ${metrics.steps}');
+      if (metrics.toolCalls != null) parts.add('Tools ${metrics.toolCalls}');
       chips.add(
         _MetricChip(
           key: const ValueKey('agent-dispatch-card-activity'),
           icon: Icons.hub_outlined,
-          label: '活动',
+          label: 'Activity',
           value: parts.join(' · '),
           color: Colors.teal.shade700,
         ),
@@ -235,13 +233,14 @@ class _MetricsRow extends StatelessWidget {
         (model != null && model.isNotEmpty && model != '(平台默认)')) {
       final value = [
         if (engine != null && engine.isNotEmpty) engine,
-        if (model != null && model.isNotEmpty && model != '(平台默认)') model,
+        if (model != null && model.isNotEmpty && model != '(platform default)')
+          model,
       ].join(' · ');
       chips.add(
         _MetricChip(
           key: const ValueKey('agent-dispatch-card-engine'),
           icon: Icons.smart_toy_outlined,
-          label: '引擎',
+          label: 'Engine',
           value: value,
           color: Colors.indigo.shade700,
         ),
@@ -253,8 +252,8 @@ class _MetricsRow extends StatelessWidget {
         _MetricChip(
           key: const ValueKey('agent-dispatch-card-retry'),
           icon: Icons.replay_outlined,
-          label: '重试',
-          value: '${metrics.retryCount} 次',
+          label: 'Retries',
+          value: '${metrics.retryCount} retries',
           color: Colors.orange.shade800,
         ),
       );

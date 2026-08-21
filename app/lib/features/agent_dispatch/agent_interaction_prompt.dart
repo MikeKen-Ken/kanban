@@ -60,7 +60,7 @@ class _AgentInteractionPromptState extends State<AgentInteractionPrompt> {
       builder: (dialogContext) {
         return AlertDialog(
           key: const ValueKey('agent-dispatch-interaction-dialog'),
-          title: const Text('Agent 需要你选择'),
+          title: const Text('Agent needs your choice'),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -94,7 +94,7 @@ class _AgentInteractionPromptState extends State<AgentInteractionPrompt> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('稍后在运行日志回复'),
+              child: const Text('Reply later in the run log'),
             ),
           ],
         );
@@ -109,7 +109,9 @@ class _AgentInteractionPromptState extends State<AgentInteractionPrompt> {
     try {
       final sent = await widget.onReply(reply);
       if (!sent && mounted) {
-        showAppSnackBar(context, message: '回复发送失败，请确认 Worker 仍在运行');
+        showAppSnackBar(context,
+            message:
+                'Failed to send reply; confirm that Worker is still running');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -132,7 +134,8 @@ class _AgentInteractionPromptState extends State<AgentInteractionPrompt> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.35)),
+        border: Border.all(
+            color: theme.colorScheme.primary.withValues(alpha: 0.35)),
       ),
       child: _PromptBody(
         event: widget.event,
@@ -172,19 +175,23 @@ class _PromptBody extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.touch_app_outlined, size: 18, color: theme.colorScheme.primary),
+            Icon(Icons.touch_app_outlined,
+                size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                event.choices.isEmpty ? 'Agent 等待回复' : 'Agent 等待你选择',
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                event.choices.isEmpty
+                    ? 'Agent is waiting for a reply'
+                    : 'Agent is waiting for your choice',
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             if (onOpenMenu != null)
               TextButton(
                 key: const ValueKey('agent-dispatch-interaction-open-menu'),
                 onPressed: sending ? null : onOpenMenu,
-                child: const Text('打开选项菜单'),
+                child: const Text('Open choices'),
               ),
           ],
         ),
@@ -213,7 +220,9 @@ class _PromptBody extends StatelessWidget {
           minLines: 1,
           maxLines: 3,
           decoration: InputDecoration(
-            hintText: event.choices.isEmpty ? '回复 Agent…' : '或输入其他回复…',
+            hintText: event.choices.isEmpty
+                ? 'Reply to Agent…'
+                : 'Or enter another reply…',
             border: const OutlineInputBorder(),
             isDense: true,
           ),
@@ -226,7 +235,7 @@ class _PromptBody extends StatelessWidget {
             key: const ValueKey('agent-dispatch-interaction-send'),
             onPressed: sending ? null : onCustom,
             icon: const Icon(Icons.send, size: 16),
-            label: Text(sending ? '发送中…' : '发送回复'),
+            label: Text(sending ? 'Sending…' : 'Send reply'),
           ),
         ),
       ],

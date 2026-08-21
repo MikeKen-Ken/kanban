@@ -102,8 +102,8 @@ void main() {
   });
 
   test('格式化耗时与 token 数量', () {
-    expect(formatAgentDispatchElapsed(45), '45秒');
-    expect(formatAgentDispatchElapsed(75), '1分15秒');
+    expect(formatAgentDispatchElapsed(45), '45s');
+    expect(formatAgentDispatchElapsed(75), '1m 15s');
     expect(formatAgentDispatchTokenCount(1540), '1.5K');
     expect(formatAgentDispatchTokenCount(242863), '243K');
   });

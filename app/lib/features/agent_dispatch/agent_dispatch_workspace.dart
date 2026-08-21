@@ -37,7 +37,7 @@ class AgentDispatchWorkspace extends StatelessWidget {
               Expanded(
                 flex: 10,
                 child: _ScrollablePane(
-                  title: '调度配置',
+                  title: 'Dispatch configuration',
                   child: settings,
                 ),
               ),
@@ -64,7 +64,7 @@ class AgentDispatchWorkspace extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const _PaneTitle(
-                title: '调度配置',
+                title: 'Dispatch configuration',
                 tone: AgentDispatchSectionTone.configuration,
               ),
               const SizedBox(height: 12),
@@ -106,13 +106,13 @@ class AgentDispatchWorkerPane extends StatelessWidget {
           tone: AgentDispatchSectionTone.worker,
         ),
         const SizedBox(height: 12),
-        SelectableText(workerStatus ?? '检查中…', style: textTheme.bodySmall),
+        SelectableText(workerStatus ?? 'Checking…', style: textTheme.bodySmall),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
             onPressed: enabled ? onFixWorker : null,
             icon: const Icon(Icons.build_outlined, size: 18),
-            label: const Text('一键修复 Worker'),
+            label: const Text('Repair Worker'),
           ),
         ),
       ],
@@ -159,7 +159,7 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
           ),
           child: SingleChildScrollView(
             child: SelectableText(
-              widget.skillPreview ?? '（未找到或无法读取 Skill）',
+              widget.skillPreview ?? '(Skill not found or unreadable)',
               style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
             ),
           ),
@@ -171,7 +171,7 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
               children: [
                 IconButton(
                   key: const ValueKey('agent-dispatch-skill-expand'),
-                  tooltip: _expanded ? '折叠 Skill' : '展开 Skill',
+                  tooltip: _expanded ? 'Collapse Skill' : 'Expand Skill',
                   onPressed: () => setState(() => _expanded = !_expanded),
                   icon: Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
@@ -185,13 +185,13 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '打开 Skill 目录',
+                  tooltip: 'Open Skill directory',
                   onPressed:
                       widget.enabled ? widget.onOpenSkillDirectory : null,
                   icon: const Icon(Icons.folder_open_outlined, size: 20),
                 ),
                 IconButton(
-                  tooltip: '重新读取 Skill',
+                  tooltip: 'Reload Skill',
                   onPressed: widget.enabled ? widget.onRefreshSkill : null,
                   icon: const Icon(Icons.refresh, size: 20),
                 ),
@@ -364,6 +364,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
   }
 
   List<TextSpan> _lineSpans(BuildContext context, String line) {
+    final displayedLine = AgentDispatchLogEntry.displayLine(line);
     final level = AgentDispatchLogEntry.levelOf(line);
     final source = AgentDispatchLogEntry.sourceOf(line);
     final baseColor = _lineColor(context, level, source);
@@ -371,7 +372,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
     const baseStyle = TextStyle(fontFamily: 'Consolas', fontSize: 12);
 
     return [
-      for (final segment in AgentDispatchLogHighlight.segments(line))
+      for (final segment in AgentDispatchLogHighlight.segments(displayedLine))
         TextSpan(
           text: segment.text,
           style: baseStyle.copyWith(
@@ -408,11 +409,11 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
 
   Widget _taskFilterMenu(List<AgentDispatchLogTask> tasks, int? selectedTask) {
     final label = selectedTask == null
-        ? '全部任务'
+        ? 'All tasks'
         : tasks.firstWhere((task) => task.ordinal == selectedTask).label;
     return PopupMenuButton<int>(
       key: const ValueKey('agent-dispatch-log-task-filter'),
-      tooltip: '按任务筛选日志',
+      tooltip: 'Filter logs by task',
       initialValue: selectedTask ?? _allTasksMenuValue,
       onSelected: (value) {
         setState(() {
@@ -428,7 +429,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         const PopupMenuItem<int>(
           key: ValueKey('agent-dispatch-log-task-all'),
           value: _allTasksMenuValue,
-          child: Text('全部任务'),
+          child: Text('All tasks'),
         ),
         for (final task in tasks)
           PopupMenuItem<int>(
@@ -616,7 +617,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
           children: [
             const Expanded(
               child: _PaneTitle(
-                title: '运行日志',
+                title: 'Run log',
                 tone: AgentDispatchSectionTone.log,
               ),
             ),
@@ -629,19 +630,19 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
               const SizedBox(width: 4),
             ],
             IconButton(
-              tooltip: '清空记录',
+              tooltip: 'Clear log',
               onPressed: widget.running || !hasLog ? null : widget.onClear,
               icon: const Icon(Icons.delete_sweep_outlined, size: 20),
             ),
             IconButton(
               key: const ValueKey('agent-dispatch-log-export'),
-              tooltip: '导出记录',
+              tooltip: 'Export log',
               onPressed: canAct ? () => widget.onExport(actionLog) : null,
               icon: const Icon(Icons.file_download_outlined, size: 20),
             ),
             IconButton(
               key: const ValueKey('agent-dispatch-log-copy'),
-              tooltip: '复制记录',
+              tooltip: 'Copy log',
               onPressed: canAct ? () => widget.onCopy(actionLog) : null,
               icon: const Icon(Icons.copy_outlined, size: 20),
             ),
@@ -656,21 +657,21 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
           children: [
             _summaryChip(
               icon: Icons.error_outline,
-              label: '失败',
+              label: 'Error',
               value: '${summary.errors}',
               color: Theme.of(context).colorScheme.error,
               filter: AgentDispatchLogLevel.error,
             ),
             _summaryChip(
               icon: Icons.warning_amber_rounded,
-              label: '警告',
+              label: 'Warning',
               value: '${summary.warnings}',
               color: Colors.orange.shade800,
               filter: AgentDispatchLogLevel.warning,
             ),
             _summaryChip(
               icon: Icons.token_outlined,
-              label: '最新 Token',
+              label: 'Latest token',
               value: summary.totalTokens ?? '—',
               color: Theme.of(context).colorScheme.primary,
             ),

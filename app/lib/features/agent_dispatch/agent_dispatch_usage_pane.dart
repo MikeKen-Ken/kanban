@@ -20,7 +20,7 @@ class AgentDispatchUsagePane extends StatelessWidget {
   static String _accountFallbackText(String? message) {
     final text = message?.trim() ?? '';
     if (text.contains('失败')) return text;
-    return '尚未加载账号信息';
+    return 'Account information has not loaded';
   }
 
   @override
@@ -34,7 +34,7 @@ class AgentDispatchUsagePane extends StatelessWidget {
         Row(
           children: [
             const AgentDispatchSectionHeader(
-              title: 'Cursor 账号',
+              title: 'Cursor account',
               tone: AgentDispatchSectionTone.account,
             ),
             const Spacer(),
@@ -49,7 +49,7 @@ class AgentDispatchUsagePane extends StatelessWidget {
               ),
             TextButton(
               onPressed: onOpenTokenStats,
-              child: const Text('Token 统计'),
+              child: const Text('Token statistics'),
             ),
             TextButton(
               onPressed: () => launchUrl(
@@ -60,7 +60,7 @@ class AgentDispatchUsagePane extends StatelessWidget {
           ],
         ),
         if (email != null && email.isNotEmpty)
-          Text('邮箱：$email', style: textTheme.bodySmall),
+          Text('Email: $email', style: textTheme.bodySmall),
         if (keyName != null && keyName.isNotEmpty)
           Text('Key：$keyName', style: textTheme.bodySmall),
         if ((email == null || email.isEmpty) &&

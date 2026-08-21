@@ -86,13 +86,13 @@ class AgentDispatchModelParameters extends StatelessWidget {
 
   String _defaultLabel(AgentDispatchModelParameter parameter) {
     final defaultValue = defaultVariant?.params[parameter.id];
-    if (defaultValue == null) return 'API 默认（不显式传参）';
+    if (defaultValue == null) return 'API default (parameter omitted)';
     for (final option in parameter.options) {
       if (option.value == defaultValue) {
-        return 'API 默认（${option.displayName ?? defaultValue}）';
+        return 'API default (${option.displayName ?? defaultValue})';
       }
     }
-    return 'API 默认（$defaultValue）';
+    return 'API default ($defaultValue)';
   }
 }
 
@@ -103,10 +103,10 @@ String _parameterLabel(AgentDispatchModelParameter parameter) =>
       'model_reasoning_effort' ||
       'effort' ||
       'thinking' =>
-        '思考程度',
-      'fast' => '快速模式',
+        'Reasoning effort',
+      'fast' => 'Fast mode',
       _ => isAgentDispatchContextParam(parameter.id)
-          ? '上下文'
+          ? 'Context'
           : (parameter.displayName ?? parameter.id),
     };
 

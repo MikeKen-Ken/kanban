@@ -33,7 +33,7 @@ class AgentDispatchHubOverview {
     final phase = phaseLabel.trim();
     final progress = liveCardLabel.trim();
     final statusParts = [
-      '运行中',
+      'Running',
       if (phase.isNotEmpty) phase,
       if (progress.isNotEmpty) progress,
     ];
@@ -41,11 +41,11 @@ class AgentDispatchHubOverview {
     final batch = elapsedSecondsSince(batchStartedAt, now: clock);
     final card = elapsedSecondsSince(cardStartedAt, now: clock);
     final elapsedParts = <String>[
-      if (batch != null) '批次 ${formatAgentDispatchElapsed(batch)}',
-      if (card != null) '本卡 ${formatAgentDispatchElapsed(card)}',
+      if (batch != null) 'Batch ${formatAgentDispatchElapsed(batch)}',
+      if (card != null) 'This card ${formatAgentDispatchElapsed(card)}',
     ];
     return AgentDispatchHubOverview(
-      cardTitle: title.isEmpty ? '暂无卡片标题' : title,
+      cardTitle: title.isEmpty ? 'Untitled card' : title,
       statusLine: statusParts.join(' · '),
       engineModelLabel: formatAgentDispatchHubEngineModel(
         engine: engine,
@@ -63,7 +63,7 @@ String formatAgentDispatchHubEngineModel({
 }) {
   final engineLabel = _engineLabel(engine);
   final modelLabel = _modelLabel(model);
-  if (engineLabel.isEmpty && modelLabel.isEmpty) return '模型未记录';
+  if (engineLabel.isEmpty && modelLabel.isEmpty) return 'Model not recorded';
   if (engineLabel.isEmpty) return modelLabel;
   if (modelLabel.isEmpty) return engineLabel;
   return '$engineLabel · $modelLabel';
@@ -80,7 +80,7 @@ String _engineLabel(String raw) {
 
 String _modelLabel(String raw) {
   final model = raw.trim();
-  if (model.isEmpty || model == '(平台默认)') return '';
+  if (model.isEmpty || model == '(platform default)') return '';
   return model;
 }
 
@@ -125,9 +125,9 @@ String _formatHubParam(String id, String value) {
     'model_reasoning_effort' ||
     'effort' ||
     'thinking' =>
-      '思考程度',
-    'fast' => '快速模式',
-    _ => isAgentDispatchContextParam(id) ? '上下文' : id,
+      'Reasoning effort',
+    'fast' => 'Fast mode',
+    _ => isAgentDispatchContextParam(id) ? 'Context' : id,
   };
   return '$label ${_hubParamValue(id, value)}';
 }
@@ -135,8 +135,8 @@ String _formatHubParam(String id, String value) {
 String _hubParamValue(String id, String value) {
   if (id == 'fast') {
     return switch (value.trim()) {
-      'true' => '开',
-      'false' => '关',
+      'true' => 'On',
+      'false' => 'Off',
       _ => value.trim(),
     };
   }

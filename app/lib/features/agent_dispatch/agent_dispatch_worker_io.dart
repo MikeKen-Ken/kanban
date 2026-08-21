@@ -539,7 +539,10 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
   );
   onLog?.call('Worker 检查：${existingHealth.summary}');
   if (existingHealth.ok) {
-    return (ok: true, message: 'Worker 健康检查通过：${existingHealth.summary}');
+    return (
+      ok: true,
+      message: 'Worker health check passed: ${existingHealth.summary}'
+    );
   }
   if (_isPublishedWorkerRoot(existingHealth.workerRoot)) {
     return (
@@ -553,7 +556,8 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
   if (packageRoot == null) {
     return (
       ok: false,
-      message: '未找到内置 Worker。开发环境请设置 KANBAN_ROOT；发布包请重新下载完整 ZIP。',
+      message:
+          'Built-in Worker not found. Set KANBAN_ROOT in development, or download the complete ZIP again.',
     );
   }
   if (!await _isDevelopmentWorkerRoot(packageRoot)) {
@@ -566,7 +570,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
 
   final npm = await _resolveNpmExecutable();
   if (npm == null) {
-    return (ok: false, message: '未找到 npm。请先安装 Node.js。');
+    return (ok: false, message: 'npm not found. Install Node.js first.');
   }
 
   onLog?.call('开发环境执行 npm ci @ $packageRoot');
@@ -582,7 +586,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     onLog?.call((install.stderr as String).trim());
   }
   if (install.exitCode != 0) {
-    return (ok: false, message: 'npm ci 失败（${install.exitCode}）');
+    return (ok: false, message: 'npm ci failed (${install.exitCode})');
   }
 
   onLog?.call('npm run build');
@@ -598,7 +602,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     onLog?.call((build.stderr as String).trim());
   }
   if (build.exitCode != 0) {
-    return (ok: false, message: 'npm run build 失败（${build.exitCode}）');
+    return (ok: false, message: 'npm run build failed (${build.exitCode})');
   }
 
   final repaired = await inspectAgentDispatchWorker(
@@ -607,8 +611,16 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
   );
   onLog?.call('修复后检查：${repaired.summary}');
   return repaired.ok
-      ? (ok: true, message: 'Worker 已修复并通过健康检查：${repaired.summary}')
-      : (ok: false, message: repaired.error ?? 'Worker 修复后健康检查仍未通过');
+      ? (
+          ok: true,
+          message:
+              'Worker repaired and passed health check: ${repaired.summary}'
+        )
+      : (
+          ok: false,
+          message: repaired.error ??
+              'Worker still failed its health check after repair'
+        );
 }
 
 Future<AgentWorkerHealth> inspectAgentDispatchWorker(String? workerScriptPath,

@@ -12,7 +12,7 @@ String agentDispatchLogExportFileName(DateTime now) {
 /// 将当前本机记录另存为 UTF-8 文本；不会写入备份或 WebDAV。
 Future<bool> exportAgentDispatchLog(String log, {DateTime? now}) async {
   final path = await FilePicker.saveFile(
-    dialogTitle: '导出 Agent 调度记录',
+    dialogTitle: 'Export Agent Dispatch log',
     fileName: agentDispatchLogExportFileName(now ?? DateTime.now()),
     type: FileType.custom,
     allowedExtensions: const ['txt'],

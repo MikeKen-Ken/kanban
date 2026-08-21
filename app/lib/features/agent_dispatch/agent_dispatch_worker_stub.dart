@@ -105,7 +105,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
   void Function(String line)? onLog,
   AgentWorkerCommandRunner? commandRunner,
 }) async =>
-    (ok: false, message: '当前平台不支持');
+    (ok: false, message: 'The current platform is not supported');
 
 String describeWorkerExitWithoutOutput(int code) =>
     'worker 退出码 $code，且无 out.json';

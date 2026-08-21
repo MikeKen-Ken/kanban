@@ -184,21 +184,20 @@ class AgentDispatchCardMetrics {
   );
   static final _codexElapsedPattern =
       RegExp(r'Codex exec (?:exitCode=\d+|skipped|cancelled) elapsedMs=(\d+)');
-  static final _retryPattern =
-      RegExp(r'Agent 会话暂时失败（第 (\d+)/\d+ 次）');
+  static final _retryPattern = RegExp(r'Agent 会话暂时失败（第 (\d+)/\d+ 次）');
 }
 
 String formatAgentDispatchElapsed(int seconds) {
-  if (seconds < 60) return '${seconds}秒';
+  if (seconds < 60) return '${seconds}s';
   final minutes = seconds ~/ 60;
   final remain = seconds % 60;
   if (minutes < 60) {
-    return remain == 0 ? '${minutes}分' : '${minutes}分${remain}秒';
+    return remain == 0 ? '${minutes}m' : '${minutes}m ${remain}s';
   }
   final hours = minutes ~/ 60;
   final remainMinutes = minutes % 60;
-  if (remainMinutes == 0) return '${hours}小时';
-  return '${hours}小时${remainMinutes}分';
+  if (remainMinutes == 0) return '${hours}h';
+  return '${hours}h ${remainMinutes}m';
 }
 
 String formatAgentDispatchTokenCount(int value) {
@@ -210,7 +209,5 @@ String formatAgentDispatchTokenCount(int value) {
         : '${scaled.toStringAsFixed(1)}K';
   }
   final scaled = value / 1000000;
-  return scaled >= 100
-      ? '${scaled.round()}M'
-      : '${scaled.toStringAsFixed(1)}M';
+  return scaled >= 100 ? '${scaled.round()}M' : '${scaled.toStringAsFixed(1)}M';
 }

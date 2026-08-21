@@ -31,7 +31,7 @@ class AgentDispatchHubBatchStartResult {
   const AgentDispatchHubBatchStartResult.alreadyRunning()
       : this._(
           status: AgentDispatchHubBatchStartStatus.alreadyRunning,
-          message: '该项目已在运行',
+          message: 'This project is already running',
         );
 
   const AgentDispatchHubBatchStartResult.validationFailed(String message)
@@ -58,7 +58,8 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
 }) async {
   final id = projectId.trim();
   if (id.isEmpty) {
-    return const AgentDispatchHubBatchStartResult.validationFailed('项目无效');
+    return const AgentDispatchHubBatchStartResult.validationFailed(
+        'Invalid project');
   }
 
   final service = AgentDispatchRegistry.instance.forProject(id);
@@ -74,16 +75,17 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
       (loaded.cardLimitCount < 1 || loaded.cardLimitCount > 999);
 
   if (projectMissing) {
-    return const AgentDispatchHubBatchStartResult.validationFailed('项目不存在');
+    return const AgentDispatchHubBatchStartResult.validationFailed(
+        'Project not found');
   }
   if (countInvalid) {
     return const AgentDispatchHubBatchStartResult.validationFailed(
-      '卡片上限无效，请先在工作台调整为 1–999',
+      'Invalid card limit; adjust it to 1–999 in the workspace',
     );
   }
   if (!board.mcpHost.isRunning) {
     return const AgentDispatchHubBatchStartResult.validationFailed(
-      '看板 MCP 未运行，请先在设置中启用 MCP',
+      'Kanban MCP is not running; enable MCP in Settings first',
     );
   }
 

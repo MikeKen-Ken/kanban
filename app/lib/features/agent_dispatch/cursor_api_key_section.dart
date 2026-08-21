@@ -58,7 +58,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _message = '读取安全存储失败：$error');
+      setState(() => _message = 'Failed to read secure storage: $error');
     }
   }
 
@@ -71,7 +71,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     if (cache.isEmpty) return keys;
     final next = <CursorApiKeySummary>[];
     for (final item in keys) {
-      final value = await widget.credentials.readStoredCursorApiKeyById(item.id);
+      final value =
+          await widget.credentials.readStoredCursorApiKeyById(item.id);
       final usage = cache[agentDispatchUsageKeyFingerprint(value)];
       final label = cursorApiKeyMenuLabel(
         storedLabel: item.label,
@@ -95,7 +96,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     final prefs = await SharedPreferences.getInstance();
     var changed = false;
     for (final item in [..._keys]) {
-      final value = await widget.credentials.readStoredCursorApiKeyById(item.id);
+      final value =
+          await widget.credentials.readStoredCursorApiKeyById(item.id);
       final fingerprint = agentDispatchUsageKeyFingerprint(value);
       final cached = prefs.loadAgentDispatchUsage(keyFingerprint: fingerprint);
       if (cached != null && cached.hasUserEmail) continue;
@@ -180,7 +182,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                     ),
                   ),
                   IconButton(
-                    tooltip: '删除此 Key',
+                    tooltip: 'Delete this Key',
                     visualDensity: VisualDensity.compact,
                     iconSize: 18,
                     onPressed: () {
@@ -235,7 +237,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _message = '已添加 Cursor API Key，可随时从下拉菜单切换';
+        _message =
+            'Cursor API Key added; you can switch it from the dropdown at any time';
       });
     } catch (error) {
       if (!mounted) return;
@@ -261,7 +264,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
       setState(() {
         _busy = false;
         _controller.clear();
-        _message = '已切换当前 Key';
+        _message = 'Active Key switched';
       });
     } catch (error) {
       if (!mounted) return;
@@ -290,14 +293,14 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
           _controller.clear();
         }
         _message = _keys.isEmpty && _hasEnvironmentKey
-            ? '已删除该 Key；仍会使用环境变量 CURSOR_API_KEY'
-            : '已删除 Cursor API Key';
+            ? 'Key deleted; the CURSOR_API_KEY environment variable will still be used'
+            : 'Cursor API Key deleted';
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _message = '删除失败：$error';
+        _message = 'Delete failed: $error';
       });
     }
   }
@@ -318,8 +321,10 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
     final showSaveButton = !available || hasInput;
     final enabled = widget.enabled && !_busy;
     final statusText = available
-        ? (_hasEnvironmentKey && active == null ? '已检测到环境变量' : null)
-        : '尚未配置';
+        ? (_hasEnvironmentKey && active == null
+            ? 'Environment variable detected'
+            : null)
+        : 'Not configured';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -362,8 +367,8 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                     vertical: 10,
                   ),
                   hintText: available
-                      ? '输入新 Key 可添加账号并切换'
-                      : '粘贴 Cursor API Key',
+                      ? 'Enter a new Key to add and switch accounts'
+                      : 'Paste Cursor API Key',
                   hintStyle: agentDispatchFieldHintStyle(theme),
                   suffixIconConstraints: const BoxConstraints(
                     minWidth: 28,
@@ -374,7 +379,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
                   suffixIcon: Builder(
                     builder: (buttonContext) {
                       return IconButton(
-                        tooltip: '展开已保存 Key',
+                        tooltip: 'Expand saved Keys',
                         padding: EdgeInsets.zero,
                         iconSize: 20,
                         onPressed: enabled && _keys.isNotEmpty
@@ -389,7 +394,7 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
               ),
             ),
             IconButton(
-              tooltip: _obscure ? '显示' : '隐藏',
+              tooltip: _obscure ? 'Show' : 'Hide',
               onPressed:
                   enabled ? () => setState(() => _obscure = !_obscure) : null,
               icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
@@ -404,13 +409,12 @@ class _CursorApiKeySectionState extends State<CursorApiKeySection> {
               FilledButton.tonalIcon(
                 onPressed: enabled ? _save : null,
                 icon: const Icon(Icons.key, size: 18),
-                label: Text(_keys.isEmpty ? '安全保存' : '添加并切换'),
+                label: Text(_keys.isEmpty ? 'Save securely' : 'Add and switch'),
               ),
             ],
           ),
         ],
-        if (_message != null)
-          Text(_message!, style: theme.textTheme.bodySmall),
+        if (_message != null) Text(_message!, style: theme.textTheme.bodySmall),
       ],
     );
   }

@@ -140,19 +140,19 @@ class AgentDispatchHub extends StatelessWidget {
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('仓库已被其它项目占用'),
+        title: const Text('Repository is used by another project'),
         content: Text(
-          '项目「$otherTitle」正在同一仓库运行：\n$repo\n\n'
-          '并行可能导致互相改到同一批文件。仍要继续吗？',
+          'Project "$otherTitle" is already running in this repository:\n$repo\n\n'
+          'Running in parallel may modify the same files. Continue anyway?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('仍要运行'),
+            child: const Text('Run anyway'),
           ),
         ],
       ),
@@ -298,7 +298,9 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
     return AlertDialog(
       insetPadding: const EdgeInsets.all(24),
       title: Text(
-        runningCount > 0 ? 'Agent 调度总览（$runningCount 个运行中）' : 'Agent 调度总览',
+        runningCount > 0
+            ? 'Agent Dispatch overview ($runningCount running)'
+            : 'Agent Dispatch overview',
       ),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
@@ -306,7 +308,7 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
         width: dialogWidth,
         height: dialogHeight,
         child: widget.items.isEmpty
-            ? const Center(child: Text('还没有看板项目'))
+            ? const Center(child: Text('No board projects yet'))
             : ListView.separated(
                 itemCount: widget.items.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
@@ -324,7 +326,7 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
               ),
       ),
       actions: [
-        TextButton(onPressed: widget.onClose, child: const Text('关闭')),
+        TextButton(onPressed: widget.onClose, child: const Text('Close')),
       ],
     );
   }
@@ -362,7 +364,7 @@ class _HubProjectTile extends StatelessWidget {
             cardStartedAt: item.cardStartedAt,
           )
         : null;
-    final status = overview?.statusLine ?? '未运行';
+    final status = overview?.statusLine ?? 'Not running';
     final actionsBusy = starting || stopping;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -383,7 +385,7 @@ class _HubProjectTile extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 8),
               child: Text(
-                '当前',
+                'Current',
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.primary,
                 ),
@@ -448,7 +450,7 @@ class _HubProjectTile extends StatelessWidget {
                 OutlinedButton(
                   key: ValueKey('agent-dispatch-hub-stop-${item.projectId}'),
                   onPressed: actionsBusy ? null : onStop,
-                  child: Text(stopping ? '停止中…' : '停止'),
+                  child: Text(stopping ? 'Stopping…' : 'Stop'),
                 )
               else
                 FilledButton.tonalIcon(
@@ -461,11 +463,11 @@ class _HubProjectTile extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.play_arrow),
-                  label: Text(starting ? '启动中…' : '运行'),
+                  label: Text(starting ? 'Starting…' : 'Run'),
                 ),
               TextButton(
                 onPressed: onOpen,
-                child: Text(item.running ? '查看' : '打开'),
+                child: Text(item.running ? 'View' : 'Open'),
               ),
             ],
           ),

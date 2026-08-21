@@ -45,7 +45,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                 horizontal: 12,
                 vertical: 10,
               ),
-              hintText: '本机仓库根目录，可不填',
+              hintText: 'Local repository root (optional)',
               hintStyle: agentDispatchFieldHintStyle(theme),
               errorText: errorText,
               suffixIconConstraints: const BoxConstraints(
@@ -55,7 +55,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                 maxHeight: 28,
               ),
               suffixIcon: PopupMenuButton<String>(
-                tooltip: '展开历史仓库',
+                tooltip: 'Expand repository history',
                 enabled: enabled && paths.isNotEmpty,
                 padding: EdgeInsets.zero,
                 constraints: BoxConstraints.tightFor(width: menuWidth),
@@ -73,33 +73,34 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                         value: path,
                         child: SizedBox(
                           width: itemWidth,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Tooltip(
-                                message: path,
-                                waitDuration: const Duration(milliseconds: 350),
-                                child: Text(
-                                  path,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Tooltip(
+                                  message: path,
+                                  waitDuration:
+                                      const Duration(milliseconds: 350),
+                                  child: Text(
+                                    path,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              tooltip: '删除此历史仓库',
-                              visualDensity: VisualDensity.compact,
-                              iconSize: 18,
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                onDeletePath(path);
-                              },
-                              icon: const Icon(Icons.delete_outline),
-                            ),
-                          ],
+                              IconButton(
+                                tooltip: 'Delete this repository history',
+                                visualDensity: VisualDensity.compact,
+                                iconSize: 18,
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  onDeletePath(path);
+                                },
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ];
                 },
               ),
@@ -108,7 +109,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
           ),
         ),
         IconButton(
-          tooltip: '选择目录',
+          tooltip: 'Choose directory',
           onPressed: enabled ? onPickDirectory : null,
           icon: const Icon(Icons.folder_open),
         ),

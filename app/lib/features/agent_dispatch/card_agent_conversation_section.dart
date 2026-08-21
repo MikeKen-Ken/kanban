@@ -41,7 +41,7 @@ class CardAgentConversationSection extends StatelessWidget {
               );
             },
       icon: Icon(hasHistory ? Icons.forum : Icons.forum_outlined),
-      label: Text(hasHistory ? '查看 / 追问 Agent' : 'Agent 对话'),
+      label: Text(hasHistory ? 'View / ask Agent' : 'Agent conversation'),
     );
   }
 }
@@ -127,14 +127,16 @@ class _CardAgentConversationDialogState
       if (pending?.cardId == widget.cardId) {
         final sent = await _service.submitInteractionReply(text);
         if (!sent && mounted) {
-          showAppSnackBar(context, message: '回复发送失败，请确认 Worker 仍在运行');
+          showAppSnackBar(context,
+              message:
+                  'Failed to send reply; confirm that Worker is still running');
           return;
         }
       } else {
         final columnId = _board.findColumnIdForCard(widget.cardId);
         final card = _board.findCardById(widget.cardId);
         if (columnId == null || card == null) {
-          throw StateError('卡片不存在');
+          throw StateError('Card not found');
         }
         final feedback = ChecklistItem(
           id: const Uuid().v4(),
@@ -161,7 +163,7 @@ class _CardAgentConversationDialogState
       Navigator.of(context, rootNavigator: true).pop();
       await closer?.call();
     } catch (error) {
-      if (mounted) showAppSnackBar(context, message: '发送失败：$error');
+      if (mounted) showAppSnackBar(context, message: 'Send failed: $error');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -230,7 +232,9 @@ class _CardAgentConversationDialogState
             ),
           ),
           AlertDialog(
-            title: Text(waiting ? 'Agent 等待回复' : 'Agent 对话'),
+            title: Text(waiting
+                ? 'Agent is waiting for a reply'
+                : 'Agent conversation'),
             content: SizedBox(
               width: (size.width - 80).clamp(420.0, 860.0).toDouble(),
               height: (size.height - 180).clamp(360.0, 720.0).toDouble(),
@@ -245,7 +249,7 @@ class _CardAgentConversationDialogState
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: history.isEmpty
-                          ? const Center(child: Text('暂无对话记录'))
+                          ? const Center(child: Text('No conversation history'))
                           : Markdown(
                               data: history,
                               selectable: true,
@@ -266,7 +270,8 @@ class _CardAgentConversationDialogState
                             if (!sent && mounted) {
                               showAppSnackBar(
                                 context,
-                                message: '回复发送失败，请确认 Worker 仍在运行',
+                                message:
+                                    'Failed to send reply; confirm that Worker is still running',
                               );
                               return false;
                             }
@@ -283,7 +288,7 @@ class _CardAgentConversationDialogState
                     )
                   else ...[
                     Text(
-                      '提交追问会写入同步 Markdown，并把卡片加入待返工；下次调度继续处理。',
+                      'Submitting a follow-up writes to synced Markdown and moves the card to Rework; the next dispatch continues it.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 8),
@@ -294,7 +299,7 @@ class _CardAgentConversationDialogState
                       minLines: 2,
                       maxLines: 5,
                       decoration: const InputDecoration(
-                        hintText: '补充约束或继续追问…',
+                        hintText: 'Add constraints or ask a follow-up…',
                         border: OutlineInputBorder(),
                       ),
                       onSubmitted: (_) => _send(),
@@ -311,24 +316,24 @@ class _CardAgentConversationDialogState
                   ),
                   onPressed: _openMarkdownDirectory,
                   icon: const Icon(Icons.folder_open_outlined, size: 18),
-                  label: const Text('打开所在文件夹'),
+                  label: const Text('Open containing folder'),
                 ),
               if (hasMarkdownFile)
                 OutlinedButton.icon(
                   key: const ValueKey('card-agent-conversation-open-markdown'),
                   onPressed: _openMarkdownFile,
                   icon: const Icon(Icons.open_in_new, size: 18),
-                  label: const Text('打开 Markdown 文件'),
+                  label: const Text('Open Markdown file'),
                 ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('关闭'),
+                child: const Text('Close'),
               ),
               if (!waiting)
                 FilledButton.icon(
                   onPressed: _sending ? null : _send,
                   icon: const Icon(Icons.send, size: 18),
-                  label: Text(_sending ? '发送中…' : '提交追问'),
+                  label: Text(_sending ? 'Sending…' : 'Submit follow-up'),
                 ),
             ],
           ),

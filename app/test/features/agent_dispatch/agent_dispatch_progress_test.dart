@@ -67,13 +67,13 @@ void main() {
       '卡片 abc 已验证、提交并送交人工验证',
     );
     expect(progress.processedCards, 1);
-    expect(progress.phaseLabel, '提交');
+    expect(progress.phaseLabel, 'Submit');
 
     progress =
         applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 2/4 ────────');
     progress = applyWorkerProgressLog(progress, '咨询卡 def 已送交验证');
     expect(progress.processedCards, 2);
-    expect(progress.phaseLabel, '送验');
+    expect(progress.phaseLabel, 'Verify');
 
     progress = applyWorkerProgressLog(progress, '已恢复 pending 会话 session-1');
     expect(progress.processedCards, 3);
@@ -83,14 +83,14 @@ void main() {
       '验证已由 Agent 会话完成，Worker 不再复跑测试',
     );
     expect(progress.processedCards, 3);
-    expect(progress.phaseLabel, '提交');
+    expect(progress.phaseLabel, 'Submit');
 
     progress = applyWorkerProgressLog(
       progress,
       'Worker 批次完成：当前无更多卡片；已处理 3 张',
     );
     expect(progress.processedCards, 3);
-    expect(progress.phaseLabel, '完成');
+    expect(progress.phaseLabel, 'Complete');
   });
 
   test('已处理张数参与实时分母，完成后不会把 4/10 收成 4/7', () {
@@ -115,7 +115,7 @@ void main() {
     progress =
         applyWorkerProgressLog(progress, '──────── Worker 单卡轮次 1/12 ────────');
     expect(progress.liveCardLabel, '1/12');
-    expect(progress.phaseLabel, '领取');
+    expect(progress.phaseLabel, 'Claim');
     progress = applyWorkerProgressLog(progress, '当前卡片：agent 工作台');
     progress = applyWorkerProgressLog(
       progress,
@@ -124,19 +124,19 @@ void main() {
     expect(progress.currentTitle, 'agent 工作台');
     expect(progress.currentDetail, contains('实时状态'));
     progress = applyWorkerProgressLog(progress, 'Worker 正在实施当前卡片');
-    expect(progress.phaseLabel, '实施');
+    expect(progress.phaseLabel, 'Implement');
     progress = applyWorkerProgressLog(
       progress,
       'Agent 会话暂时失败（第 2/5 次）：connection lost；2000ms 后自动重试',
     );
-    expect(progress.phaseLabel, '重试');
+    expect(progress.phaseLabel, 'Retry');
     progress =
         applyWorkerProgressLog(progress, '验证已由 Agent 会话完成，Worker 不再复跑测试');
-    expect(progress.phaseLabel, '提交');
+    expect(progress.phaseLabel, 'Submit');
     progress = applyWorkerProgressLog(progress, 'Worker 正在提交并送交验证');
-    expect(progress.phaseLabel, '提交');
+    expect(progress.phaseLabel, 'Submit');
     progress = applyWorkerProgressLog(progress, '完成后队列：开始「推送」');
-    expect(progress.phaseLabel, '推送');
+    expect(progress.phaseLabel, 'Push');
   });
 
   test('队列中途加卡时 Max 分母随剩余工作量增加', () {
@@ -332,7 +332,8 @@ void main() {
       'context': '272k',
     });
     expect(
-      progress.batchElapsedSeconds(now: started.add(const Duration(minutes: 5))),
+      progress.batchElapsedSeconds(
+          now: started.add(const Duration(minutes: 5))),
       5 * 60,
     );
     expect(

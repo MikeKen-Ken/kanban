@@ -28,12 +28,12 @@ class PowerShellEnsureResult {
     if (!installAttempted) return null;
     if (ok) {
       return switch (installMethod) {
-        'winget' => '已通过 winget 安装 PowerShell 7',
-        'msi' => '已通过 MSI 安装 PowerShell 7',
-        _ => '已安装 PowerShell 7',
+        'winget' => 'PowerShell 7 installed through winget',
+        'msi' => 'PowerShell 7 installed through MSI',
+        _ => 'PowerShell 7 installed',
       };
     }
-    return 'PowerShell 7 自动安装失败';
+    return 'Automatic PowerShell 7 installation failed';
   }
 }
 
@@ -72,9 +72,8 @@ String? resolveWingetExecutable({
     );
   }
 
-  final pathValue = _envValue(environment, 'Path') ??
-      _envValue(environment, 'PATH') ??
-      '';
+  final pathValue =
+      _envValue(environment, 'Path') ?? _envValue(environment, 'PATH') ?? '';
   for (final raw in pathValue.split(separator)) {
     final dir = raw.trim();
     if (dir.isEmpty) continue;

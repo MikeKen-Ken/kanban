@@ -13,7 +13,8 @@ class AgentDispatchToolbarButton extends StatefulWidget {
       _AgentDispatchToolbarButtonState();
 }
 
-class _AgentDispatchToolbarButtonState extends State<AgentDispatchToolbarButton> {
+class _AgentDispatchToolbarButtonState
+    extends State<AgentDispatchToolbarButton> {
   final _registry = AgentDispatchRegistry.instance;
 
   @override
@@ -37,8 +38,8 @@ class _AgentDispatchToolbarButtonState extends State<AgentDispatchToolbarButton>
     if (!isAgentDispatchDesktop) return const SizedBox.shrink();
     final runningCount = _registry.runningCount;
     final tooltip = runningCount > 0
-        ? 'Agent 调度（$runningCount 个项目运行中）'
-        : 'Agent 调度';
+        ? 'Agent Dispatch ($runningCount project(s) running)'
+        : 'Agent Dispatch';
     return IconButton(
       tooltip: tooltip,
       icon: Icon(

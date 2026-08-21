@@ -16,9 +16,9 @@ class WorkerAgentShell {
   String get summaryFragment {
     final ver = version?.trim();
     if (ver != null && ver.isNotEmpty) {
-      return 'Cursor Agent 终端：$displayName $ver（$executable）';
+      return 'Cursor Agent shell: $displayName $ver ($executable)';
     }
-    return 'Cursor Agent 终端：$displayName（$executable，版本未知）';
+    return 'Cursor Agent shell: $displayName ($executable, version unknown)';
   }
 }
 
@@ -94,9 +94,8 @@ String? resolveWindowsPowerShell7({
     );
   }
 
-  final pathValue = _envValue(environment, 'Path') ??
-      _envValue(environment, 'PATH') ??
-      '';
+  final pathValue =
+      _envValue(environment, 'Path') ?? _envValue(environment, 'PATH') ?? '';
   for (final raw in pathValue.split(separator)) {
     final dir = raw.trim();
     if (dir.isEmpty) continue;

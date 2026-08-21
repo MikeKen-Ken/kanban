@@ -26,7 +26,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const AgentDispatchSectionHeader(
-          title: '完成后队列',
+          title: 'After-completion queue',
           tone: AgentDispatchSectionTone.queue,
         ),
         const SizedBox(height: 4),
@@ -45,7 +45,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  '失败后仍执行',
+                  'Continue after failure',
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
@@ -59,7 +59,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
           children: [
             for (final step in AgentDispatchAfterStep.values)
               ActionChip(
-                tooltip: '添加到完成后队列',
+                tooltip: 'Add to after-completion queue',
                 label: Text(step.label),
                 onPressed: !enabled || steps.contains(step)
                     ? null
@@ -70,7 +70,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
         if (steps.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text('未添加动作', style: theme.textTheme.bodySmall),
+            child: Text('No actions added', style: theme.textTheme.bodySmall),
           )
         else
           ReorderableListView.builder(
@@ -97,7 +97,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
                     : const Icon(Icons.drag_handle),
                 title: Text('${index + 1}. ${step.label}'),
                 trailing: IconButton(
-                  tooltip: '移除',
+                  tooltip: 'Remove',
                   onPressed: enabled
                       ? () => onChanged(removeAfterQueueStepAt(steps, index))
                       : null,

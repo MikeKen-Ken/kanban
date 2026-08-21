@@ -89,7 +89,7 @@ void main() {
     final overview = AgentDispatchHubOverview.running(
       liveCardLabel: '2/5',
       currentTitle: 'Agent 调度总览可以显示更多的信息',
-      phaseLabel: '实施',
+      phaseLabel: 'Implement',
       engine: 'cursor',
       model: 'composer-2.5',
       batchStartedAt: DateTime(2026, 8, 18, 18, 0, 0),
@@ -97,18 +97,18 @@ void main() {
       now: DateTime(2026, 8, 18, 18, 12, 30),
     );
 
-    expect(overview.statusLine, '运行中 · 实施 · 2/5');
+    expect(overview.statusLine, 'Running · Implement · 2/5');
     expect(overview.cardTitle, 'Agent 调度总览可以显示更多的信息');
     expect(overview.engineModelLabel, 'Cursor SDK · composer-2.5');
     expect(overview.modelDetailLabel, isEmpty);
-    expect(overview.elapsedLabel, '批次 12分30秒 · 本卡 2分30秒');
+    expect(overview.elapsedLabel, 'Batch 12m 30s · This card 2m 30s');
   });
 
   test('总览文案包含上下文长度与快速模式', () {
     final overview = AgentDispatchHubOverview.running(
       liveCardLabel: '1/2',
       currentTitle: '卡片',
-      phaseLabel: '实施',
+      phaseLabel: 'Implement',
       engine: 'cursor',
       model: 'composer-2.5',
       modelParams: const {
@@ -139,7 +139,7 @@ void main() {
               progressLabel: '1/3',
               progressFraction: 0.0,
               currentTitle: 'Agent 调度总览可以显示更多的信息',
-              phaseLabel: '实施',
+              phaseLabel: 'Implement',
               engine: 'cursor',
               model: 'composer-2.5',
               modelParams: const {
@@ -158,7 +158,7 @@ void main() {
       ),
     );
 
-    expect(find.text('运行中 · 实施 · 1/3'), findsOneWidget);
+    expect(find.text('Running · Implement · 1/3'), findsOneWidget);
     expect(find.text('Agent 调度总览可以显示更多的信息'), findsOneWidget);
     expect(find.text('Cursor SDK · composer-2.5'), findsOneWidget);
     expect(find.text('上下文 272k · 快速模式 开'), findsOneWidget);

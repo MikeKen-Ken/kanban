@@ -10,10 +10,10 @@ enum AgentDispatchAfterStep {
   shutdown;
 
   String get label => switch (this) {
-        AgentDispatchAfterStep.webdavUpload => '上传',
-        AgentDispatchAfterStep.gitPush => '推送',
-        AgentDispatchAfterStep.sleep => '休眠',
-        AgentDispatchAfterStep.shutdown => '关机',
+        AgentDispatchAfterStep.webdavUpload => 'Upload',
+        AgentDispatchAfterStep.gitPush => 'Push',
+        AgentDispatchAfterStep.sleep => 'Sleep',
+        AgentDispatchAfterStep.shutdown => 'Shut down',
       };
 
   static AgentDispatchAfterStep? tryParse(String? name) {

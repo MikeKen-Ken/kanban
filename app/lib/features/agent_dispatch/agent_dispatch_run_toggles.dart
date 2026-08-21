@@ -37,31 +37,31 @@ class AgentDispatchRunToggles extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _Toggle(
-          title: '允许使用卡片参数',
+          title: 'Allow card parameters',
           value: !ignoreCardParams,
           enabled: enabled,
           onChanged: (allow) => onIgnoreCardParamsChanged(!allow),
         ),
         _Toggle(
-          title: '允许脏工作区',
+          title: 'Allow dirty workspace',
           value: allowDirtyWorkspace,
           enabled: enabled,
           onChanged: onAllowDirtyWorkspaceChanged,
         ),
         _Toggle(
-          title: '开沙箱',
+          title: 'Enable sandbox',
           value: enableSandbox,
           enabled: enabled,
           onChanged: onEnableSandboxChanged,
         ),
         _Toggle(
-          title: '需要测试',
+          title: 'Tests required',
           value: requireTests,
           enabled: enabled,
           onChanged: onRequireTestsChanged,
         ),
         _Toggle(
-          title: '收尾后主动结束会话',
+          title: 'End session after finalization',
           value: terminateAfterDispatchTerminal,
           enabled: enabled,
           onChanged: onTerminateAfterDispatchTerminalChanged,

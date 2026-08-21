@@ -23,7 +23,7 @@ Future<void> showAgentDispatchTokenStatsDialog({
         return KeyEventResult.ignored;
       },
       child: AlertDialog(
-        title: const Text('Token 统计'),
+        title: const Text('Token statistics'),
         content: SizedBox(
           width: 640,
           height: 560,
@@ -32,7 +32,7 @@ Future<void> showAgentDispatchTokenStatsDialog({
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -81,16 +81,17 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('清空 Token 统计？'),
-        content: const Text('将删除本机当前项目的全部会话用量记录，且不会同步到其他设备。'),
+        title: const Text('Clear token statistics?'),
+        content: const Text(
+            'This deletes all local session usage records for the current project and does not sync to other devices.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('清空'),
+            child: const Text('Clear'),
           ),
         ],
       ),
@@ -110,7 +111,8 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
     }
     if (stats.sessionCount == 0) {
       return const Center(
-        child: Text('暂无会话用量。完成一次 Cursor 调度后会在此按日汇总。'),
+        child: Text(
+            'No session usage yet. Usage is summarized by day after a Cursor dispatch.'),
       );
     }
 
@@ -128,7 +130,7 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
           child: TextButton.icon(
             onPressed: _confirmClear,
             icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-            label: const Text('清空统计'),
+            label: const Text('Clear statistics'),
           ),
         ),
         Wrap(
@@ -148,24 +150,24 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            _MetricCard(label: '会话数', value: '${selected.sessionCount}'),
+            _MetricCard(label: 'Sessions', value: '${selected.sessionCount}'),
             _MetricCard(
-              label: '合计 Token',
+              label: 'Total tokens',
               value: _formatCount(selected.totalTokens),
             ),
             _MetricCard(
-              label: '平均每次',
+              label: 'Average per session',
               value: _formatCount(selected.averageTotal?.round() ?? 0),
             ),
             _MetricCard(
-              label: '全部累计',
+              label: 'All-time total',
               value: _formatCount(stats.totalTokens),
-              subtitle: '${stats.sessionCount} 次',
+              subtitle: '${stats.sessionCount} sessions',
             ),
           ],
         ),
         const SizedBox(height: 20),
-        Text('输入 / 缓存 / 输出', style: textTheme.titleMedium),
+        Text('Input / cache / output', style: textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
           '输入 ${_formatCount(selected.totalInput)} · '
@@ -182,7 +184,7 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
         ),
         if (daily.isNotEmpty) ...[
           const SizedBox(height: 20),
-          Text('按日明细', style: textTheme.titleMedium),
+          Text('Daily details', style: textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
             '共 ${_formatCount(selected.totalTokens)} token · '
@@ -200,7 +202,7 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.trending_up_outlined),
-            title: const Text('单次峰值'),
+            title: const Text('Single-session peak'),
             subtitle: Text(
               '${_formatCount(selected.peakSession!.totalTokens)} '
               '(入 ${_formatCount(selected.peakSession!.inputTokens)} / '
@@ -213,7 +215,7 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.schedule_outlined),
-            title: const Text('最近一次'),
+            title: const Text('Most recent'),
             subtitle: Text(
               '${_formatCount(selected.lastSession!.totalTokens)} token · '
               '${_formatStamp(selected.lastSession!.at)}'
@@ -248,12 +250,12 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
 
   String _rangeLabel(_TokenRange range) {
     return switch (range) {
-      _TokenRange.lastHour => '过去 1 小时',
-      _TokenRange.today => '今天',
-      _TokenRange.last3Days => '近 3 天',
-      _TokenRange.last7Days => '近 7 天',
-      _TokenRange.last30Days => '近 30 天',
-      _TokenRange.all => '全部',
+      _TokenRange.lastHour => 'Past hour',
+      _TokenRange.today => 'Today',
+      _TokenRange.last3Days => 'Past 3 days',
+      _TokenRange.last7Days => 'Past 7 days',
+      _TokenRange.last30Days => 'Past 30 days',
+      _TokenRange.all => 'All',
     };
   }
 }
@@ -394,7 +396,8 @@ class _DailyTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = values.reversed.where((day) => day.sessions > 0).toList();
     if (rows.isEmpty) {
-      return Text('该范围内暂无会话。', style: Theme.of(context).textTheme.bodySmall);
+      return Text('No sessions in this range.',
+          style: Theme.of(context).textTheme.bodySmall);
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -403,8 +406,8 @@ class _DailyTable extends StatelessWidget {
         dataRowMinHeight: 32,
         dataRowMaxHeight: 36,
         columns: const [
-          DataColumn(label: Text('日期')),
-          DataColumn(label: Text('次数'), numeric: true),
+          DataColumn(label: Text('Date')),
+          DataColumn(label: Text('Count'), numeric: true),
           DataColumn(label: Text('Input'), numeric: true),
           DataColumn(label: Text('Cache Read'), numeric: true),
           DataColumn(label: Text('Cache Write'), numeric: true),

@@ -241,7 +241,7 @@ AgentDispatchProgress applyWorkerProgressLog(
       ),
       currentTitle: '',
       currentDetail: '',
-      phaseLabel: '领取',
+      phaseLabel: 'Claim',
       cardStartedAt: clock,
     );
   }
@@ -249,7 +249,7 @@ AgentDispatchProgress applyWorkerProgressLog(
   if (title != null) {
     return current.copyWith(
       currentTitle: title.group(1)!.trim(),
-      phaseLabel: current.phaseLabel.isEmpty ? '领取' : current.phaseLabel,
+      phaseLabel: current.phaseLabel.isEmpty ? 'Claim' : current.phaseLabel,
       cardStartedAt: current.cardStartedAt ?? clock,
     );
   }
@@ -274,7 +274,8 @@ AgentDispatchProgress applyWorkerProgressLog(
   }
   final phase = _phaseFromLog(message);
   final absoluteProcessed = _absoluteProcessedFromLog(message);
-  final completedCard = absoluteProcessed == null && _isCompletedCardLog(message);
+  final completedCard =
+      absoluteProcessed == null && _isCompletedCardLog(message);
   if (phase == null && absoluteProcessed == null && !completedCard) {
     return current;
   }
@@ -303,19 +304,19 @@ bool _isCompletedCardLog(String message) {
 
 String? _phaseFromLog(String message) {
   if (message.contains('Agent 会话暂时失败') && message.contains('自动重试')) {
-    return '重试';
+    return 'Retry';
   }
-  if (message.contains('Worker 正在实施')) return '实施';
+  if (message.contains('Worker 正在实施')) return 'Implement';
   if (message.contains('验证已由 Agent 会话完成') ||
       message.contains('Worker 正在提交') ||
       message.contains('已验证、提交')) {
-    return '提交';
+    return 'Submit';
   }
-  if (message.contains('咨询卡') && message.contains('送交验证')) return '送验';
-  if (message.contains('Worker 批次完成')) return '完成';
+  if (message.contains('咨询卡') && message.contains('送交验证')) return 'Verify';
+  if (message.contains('Worker 批次完成')) return 'Complete';
   final afterQueue = _afterQueuePattern.firstMatch(message);
   if (afterQueue != null) return afterQueue.group(1);
-  if (message.contains('完成后队列：开始')) return '完成后队列';
+  if (message.contains('完成后队列：开始')) return 'After-completion queue';
   return null;
 }
 
