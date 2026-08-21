@@ -94,7 +94,8 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
       );
       if (!mounted) return;
       setState(() => _busy = false);
-      showAppSnackBar(context, message: '已调起安装；完成后请按提示完成更新');
+      showAppSnackBar(context,
+          message: 'Installer opened; follow the prompts to finish the update');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -111,38 +112,40 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
     final currentDate = _currentVersionDate(check);
     final currentDateText = formatAppUpdateDate(currentDate);
     final versionLabel = info == null
-        ? '读取中…'
+        ? 'Loading…'
         : currentDateText.isEmpty
             ? '${info.version}（${info.buildNumber}）'
-            : '${info.version}（${info.buildNumber}）\n发布于 $currentDateText';
+            : '${info.version} (${info.buildNumber})\nReleased $currentDateText';
     final remote = check?.release;
     final remoteDateText = formatAppUpdateDate(
       remote?.displayDate ?? check?.asset?.updatedAt,
     );
     final remoteTitle = remote == null
         ? ''
-        : '远端 ${remote.versionLabel}（${remote.tagName}）';
+        : 'Remote ${remote.versionLabel} (${remote.tagName})';
     final remoteSubtitleParts = <String>[
-      if (remoteDateText.isNotEmpty) '发布于 $remoteDateText',
+      if (remoteDateText.isNotEmpty) 'Released $remoteDateText',
       if (check?.updateAvailable == true)
-        (check?.message?.contains('同版本') == true ? '同版本安装包已刷新' : '有可用更新')
+        (check?.message?.contains('same-version') == true
+            ? 'Same-version package refreshed'
+            : 'Update available')
       else
-        '已是最新',
+        'Up to date',
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('检查更新')),
+      appBar: AppBar(title: const Text('Check for updates')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           SettingsSection(
             icon: Icons.system_update_alt_outlined,
-            title: '软件更新',
-            subtitle: '从 GitHub Release 获取安装包',
+            title: 'Software updates',
+            subtitle: 'Get installers from GitHub Releases',
             children: [
               ListTile(
                 leading: const Icon(Icons.info_outline),
-                title: const Text('当前版本'),
+                title: const Text('Current version'),
                 subtitle: Text(versionLabel),
               ),
               if (remote != null)
@@ -163,7 +166,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                       const SizedBox(height: 6),
                       Text(
                         (_progress ?? 0) >= 0.999
-                            ? '下载完成，正在解压安装…请勿关闭窗口'
+                            ? 'Download complete; extracting and installing… do not close the window'
                             : '下载 ${((_progress ?? 0) * 100).toStringAsFixed(0)}%',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
@@ -176,7 +179,8 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
               Padding(
@@ -186,7 +190,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: _busy ? null : _checkUpdate,
-                        child: const Text('重新检查'),
+                        child: const Text('Check again'),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -199,7 +203,9 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                             ? null
                             : _install,
                         child: Text(
-                          check?.updateAvailable == true ? '下载并安装' : '无需更新',
+                          check?.updateAvailable == true
+                              ? 'Download and install'
+                              : 'No update needed',
                         ),
                       ),
                     ),
@@ -212,7 +218,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
             const SizedBox(height: 16),
             SettingsSection(
               icon: Icons.notes_outlined,
-              title: '更新说明',
+              title: 'Release notes',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -256,20 +262,20 @@ Future<void> maybePromptAppUpdate(BuildContext context) async {
     final action = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('发现新版本 ${result.release!.versionLabel}'),
+        title: Text('New version available: ${result.release!.versionLabel}'),
         content: Text(_startupPromptBody(result)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, 'skip'),
-            child: const Text('跳过此版本'),
+            child: const Text('Skip this version'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, 'later'),
-            child: const Text('稍后'),
+            child: const Text('Later'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, 'update'),
-            child: const Text('去更新'),
+            child: const Text('Update now'),
           ),
         ],
       ),
@@ -296,8 +302,8 @@ String _startupPromptBody(AppUpdateCheckResult result) {
   final date = formatAppUpdateDate(
     result.release?.displayDate ?? result.asset?.updatedAt,
   );
-  final message = result.message ?? '是否前往更新？';
+  final message = result.message ?? 'Open the update page?';
   if (date.isEmpty) return message;
   if (message.contains(date)) return message;
-  return '$message\n发布于 $date';
+  return '$message\nReleased $date';
 }

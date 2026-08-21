@@ -82,9 +82,9 @@ class AppUpdateService {
       updateAvailable: updateAvailable,
       message: updateAvailable
           ? (newer
-              ? '发现新版本 ${_versionWithDate(release, asset)}'
-              : '发现同版本更新包（构建已刷新${_optionalDateSuffix(asset.updatedAt ?? release.displayDate)}）')
-          : '已是最新版本${_optionalDateSuffix(release.displayDate)}',
+              ? 'New version available: ${_versionWithDate(release, asset)}'
+              : 'Same-version package refreshed${_optionalDateSuffix(asset.updatedAt ?? release.displayDate)}')
+          : 'Up to date${_optionalDateSuffix(release.displayDate)}',
     );
   }
 
@@ -94,7 +94,7 @@ class AppUpdateService {
   ) {
     final date = formatAppUpdateDate(release.displayDate ?? asset.updatedAt);
     if (date.isEmpty) return release.versionLabel;
-    return '${release.versionLabel}（$date）';
+    return '${release.versionLabel} ($date)';
   }
 
   static String _optionalDateSuffix(DateTime? value) {
@@ -107,7 +107,8 @@ class AppUpdateService {
     String remoteVersion,
     GithubReleaseAsset asset,
   ) async {
-    if (VersionCompare.compare(remoteVersion, (await _packageInfoLoader()).version) !=
+    if (VersionCompare.compare(
+            remoteVersion, (await _packageInfoLoader()).version) !=
         0) {
       return false;
     }

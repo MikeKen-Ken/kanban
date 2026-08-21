@@ -42,16 +42,16 @@ class TrashScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('还原？'),
-        content: Text('将还原「${item.displayName}」'),
+        title: const Text('Restore?'),
+        content: Text('Restore "${item.displayName}"'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('还原'),
+            child: const Text('Restore'),
           ),
         ],
       ),
@@ -63,7 +63,7 @@ class TrashScreen extends StatelessWidget {
     if (error != null) {
       showAppSnackBar(context, message: error);
     } else {
-      showAppSnackBar(context, message: '已还原「${item.displayName}」');
+      showAppSnackBar(context, message: 'Restored "${item.displayName}"');
     }
   }
 
@@ -75,19 +75,20 @@ class TrashScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('永久删除？'),
-        content: Text('「${item.displayName}」将被永久删除，无法恢复'),
+        title: const Text('Delete permanently?'),
+        content: Text(
+            '"${item.displayName}" will be permanently deleted and cannot be restored'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('永久删除'),
+            child: const Text('Delete permanently'),
           ),
         ],
       ),
@@ -95,7 +96,8 @@ class TrashScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
     await controller.permanentlyDeleteTrashItem(item.id);
     if (!context.mounted) return;
-    showAppSnackBar(context, message: '已永久删除「${item.displayName}」');
+    showAppSnackBar(context,
+        message: 'Permanently deleted "${item.displayName}"');
   }
 
   Future<void> _confirmEmptyTrash(
@@ -105,19 +107,20 @@ class TrashScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('清空回收站？'),
-        content: const Text('所有回收项将被永久删除，无法恢复'),
+        title: const Text('Empty Trash?'),
+        content: const Text(
+            'All Trash items will be permanently deleted and cannot be restored'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
+            child: const Text('Empty'),
           ),
         ],
       ),
@@ -125,7 +128,7 @@ class TrashScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
     await controller.emptyTrash();
     if (!context.mounted) return;
-    showAppSnackBar(context, message: '回收站已清空');
+    showAppSnackBar(context, message: 'Trash emptied');
   }
 
   @override
@@ -137,7 +140,7 @@ class TrashScreen extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('回收站'),
+            title: const Text('Trash'),
             actions: [
               Selector<BoardController, int>(
                 selector: (_, c) => c.appSettings.trashRetentionDays,
@@ -175,7 +178,7 @@ class TrashScreen extends StatelessWidget {
                 TextButton(
                   onPressed: () => _confirmEmptyTrash(context, controller),
                   child: Text(
-                    '清空',
+                    'Empty',
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                 ),
@@ -193,14 +196,14 @@ class TrashScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        '回收站为空',
+                        'Trash is empty',
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '删除的卡片、列、项目会出现在这里',
+                        'Deleted cards, columns, and projects appear here',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

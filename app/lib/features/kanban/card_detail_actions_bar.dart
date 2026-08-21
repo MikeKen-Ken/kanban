@@ -46,7 +46,7 @@ class CardDetailActionsBar extends StatelessWidget {
                   TextButton.icon(
                     onPressed: onSaveAsTemplate,
                     icon: const Icon(Icons.bookmark_add_outlined),
-                    label: const Text('存为模板'),
+                    label: const Text('Save as template'),
                   ),
                   Builder(
                     builder: (context) {
@@ -56,7 +56,7 @@ class CardDetailActionsBar extends StatelessWidget {
                       return TextButton(
                         onPressed: onTransfer,
                         child: Text(
-                          '转移到…',
+                          'Move to…',
                           style: TextStyle(
                             color: canTransfer
                                 ? null
@@ -81,7 +81,7 @@ class CardDetailActionsBar extends StatelessWidget {
                       }
                     },
                     child: Text(
-                      '删除',
+                      'Delete',
                       style: TextStyle(color: theme.colorScheme.error),
                     ),
                   ),
@@ -96,7 +96,7 @@ class CardDetailActionsBar extends StatelessWidget {
           ],
           FilledButton(
             onPressed: onSave,
-            child: const Text('保存'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -185,7 +185,7 @@ class _CardDetailCompleteButtonState extends State<CardDetailCompleteButton>
         label: AnimatedSwitcher(
           duration: const Duration(milliseconds: 160),
           child: Text(
-            _succeededVisual ? '已完成' : '完成',
+            _succeededVisual ? 'Completed' : 'Complete',
             key: ValueKey(_succeededVisual),
           ),
         ),

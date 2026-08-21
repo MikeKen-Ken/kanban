@@ -73,7 +73,9 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
     if (!mounted) return;
     setState(() {
       _testing = false;
-      _testResult = ok ? '连接成功' : '连接失败，请检查地址与账号';
+      _testResult = ok
+          ? 'Connection successful'
+          : 'Connection failed; check the URL and account';
     });
   }
 
@@ -85,7 +87,9 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
     setState(() => _saving = false);
     showAppSnackBar(
       context,
-      message: !_enabled ? '已保存' : '已保存；请用顶栏手动上传、下载或合并',
+      message: !_enabled
+          ? 'Saved'
+          : 'Saved; use the toolbar to upload, download, or merge',
     );
     Navigator.pop(context);
   }
@@ -93,7 +97,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('WebDAV 同步')),
+      appBar: AppBar(title: const Text('WebDAV sync')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -101,12 +105,14 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
           children: [
             SettingsSection(
               icon: Icons.cloud_outlined,
-              title: '同步开关',
-              subtitle: '连接配置仅保存在本机，不同步',
+              title: 'Sync switch',
+              subtitle:
+                  'Connection settings are stored locally and are not synced',
               children: [
                 SwitchListTile(
-                  title: const Text('启用 WebDAV 同步'),
-                  subtitle: const Text('开启后可配置连接；数据仅通过顶栏手动上传、下载或合并'),
+                  title: const Text('Enable WebDAV sync'),
+                  subtitle: const Text(
+                      'Configure the connection after enabling; sync is manual from the toolbar'),
                   value: _enabled,
                   onChanged: (v) => setState(() => _enabled = v),
                 ),
@@ -114,7 +120,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Text(
-                      '开启后可配置服务器连接；不会自动同步',
+                      'Configure the server connection after enabling; syncing is not automatic',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color:
                                 Theme.of(context).colorScheme.onSurfaceVariant,
@@ -127,7 +133,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
               const SizedBox(height: 16),
               SettingsSection(
                 icon: Icons.link_outlined,
-                title: '连接信息',
+                title: 'Connection details',
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(8),
@@ -136,7 +142,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                         TextFormField(
                           controller: _urlController,
                           decoration: const InputDecoration(
-                            labelText: '服务器地址',
+                            labelText: 'Server URL',
                             hintText: 'https://dav.jianguoyun.com/dav/',
                             border: OutlineInputBorder(),
                             isDense: true,
@@ -144,7 +150,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                           validator: (v) {
                             if (!_enabled) return null;
                             if (v == null || v.trim().isEmpty) {
-                              return '请输入服务器地址';
+                              return 'Enter a server URL';
                             }
                             return null;
                           },
@@ -153,14 +159,14 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                         TextFormField(
                           controller: _userController,
                           decoration: const InputDecoration(
-                            labelText: '用户名',
+                            labelText: 'Username',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
                           validator: (v) {
                             if (!_enabled) return null;
                             if (v == null || v.trim().isEmpty) {
-                              return '请输入用户名';
+                              return 'Enter a username';
                             }
                             return null;
                           },
@@ -170,7 +176,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                           controller: _passController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
-                            labelText: '密码 / 应用密码',
+                            labelText: 'Password / app password',
                             border: const OutlineInputBorder(),
                             isDense: true,
                             suffixIcon: IconButton(
@@ -186,7 +192,8 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                           ),
                           validator: (v) {
                             if (!_enabled) return null;
-                            if (v == null || v.isEmpty) return '请输入密码';
+                            if (v == null || v.isEmpty)
+                              return 'Enter a password';
                             return null;
                           },
                         ),
@@ -194,12 +201,12 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                         TextFormField(
                           controller: _pathController,
                           decoration: const InputDecoration(
-                            labelText: '远端目录路径',
+                            labelText: 'Remote directory path',
                             hintText: '/KanbanApp',
                             border: OutlineInputBorder(),
                             isDense: true,
                             helperText:
-                                '数据目录：projects.json + projects/{项目id}/',
+                                'Data layout: projects.json + projects/{projectId}/',
                           ),
                         ),
                       ],
@@ -214,11 +221,11 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        _testResult == '连接成功'
+                        _testResult == 'Connection successful'
                             ? Icons.check_circle_outline
                             : Icons.error_outline,
                         size: 18,
-                        color: _testResult == '连接成功'
+                        color: _testResult == 'Connection successful'
                             ? Colors.green
                             : Theme.of(context).colorScheme.error,
                       ),
@@ -226,7 +233,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                       Text(
                         _testResult!,
                         style: TextStyle(
-                          color: _testResult == '连接成功'
+                          color: _testResult == 'Connection successful'
                               ? Colors.green
                               : Theme.of(context).colorScheme.error,
                         ),
@@ -244,7 +251,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('测试连接'),
+                        : const Text('Test connection'),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -256,7 +263,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('保存'),
+                          : const Text('Save'),
                     ),
                   ),
                 ],
@@ -272,7 +279,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('保存'),
+                    : const Text('Save'),
               ),
             ],
           ],

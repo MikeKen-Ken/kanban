@@ -12,9 +12,9 @@ class ActivityScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final events = context.watch<BoardController>().activeProjectActivity;
     return Scaffold(
-      appBar: AppBar(title: const Text('活动历史')),
+      appBar: AppBar(title: const Text('Activity history')),
       body: events.isEmpty
-          ? const Center(child: Text('还没有活动记录'))
+          ? const Center(child: Text('No activity yet'))
           : ListView.separated(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: events.length,

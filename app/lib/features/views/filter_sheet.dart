@@ -82,18 +82,19 @@ class _FilterSheetState extends State<_FilterSheet> {
             children: [
               Row(
                 children: [
-                  Text('筛选卡片', style: Theme.of(context).textTheme.titleLarge),
+                  Text('Filter cards',
+                      style: Theme.of(context).textTheme.titleLarge),
                   const Spacer(),
                   TextButton(
                     onPressed: () =>
                         setState(() => _value = const FilterSpec()),
-                    child: const Text('重置'),
+                    child: const Text('Reset'),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               if (widget.projects.isNotEmpty) ...[
-                Text('项目', style: Theme.of(context).textTheme.titleSmall),
+                Text('Projects', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -109,16 +110,17 @@ class _FilterSheetState extends State<_FilterSheet> {
                 ),
                 const SizedBox(height: 20),
               ],
-              Text('日期', style: Theme.of(context).textTheme.titleSmall),
+              Text('Date', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               SegmentedButton<DueDateFilter>(
                 segments: const [
-                  ButtonSegment(value: DueDateFilter.any, label: Text('全部')),
-                  ButtonSegment(value: DueDateFilter.today, label: Text('今天')),
+                  ButtonSegment(value: DueDateFilter.any, label: Text('Any')),
                   ButtonSegment(
-                      value: DueDateFilter.overdue, label: Text('逾期')),
+                      value: DueDateFilter.today, label: Text('Today')),
                   ButtonSegment(
-                      value: DueDateFilter.thisWeek, label: Text('本周')),
+                      value: DueDateFilter.overdue, label: Text('Overdue')),
+                  ButtonSegment(
+                      value: DueDateFilter.thisWeek, label: Text('This week')),
                 ],
                 selected: {_value.dueDate},
                 onSelectionChanged: (value) => setState(
@@ -126,15 +128,18 @@ class _FilterSheetState extends State<_FilterSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text('状态', style: Theme.of(context).textTheme.titleSmall),
+              Text('Status', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               SegmentedButton<CompletionFilter>(
                 segments: const [
-                  ButtonSegment(value: CompletionFilter.any, label: Text('全部')),
                   ButtonSegment(
-                      value: CompletionFilter.incomplete, label: Text('未完成')),
+                      value: CompletionFilter.any, label: Text('Any')),
                   ButtonSegment(
-                      value: CompletionFilter.completed, label: Text('已完成')),
+                      value: CompletionFilter.incomplete,
+                      label: Text('Incomplete')),
+                  ButtonSegment(
+                      value: CompletionFilter.completed,
+                      label: Text('Completed')),
                 ],
                 selected: {_value.completion},
                 onSelectionChanged: (value) => setState(
@@ -142,16 +147,16 @@ class _FilterSheetState extends State<_FilterSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text('优先级', style: Theme.of(context).textTheme.titleSmall),
+              Text('Priority', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 children: [
                   for (final item in const [
-                    ('high', '高'),
-                    ('medium', '中'),
-                    ('low', '低'),
-                    ('none', '无'),
+                    ('high', 'High'),
+                    ('medium', 'Medium'),
+                    ('low', 'Low'),
+                    ('none', 'None'),
                   ])
                     FilterChip(
                       label: Text(item.$2),
@@ -164,18 +169,19 @@ class _FilterSheetState extends State<_FilterSheet> {
                 const SizedBox(height: 20),
                 Row(
                   children: [
-                    Text('标签', style: Theme.of(context).textTheme.titleSmall),
+                    Text('Labels',
+                        style: Theme.of(context).textTheme.titleSmall),
                     const Spacer(),
                     DropdownButton<LabelMatchMode>(
                       value: _value.labelMatchMode,
                       items: const [
                         DropdownMenuItem(
                           value: LabelMatchMode.any,
-                          child: Text('满足任一'),
+                          child: Text('Any selected'),
                         ),
                         DropdownMenuItem(
                           value: LabelMatchMode.all,
-                          child: Text('满足全部'),
+                          child: Text('All selected'),
                         ),
                       ],
                       onChanged: (value) {
@@ -205,14 +211,15 @@ class _FilterSheetState extends State<_FilterSheet> {
               ],
               if (widget.showSort) ...[
                 const SizedBox(height: 20),
-                Text('排序', style: Theme.of(context).textTheme.titleSmall),
+                Text('Sort', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<CardSortField>(
                         initialValue: _value.sortField,
-                        decoration: const InputDecoration(labelText: '排序字段'),
+                        decoration:
+                            const InputDecoration(labelText: 'Sort field'),
                         items: [
                           for (final item in const [
                             (CardSortField.dueDate, '到期日'),

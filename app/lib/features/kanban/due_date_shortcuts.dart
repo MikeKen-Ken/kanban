@@ -19,11 +19,11 @@ enum DueDateShortcut {
   thisMonth;
 
   String get label => switch (this) {
-        DueDateShortcut.today => '今天',
-        DueDateShortcut.tomorrow => '明天',
-        DueDateShortcut.thisWeek => '本周',
-        DueDateShortcut.inTwoWeeks => '两周',
-        DueDateShortcut.thisMonth => '本月',
+        DueDateShortcut.today => 'Today',
+        DueDateShortcut.tomorrow => 'Tomorrow',
+        DueDateShortcut.thisWeek => 'This week',
+        DueDateShortcut.inTwoWeeks => 'In two weeks',
+        DueDateShortcut.thisMonth => 'This month',
       };
 
   /// 根据 [now] 解析该快捷对应的截止日期（本地零点）。

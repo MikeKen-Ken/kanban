@@ -20,16 +20,16 @@ Future<bool?> showDeleteCardConfirmDialog({
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('删除卡片？'),
-      content: Text('「$cardTitle」将移至回收站'),
+      title: const Text('Delete card?'),
+      content: Text('"$cardTitle" will be moved to Trash'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('取消'),
+          child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('删除'),
+          child: const Text('Delete'),
         ),
       ],
     ),

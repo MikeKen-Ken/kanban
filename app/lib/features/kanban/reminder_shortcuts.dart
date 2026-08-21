@@ -22,12 +22,12 @@ enum ReminderShortcut {
   nextWeek;
 
   String get label => switch (this) {
-        ReminderShortcut.later => '稍后',
-        ReminderShortcut.tonight => '今晚',
-        ReminderShortcut.tomorrowMorning => '明天上午',
-        ReminderShortcut.tomorrowAfternoon => '明天下午',
-        ReminderShortcut.thisWeekend => '周末',
-        ReminderShortcut.nextWeek => '下周',
+        ReminderShortcut.later => 'Later',
+        ReminderShortcut.tonight => 'Tonight',
+        ReminderShortcut.tomorrowMorning => 'Tomorrow morning',
+        ReminderShortcut.tomorrowAfternoon => 'Tomorrow afternoon',
+        ReminderShortcut.thisWeekend => 'This weekend',
+        ReminderShortcut.nextWeek => 'Next week',
       };
 
   /// 根据 [now] 解析该快捷对应的提醒时刻（本地时区，秒与毫秒为 0）。
@@ -41,8 +41,7 @@ enum ReminderShortcut {
       local.minute,
     );
     return switch (this) {
-      ReminderShortcut.later =>
-        truncated.add(const Duration(hours: 1)),
+      ReminderShortcut.later => truncated.add(const Duration(hours: 1)),
       ReminderShortcut.tonight => _tonight(truncated),
       ReminderShortcut.tomorrowMorning => DateTime(
           truncated.year,

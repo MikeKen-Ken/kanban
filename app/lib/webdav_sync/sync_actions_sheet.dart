@@ -16,11 +16,11 @@ enum SyncManualAction {
 
 extension SyncManualActionUi on SyncManualAction {
   String get label => switch (this) {
-        SyncManualAction.upload => '上传',
-        SyncManualAction.download => '下载',
-        SyncManualAction.merge => '合并',
-        SyncManualAction.uploadWallpapers => '上传壁纸库',
-        SyncManualAction.downloadWallpapers => '下载壁纸库',
+        SyncManualAction.upload => 'Upload',
+        SyncManualAction.download => 'Download',
+        SyncManualAction.merge => 'Merge',
+        SyncManualAction.uploadWallpapers => 'Upload wallpapers',
+        SyncManualAction.downloadWallpapers => 'Download wallpapers',
       };
 
   IconData get icon => switch (this) {
@@ -32,11 +32,16 @@ extension SyncManualActionUi on SyncManualAction {
       };
 
   String get subtitle => switch (this) {
-        SyncManualAction.upload => '用本机数据覆盖云端工作区压缩包',
-        SyncManualAction.download => '用云端工作区压缩包覆盖本机',
-        SyncManualAction.merge => '三路合并本机与云端工作区，有差异再回写云端',
-        SyncManualAction.uploadWallpapers => '用本机壁纸库覆盖云端壁纸压缩包',
-        SyncManualAction.downloadWallpapers => '用云端壁纸压缩包覆盖本机壁纸库',
+        SyncManualAction.upload =>
+          'Replace the cloud workspace archive with local data',
+        SyncManualAction.download =>
+          'Replace local data with the cloud workspace archive',
+        SyncManualAction.merge =>
+          'Three-way merge local and cloud workspaces, then write differences back to the cloud',
+        SyncManualAction.uploadWallpapers =>
+          'Replace the cloud wallpaper archive with the local library',
+        SyncManualAction.downloadWallpapers =>
+          'Replace the local wallpaper library with the cloud archive',
       };
 }
 
@@ -48,12 +53,12 @@ bool ensureSyncActionsAvailable(
   BoardController controller,
 ) {
   if (controller.syncStatus == SyncStatus.syncing) {
-    showAppSnackBar(context, message: '正在同步…可点取消按钮');
+    showAppSnackBar(context, message: 'Syncing… click Cancel to stop');
     return false;
   }
   if (!controller.webDavConfig.enabled ||
       !controller.webDavConfig.isConfigured) {
-    showAppSnackBar(context, message: '请先在设置中配置 WebDAV');
+    showAppSnackBar(context, message: 'Configure WebDAV in Settings first');
     return false;
   }
   return true;
@@ -177,7 +182,7 @@ Future<bool?> _confirmSyncOverwrite(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('取消'),
+          child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, true),

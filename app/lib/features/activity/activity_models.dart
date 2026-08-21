@@ -9,14 +9,14 @@ enum ActivityAction {
   dueDateChanged;
 
   String get label => switch (this) {
-        ActivityAction.created => '已创建',
-        ActivityAction.updated => '已更新',
-        ActivityAction.moved => '已移动',
-        ActivityAction.completed => '已完成',
-        ActivityAction.reopened => '已重新打开',
-        ActivityAction.deleted => '已删除',
-        ActivityAction.restored => '已还原',
-        ActivityAction.dueDateChanged => '已调整日期',
+        ActivityAction.created => 'Created',
+        ActivityAction.updated => 'Updated',
+        ActivityAction.moved => 'Moved',
+        ActivityAction.completed => 'Completed',
+        ActivityAction.reopened => 'Reopened',
+        ActivityAction.deleted => 'Deleted',
+        ActivityAction.restored => 'Restored',
+        ActivityAction.dueDateChanged => 'Due date changed',
       };
 
   static ActivityAction fromString(String? value) {
@@ -34,16 +34,18 @@ enum ActivitySource {
   automation;
 
   String get label => switch (this) {
-        ActivitySource.user => '本机',
+        ActivitySource.user => 'Local',
         ActivitySource.mcp => 'MCP',
-        ActivitySource.automation => '自动化',
+        ActivitySource.automation => 'Automation',
       };
 
   /// 活动列表副文案：提示如何恢复。
   String get recoveryHint => switch (this) {
         ActivitySource.user => '',
-        ActivitySource.mcp => '可由工具栏「撤销」或回收站恢复（视操作类型）',
-        ActivitySource.automation => '规则触发；可用「撤销」回退上一本机/MCP 操作',
+        ActivitySource.mcp =>
+          'Can be undone from the toolbar or Trash, depending on the action',
+        ActivitySource.automation =>
+          'Triggered by a rule; use Undo to revert the latest local/MCP action',
       };
 
   static ActivitySource fromString(String? value) {

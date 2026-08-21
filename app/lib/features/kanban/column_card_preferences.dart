@@ -2,12 +2,12 @@ import '../../models/kanban_models.dart';
 
 /// 列内卡片排序方式
 enum CardSortMode {
-  priority('按紧急程度'),
-  dueDate('按到期时间'),
-  updatedAt('按时间'),
-  name('按名称'),
-  createdAt('按添加时间'),
-  custom('自定义');
+  priority('By priority'),
+  dueDate('By due date'),
+  updatedAt('By updated time'),
+  name('By name'),
+  createdAt('By created time'),
+  custom('Custom');
 
   const CardSortMode(this.label);
 
@@ -96,7 +96,8 @@ List<KanbanCard> sortColumnCards(
       );
     case CardSortMode.priority:
       unpinned.sort((a, b) {
-        final byPriority = b.priority.sortWeight.compareTo(a.priority.sortWeight);
+        final byPriority =
+            b.priority.sortWeight.compareTo(a.priority.sortWeight);
         if (byPriority != 0) return byPriority;
         return a.order.compareTo(b.order);
       });
