@@ -1978,7 +1978,7 @@ async function runCodex(job, cancellation) {
   const startedAt = Date.now();
   const mcpUrl = job.round.agentEndpointUrl.trim();
   if (!mcpUrl) {
-    return { ok: false, error: "\u672C\u8F6E claim \u7F3A\u5C11 scoped MCP \u7AEF\u70B9" };
+    return { ok: false, error: "This claim is missing a scoped MCP endpoint" };
   }
   const temp = mkdtempSync2(join4(tmpdir2(), "kanban-codex-"));
   const promptFile = join4(temp, "prompt.txt");
@@ -1992,7 +1992,7 @@ async function runCodex(job, cancellation) {
       tempRoot: temp
     });
     workerLog(
-      `Codex \u4F7F\u7528\u9694\u79BB CODEX_HOME\uFF0C\u590D\u5236\u7528\u6237 AGENTS.md\uFF08\u8986\u76D6\u5148\u8BFB Architecture\uFF09\u4E0E skills\uFF1B\u5408\u5E76\u7528\u6237 MCP\uFF08${agentHome.mcpServerNames.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${mcpUrl}\uFF09`
+      `Codex uses an isolated CODEX_HOME, copied user AGENTS.md (Architecture pre-read is covered) and skills; merged user MCP servers (${agentHome.mcpServerNames.join(", ") || "none"}); kanbanMCP is forced to scoped (${mcpUrl})`
     );
     const args = buildCodexExecArgs({
       cwd: job.cwd,
@@ -2010,7 +2010,7 @@ async function runCodex(job, cancellation) {
     const stopAfterTerminal = (reason) => {
       if (endedByTerminal) return;
       endedByTerminal = true;
-      workerLog(`\u6536\u5C3E\u5DE5\u5177\u5DF2\u6210\u529F\uFF08${reason}\uFF09\uFF0C\u6B63\u5728\u7ED3\u675F Codex \u4F1A\u8BDD`);
+      workerLog(`Finalization tool succeeded (${reason}); ending Codex session`);
     };
     const emittedAssistant = /* @__PURE__ */ new Set();
     const emittedThinking = /* @__PURE__ */ new Set();
@@ -2094,7 +2094,7 @@ async function runCodex(job, cancellation) {
       });
       if (!child.stdin) {
         terminalPoll.stop();
-        reject(new Error("Codex stdin \u4E0D\u53EF\u7528"));
+        reject(new Error("Codex stdin is unavailable"));
         return;
       }
       child.stdin.write(readFileSync3(promptFile));
@@ -2112,11 +2112,11 @@ async function runCodex(job, cancellation) {
     });
     if (cancellation?.isSkipRequested) {
       workerLog(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
-      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+      return { ok: false, error: "Skipped" };
     }
     if (cancellation?.isCancelled) {
       workerLog(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
-      return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+      return { ok: false, error: "Cancelled" };
     }
     let summary;
     try {
@@ -2136,24 +2136,24 @@ async function runCodex(job, cancellation) {
       })
     );
     if (code === 0) {
-      return { ok: true, summary: summary || "Codex \u4F1A\u8BDD\u5B8C\u6210" };
+      return { ok: true, summary: summary || "Codex session completed" };
     }
     return {
       ok: false,
-      error: `Codex \u9000\u51FA\u7801 ${code}`,
+      error: `Codex exited with code ${code}`,
       summary,
       retryable: isRetryableError(summary)
     };
   } catch (error) {
     if (cancellation?.isSkipRequested) {
-      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+      return { ok: false, error: "Skipped" };
     }
     if (cancellation?.isCancelled) {
-      return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+      return { ok: false, error: "Cancelled" };
     }
     return {
       ok: false,
-      error: `Codex \u4F1A\u8BDD\u5F02\u5E38\uFF1A${error instanceof Error ? error.message : String(error)}`,
+      error: `Codex session error: ${error instanceof Error ? error.message : String(error)}`,
       retryable: isRetryableError(error)
     };
   } finally {
@@ -3538,10 +3538,10 @@ async function runAgentWithRetry(runAgent, job, cancellation, wait = sleep) {
     cancellation?.throwIfCancelled();
     try {
       const result = await runAgent(job, cancellation);
-      if (result.ok || cancellation?.isCancelled || cancellation?.isSkipRequested || result.error === "\u5DF2\u53D6\u6D88" || result.error === "\u5DF2\u8DF3\u8FC7" || !isRetryableAgentResult(result) || attempt >= MAX_AGENT_ATTEMPTS) {
+      if (result.ok || cancellation?.isCancelled || cancellation?.isSkipRequested || result.error === "Cancelled" || result.error === "Skipped" || !isRetryableAgentResult(result) || attempt >= MAX_AGENT_ATTEMPTS) {
         return result;
       }
-      await waitBeforeRetry(attempt, result.error ?? "Agent \u4F1A\u8BDD\u5931\u8D25", wait);
+      await waitBeforeRetry(attempt, result.error ?? "Agent session failed", wait);
     } catch (error) {
       if (!isRetryableError(error) || attempt >= MAX_AGENT_ATTEMPTS) throw error;
       await waitBeforeRetry(
@@ -3551,10 +3551,10 @@ async function runAgentWithRetry(runAgent, job, cancellation, wait = sleep) {
       );
     }
     if (cancellation?.isSkipRequested) {
-      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+      return { ok: false, error: "Skipped" };
     }
   }
-  return { ok: false, error: "Agent \u4F1A\u8BDD\u91CD\u8BD5\u6B21\u6570\u5DF2\u8017\u5C3D" };
+  return { ok: false, error: "Agent session retry limit exhausted" };
 }
 function isRetryableAgentResult(result) {
   return result.retryable === true || result.retryable !== false && isRetryableError(result.error);
@@ -3562,7 +3562,7 @@ function isRetryableAgentResult(result) {
 async function waitBeforeRetry(attempt, reason, wait) {
   const delayMs = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
   workerLog(
-    `Agent \u4F1A\u8BDD\u6682\u65F6\u5931\u8D25\uFF08\u7B2C ${attempt}/${MAX_AGENT_ATTEMPTS} \u6B21\uFF09\uFF1A${reason}\uFF1B${delayMs}ms \u540E\u81EA\u52A8\u91CD\u8BD5`,
+    `Agent session temporarily failed (attempt ${attempt}/${MAX_AGENT_ATTEMPTS}): ${reason}; retrying in ${delayMs}ms`,
     "worker",
     "warning"
   );
@@ -3845,22 +3845,22 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
   };
   const mcp = await dependencies.connectMcp(job.mcpEndpoint);
   let processedCards = 0;
-  workerLog(`Worker \u6279\u6B21\u542F\u52A8\uFF1Aendpoint=${job.mcpEndpoint} limit=${limit}`);
+  workerLog(`Worker batch started: endpoint=${job.mcpEndpoint} limit=${limit}`);
   workerLog(
-    `\u7528\u6237 Rule \u6CE8\u5165\uFF1A${userRules.count} \u4E2A\uFF0C${userRules.bytes} bytes\uFF1B\u7528\u6237 Skill \u4E0D\u5199\u5165 prompt`
+    `Injected user rules: ${userRules.count}, ${userRules.bytes} bytes; user skills are not written to the prompt`
   );
   const cancelledResult = () => ({
     ok: false,
-    error: "\u5DF2\u53D6\u6D88",
+    error: "Cancelled",
     processedCards
   });
   const drainedResult = () => ({
     ok: true,
-    summary: `\u5DF2\u5728\u5F53\u524D\u4F1A\u8BDD\u7ED3\u675F\u540E\u505C\u6B62\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`,
+    summary: `Stopped after the current session; processed ${processedCards} card(s)`,
     processedCards
   });
   try {
-    workerLog("Worker \u5DF2\u8FDE\u63A5\u5B8C\u6574\u770B\u677F MCP\uFF0C\u6B63\u5728\u6062\u590D\u672A\u5B8C\u6210\u6536\u5C3E");
+    workerLog("Worker connected to the full Kanban MCP; recovering unfinished finalization");
     const recovery = await recoverPendingSessions(
       mcp,
       job
@@ -3878,12 +3878,12 @@ async function runBatch(job, cancellation, dependencies = defaultDependencies) {
         ...liveJob.projectId ? { projectId: liveJob.projectId } : {}
       });
       if (peek.found !== true) {
-        return completedResult(processedCards, "\u5F53\u524D\u65E0\u66F4\u591A\u5361\u7247");
+        return completedResult(processedCards, "No more cards available");
       }
       const preview = mergeJobWithCardOverrides(liveJob, peek);
       const tree = dependencies.inspectGit(job.cwd);
       if (tree.kind === "dirty" && preview.allowDirtyWorkspace === true) {
-        workerLog(`\u5DF2\u5141\u8BB8\u810F\u5DE5\u4F5C\u533A\uFF0C\u7EE7\u7EED\u9886\u53D6\uFF1A
+        workerLog(`Dirty workspace allowed; continuing claim:
 ${tree.output}`);
       } else {
         const treeError = gitPreflightError(tree);
@@ -3899,10 +3899,10 @@ ${tree.output}`);
         })
       );
       if (claim.payload.found !== true) {
-        return completedResult(processedCards, "claim \u65F6\u961F\u5217\u5DF2\u4E3A\u7A7A");
+        return completedResult(processedCards, "Queue became empty during claim");
       }
       const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
-      workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker \u5355\u5361\u8F6E\u6B21 ${roundLabel} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
+      workerLog(`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Worker card round ${roundLabel} \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
       const cardId = requiredString(claim.payload, "cardId");
       const sessionId = requiredString(claim.payload, "sessionId");
       const agentEndpointUrl = requiredString(
@@ -3919,7 +3919,7 @@ ${tree.output}`);
         const tools = await scoped.listTools();
         if (JSON.stringify(tools) !== JSON.stringify(DISPATCH_SCOPED_TOOL_NAMES)) {
           throw new Error(
-            `scoped MCP \u5DE5\u5177\u95E8\u7981\u5931\u8D25\uFF1A\u5B9E\u9645=${tools.join(",")}\uFF0C\u671F\u671B=${DISPATCH_SCOPED_TOOL_NAMES.join(",")}`
+            `Scoped MCP tool gate failed: actual=${tools.join(",")}, expected=${DISPATCH_SCOPED_TOOL_NAMES.join(",")}`
           );
         }
         const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
@@ -3974,20 +3974,20 @@ ${tree.output}`);
         };
         logModelOverride(liveJob, roundJob, cardId);
         logClaimedCard(claim.payload);
-        workerLog(`\u672C\u5361\u6D4B\u8BD5\uFF1A${roundJob.requireTests === false ? "\u65E0\u9700" : "\u9700\u8981"}`);
-        workerLog("Worker \u6B63\u5728\u5B9E\u65BD\u5F53\u524D\u5361\u7247");
+        workerLog(`Tests for this card: ${roundJob.requireTests === false ? "not required" : "required"}`);
+        workerLog("Worker is processing the current card");
         const agentResult = await runAgentWithRetry(
           dependencies.runAgent,
           roundJob,
           cancellation,
           dependencies.sleep
         );
-        if (cancellation?.isSkipRequested || agentResult.error === "\u5DF2\u8DF3\u8FC7") {
+        if (cancellation?.isSkipRequested || agentResult.error === "Skipped") {
           cancellation?.clearSkipRequest();
           await mcp.callJson("dispatch_skip_agent_session", {
             workerToken: job.workerToken,
             sessionId,
-            reason: "\u7528\u6237\u8BF7\u6C42\u8DF3\u8FC7\u5F53\u524D\u5361\u7247"
+            reason: "User requested skipping the current card"
           });
           terminalRecorded = true;
           const afterSkip = dependencies.inspectGit(job.cwd);
@@ -3995,7 +3995,7 @@ ${tree.output}`);
             if (afterSkip.kind === "dirty") {
               return {
                 ok: false,
-                error: `\u8DF3\u8FC7\u540E\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
+                error: `Workspace is dirty after skip; stopping batch:
 ${afterSkip.output}`,
                 processedCards
               };
@@ -4003,19 +4003,19 @@ ${afterSkip.output}`,
             if (afterSkip.kind === "unknown") {
               return {
                 ok: false,
-                error: `\u8DF3\u8FC7\u540E\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF1A${afterSkip.output}`,
+                error: `Unable to determine workspace state after skip: ${afterSkip.output}`,
                 processedCards
               };
             }
           }
           continue;
         }
-        if (cancellation?.isCancelled || agentResult.error === "\u5DF2\u53D6\u6D88") {
+        if (cancellation?.isCancelled || agentResult.error === "Cancelled") {
           await recordRoundFailure(
             mcp,
             job,
             sessionId,
-            "\u7528\u6237\u53D6\u6D88\u5F53\u524D Agent \u4F1A\u8BDD",
+            "User cancelled the current Agent session",
             true
           );
           terminalRecorded = true;
@@ -4025,12 +4025,12 @@ ${afterSkip.output}`,
           await mcp.callJson("dispatch_fail_agent_session", {
             workerToken: job.workerToken,
             sessionId,
-            reason: agentResult.error ?? "Agent \u4F1A\u8BDD\u5931\u8D25"
+            reason: agentResult.error ?? "Agent session failed"
           });
           terminalRecorded = true;
           return {
             ok: false,
-            error: agentResult.error ?? `\u7B2C ${index} \u6B21 Agent \u4F1A\u8BDD\u5931\u8D25`,
+            error: agentResult.error ?? `Agent session ${index} failed`,
             processedCards
           };
         }
@@ -4051,13 +4051,13 @@ ${afterSkip.output}`,
         if (state === "blocked") {
           return {
             ok: false,
-            error: `\u5361\u7247 ${cardId} \u5DF2\u8FDB\u5165\u963B\u585E\u4E2D\uFF0CWorker \u505C\u6B62\u6279\u6B21`,
+            error: `Card ${cardId} is blocked; Worker is stopping the batch`,
             processedCards
           };
         }
         if (state === "verify" && pending == null) {
           processedCards += 1;
-          workerLog(`\u54A8\u8BE2\u5361 ${cardId} \u5DF2\u9001\u4EA4\u9A8C\u8BC1`, "worker", "success");
+          workerLog(`Consultation card ${cardId} was submitted for verification`, "worker", "success");
           continue;
         }
         if (!pending || pending.status !== "declared") {
@@ -4065,16 +4065,16 @@ ${afterSkip.output}`,
             mcp,
             job,
             sessionId,
-            `\u5B9E\u65BD\u5361 ${cardId} \u672A\u58F0\u660E ready_to_submit`
+            `Card ${cardId} did not declare ready_to_submit`
           );
           terminalRecorded = true;
           return {
             ok: false,
-            error: `\u5B9E\u65BD\u5361 ${cardId} \u672A\u58F0\u660E ready_to_submit`,
+            error: `Card ${cardId} did not declare ready_to_submit`,
             processedCards
           };
         }
-        workerLog("Worker \u6B63\u5728\u63D0\u4EA4\u5F53\u524D\u5361\u7247");
+        workerLog("Worker is finalizing the current card");
         const finalized = await validateAndFinalize(
           mcp,
           job,
@@ -4086,7 +4086,7 @@ ${afterSkip.output}`,
               mcp,
               job,
               sessionId,
-              finalized.error ?? "Worker \u6536\u5C3E\u5931\u8D25"
+              finalized.error ?? "Worker finalization failed"
             );
             terminalRecorded = true;
           }
@@ -4094,12 +4094,12 @@ ${afterSkip.output}`,
         }
         terminalRecorded = true;
         processedCards += 1;
-        workerLog(`\u5361\u7247 ${cardId} \u5DF2\u9A8C\u8BC1\u3001\u63D0\u4EA4\u5E76\u9001\u4EA4\u4EBA\u5DE5\u9A8C\u8BC1`, "worker", "success");
+        workerLog(`Card ${cardId} was validated, committed, and submitted for manual verification`, "worker", "success");
         if (cancellation?.shouldStopAfterCurrentSession) {
           return cancellation.isCancelled ? cancelledResult() : drainedResult();
         }
       } catch (error) {
-        const reason = error instanceof WorkerCancelledError ? "\u7528\u6237\u53D6\u6D88\u5F53\u524D Agent \u4F1A\u8BDD" : `${postAgent ? "Worker \u6536\u5C3E\u5931\u8D25" : "Agent \u4F1A\u8BDD\u5F02\u5E38"}\uFF1A${error instanceof Error ? error.message : String(error)}`;
+        const reason = error instanceof WorkerCancelledError ? "User cancelled the current Agent session" : `${postAgent ? "Worker finalization failed" : "Agent session error"}: ${error instanceof Error ? error.message : String(error)}`;
         if (!terminalRecorded) {
           await recordRoundFailure(
             mcp,
@@ -4111,9 +4111,9 @@ ${afterSkip.output}`,
         }
         const tree2 = dependencies.inspectGit(job.cwd);
         const dirtySuffix = allowDirtyWorkspace || postAgent ? "" : tree2.kind === "dirty" ? `
-\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A
+Workspace is dirty; stopping batch:
 ${tree2.output}` : tree2.kind === "unknown" ? `
-\u65E0\u6CD5\u5224\u65AD\u5DE5\u4F5C\u533A\u72B6\u6001\uFF0C\u505C\u6B62\u6279\u6B21\uFF1A${tree2.output}` : "";
+Unable to determine workspace state; stopping batch: ${tree2.output}` : "";
         return error instanceof WorkerCancelledError ? cancelledResult() : { ok: false, error: `${reason}${dirtySuffix}`, processedCards };
       } finally {
         context?.cleanup();
@@ -4123,14 +4123,14 @@ ${tree2.output}` : tree2.kind === "unknown" ? `
         }).catch(() => void 0);
       }
     }
-    return completedResult(processedCards, "\u5DF2\u8FBE\u5230\u6279\u6B21\u4E0A\u9650");
+    return completedResult(processedCards, "Batch limit reached");
   } catch (error) {
     if (error instanceof WorkerCancelledError) return cancelledResult();
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, error: message, processedCards };
   } finally {
     await mcp.close().catch(() => void 0);
-    workerLog("Worker \u5DF2\u5173\u95ED\u5B8C\u6574\u770B\u677F MCP \u8FDE\u63A5");
+    workerLog("Worker closed the full Kanban MCP connection");
   }
 }
 async function recoverPendingSessions(mcp, job) {
@@ -4154,7 +4154,7 @@ async function recoverPendingSessions(mcp, job) {
     );
     if (!result.ok) return { ...result, processedCards };
     processedCards += 1;
-    workerLog(`\u5DF2\u6062\u590D pending \u4F1A\u8BDD ${sessionId}`, "worker", "success");
+    workerLog(`Recovered pending session ${sessionId}`, "worker", "success");
   }
   return { ok: true, processedCards };
 }
@@ -4163,7 +4163,7 @@ async function validateAndFinalize(mcp, job, pending) {
   const cardId = requiredString(pending, "cardId");
   let status = String(pending.status ?? "");
   if (status === "declared") {
-    workerLog("\u9A8C\u8BC1\u5DF2\u7531 Agent \u4F1A\u8BDD\u5B8C\u6210\uFF0CWorker \u4E0D\u518D\u590D\u8DD1\u6D4B\u8BD5");
+    workerLog("Validation was completed in the Agent session; Worker will not rerun tests");
     const recorded = await mcp.callJson("dispatch_record_validation_results", {
       workerToken: job.workerToken,
       sessionId,
@@ -4171,7 +4171,7 @@ async function validateAndFinalize(mcp, job, pending) {
     });
     status = String(recorded.status ?? "");
     if (status === "failed") {
-      const reason = String(recorded.error ?? "\u9A8C\u8BC1\u5931\u8D25");
+      const reason = String(recorded.error ?? "Validation failed");
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,
@@ -4181,9 +4181,9 @@ async function validateAndFinalize(mcp, job, pending) {
     }
   }
   if (!["validated", "committing", "committed", "finalized"].includes(status)) {
-    return { ok: false, error: `pending \u72B6\u6001\u65E0\u6CD5\u6062\u590D\uFF1A${status || "\u672A\u77E5"}` };
+    return { ok: false, error: `Cannot recover pending status: ${status || "unknown"}` };
   }
-  workerLog("Worker \u6B63\u5728\u63D0\u4EA4\u5E76\u9001\u4EA4\u9A8C\u8BC1");
+  workerLog("Worker is committing and submitting for verification");
   const finalized = await mcp.callJson("dispatch_finalize", {
     workerToken: job.workerToken,
     sessionId
@@ -4193,12 +4193,12 @@ async function validateAndFinalize(mcp, job, pending) {
       ok: false,
       preservePending: true,
       error: String(
-        finalized.error ?? "Git \u63D0\u4EA4\u540E\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u62D2\u7EDD\u66F4\u65B0\u770B\u677F"
+        finalized.error ?? "Workspace is dirty after the Git commit; refusing to update the board"
       )
     };
   }
   if (finalized.status !== "finalized" || String(finalized.sessionId ?? "") !== sessionId || String(finalized.cardId ?? "") !== cardId) {
-    return { ok: false, error: `dispatch_finalize \u8FD4\u56DE\u72B6\u6001\u4E0D\u4E00\u81F4\uFF1A${sessionId}` };
+    return { ok: false, error: `dispatch_finalize returned an inconsistent status: ${sessionId}` };
   }
   return { ok: true };
 }
@@ -4212,7 +4212,7 @@ async function recordRoundFailure(mcp, job, sessionId, reason, block = false) {
     }
   ).catch((error) => {
     workerLog(
-      `\u8BB0\u5F55\u4F1A\u8BDD\u5931\u8D25\u72B6\u6001\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`,
+      `Failed to record the session failure state: ${error instanceof Error ? error.message : String(error)}`,
       "worker",
       "warning"
     );
@@ -4220,39 +4220,39 @@ async function recordRoundFailure(mcp, job, sessionId, reason, block = false) {
 }
 function assertSessionMatches(status, sessionId, cardId) {
   if (status.sessionOpen !== true || status.pickClaimed !== true || String(status.sessionId ?? "") !== sessionId || String(status.cardId ?? "") !== cardId) {
-    throw new Error(`Agent \u4F1A\u8BDD\u72B6\u6001\u4E0E claim \u4E0D\u4E00\u81F4\uFF1A${sessionId}/${cardId}`);
+    throw new Error(`Agent session status does not match the claim: ${sessionId}/${cardId}`);
   }
 }
 function cardState(card) {
   const columnId = String(card.columnId ?? "");
   const columnName = String(card.columnName ?? "");
-  if (columnId === "verify" || columnName === "\u5F85\u9A8C\u8BC1") return "verify";
-  if (columnId === "blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
+  if (columnId === "verify" || columnName === "Verify" || columnName === "\u5F85\u9A8C\u8BC1") return "verify";
+  if (columnId === "blocked" || columnName === "Blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
   return "active";
 }
 function gitPreflightError(tree) {
   if (tree.kind === "dirty") {
-    return `\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0\uFF0C\u672A\u9886\u53D6\u5361\u7247\uFF1A
+    return `Workspace is dirty; card was not claimed:
 ${tree.output}`;
   }
   if (tree.kind === "unknown") {
-    return `\u65E0\u6CD5\u5224\u65AD Git \u5DE5\u4F5C\u533A\uFF0C\u672A\u9886\u53D6\u5361\u7247\uFF1A${tree.output}`;
+    return `Unable to determine Git workspace state; card was not claimed: ${tree.output}`;
   }
   return void 0;
 }
 function requiredString(record, key) {
   const value = String(record[key] ?? "").trim();
-  if (!value) throw new Error(`\u534F\u8BAE\u5B57\u6BB5 ${key} \u4E0D\u80FD\u4E3A\u7A7A`);
+  if (!value) throw new Error(`Protocol field ${key} cannot be empty`);
   return value;
 }
 function asRecord7(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function completedResult(processedCards, reason) {
-  workerLog(`Worker \u6279\u6B21\u5B8C\u6210\uFF1A${reason}\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`, "worker", "success");
+  workerLog(`Worker batch completed: ${reason}; processed ${processedCards} card(s)`, "worker", "success");
   return {
     ok: true,
-    summary: `Worker \u6279\u6B21\u5B8C\u6210\uFF1A${reason}\uFF1B\u5DF2\u5904\u7406 ${processedCards} \u5F20`,
+    summary: `Worker batch completed: ${reason}; processed ${processedCards} card(s)`,
     processedCards
   };
 }
@@ -4269,10 +4269,10 @@ function logClaimedCard(payload) {
     if (kind === "title" && !title) title = text;
     else details.push(text);
   }
-  workerLog(`\u5F53\u524D\u5361\u7247\uFF1A${title || String(payload.cardId ?? "\u672A\u547D\u540D\u5361\u7247")}`);
+  workerLog(`Current card: ${title || String(payload.cardId ?? "Untitled card")}`);
   if (details.length > 0) {
     const detail = details.join("\n").slice(0, 800);
-    workerLog(`\u5F53\u524D\u4EFB\u52A1\uFF1A${detail}`);
+    workerLog(`Current task: ${detail}`);
   }
 }
 function readLiveJob(job) {
@@ -4289,7 +4289,7 @@ function logModelOverride(original, round, cardId) {
     return;
   }
   workerLog(
-    `\u672C\u5361\u8986\u76D6\uFF1Aengine=${round.engine} model=${round.model ?? "(\u5E73\u53F0\u9ED8\u8BA4)"} params=${JSON.stringify(round.modelParams ?? [])} cardId=${cardId}`
+    `Card override: engine=${round.engine} model=${round.model ?? "(platform default)"} params=${JSON.stringify(round.modelParams ?? [])} cardId=${cardId}`
   );
 }
 

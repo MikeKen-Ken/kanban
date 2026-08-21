@@ -8,27 +8,27 @@ import { workerLog } from "./worker_log.ts";
 
 const LOG_OUTPUT_CHARS = 4_000;
 
-/** 在真正执行前打出命令清单，避免验证阶段只有心跳、没有原因。 */
+/** Log the command plan before execution so verification has actionable context. */
 export function logVerificationPlan(commands: VerificationCommand[]): void {
-  workerLog(`开始 Worker 验证：共 ${commands.length} 条`);
+  workerLog(`Starting Worker validation: ${commands.length} command(s)`);
   for (let index = 0; index < commands.length; index += 1) {
     const command = commands[index]!;
     workerLog(
-      `验证命令 ${index + 1}/${commands.length}：` +
+      `Validation command ${index + 1}/${commands.length}: ` +
         `${summarizeCommand(command.executable, command.args)} ` +
         `cwd=${command.cwd?.trim() || "."}`,
     );
   }
 }
 
-/** 记账到看板之前先写出每条结果，防止 MCP 拒收时吞掉真实失败原因。 */
+/** Log each result before recording it in Kanban so MCP failures retain the real cause. */
 export function logVerificationResults(results: VerificationResult[]): void {
   for (let index = 0; index < results.length; index += 1) {
     const result = results[index]!;
     const ordinal = `${index + 1}/${results.length}`;
     if (result.output.trim() === "因前序验证失败未执行") {
       workerLog(
-        `验证跳过 ${ordinal}：${result.commandSummary}（因前序验证失败未执行）`,
+        `Validation skipped ${ordinal}: ${result.commandSummary} (not run because a previous validation failed)`,
         "worker",
         "warning",
       );
@@ -36,20 +36,20 @@ export function logVerificationResults(results: VerificationResult[]): void {
     }
     if (result.passed) {
       workerLog(
-        `验证通过 ${ordinal}：${result.commandSummary} 耗时=${result.durationMs}ms`,
+        `Validation passed ${ordinal}: ${result.commandSummary} duration=${result.durationMs}ms`,
         "worker",
         "success",
       );
       continue;
     }
     workerLog(
-      `验证失败 ${ordinal}：${formatVerificationFailure(result)} 耗时=${result.durationMs}ms`,
+      `Validation failed ${ordinal}: ${formatVerificationFailure(result)} duration=${result.durationMs}ms`,
       "worker",
       "error",
     );
     const output = result.output.trim();
     if (!output) {
-      workerLog("验证无输出（进程可能未能启动）", "shell", "warning");
+      workerLog("Validation produced no output (the process may not have started)", "shell", "warning");
       continue;
     }
     workerLog(truncateLogOutput(output), "shell", "error");
@@ -58,5 +58,5 @@ export function logVerificationResults(results: VerificationResult[]): void {
 
 export function truncateLogOutput(output: string): string {
   if (output.length <= LOG_OUTPUT_CHARS) return output;
-  return `${output.slice(0, LOG_OUTPUT_CHARS)}\n…（日志已截断，完整输出写入验证结果）`;
+  return `${output.slice(0, LOG_OUTPUT_CHARS)}\n...(log truncated; full output is stored in the validation result)`;
 }

@@ -260,8 +260,8 @@ Future<AgentWorkerResult> runAgentWorkerJob({
         error: '未找到 node。请安装 Node.js 并确保在 PATH 中。',
       );
     }
-    onLog?.call('启动 worker：$cli');
-    onLog?.call('node：$node');
+    onLog?.call('Starting worker: $cli');
+    onLog?.call('Node: $node');
     final workerEnv = await _workerEnvironment(
       nodeExecutable: node,
       cursorApiKey: cursorApiKey,

@@ -25,15 +25,15 @@ export async function runAgentWithRetry(
         result.ok ||
         cancellation?.isCancelled ||
         cancellation?.isSkipRequested ||
-        result.error === "已取消" ||
-        result.error === "已跳过" ||
+        result.error === "Cancelled" ||
+        result.error === "Skipped" ||
         !isRetryableAgentResult(result) ||
         attempt >= MAX_AGENT_ATTEMPTS
       ) {
         return result;
       }
 
-      await waitBeforeRetry(attempt, result.error ?? "Agent 会话失败", wait);
+      await waitBeforeRetry(attempt, result.error ?? "Agent session failed", wait);
     } catch (error) {
       if (!isRetryableError(error) || attempt >= MAX_AGENT_ATTEMPTS) throw error;
       await waitBeforeRetry(
@@ -44,11 +44,11 @@ export async function runAgentWithRetry(
     }
 
     if (cancellation?.isSkipRequested) {
-      return { ok: false, error: "已跳过" };
+      return { ok: false, error: "Skipped" };
     }
   }
 
-  return { ok: false, error: "Agent 会话重试次数已耗尽" };
+  return { ok: false, error: "Agent session retry limit exhausted" };
 }
 
 export function isRetryableAgentResult(result: DispatchResult): boolean {
@@ -63,7 +63,7 @@ async function waitBeforeRetry(
 ): Promise<void> {
   const delayMs = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
   workerLog(
-    `Agent 会话暂时失败（第 ${attempt}/${MAX_AGENT_ATTEMPTS} 次）：${reason}；${delayMs}ms 后自动重试`,
+    `Agent session temporarily failed (attempt ${attempt}/${MAX_AGENT_ATTEMPTS}): ${reason}; retrying in ${delayMs}ms`,
     "worker",
     "warning",
   );

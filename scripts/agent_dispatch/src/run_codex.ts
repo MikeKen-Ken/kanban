@@ -110,7 +110,7 @@ export async function runCodex(
   const startedAt = Date.now();
   const mcpUrl = job.round.agentEndpointUrl.trim();
   if (!mcpUrl) {
-    return { ok: false, error: "本轮 claim 缺少 scoped MCP 端点" };
+    return { ok: false, error: "This claim is missing a scoped MCP endpoint" };
   }
 
   const temp = mkdtempSync(join(tmpdir(), "kanban-codex-"));
@@ -125,9 +125,9 @@ export async function runCodex(
       tempRoot: temp,
     });
     workerLog(
-      `Codex 使用隔离 CODEX_HOME，复制用户 AGENTS.md（覆盖先读 Architecture）与 skills；` +
-        `合并用户 MCP（${agentHome.mcpServerNames.join(", ") || "无"}）；` +
-        `kanbanMCP 强制为 scoped（${mcpUrl}）`,
+      `Codex uses an isolated CODEX_HOME, copied user AGENTS.md (Architecture pre-read is covered) and skills; ` +
+        `merged user MCP servers (${agentHome.mcpServerNames.join(", ") || "none"}); ` +
+        `kanbanMCP is forced to scoped (${mcpUrl})`,
     );
 
     const args = buildCodexExecArgs({
@@ -147,7 +147,7 @@ export async function runCodex(
     const stopAfterTerminal = (reason: string): void => {
       if (endedByTerminal) return;
       endedByTerminal = true;
-      workerLog(`收尾工具已成功（${reason}），正在结束 Codex 会话`);
+      workerLog(`Finalization tool succeeded (${reason}); ending Codex session`);
     };
 
     const emittedAssistant = new Set<string>();
@@ -236,7 +236,7 @@ export async function runCodex(
       });
       if (!child.stdin) {
         terminalPoll.stop();
-        reject(new Error("Codex stdin 不可用"));
+        reject(new Error("Codex stdin is unavailable"));
         return;
       }
       child.stdin.write(readFileSync(promptFile));
@@ -255,11 +255,11 @@ export async function runCodex(
 
     if (cancellation?.isSkipRequested) {
       workerLog(`Codex exec skipped elapsedMs=${Date.now() - startedAt}`);
-      return { ok: false, error: "已跳过" };
+      return { ok: false, error: "Skipped" };
     }
     if (cancellation?.isCancelled) {
       workerLog(`Codex exec cancelled elapsedMs=${Date.now() - startedAt}`);
-      return { ok: false, error: "已取消" };
+      return { ok: false, error: "Cancelled" };
     }
 
     let summary: string | undefined;
@@ -281,24 +281,24 @@ export async function runCodex(
       }),
     );
     if (code === 0) {
-      return { ok: true, summary: summary || "Codex 会话完成" };
+      return { ok: true, summary: summary || "Codex session completed" };
     }
     return {
       ok: false,
-      error: `Codex 退出码 ${code}`,
+      error: `Codex exited with code ${code}`,
       summary,
       retryable: isRetryableError(summary),
     };
   } catch (error) {
     if (cancellation?.isSkipRequested) {
-      return { ok: false, error: "已跳过" };
+      return { ok: false, error: "Skipped" };
     }
     if (cancellation?.isCancelled) {
-      return { ok: false, error: "已取消" };
+      return { ok: false, error: "Cancelled" };
     }
     return {
       ok: false,
-      error: `Codex 会话异常：${error instanceof Error ? error.message : String(error)}`,
+      error: `Codex session error: ${error instanceof Error ? error.message : String(error)}`,
       retryable: isRetryableError(error),
     };
   } finally {

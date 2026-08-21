@@ -77,9 +77,8 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
   final exists = directoryExists ?? (path) => Directory(path).existsSync();
   final fileIsPresent = fileExists ?? (path) => File(path).existsSync();
   final nodeDir = ctx.dirname(nodeExecutable);
-  final originalPath = _envValue(environment, 'Path') ??
-      _envValue(environment, 'PATH') ??
-      '';
+  final originalPath =
+      _envValue(environment, 'Path') ?? _envValue(environment, 'PATH') ?? '';
 
   final flutterRoot = _firstNonEmpty([
     _envValue(environment, 'FLUTTER_ROOT'),
@@ -160,7 +159,8 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
         )
       : null;
   if (flutterRoot != null && flutterRoot.trim().isNotEmpty) {
-    environment['FLUTTER_ROOT'] = expandWindowsEnvVars(flutterRoot, environment);
+    environment['FLUTTER_ROOT'] =
+        expandWindowsEnvVars(flutterRoot, environment);
   } else if (flutterBins.isNotEmpty) {
     environment['FLUTTER_ROOT'] = ctx.dirname(flutterBins.first);
   }
@@ -189,9 +189,9 @@ WorkerEnvironmentBuild buildWorkerEnvironment({
       nodeHeapMb: parseNodeMaxOldSpaceSizeMb(environment['NODE_OPTIONS']),
       totalPhysicalMb: totalPhysicalMemoryMb,
       heapOverridden: parseNodeMaxOldSpaceSizeMb(
-            _envValue(processEnvironment, 'NODE_OPTIONS'),
-          ) !=
-          null ||
+                _envValue(processEnvironment, 'NODE_OPTIONS'),
+              ) !=
+              null ||
           parseKanbanWorkerHeapMb(
                 _envValue(environment, 'KANBAN_WORKER_HEAP_MB'),
               ) !=
@@ -304,8 +304,8 @@ List<String> _wellKnownFlutterBins(
       'bin',
     ));
   }
-  final home = _envValue(environment, 'USERPROFILE') ??
-      _envValue(environment, 'HOME');
+  final home =
+      _envValue(environment, 'USERPROFILE') ?? _envValue(environment, 'HOME');
   if (home != null && home.trim().isNotEmpty) {
     final expandedHome = expandWindowsEnvVars(home, environment);
     add(ctx.join(expandedHome, 'flutter', 'bin'));
@@ -339,15 +339,15 @@ String _summary({
   int? totalPhysicalMb,
   required bool heapOverridden,
 }) {
-  final buffer = StringBuffer('Worker 环境：');
+  final buffer = StringBuffer('Worker environment: ');
   if (flutterBin != null && mergedWindowsPath) {
-    buffer.write('已合并用户/系统 PATH，并加入 $flutterBin');
+    buffer.write('merged user/system PATH and added $flutterBin');
   } else if (flutterBin != null) {
-    buffer.write('已加入 $flutterBin');
+    buffer.write('added $flutterBin');
   } else if (mergedWindowsPath) {
-    buffer.write('已合并用户/系统 PATH');
+    buffer.write('merged user/system PATH');
   } else {
-    buffer.write('沿用看板进程 PATH');
+    buffer.write('using the Kanban process PATH');
   }
   if (powerShellEnsure?.installAttempted == true) {
     buffer.write('；${powerShellEnsure!.summaryFragment}');

@@ -91,6 +91,9 @@ function createHappyDependencies(options?: {
   recordError?: string;
   finalizeResult?: Record<string, unknown>;
   peekFields?: Record<string, unknown>;
+  cardColumnId?: string;
+  cardColumnName?: string;
+  consultationSubmitted?: boolean;
   runAgent?: (round: RoundDispatchJob) => Promise<{ ok: boolean; error?: string }>;
 }): {
   dependencies: RunBatchDependencies;
@@ -127,17 +130,27 @@ function createHappyDependencies(options?: {
           sessionId: "session-a",
           cardId: "card-a",
           projectId: "project-a",
-          pending: {
-            sessionId: "session-a",
-            cardId: "card-a",
-            status: "declared",
-            ...(options?.manualReason
-              ? { manualVerificationReason: options.manualReason }
-              : {}),
-          },
+          ...(options?.consultationSubmitted
+            ? {}
+            : {
+                pending: {
+                  sessionId: "session-a",
+                  cardId: "card-a",
+                  status: "declared",
+                  ...(options?.manualReason
+                    ? { manualVerificationReason: options.manualReason }
+                    : {}),
+                },
+              }),
         };
       case "get_card":
-        return { cardId: "card-a", columnId: "doing" };
+        return {
+          cardId: "card-a",
+          columnId: options?.cardColumnId ?? "doing",
+          ...(options?.cardColumnName
+            ? { columnName: options.cardColumnName }
+            : {}),
+        };
       case "dispatch_record_validation_results":
         if (options?.recordError) {
           throw new Error(options.recordError);
@@ -193,6 +206,19 @@ function createHappyDependencies(options?: {
 }
 
 describe("run_batch", () => {
+  it("accepts a consultation card in a custom Verify column without ready_to_submit", async () => {
+    const { dependencies } = createHappyDependencies({
+      cardColumnId: "custom-verify",
+      cardColumnName: "Verify",
+      consultationSubmitted: true,
+    });
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.processedCards, 1);
+  });
+
   it("批次开始先用新 token 恢复 committed 收尾", async () => {
     const full = new FakeMcp((name) => {
       switch (name) {
@@ -313,7 +339,7 @@ describe("run_batch", () => {
     const result = await runBatch(job, undefined, dependencies);
 
     assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /Worker 收尾失败/);
+    assert.match(result.error ?? "", /Worker finalization failed/);
     assert.doesNotMatch(result.error ?? "", /工作区不干净，停止批次/);
   });
 
@@ -342,7 +368,7 @@ describe("run_batch", () => {
     const result = await runBatch(job, undefined, dependencies);
 
     assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /工作区不干净，未领取卡片/);
+    assert.match(result.error ?? "", /Workspace is dirty; card was not claimed/);
     assert.equal(
       full.calls.some((item) => item.name === "dispatch_claim_next_card"),
       false,
@@ -392,7 +418,7 @@ describe("run_batch", () => {
     );
 
     assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /工作区不干净，未领取卡片/);
+    assert.match(result.error ?? "", /Workspace is dirty; card was not claimed/);
     assert.equal(
       full.calls.some((item) => item.name === "dispatch_claim_next_card"),
       false,
@@ -411,7 +437,7 @@ describe("run_batch", () => {
 
     const result = await runBatch(job, undefined, dependencies);
     assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /scoped MCP 工具门禁失败/);
+    assert.match(result.error ?? "", /Scoped MCP tool gate failed/);
     assert.equal(agentStarted, false);
     assert.equal(scoped.closed, true);
     assert.ok(
@@ -421,7 +447,7 @@ describe("run_batch", () => {
 
   it("skip 调用私有工具且脏工作区停止批次", async () => {
     const { dependencies, full } = createHappyDependencies({
-      runAgent: async () => ({ ok: false, error: "已跳过" }),
+      runAgent: async () => ({ ok: false, error: "Skipped" }),
     });
     let inspections = 0;
     dependencies.inspectGit = () => {
@@ -434,7 +460,7 @@ describe("run_batch", () => {
     const result = await runBatch(job, undefined, dependencies);
 
     assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /跳过后工作区不干净/);
+    assert.match(result.error ?? "", /Workspace is dirty after skip/);
     assert.ok(
       full.calls.some((item) => item.name === "dispatch_skip_agent_session"),
     );
