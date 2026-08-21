@@ -18,7 +18,7 @@ describe("buildCodexExecArgs", () => {
       "--approve-for-me",
       "--skip-git-repo-check",
     ]);
-    assert.deepEqual(args, [
+    const expected = [
       "exec",
       "--json",
       "--approve-for-me",
@@ -29,10 +29,14 @@ describe("buildCodexExecArgs", () => {
       "last.txt",
       "-c",
       "model_reasoning_effort=low",
+      ...(process.platform === "win32"
+        ? ["-c", 'windows.sandbox="unelevated"']
+        : []),
       "-m",
       "gpt-5.6-sol",
       "-",
-    ]);
+    ];
+    assert.deepEqual(args, expected);
   });
 
   it("无模型时不追加 -m", () => {

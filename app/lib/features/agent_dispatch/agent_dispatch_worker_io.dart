@@ -205,8 +205,8 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   }
 
   final health = await inspectAgentDispatchWorker(workerScriptPath);
-  onLog?.call('Worker 环境：${health.summary}');
-  onLog?.call('Worker 路径：${health.workerRoot}');
+  onLog?.call('Worker environment: ${health.summary}');
+  onLog?.call('Worker path: ${health.workerRoot}');
   if (!health.ok) {
     return AgentWorkerResult(ok: false, error: health.error);
   }
@@ -632,9 +632,9 @@ Future<AgentWorkerHealth> inspectAgentDispatchWorker(String? workerScriptPath,
   if (root == null) {
     return const AgentWorkerHealth(
       ok: false,
-      source: '未找到',
-      workerRoot: '未知',
-      error: '未找到 Worker（dist/cli.js）',
+      source: 'Not found',
+      workerRoot: 'Unknown',
+      error: 'Worker not found (dist/cli.js)',
     );
   }
   final published = _isPublishedWorkerRoot(root);

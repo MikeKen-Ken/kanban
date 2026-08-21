@@ -27,11 +27,11 @@ class AgentWorkerHealth {
 
   String get summary {
     final parts = <String>[
-      '来源=$source',
+      'Source=$source',
       if (nodeVersion != null) 'Node.js=$nodeVersion',
       if (cursorSdkVersion != null) 'Cursor SDK=$cursorSdkVersion',
     ];
-    return parts.join('；');
+    return parts.join('; ');
   }
 }
 
@@ -46,13 +46,15 @@ Future<AgentWorkerHealth> inspectAgentWorkerRoot({
   required String? nodePath,
   AgentWorkerCommandRunner? commandRunner,
 }) async {
-  final source = published ? '应用内置' : '源码开发';
+  final source = published ? 'Built-in app' : 'Source checkout';
   if (nodePath == null) {
     return AgentWorkerHealth(
       ok: false,
       source: source,
       workerRoot: root,
-      error: published ? '应用内置 Worker 缺少便携 Node.js' : '开发环境未找到 Node.js',
+      error: published
+          ? 'Built-in Worker is missing portable Node.js'
+          : 'Node.js was not found in the development environment',
     );
   }
   final runner = commandRunner ?? _runWorkerCommand;
@@ -81,7 +83,7 @@ Future<AgentWorkerHealth> inspectAgentWorkerRoot({
         nodeVersion: nodeVersion,
         expectedNodeVersion: expectedNodeVersion,
         sdkVersion: sdkVersion,
-        error: 'Worker 文件不完整：$path',
+        error: 'Worker files are incomplete: $path',
       );
     }
   }
@@ -93,7 +95,8 @@ Future<AgentWorkerHealth> inspectAgentWorkerRoot({
       nodeVersion: nodeVersion,
       expectedNodeVersion: expectedNodeVersion,
       sdkVersion: sdkVersion,
-      error: 'Worker Node.js 版本不匹配：需要 $expectedNodeVersion，当前 $nodeVersion',
+      error:
+          'Worker Node.js version mismatch: expected $expectedNodeVersion, got $nodeVersion',
     );
   }
   if (Platform.isWindows) {
@@ -115,7 +118,7 @@ Future<AgentWorkerHealth> inspectAgentWorkerRoot({
           nodeVersion: nodeVersion,
           expectedNodeVersion: expectedNodeVersion,
           sdkVersion: sdkVersion,
-          error: 'Cursor SDK 原生模块缺失：$binding',
+          error: 'Cursor SDK native module is missing: $binding',
         );
       }
       try {
@@ -131,8 +134,8 @@ Future<AgentWorkerHealth> inspectAgentWorkerRoot({
             nodeVersion: nodeVersion,
             expectedNodeVersion: expectedNodeVersion,
             sdkVersion: sdkVersion,
-            error: 'Cursor SDK 原生模块健康检查失败：$grammar'
-                '（退出码 ${probe.exitCode}）',
+            error: 'Cursor SDK native module health check failed: $grammar '
+                '(exit code ${probe.exitCode})',
           );
         }
       } catch (error) {
@@ -143,7 +146,7 @@ Future<AgentWorkerHealth> inspectAgentWorkerRoot({
           nodeVersion: nodeVersion,
           expectedNodeVersion: expectedNodeVersion,
           sdkVersion: sdkVersion,
-          error: '无法启动 Worker Node.js：$error',
+          error: 'Unable to start Worker Node.js: $error',
         );
       }
     }

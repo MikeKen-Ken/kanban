@@ -1965,6 +1965,9 @@ function buildCodexExecArgs(options) {
     options.lastMessageFile,
     ...options.extraConfigArgs ?? []
   ];
+  if (process.platform === "win32") {
+    args.push("-c", 'windows.sandbox="unelevated"');
+  }
   if (options.model?.trim()) {
     args.push("-m", options.model.trim());
   }

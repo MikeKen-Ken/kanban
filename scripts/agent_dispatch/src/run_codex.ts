@@ -92,6 +92,10 @@ export function buildCodexExecArgs(options: {
     options.lastMessageFile,
     ...(options.extraConfigArgs ?? []),
   ];
+  if (process.platform === "win32") {
+    // MSIX 版 pwsh 无法被 elevated sandbox 的受限令牌启动（CreateProcessAsUserW）。
+    args.push("-c", 'windows.sandbox="unelevated"');
+  }
   if (options.model?.trim()) {
     args.push("-m", options.model.trim());
   }
