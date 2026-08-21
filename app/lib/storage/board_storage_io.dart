@@ -234,7 +234,7 @@ class BoardStorageIo implements BoardStorage {
   /// note: 供 BoardRepository 在无数据时创建默认项目
   Future<String> createDefaultProject({String? id, String? title}) async {
     final projectId = id ?? const Uuid().v4();
-    final projectTitle = title ?? '我的看板';
+    final projectTitle = title ?? 'My Board';
     final board = KanbanBoard.empty(id: projectId, title: projectTitle);
     await saveBoard(projectId, board);
     await saveProjectSettings(projectId, const ProjectSettings());

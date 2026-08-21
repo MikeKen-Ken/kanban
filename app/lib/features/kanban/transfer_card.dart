@@ -6,7 +6,7 @@ import '../completed_auto_clear/completed_auto_clear.dart';
 const kDefaultTransferColumnId = 'todo';
 
 /// 默认「待办」列标题（与 [KanbanBoard.empty] 一致）。
-const kDefaultTransferColumnTitle = '待办';
+const kDefaultTransferColumnTitle = 'To Do';
 
 /// 解析卡片转移到目标看板时应落入的列。
 ///
@@ -22,7 +22,8 @@ String? resolveTransferTargetColumnId(
   String preferredColumnTitle = kDefaultTransferColumnTitle,
   String doneColumnName = ProjectSettings.defaultDoneColumnName,
 }) {
-  final columns = [...board.columns]..sort((a, b) => a.order.compareTo(b.order));
+  final columns = [...board.columns]
+    ..sort((a, b) => a.order.compareTo(b.order));
   if (columns.isEmpty) return null;
 
   final sourceTitle = sourceColumnTitle?.trim();

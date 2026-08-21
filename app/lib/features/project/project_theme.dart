@@ -82,39 +82,40 @@ class ProjectThemePreset {
   List<KanbanLabel> get presetLabels => [
         KanbanLabel(
           key: 'important_urgent',
-          name: '重要紧急',
-          description: '重要且紧急',
+          name: 'Important & urgent',
+          description: 'Important and urgent',
           color: _distinctLabelColor(labelImportantUrgent, _semanticUrgent),
         ),
         KanbanLabel(
           key: 'important_not_urgent',
-          name: '重要不急',
-          description: '重要不紧急',
+          name: 'Important, not urgent',
+          description: 'Important but not urgent',
           color:
               _distinctLabelColor(labelImportantNotUrgent, _semanticImportant),
         ),
         KanbanLabel(
           key: 'urgent_not_important',
-          name: '次要紧急',
-          description: '紧急不重要',
+          name: 'Urgent, not important',
+          description: 'Urgent but not important',
           color:
               _distinctLabelColor(labelUrgentNotImportant, _semanticSecondary),
         ),
         KanbanLabel(
           key: 'not_urgent_not_important',
-          name: '次要不急',
-          description: '不重要不紧急',
+          name: 'Not urgent, not important',
+          description: 'Not important and not urgent',
           color: _distinctLabelColor(labelNeither, _semanticNeutral),
         ),
         KanbanLabel(
           key: 'need_resource',
-          name: '缺资源',
+          name: 'Needs resources',
           color: _distinctLabelColor(labelNeedResource, _semanticResource),
         ),
         KanbanLabel(
           key: 'consultation',
-          name: '咨询',
-          description: '答复、解释、建议或非代码说明类交付',
+          name: 'Consultation',
+          description:
+              'Answers, explanations, advice, or non-code deliverables',
           color: _distinctLabelColor(labelConsultation, _semanticConsultation),
         ),
       ];
@@ -124,39 +125,40 @@ class ProjectThemePreset {
   List<KanbanLabel> get legacyPresetLabels => [
         KanbanLabel(
           key: 'work',
-          name: '工作（旧）',
-          description: '旧预置标签，新项目请改用象限标签',
+          name: 'Work (legacy)',
+          description: 'Legacy preset; use quadrant labels for new projects',
           color: labelImportantNotUrgent,
         ),
         KanbanLabel(
           key: 'personal',
-          name: '个人（旧）',
-          description: '旧预置标签，新项目请改用象限标签',
+          name: 'Personal (legacy)',
+          description: 'Legacy preset; use quadrant labels for new projects',
           color: labelUrgentNotImportant,
         ),
         KanbanLabel(
           key: 'urgent',
-          name: '紧急（旧）',
-          description: '旧预置标签，新项目请改用象限标签',
+          name: 'Urgent (legacy)',
+          description: 'Legacy preset; use quadrant labels for new projects',
           color: labelImportantUrgent,
         ),
         KanbanLabel(
           key: 'idea',
-          name: '想法（旧）',
-          description: '旧预置标签，新项目请改用象限标签',
+          name: 'Ideas (legacy)',
+          description: 'Legacy preset; use quadrant labels for new projects',
           color: labelNeither,
         ),
         KanbanLabel(
           key: 'documentation',
-          name: '文档（旧）',
-          description: '旧预置标签，新项目请改用「咨询」',
+          name: 'Documentation (legacy)',
+          description: 'Legacy preset; use Consultation for new projects',
           color:
               _distinctLabelColor(labelDocumentation, _semanticDocumentation),
         ),
         KanbanLabel(
           key: 'development',
-          name: '开发（旧）',
-          description: '旧预置标签，无标签时即按一般实施流程',
+          name: 'Development (legacy)',
+          description:
+              'Legacy preset; no label means the standard implementation flow',
           color: _distinctLabelColor(labelDevelopment, _semanticDevelopment),
         ),
       ];
@@ -167,7 +169,7 @@ const kDefaultProjectThemeId = 'indigo';
 const kProjectThemePresets = <ProjectThemePreset>[
   ProjectThemePreset(
     id: 'indigo',
-    name: '靛蓝',
+    name: 'Indigo',
     seedLight: Color(0xFF4F6BED),
     seedDark: Color(0xFF8BA4FF),
     labelImportantUrgent: Color(0xFFE05252),
@@ -184,7 +186,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'forest',
-    name: '森林',
+    name: 'Forest',
     seedLight: Color(0xFF2E7D56),
     seedDark: Color(0xFF6BBF8A),
     labelImportantUrgent: Color(0xFFC45C4A),
@@ -201,7 +203,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'sunset',
-    name: '暮色',
+    name: 'Dusk',
     seedLight: Color(0xFFE07A3A),
     seedDark: Color(0xFFFFB07C),
     labelImportantUrgent: Color(0xFFD64550),
@@ -218,7 +220,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'ocean',
-    name: '海洋',
+    name: 'Ocean',
     seedLight: Color(0xFF1A8FAD),
     seedDark: Color(0xFF5EC4E0),
     labelImportantUrgent: Color(0xFFE05252),
@@ -235,7 +237,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'slate',
-    name: '石墨',
+    name: 'Graphite',
     seedLight: Color(0xFF5C6B7A),
     seedDark: Color(0xFF9AA8B5),
     labelImportantUrgent: Color(0xFFB85C5C),
@@ -252,7 +254,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'rose',
-    name: '玫瑰',
+    name: 'Rose',
     seedLight: Color(0xFFC45B7A),
     seedDark: Color(0xFFE89BB4),
     labelImportantUrgent: Color(0xFFD64550),
@@ -269,7 +271,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'violet',
-    name: '紫罗兰',
+    name: 'Violet',
     seedLight: Color(0xFF7B5EA7),
     seedDark: Color(0xFFB69AD9),
     labelImportantUrgent: Color(0xFFC45C6A),
@@ -286,7 +288,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'amber',
-    name: '琥珀',
+    name: 'Amber',
     seedLight: Color(0xFFC9922E),
     seedDark: Color(0xFFE8C06A),
     labelImportantUrgent: Color(0xFFD45C3A),
@@ -303,7 +305,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'terracotta',
-    name: '陶土',
+    name: 'Terracotta',
     seedLight: Color(0xFFB86B4A),
     seedDark: Color(0xFFE0A888),
     labelImportantUrgent: Color(0xFFC24A3A),
@@ -320,7 +322,7 @@ const kProjectThemePresets = <ProjectThemePreset>[
   ),
   ProjectThemePreset(
     id: 'mint',
-    name: '薄荷',
+    name: 'Mint',
     seedLight: Color(0xFF2E9E8A),
     seedDark: Color(0xFF6FD4C0),
     labelImportantUrgent: Color(0xFFD45C5C),

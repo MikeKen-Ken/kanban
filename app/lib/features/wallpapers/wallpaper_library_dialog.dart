@@ -42,10 +42,10 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
   }
 
   String _intervalLabel(int seconds) {
-    if (seconds < 60) return '$seconds 秒';
-    if (seconds < 3600) return '${seconds ~/ 60} 分钟';
-    if (seconds < 86400) return '${seconds ~/ 3600} 小时';
-    return '1 天';
+    if (seconds < 60) return '${seconds}s';
+    if (seconds < 3600) return '${seconds ~/ 60}m';
+    if (seconds < 86400) return '${seconds ~/ 3600}h';
+    return '1d';
   }
 
   Future<void> _upload() async {
@@ -69,18 +69,18 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除壁纸'),
+        title: const Text('Delete wallpapers'),
         content: Text(
-          '确定删除选中的 ${_deleteSelection.length} 张壁纸吗？所有项目中的对应引用也会移除。',
+          'Delete ${_deleteSelection.length} selected wallpaper(s)? References in all projects will also be removed.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -122,7 +122,9 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
             onPressed: _busy ? null : () => Navigator.pop(context),
             icon: const Icon(Icons.close),
           ),
-          title: Text(_deleteMode ? '选择要删除的壁纸' : '壁纸库'),
+          title: Text(_deleteMode
+              ? 'Select wallpapers to delete'
+              : 'Wallpaper library'),
           actions: [
             if (_deleteMode) ...[
               TextButton(
@@ -132,17 +134,17 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                           _deleteMode = false;
                           _deleteSelection.clear();
                         }),
-                child: const Text('取消'),
+                child: const Text('Cancel'),
               ),
               IconButton(
-                tooltip: '删除所选',
+                tooltip: 'Delete selected',
                 onPressed:
                     _busy || _deleteSelection.isEmpty ? null : _deleteSelected,
                 icon: const Icon(Icons.delete_outline),
               ),
             ] else ...[
               IconButton(
-                tooltip: '上传壁纸库到云端',
+                tooltip: 'Upload wallpaper library to cloud',
                 onPressed: _busy
                     ? null
                     : () => runSyncManualAction(
@@ -153,7 +155,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                 icon: const Icon(Icons.cloud_upload_outlined),
               ),
               IconButton(
-                tooltip: '从云端下载壁纸库',
+                tooltip: 'Download wallpaper library from cloud',
                 onPressed: _busy
                     ? null
                     : () => runSyncManualAction(
@@ -164,14 +166,14 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                 icon: const Icon(Icons.cloud_download_outlined),
               ),
               IconButton(
-                tooltip: '批量删除',
+                tooltip: 'Bulk delete',
                 onPressed: _busy || wallpapers.isEmpty
                     ? null
                     : () => setState(() => _deleteMode = true),
                 icon: const Icon(Icons.checklist_rtl_outlined),
               ),
               TextButton(
-                  onPressed: _busy ? null : _save, child: const Text('应用')),
+                  onPressed: _busy ? null : _save, child: const Text('Apply')),
             ],
           ],
         ),
@@ -189,12 +191,12 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                             segments: const [
                               ButtonSegment(
                                 value: WallpaperPlaybackMode.fixed,
-                                label: Text('固定'),
+                                label: Text('Fixed'),
                                 icon: Icon(Icons.push_pin_outlined),
                               ),
                               ButtonSegment(
                                 value: WallpaperPlaybackMode.random,
-                                label: Text('随机轮播'),
+                                label: Text('Random rotation'),
                                 icon: Icon(Icons.shuffle),
                               ),
                             ],
@@ -214,7 +216,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                                       CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.add_photo_alternate_outlined),
-                          label: const Text('上传'),
+                          label: const Text('Upload'),
                         ),
                       ],
                     ),
@@ -222,7 +224,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Text('切换间隔'),
+                          const Text('Switch interval'),
                           const SizedBox(width: 12),
                           DropdownButton<int>(
                             value: _intervalSeconds,
@@ -240,7 +242,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                                     ),
                           ),
                           const Spacer(),
-                          const Text('轮播全部壁纸'),
+                          const Text('Rotate all wallpapers'),
                         ],
                       ),
                     ],
@@ -249,7 +251,9 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
               ),
             Expanded(
               child: wallpapers.isEmpty
-                  ? const Center(child: Text('还没有壁纸，点击“上传”添加图片'))
+                  ? const Center(
+                      child: Text(
+                          'No wallpapers yet. Click “Upload” to add images.'))
                   : GridView.builder(
                       padding: const EdgeInsets.all(16),
                       gridDelegate:
@@ -262,8 +266,8 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                       itemCount: wallpapers.length,
                       itemBuilder: (context, index) {
                         final asset = wallpapers[index];
-                        final showSelection = _deleteMode ||
-                            _mode == WallpaperPlaybackMode.fixed;
+                        final showSelection =
+                            _deleteMode || _mode == WallpaperPlaybackMode.fixed;
                         final checked = _deleteMode
                             ? _deleteSelection.contains(asset.id)
                             : _selected.contains(asset.id);

@@ -73,7 +73,7 @@ class KanbanBoard {
   factory KanbanBoard.fromJson(Map<String, dynamic> json) {
     return KanbanBoard(
       id: json['id'] as String,
-      title: json['title'] as String? ?? '我的看板',
+      title: json['title'] as String? ?? 'My Board',
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
       columns: (json['columns'] as List<dynamic>? ?? [])
@@ -90,7 +90,7 @@ class KanbanBoard {
     final sorted = [...columns]..sort((a, b) => a.order.compareTo(b.order));
     return KanbanBoard(
       id: json['id'] as String,
-      title: json['title'] as String? ?? '我的看板',
+      title: json['title'] as String? ?? 'My Board',
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
       columns: sorted,
@@ -102,21 +102,21 @@ class KanbanBoard {
   static const defaultReworkColumnId = 'rework';
 
   /// 默认「待返工」列标题
-  static const defaultReworkColumnTitle = '待返工';
+  static const defaultReworkColumnTitle = 'Rework';
 
   /// 默认「待验证」列标题
-  static const defaultVerifyColumnTitle = '待验证';
+  static const defaultVerifyColumnTitle = 'Verify';
 
   /// 默认「收件箱」列 id（采集缓冲，避免打断进行中的流程列）
   static const defaultInboxColumnId = 'inbox';
 
   /// 默认「收件箱」列标题
-  static const defaultInboxColumnTitle = '收件箱';
+  static const defaultInboxColumnTitle = 'Inbox';
 
   static KanbanBoard empty({
     required String id,
-    String title = '我的看板',
-    String doneColumnTitle = '已完成',
+    String title = 'My Board',
+    String doneColumnTitle = 'Done',
   }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return KanbanBoard(
@@ -127,19 +127,19 @@ class KanbanBoard {
       columns: [
         KanbanColumn(
           id: 'todo',
-          title: '待办',
+          title: 'To Do',
           order: 0,
           cards: [],
         ),
         KanbanColumn(
           id: 'doing',
-          title: '进行中',
+          title: 'In Progress',
           order: 1,
           cards: [],
         ),
         KanbanColumn(
           id: 'blocked',
-          title: '阻塞中',
+          title: 'Blocked',
           order: 2,
           cards: [],
         ),

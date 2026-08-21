@@ -17,7 +17,7 @@ void main() {
     );
     expect(
       board.columns.map((c) => c.title).toList(),
-      ['待办', '进行中', '阻塞中', '待验证', '待返工', '已完成', '收件箱'],
+      ['To Do', 'In Progress', 'Blocked', 'Verify', 'Rework', 'Done', 'Inbox'],
     );
   });
 

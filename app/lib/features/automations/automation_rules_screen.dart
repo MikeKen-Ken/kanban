@@ -38,7 +38,7 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
     var draft = existing ??
         AutomationRule(
           id: const Uuid().v4(),
-          name: '新规则',
+          name: 'New rule',
           triggerColumnId: columns.isNotEmpty ? columns.first.id : '',
         );
     final nameController = TextEditingController(text: draft.name);
@@ -46,19 +46,19 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(existing == null ? '新建规则' : '编辑规则'),
+          title: Text(existing == null ? 'Create rule' : 'Edit rule'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(labelText: '名称'),
+                  decoration: const InputDecoration(labelText: 'Name'),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<AutomationTrigger>(
                   value: draft.trigger,
-                  decoration: const InputDecoration(labelText: '触发条件'),
+                  decoration: const InputDecoration(labelText: 'Trigger'),
                   items: [
                     for (final trigger in AutomationTrigger.values)
                       DropdownMenuItem(
@@ -68,7 +68,8 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
                   ],
                   onChanged: (value) {
                     if (value == null) return;
-                    setDialogState(() => draft = draft.copyWith(trigger: value));
+                    setDialogState(
+                        () => draft = draft.copyWith(trigger: value));
                   },
                 ),
                 if (draft.trigger == AutomationTrigger.movedToColumn) ...[
@@ -77,7 +78,8 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
                     value: draft.triggerColumnId.isEmpty && columns.isNotEmpty
                         ? columns.first.id
                         : draft.triggerColumnId,
-                    decoration: const InputDecoration(labelText: '目标列'),
+                    decoration:
+                        const InputDecoration(labelText: 'Target column'),
                     items: [
                       for (final column in columns)
                         DropdownMenuItem(
@@ -96,7 +98,7 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<AutomationActionType>(
                   value: draft.action,
-                  decoration: const InputDecoration(labelText: '执行动作'),
+                  decoration: const InputDecoration(labelText: 'Action'),
                   items: [
                     for (final action in AutomationActionType.values)
                       DropdownMenuItem(
@@ -113,7 +115,7 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: draft.actionPriority,
-                    decoration: const InputDecoration(labelText: '优先级'),
+                    decoration: const InputDecoration(labelText: 'Priority'),
                     items: [
                       for (final priority in CardPriority.values)
                         DropdownMenuItem(
@@ -135,7 +137,7 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
                     value: draft.actionLabelKey.isEmpty
                         ? null
                         : draft.actionLabelKey,
-                    decoration: const InputDecoration(labelText: '标签'),
+                    decoration: const InputDecoration(labelText: 'Label'),
                     items: [
                       for (final label in labelsForEditing(
                         controller.appSettings.customLabels,
@@ -161,11 +163,11 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存'),
+              child: const Text('Save'),
             ),
           ],
         ),
@@ -189,14 +191,14 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('自动化规则')),
+      appBar: AppBar(title: const Text('Automation rules')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _editRule(),
         icon: const Icon(Icons.add),
-        label: const Text('新建规则'),
+        label: const Text('Create rule'),
       ),
       body: _rules.isEmpty
-          ? const Center(child: Text('还没有自动化规则'))
+          ? const Center(child: Text('No automation rules yet'))
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
               itemCount: _rules.length,
@@ -210,14 +212,14 @@ class _AutomationRulesScreenState extends State<AutomationRulesScreen> {
                     '${rule.trigger.label} → ${rule.action.label}',
                   ),
                   secondary: IconButton(
-                    tooltip: '编辑',
+                    tooltip: 'Edit',
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: () => _editRule(rule),
                   ),
                   onChanged: (enabled) async {
                     setState(() {
-                      _rules = [..._rules]
-                        ..[index] = rule.copyWith(enabled: enabled);
+                      _rules = [..._rules]..[index] =
+                          rule.copyWith(enabled: enabled);
                     });
                     await _persist();
                   },

@@ -131,10 +131,10 @@ enum CardPriority {
   high;
 
   String get label => switch (this) {
-        CardPriority.none => '无',
-        CardPriority.low => '低',
-        CardPriority.medium => '中',
-        CardPriority.high => '高',
+        CardPriority.none => 'None',
+        CardPriority.low => 'Low',
+        CardPriority.medium => 'Medium',
+        CardPriority.high => 'High',
       };
 
   Color color(ColorScheme scheme, {ProjectThemePreset? theme}) {

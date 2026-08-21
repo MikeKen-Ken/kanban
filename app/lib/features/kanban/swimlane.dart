@@ -10,9 +10,9 @@ enum SwimlaneMode {
 
 extension SwimlaneModeX on SwimlaneMode {
   String get label => switch (this) {
-        SwimlaneMode.none => '关闭',
-        SwimlaneMode.priority => '按优先级',
-        SwimlaneMode.label => '按标签',
+        SwimlaneMode.none => 'Off',
+        SwimlaneMode.priority => 'By priority',
+        SwimlaneMode.label => 'By label',
       };
 
   static SwimlaneMode fromString(String? value) {
@@ -59,7 +59,7 @@ class SwimlaneService {
   }) {
     switch (mode) {
       case SwimlaneMode.none:
-        return const [SwimlaneBucket(id: 'all', title: '全部')];
+        return const [SwimlaneBucket(id: 'all', title: 'All')];
       case SwimlaneMode.priority:
         return [
           for (final priority in [
@@ -70,7 +70,7 @@ class SwimlaneService {
           ])
             SwimlaneBucket(
               id: 'priority:${priority.name}',
-              title: '优先级 · ${priority.label}',
+              title: 'Priority · ${priority.label}',
               priority: priority,
             ),
         ];
@@ -94,7 +94,7 @@ class SwimlaneService {
             ),
           const SwimlaneBucket(
             id: 'label:',
-            title: '无标签',
+            title: 'No label',
             labelKey: '',
           ),
         ];
@@ -116,7 +116,8 @@ class SwimlaneService {
   }
 
   /// 将卡片拖入某泳道时应写入的字段变更。
-  KanbanCard applyBucket(KanbanCard card, SwimlaneBucket bucket, SwimlaneMode mode) {
+  KanbanCard applyBucket(
+      KanbanCard card, SwimlaneBucket bucket, SwimlaneMode mode) {
     switch (mode) {
       case SwimlaneMode.none:
         return card;

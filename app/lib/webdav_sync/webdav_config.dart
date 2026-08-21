@@ -40,8 +40,10 @@ class WebDavConfig {
   final String username;
   final String password;
   final String remotePath;
+
   /// 兼容旧配置 JSON；运行时始终视为关闭，不会自动上传
   final bool autoSync;
+
   /// 兼容旧配置 JSON；运行时始终视为关闭，不会自动拉取
   final bool autoPull;
   final int pollIntervalSeconds;
@@ -162,7 +164,7 @@ class BoardRepository {
 
   Future<String> _createDefaultProject({String? id, String? title}) async {
     final projectId = id ?? const Uuid().v4();
-    final projectTitle = title ?? '我的看板';
+    final projectTitle = title ?? 'My Board';
     final board = KanbanBoard.empty(id: projectId, title: projectTitle);
     await _storage.saveBoard(projectId, board);
     await _storage.saveProjectSettings(projectId, const ProjectSettings());

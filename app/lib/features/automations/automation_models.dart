@@ -15,10 +15,10 @@ enum AutomationTrigger {
 
 extension AutomationTriggerX on AutomationTrigger {
   String get label => switch (this) {
-        AutomationTrigger.movedToColumn => '移入指定列',
-        AutomationTrigger.completed => '标记完成',
-        AutomationTrigger.checklistAllDone => '清单全部完成',
-        AutomationTrigger.overdue => '已逾期',
+        AutomationTrigger.movedToColumn => 'Moved to column',
+        AutomationTrigger.completed => 'Marked complete',
+        AutomationTrigger.checklistAllDone => 'Checklist completed',
+        AutomationTrigger.overdue => 'Overdue',
       };
 
   static AutomationTrigger fromString(String? value) {
@@ -40,11 +40,11 @@ enum AutomationActionType {
 
 extension AutomationActionTypeX on AutomationActionType {
   String get label => switch (this) {
-        AutomationActionType.markCompleted => '标记完成',
-        AutomationActionType.moveToDoneColumn => '移到已完成列',
-        AutomationActionType.setPriority => '设置优先级',
-        AutomationActionType.addLabel => '添加标签',
-        AutomationActionType.clearReminder => '清除提醒',
+        AutomationActionType.markCompleted => 'Mark complete',
+        AutomationActionType.moveToDoneColumn => 'Move to Done column',
+        AutomationActionType.setPriority => 'Set priority',
+        AutomationActionType.addLabel => 'Add label',
+        AutomationActionType.clearReminder => 'Clear reminder',
       };
 
   static AutomationActionType fromString(String? value) {
@@ -119,7 +119,7 @@ class AutomationRule {
   factory AutomationRule.fromJson(Map<String, dynamic> json) {
     return AutomationRule(
       id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '未命名规则',
+      name: json['name'] as String? ?? 'Unnamed rule',
       enabled: json['enabled'] as bool? ?? true,
       trigger: AutomationTriggerX.fromString(json['trigger'] as String?),
       triggerColumnId: json['triggerColumnId'] as String? ?? '',

@@ -63,7 +63,7 @@ class ProjectEntry {
   factory ProjectEntry.fromJson(Map<String, dynamic> json) {
     return ProjectEntry(
       id: json['id'] as String,
-      title: json['title'] as String? ?? '我的看板',
+      title: json['title'] as String? ?? 'My Board',
       updatedAt: json['updatedAt'] as int? ?? 0,
       revision: json['revision'] as int? ?? 0,
       conflictTitle: json['conflictTitle'] as String?,

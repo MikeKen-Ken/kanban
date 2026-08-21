@@ -3,13 +3,13 @@ import '../completed_auto_clear/completed_auto_clear.dart';
 import 'move_to_rework_on_new_feedback.dart';
 
 /// 默认「进行中」列标题（与 [KanbanBoard.empty] 一致）。
-const defaultDoingColumnTitle = '进行中';
+const defaultDoingColumnTitle = 'In Progress';
 
 /// 默认「进行中」列 id。
 const defaultDoingColumnId = 'doing';
 
 /// 默认「阻塞中」列标题（与 [KanbanBoard.empty] 一致）。
-const defaultBlockedColumnTitle = '阻塞中';
+const defaultBlockedColumnTitle = 'Blocked';
 
 /// 默认「阻塞中」列 id。
 const defaultBlockedColumnId = 'blocked';
@@ -112,7 +112,7 @@ bool isBlockedColumnId({
 bool shouldDefaultPreviewMarkdown({
   required String columnId,
   required Iterable<KanbanColumn> columns,
-  String doneColumnName = '已完成',
+  String doneColumnName = 'Done',
 }) {
   if (isVerifyColumnId(columnId: columnId, columns: columns)) return true;
   if (isReworkColumnId(columnId: columnId, columns: columns)) return true;

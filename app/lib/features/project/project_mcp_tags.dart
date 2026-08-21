@@ -19,43 +19,44 @@ const kProjectMcpTagOptions = <ProjectMcpTagOption>[
   ProjectMcpTagOption(
     key: 'aseprite',
     name: 'Aseprite',
-    description: '为像素画与精灵资源项目附加 Aseprite MCP',
+    description: 'Add Aseprite MCP for pixel art and sprite projects',
     color: Color(0xFF7C4DFF),
   ),
   ProjectMcpTagOption(
     key: 'chrome-devtools',
-    name: 'Chrome 调试',
-    description: '为 Web 调试项目附加 Chrome DevTools MCP',
+    name: 'Chrome debugging',
+    description: 'Add Chrome DevTools MCP for web debugging projects',
     color: Color(0xFF4285F4),
   ),
   ProjectMcpTagOption(
     key: 'hub',
     name: 'Hub MCP',
-    description: '为需要在 Worker 会话里管理其它 MCP 服务器的项目附加 Hub MCP',
+    description:
+        'Add Hub MCP for projects that manage other MCP servers in Worker sessions',
     color: Color(0xFF5D4037),
   ),
   ProjectMcpTagOption(
     key: 'tavily',
     name: 'Tavily',
-    description: '为需要联网检索的项目附加 Tavily MCP',
+    description: 'Add Tavily MCP for projects that need web research',
     color: Color(0xFF0F766E),
   ),
   ProjectMcpTagOption(
     key: 'unity',
     name: 'Unity',
-    description: '为 Unity 项目附加 Unity MCP',
+    description: 'Add Unity MCP for Unity projects',
     color: Color(0xFF455A64),
   ),
   ProjectMcpTagOption(
     key: 'cocos',
     name: 'Cocos',
-    description: '为 Cocos 项目附加 Cocos Creator MCP',
+    description: 'Add Cocos Creator MCP for Cocos projects',
     color: Color(0xFF00838F),
   ),
   ProjectMcpTagOption(
     key: 'node_repl',
     name: 'Node REPL',
-    description: '为脚本与浏览器辅助项目附加 Node REPL',
+    description: 'Add Node REPL for scripting and browser-assistance projects',
     color: Color(0xFF558B2F),
   ),
 ];

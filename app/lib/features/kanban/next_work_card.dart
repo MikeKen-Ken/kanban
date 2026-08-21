@@ -3,7 +3,7 @@ import 'move_to_rework_on_new_feedback.dart';
 import 'verify_column.dart';
 
 /// 默认「待办」列标题（与 [KanbanBoard.empty] 一致）。
-const defaultTodoColumnTitle = '待办';
+const defaultTodoColumnTitle = 'To Do';
 
 /// 默认「待办」列 id。
 const defaultTodoColumnId = 'todo';
@@ -32,8 +32,7 @@ KanbanCard? pickLatestIncompleteCard(Iterable<KanbanCard> cards) {
     if (card.completed) continue;
     if (best == null ||
         card.updatedAt > best.updatedAt ||
-        (card.updatedAt == best.updatedAt &&
-            card.createdAt > best.createdAt)) {
+        (card.updatedAt == best.updatedAt && card.createdAt > best.createdAt)) {
       best = card;
     }
   }

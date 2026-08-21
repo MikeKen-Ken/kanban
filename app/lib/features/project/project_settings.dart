@@ -9,7 +9,7 @@ import '../wallpapers/wallpaper_models.dart';
 /// 单个项目的偏好设置（随项目数据同步到 WebDAV）
 class ProjectSettings {
   const ProjectSettings({
-    this.doneColumnName = '已完成',
+    this.doneColumnName = 'Done',
     this.themeId = '',
     this.backgroundAttachmentId = '',
     this.wallpaperIds = const [],
@@ -105,14 +105,15 @@ class ProjectSettings {
     return displayableIds.first;
   }
 
-  static const defaultDoneColumnName = '已完成';
+  static const defaultDoneColumnName = 'Done';
   static const defaultBackgroundOverlayOpacity = 0.4;
   static const maxBackgroundOverlayOpacity = 0.7;
   static const defaultCardSurfaceOpacity = 1.0;
   static const minCardSurfaceOpacity = 0.35;
 
   /// 新项目默认每 10 秒从工作区壁纸库随机轮播；库为空时保持纯色。
-  static ProjectSettings defaultsForNewProject(List<String> libraryWallpaperIds) {
+  static ProjectSettings defaultsForNewProject(
+      List<String> libraryWallpaperIds) {
     final ids = libraryWallpaperIds
         .where((id) => id.isNotEmpty)
         .toList(growable: false);

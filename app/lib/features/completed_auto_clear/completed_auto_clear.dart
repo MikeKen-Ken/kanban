@@ -17,7 +17,7 @@ int completedReferenceMs(KanbanCard card) => card.completedAt ?? card.updatedAt;
 
 /// 在列列表中定位已完成列（与看板控制器识别规则一致）。
 ///
-/// 优先级：默认 id `done` → 标题等于 [doneColumnName] → 标题含「完成」。
+/// 优先级：默认 id `done` → 标题等于 [doneColumnName] / `Done` → 兼容旧中文标题。
 KanbanColumn? findDoneColumnAmong(
   Iterable<KanbanColumn> columns, {
   required String doneColumnName,
@@ -27,6 +27,9 @@ KanbanColumn? findDoneColumnAmong(
   }
   for (final col in columns) {
     if (col.title == doneColumnName) return col;
+  }
+  for (final col in columns) {
+    if (col.title == 'Done') return col;
   }
   for (final col in columns) {
     if (col.title.contains('完成')) return col;

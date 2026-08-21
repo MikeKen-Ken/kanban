@@ -51,13 +51,13 @@ const incompleteVerificationFeedbackBlocksReworkExitMessage =
     '请先完成所有验证反馈，才能离开待返工列';
 
 /// 默认「进行中」列标题（与 [KanbanBoard.empty] 一致）。
-const _defaultDoingColumnTitle = '进行中';
+const _defaultDoingColumnTitle = 'In Progress';
 
 /// 默认「进行中」列 id。
 const _defaultDoingColumnId = 'doing';
 
 /// 默认「阻塞中」列标题。
-const _defaultBlockedColumnTitle = '阻塞中';
+const _defaultBlockedColumnTitle = 'Blocked';
 
 /// 默认「阻塞中」列 id。
 const _defaultBlockedColumnId = 'blocked';

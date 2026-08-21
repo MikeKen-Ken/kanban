@@ -57,7 +57,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   Future<void> _save() async {
     final name = _doneColumnController.text.trim();
     if (name.isEmpty) {
-      showAppSnackBar(context, message: '已完成列名称不能为空');
+      showAppSnackBar(context, message: 'Done column name cannot be empty');
       return;
     }
 
@@ -78,7 +78,8 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    showAppSnackBar(context, message: '项目设置已保存，将自动同步');
+    showAppSnackBar(context,
+        message: 'Project settings saved and will sync automatically');
     Navigator.pop(context);
   }
 
@@ -102,7 +103,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
       _overlayDraft = null;
       _cardOpacityDraft = null;
     });
-    showAppSnackBar(context, message: '已清除背景图');
+    showAppSnackBar(context, message: 'Background image cleared');
   }
 
   Future<void> _resolveConflict({required bool keepPrimary}) async {
@@ -119,7 +120,12 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
       _overlayDraft = null;
       _cardOpacityDraft = null;
     });
-    showAppSnackBar(context, message: keepPrimary ? '已保留当前项目设置' : '已改用另一侧项目设置');
+    showAppSnackBar(
+      context,
+      message: keepPrimary
+          ? 'Kept the current project settings'
+          : 'Switched to the other project settings',
+    );
   }
 
   String _themeLabel(String themeId) {
@@ -130,25 +136,27 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   String _conflictSummary(ProjectSettings primary, ProjectSettings other) {
     final parts = <String>[];
     if (primary.doneColumnName != other.doneColumnName) {
-      parts.add('已完成列：「${other.doneColumnName}」');
+      parts.add('Done column: "${other.doneColumnName}"');
     }
     if (primary.themeId != other.themeId) {
-      parts.add('主题：${_themeLabel(other.themeId)}');
+      parts.add('Theme: ${_themeLabel(other.themeId)}');
     }
     if (primary.backgroundAttachmentId != other.backgroundAttachmentId) {
-      parts.add(other.hasBackgroundImage ? '背景图不同' : '无自定义背景图');
+      parts.add(other.hasBackgroundImage
+          ? 'Background image differs'
+          : 'No custom background image');
     }
     if ((primary.backgroundOverlayOpacity - other.backgroundOverlayOpacity)
             .abs() >=
         0.001) {
       parts.add(
-        '背景遮罩：${(other.backgroundOverlayOpacity * 100).round()}%',
+        'Background overlay: ${(other.backgroundOverlayOpacity * 100).round()}%',
       );
     }
     if ((primary.cardSurfaceOpacity - other.cardSurfaceOpacity).abs() >=
         0.001) {
       parts.add(
-        '卡片不透明度：${(other.cardSurfaceOpacity * 100).round()}%',
+        'Card opacity: ${(other.cardSurfaceOpacity * 100).round()}%',
       );
     }
     final prefsDiffer =
@@ -161,24 +169,24 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                   a.pinnedCardIds.join(',') != b.pinnedCardIds.join(',');
             });
     if (prefsDiffer) {
-      parts.add('列排序/置顶偏好不同');
+      parts.add('Column sorting or pinning preferences differ');
     }
     if (primary.columnWipLimits.toString() !=
         other.columnWipLimits.toString()) {
-      parts.add('列 WIP 上限不同');
+      parts.add('Column WIP limits differ');
     }
     if (_agentMcpTagsSummary(primary.agentMcpTags) !=
         _agentMcpTagsSummary(other.agentMcpTags)) {
-      parts.add('项目 MCP：${_agentMcpTagsSummary(other.agentMcpTags)}');
+      parts.add('Project MCP: ${_agentMcpTagsSummary(other.agentMcpTags)}');
     }
     if (parts.isEmpty) {
-      return '另一侧为较旧或空默认设置，通常保留当前即可';
+      return 'The other side has older or empty default settings; keeping the current copy is usually best';
     }
-    return '另一侧：${parts.join('；')}';
+    return 'Other side: ${parts.join('; ')}';
   }
 
   String _agentMcpTagsSummary(List<String> tags) {
-    if (tags.isEmpty) return '无';
+    if (tags.isEmpty) return 'None';
     final names = [
       for (final option in kProjectMcpTagOptions)
         if (tags.contains(option.key)) option.name,
@@ -205,7 +213,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     final theme = Theme.of(context);
     final previewPreset = projectThemeForId(_selectedThemeId);
     final controller = context.watch<BoardController>();
-    final projectTitle = controller.activeProject?.title ?? '项目';
+    final projectTitle = controller.activeProject?.title ?? 'Project';
     final settings = controller.projectSettings;
     final rotationWallpaperCount =
         settings.wallpaperPlaybackMode == WallpaperPlaybackMode.random
@@ -225,7 +233,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
         theme.brightness,
       ),
       child: Scaffold(
-        appBar: AppBar(title: Text('$projectTitle 设置')),
+        appBar: AppBar(title: Text('$projectTitle Settings')),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
@@ -239,7 +247,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '同步冲突：项目设置存在另一份副本',
+                        'Sync conflict: another copy of the project settings exists',
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: theme.colorScheme.onErrorContainer,
                           fontWeight: FontWeight.w700,
@@ -260,12 +268,12 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                           FilledButton(
                             onPressed: () =>
                                 _resolveConflict(keepPrimary: true),
-                            child: const Text('保留当前'),
+                            child: const Text('Keep current'),
                           ),
                           OutlinedButton(
                             onPressed: () =>
                                 _resolveConflict(keepPrimary: false),
-                            child: const Text('保留另一份'),
+                            child: const Text('Keep other'),
                           ),
                         ],
                       ),
@@ -277,8 +285,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             ],
             SettingsSection(
               icon: Icons.palette_outlined,
-              title: '主题',
-              subtitle: '为当前项目选择颜色搭配，切换项目后主题会随之变化',
+              title: 'Theme',
+              subtitle:
+                  'Choose a color scheme for this project; it follows the project when you switch',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
@@ -302,7 +311,8 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             SettingsSection(
               icon: Icons.memory_outlined,
               title: 'Agent MCP',
-              subtitle: 'Worker 默认只注入 scoped 看板 MCP；这里按主题附加其它 MCP（含可选 Hub）',
+              subtitle:
+                  'The Worker injects the scoped Kanban MCP by default; add other MCPs for this project here',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -315,7 +325,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '这些标签会随项目同步，Worker 仅在当前项目需要时把对应 MCP 注入单卡会话。',
+                        'These tags sync with the project. The Worker injects the selected MCPs only when needed.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -328,8 +338,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             const SizedBox(height: 16),
             SettingsSection(
               icon: Icons.wallpaper_outlined,
-              title: '看板背景',
-              subtitle: '壁纸库跨项目复用并同步；图片缓存到本地，随机轮播不会重复请求远端',
+              title: 'Board background',
+              subtitle:
+                  'The wallpaper library is shared and synced across projects; images are cached locally',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -375,7 +386,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                                           .colorScheme.surfaceContainerHighest,
                                       child: Center(
                                         child: Text(
-                                          '未设置背景图，使用主题底色',
+                                          'No background image; using the theme color',
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
                                             color: theme
@@ -405,7 +416,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                                   )
                                 : const Icon(Icons.image_outlined),
                             label: Text(
-                              settings.hasBackgroundImage ? '管理与选择壁纸' : '打开壁纸库',
+                              settings.hasBackgroundImage
+                                  ? 'Manage wallpapers'
+                                  : 'Open wallpaper library',
                             ),
                           ),
                           if (settings.hasBackgroundImage)
@@ -413,7 +426,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                               onPressed:
                                   _backgroundBusy ? null : _clearBackground,
                               icon: const Icon(Icons.hide_image_outlined),
-                              label: const Text('清除'),
+                              label: const Text('Clear'),
                             ),
                         ],
                       ),
@@ -424,13 +437,13 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Text(
-                              '随机轮播 $rotationWallpaperCount 张，每 '
-                              '${settings.wallpaperIntervalSeconds} 秒切换',
+                              'Randomly rotating $rotationWallpaperCount wallpapers; '
+                              'switching every ${settings.wallpaperIntervalSeconds}s',
                             ),
                           ),
                         const SizedBox(height: 8),
                         Text(
-                          '遮罩：${(overlayValue * 100).round()}%',
+                          'Overlay: ${(overlayValue * 100).round()}%',
                           style: theme.textTheme.labelLarge,
                         ),
                         Slider(
@@ -452,7 +465,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                           },
                         ),
                         Text(
-                          '加深遮罩可提高列与文字在复杂背景上的可读性',
+                          'A darker overlay improves column and text readability on complex backgrounds',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -460,7 +473,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                       ],
                       const SizedBox(height: 8),
                       Text(
-                        '卡片不透明度：${(cardOpacityValue * 100).round()}%',
+                        'Card opacity: ${(cardOpacityValue * 100).round()}%',
                         style: theme.textTheme.labelLarge,
                       ),
                       Slider(
@@ -481,7 +494,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                         },
                       ),
                       Text(
-                        '100% 会保持实色；降低后卡片底色半透明，可透过磨砂层看到壁纸，标题与文字仍保持清晰',
+                        '100% keeps cards solid; lower values make them translucent while keeping titles and text clear',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -494,19 +507,21 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             const SizedBox(height: 16),
             SettingsSection(
               icon: Icons.view_kanban_outlined,
-              title: '看板',
-              subtitle: '此页面的设置属于当前项目，会通过 WebDAV 在多设备间同步',
+              title: 'Board',
+              subtitle:
+                  'These settings belong to the current project and sync across devices through WebDAV',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   child: TextFormField(
                     controller: _doneColumnController,
                     decoration: const InputDecoration(
-                      labelText: '已完成列名称',
+                      labelText: 'Done column name',
                       hintText: ProjectSettings.defaultDoneColumnName,
                       border: OutlineInputBorder(),
                       isDense: true,
-                      helperText: '勾选完成或拖入该列时，卡片会移入此列。修改后会同步重命名对应列。',
+                      helperText:
+                          'Completed cards move here. Changing this name also renames the corresponding column.',
                     ),
                   ),
                 ),
@@ -515,7 +530,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                   child: DropdownButtonFormField<SwimlaneMode>(
                     value: _swimlaneMode,
                     decoration: const InputDecoration(
-                      labelText: '泳道分组',
+                      labelText: 'Swimlane grouping',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -534,9 +549,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.bolt_outlined),
-                  title: const Text('自动化规则'),
+                  title: const Text('Automation rules'),
                   subtitle: Text(
-                    '已配置 ${controller.projectSettings.automationRules.length} 条',
+                    '${controller.projectSettings.automationRules.length} configured',
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -552,8 +567,9 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
             const SizedBox(height: 16),
             SettingsSection(
               icon: Icons.speed_outlined,
-              title: '未完成卡片上限',
-              subtitle: '达到上限时高亮并提醒，但不会阻止继续添加或移动',
+              title: 'Incomplete card limits',
+              subtitle:
+                  'Cards are highlighted at the limit, but adding and moving remain allowed',
               collapsible: true,
               initiallyExpanded: false,
               children: [
@@ -563,8 +579,8 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                     title: Text(column.title),
                     subtitle: Text(
                       (_wipLimits[column.id] ?? 0) < 1
-                          ? '不限'
-                          : '建议最多 ${_wipLimits[column.id]} 张未完成卡片',
+                          ? 'Unlimited'
+                          : 'Suggested maximum: ${_wipLimits[column.id]} incomplete cards',
                     ),
                     trailing: SizedBox(
                       width: 150,
@@ -576,7 +592,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                         max: 20,
                         divisions: 20,
                         label: (_wipLimits[column.id] ?? 0) < 1
-                            ? '不限'
+                            ? 'Unlimited'
                             : '${_wipLimits[column.id]}',
                         onChanged: (value) {
                           setState(() {
@@ -602,7 +618,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('保存'),
+                  : const Text('Save'),
             ),
             const SizedBox(height: 12),
             Row(
@@ -616,7 +632,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '主题与看板选项点「保存」后写入；Agent MCP 标签、背景图、遮罩与卡片不透明度会立即生效并同步到 WebDAV。',
+                    'Theme and board options are saved when you click Save. Agent MCP tags, background, overlay, and card opacity apply and sync immediately.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

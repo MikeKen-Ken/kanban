@@ -2,9 +2,9 @@ import 'projects_manifest.dart';
 
 /// 项目列表排序方式
 enum ProjectSortMode {
-  recentlyUsed('最近使用'),
-  name('名称'),
-  defaultOrder('默认');
+  recentlyUsed('Recently used'),
+  name('Name'),
+  defaultOrder('Default');
 
   const ProjectSortMode(this.label);
 
