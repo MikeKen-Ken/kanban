@@ -31,20 +31,20 @@ class SyncProgress {
   bool get hasTotal => total != null && total! > 0;
 
   String get phaseLabel => switch (phase) {
-        SyncPhase.discovering => '准备同步',
-        SyncPhase.downloading => '拉取远端',
-        SyncPhase.merging => '合并',
-        SyncPhase.uploading => '上传',
-        SyncPhase.attachments => '同步附件',
-        SyncPhase.finalizing => '收尾',
+        SyncPhase.discovering => 'Preparing sync',
+        SyncPhase.downloading => 'Downloading remote data',
+        SyncPhase.merging => 'Merging',
+        SyncPhase.uploading => 'Uploading',
+        SyncPhase.attachments => 'Syncing attachments',
+        SyncPhase.finalizing => 'Finalizing',
       };
 
   /// 顶栏短文案，例如「同步中 3/12」
   String get shortLabel {
     if (hasTotal) {
-      return '同步中 $completed/$total';
+      return 'Syncing $completed/$total';
     }
-    return '同步中…';
+    return 'Syncing…';
   }
 
   SyncProgress copyWith({

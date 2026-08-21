@@ -17,13 +17,14 @@ class CardDetailCommitRefSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('提交号', style: theme.textTheme.titleSmall),
+        Text('Commit', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           onChanged: (_) => onChanged(),
           decoration: const InputDecoration(
-            hintText: 'Git 短哈希（7 位；完整 hash 保存时会自动缩短）',
+            hintText:
+                'Git short hash (7 characters; full hashes are shortened automatically)',
             isDense: true,
             border: OutlineInputBorder(),
           ),

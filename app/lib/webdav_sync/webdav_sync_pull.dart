@@ -33,7 +33,7 @@ mixin _WebDavSyncPull
             completed: 0,
             total: 0,
             skipped: remoteIndex.files.length,
-            currentLabel: 'JSON 未变更',
+            currentLabel: 'JSON unchanged',
           ),
         );
         return reuseFrom;
@@ -364,7 +364,7 @@ mixin _WebDavSyncPull
             expectedId: KanbanPaths.liveWorkspaceArchiveId,
           );
           if (bytes == null) {
-            throw const FormatException('云端工作区压缩包不完整，请重新上传');
+            throw const FormatException('Cloud workspace archive is incomplete; please upload it again');
           }
           remotePkg = const BackupArchiveService().decode(bytes);
           fromArchive = true;
@@ -386,7 +386,7 @@ mixin _WebDavSyncPull
       _ensureNotCancelled(runId);
       if (remotePkg == null) {
         if (replaceLocal) {
-          _setStatus(SyncStatus.error, error: '云端没有可下载的数据');
+          _setStatus(SyncStatus.error, error: 'No downloadable data found in the cloud');
           return;
         }
         _syncInFlight = false;

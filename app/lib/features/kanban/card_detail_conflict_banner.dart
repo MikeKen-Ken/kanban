@@ -27,7 +27,9 @@ class CardDetailConflictBanner extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              card.conflictDeleted ? '同步冲突：另一侧删除了此卡片' : '同步冲突：存在另一份副本',
+              card.conflictDeleted
+                  ? 'Sync conflict: this card was deleted on the other side'
+                  : 'Sync conflict: another copy exists',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.onErrorContainer,
                 fontWeight: FontWeight.w700,
@@ -36,7 +38,7 @@ class CardDetailConflictBanner extends StatelessWidget {
             if (card.conflictSide != null) ...[
               const SizedBox(height: 6),
               Text(
-                '另一份：${card.conflictSide!.title}'
+                'Other copy: ${card.conflictSide!.title}'
                 '${card.conflictSide!.description == null || card.conflictSide!.description!.isEmpty ? '' : ' — ${card.conflictSide!.description}'}',
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
@@ -54,7 +56,7 @@ class CardDetailConflictBanner extends StatelessWidget {
                   onPressed: resolving
                       ? null
                       : () => onResolve(CardConflictResolution.keepPrimary),
-                  child: Text(resolving ? '处理中…' : '保留当前'),
+                  child: Text(resolving ? 'Processing…' : 'Keep current'),
                 ),
                 OutlinedButton(
                   onPressed: resolving
@@ -62,8 +64,10 @@ class CardDetailConflictBanner extends StatelessWidget {
                       : () => onResolve(CardConflictResolution.keepOther),
                   child: Text(
                     resolving
-                        ? '处理中…'
-                        : (card.conflictDeleted ? '确认删除' : '保留另一份'),
+                        ? 'Processing…'
+                        : (card.conflictDeleted
+                            ? 'Confirm delete'
+                            : 'Keep other'),
                   ),
                 ),
               ],

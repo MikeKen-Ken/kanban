@@ -21,7 +21,7 @@ Future<bool> showTransferCardToProjectFlow({
       .toList(growable: false);
 
   if (targets.isEmpty) {
-    showAppSnackBar(context, message: '没有其他可转移的项目');
+    showAppSnackBar(context, message: 'There are no other projects to move to');
     return false;
   }
 
@@ -38,8 +38,8 @@ Future<bool> showTransferCardToProjectFlow({
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Text(
                 cardTitle == null || cardTitle.trim().isEmpty
-                    ? '转移到项目'
-                    : '将「$cardTitle」转移到…',
+                    ? 'Move to project'
+                    : 'Move "$cardTitle" to…',
                 style: Theme.of(ctx).textTheme.titleMedium,
               ),
             ),
@@ -78,6 +78,6 @@ Future<bool> showTransferCardToProjectFlow({
     showAppSnackBar(context, message: error);
     return false;
   }
-  showAppSnackBar(context, message: '已转移到「${picked.title}」');
+  showAppSnackBar(context, message: 'Moved to "${picked.title}"');
   return true;
 }

@@ -310,7 +310,7 @@ class _SyncQuickSwitchTile extends StatelessWidget {
         : Colors.transparent;
     final onTile =
         selected ? scheme.onPrimaryContainer : scheme.onSurface;
-    final label = action?.label ?? '取消';
+    final label = action?.label ?? 'Cancel';
     final icon = action?.icon ?? Icons.close;
 
     return SizedBox(

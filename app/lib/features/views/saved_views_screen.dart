@@ -46,23 +46,23 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('重命名保存视图'),
+        title: const Text('Rename saved view'),
         content: TextFormField(
           key: const ValueKey('saved-view-name'),
           initialValue: view.name,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '视图名称'),
+          decoration: const InputDecoration(labelText: 'View name'),
           onChanged: (value) => draftName = value,
           onFieldSubmitted: (value) => Navigator.pop(context, value.trim()),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, draftName.trim()),
-            child: const Text('保存'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -86,23 +86,23 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
             item,
       ]);
     });
-    showAppSnackBar(context, message: '已重命名为「$name」');
+    showAppSnackBar(context, message: 'Renamed to "$name"');
   }
 
   Future<void> _delete(SavedView view) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除保存视图'),
-        content: Text('确定删除「${view.name}」吗？卡片不会受到影响。'),
+        title: const Text('Delete saved view'),
+        content: Text('Delete "${view.name}"? Cards will not be affected.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -112,13 +112,13 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
     await widget.onDelete(view);
     if (!mounted) return;
     setState(() => _views.removeWhere((item) => item.id == view.id));
-    showAppSnackBar(context, message: '已删除「${view.name}」');
+    showAppSnackBar(context, message: 'Deleted "${view.name}"');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('保存视图')),
+      appBar: AppBar(title: const Text('Saved views')),
       body: ListView.separated(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         itemCount: 1 + (_views.isEmpty ? 1 : _views.length),
@@ -128,8 +128,8 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
             return ListTile(
               key: const ValueKey('saved-view-show-all'),
               leading: const Icon(Icons.filter_alt_off_outlined),
-              title: const Text('显示全部'),
-              subtitle: const Text('清除搜索和筛选'),
+              title: const Text('Show all'),
+              subtitle: const Text('Clear search and filters'),
               onTap: () => Navigator.pop(context, SavedView.showAll),
             );
           }
@@ -143,7 +143,7 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
             subtitle: Text(_filterSummary(view)),
             onTap: () => Navigator.pop(context, view),
             trailing: PopupMenuButton<String>(
-              tooltip: '管理「${view.name}」',
+              tooltip: 'Manage "${view.name}"',
               onSelected: (action) {
                 if (action == 'rename') {
                   _rename(view);
@@ -156,14 +156,14 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
                   value: 'rename',
                   child: ListTile(
                     leading: Icon(Icons.edit_outlined),
-                    title: Text('重命名'),
+                    title: Text('Rename'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'delete',
                   child: ListTile(
                     leading: Icon(Icons.delete_outline),
-                    title: Text('删除'),
+                    title: Text('Delete'),
                   ),
                 ),
               ],
@@ -177,17 +177,19 @@ class _SavedViewsScreenState extends State<SavedViewsScreen> {
   String _filterSummary(SavedView view) {
     final parts = <String>[];
     final filter = view.filter;
-    if (filter.keyword.trim().isNotEmpty) parts.add('关键词：${filter.keyword}');
+    if (filter.keyword.trim().isNotEmpty)
+      parts.add('Keyword: ${filter.keyword}');
     if (filter.projectIds.isNotEmpty) {
-      parts.add('${filter.projectIds.length} 个项目');
+      parts.add('${filter.projectIds.length} projects');
     }
-    if (filter.labelIds.isNotEmpty) parts.add('${filter.labelIds.length} 个标签');
+    if (filter.labelIds.isNotEmpty)
+      parts.add('${filter.labelIds.length} labels');
     if (filter.priorities.isNotEmpty) {
-      parts.add('${filter.priorities.length} 个优先级');
+      parts.add('${filter.priorities.length} priorities');
     }
-    if (filter.dueDate.name != 'any') parts.add('日期条件');
-    if (filter.completion.name != 'any') parts.add('状态条件');
-    return parts.isEmpty ? '显示全部卡片' : parts.join(' · ');
+    if (filter.dueDate.name != 'any') parts.add('Due-date condition');
+    if (filter.completion.name != 'any') parts.add('Status condition');
+    return parts.isEmpty ? 'Showing all cards' : parts.join(' · ');
   }
 }
 
@@ -208,12 +210,12 @@ class _SavedViewsEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '还没有保存视图',
+            'No saved views yet',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 6),
           Text(
-            '在“搜索”中设置范围和筛选后即可保存',
+            'Set a scope and filters in Search, then save a view',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),

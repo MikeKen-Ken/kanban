@@ -40,15 +40,16 @@ bool isReworkColumnId({
 }
 
 /// 没有未完成验证反馈时禁止移入「待返工」的提示文案。
-const reworkMoveRequiresFeedbackMessage = '需要添加未完成的反馈才可以进入待返工';
+const reworkMoveRequiresFeedbackMessage =
+    'Add incomplete feedback before moving to rework';
 
 /// 仍有验证反馈未完成时，卡片不能移入已完成列或被标记完成。
 const incompleteVerificationFeedbackBlocksProgressMessage =
-    '请先完成所有验证反馈，才能移入已完成列或标记完成';
+    'Complete all verification feedback before moving to Done or marking complete';
 
 /// 待返工列仍有未完成验证反馈时，不可移入其他列（「进行中」「阻塞中」除外）。
 const incompleteVerificationFeedbackBlocksReworkExitMessage =
-    '请先完成所有验证反馈，才能离开待返工列';
+    'Complete all verification feedback before leaving the Rework column';
 
 /// 默认「进行中」列标题（与 [KanbanBoard.empty] 一致）。
 const _defaultDoingColumnTitle = 'In Progress';

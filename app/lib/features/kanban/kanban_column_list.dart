@@ -74,8 +74,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
 
   bool get _allowWithinColumnReorder => widget.sortMode == CardSortMode.custom;
 
-  int get _pinnedCount =>
-      pinnedCardCount(widget.pinnedCardIds, widget.cards);
+  int get _pinnedCount => pinnedCardCount(widget.pinnedCardIds, widget.cards);
 
   void _onFlightChanged() {
     if (!mounted) return;
@@ -207,9 +206,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            color: active
-                ? colorScheme.primary.withValues(alpha: 0.06)
-                : null,
+            color: active ? colorScheme.primary.withValues(alpha: 0.06) : null,
             border: active
                 ? Border.all(color: colorScheme.primary.withValues(alpha: 0.45))
                 : null,
@@ -217,7 +214,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
           child: _tracked.isEmpty
               ? Center(
                   child: Text(
-                    '暂无卡片',
+                    'No cards',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant
                               .withValues(alpha: 0.7),
@@ -231,22 +228,25 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
                     children: [
-                    if (_pinnedCount > 0 && _allowWithinColumnReorder)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4, left: 4),
-                        child: Text(
-                          '置顶',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: colorScheme.primary,
-                              ),
+                      if (_pinnedCount > 0 && _allowWithinColumnReorder)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4, left: 4),
+                          child: Text(
+                            'Pinned',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: colorScheme.primary,
+                                ),
+                          ),
                         ),
-                      ),
-                    ..._cardChildren(showIndicator, colorScheme),
-                    if (showIndicator &&
-                        _hoverInsertIndex == widget.cards.length)
-                      _InsertionIndicator(colorScheme: colorScheme),
-                    const SizedBox(height: 8),
-                  ],
+                      ..._cardChildren(showIndicator, colorScheme),
+                      if (showIndicator &&
+                          _hoverInsertIndex == widget.cards.length)
+                        _InsertionIndicator(colorScheme: colorScheme),
+                      const SizedBox(height: 8),
+                    ],
                   ),
                 ),
         );
@@ -270,7 +270,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
             Padding(
               padding: const EdgeInsets.only(bottom: 4, top: 2, left: 4),
               child: Text(
-                '其余卡片',
+                'Other cards',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -296,8 +296,7 @@ class _KanbanColumnListState extends State<KanbanColumnList> {
                 allColumns: widget.allColumns,
                 searchQuery: widget.searchQuery,
                 isPinned: widget.pinnedCardIds.contains(item.card.id),
-                onDragStarted: () =>
-                    setState(() => _hoverInsertIndex = null),
+                onDragStarted: () => setState(() => _hoverInsertIndex = null),
               ),
             ),
           ),

@@ -51,8 +51,7 @@ Offset feedbackCenterDragAnchorStrategy(
 }) {
   final box = context.findRenderObject() as RenderBox?;
   final height = (box != null && box.hasSize) ? box.size.height : 80.0;
-  final visualHeight =
-      (height - listBottomMargin).clamp(1.0, double.infinity);
+  final visualHeight = (height - listBottomMargin).clamp(1.0, double.infinity);
   return Offset(feedbackWidth / 2, visualHeight / 2);
 }
 
@@ -73,8 +72,7 @@ bool shouldSuppressCardTapAfterPress({
 
 /// 触控为主的平台通常没有可靠的右键（secondary tap）。
 bool isTouchPrimaryPlatform(TargetPlatform platform) {
-  return platform == TargetPlatform.android ||
-      platform == TargetPlatform.iOS;
+  return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
 }
 
 /// 是否用长按打开卡片上下文菜单（复制 / 克隆 / 转移 / 删除）。
@@ -174,10 +172,9 @@ class CardLongPressDraggable<T extends Object> extends LongPressDraggable<T> {
     GestureMultiDragStartCallback onStart,
   ) {
     return _CardDelayedMultiDragGestureRecognizer(
-        delay: delay,
-        allowedButtonsFilter: allowedButtonsFilter,
-      )
-      ..onStart = (Offset position) {
+      delay: delay,
+      allowedButtonsFilter: allowedButtonsFilter,
+    )..onStart = (Offset position) {
         final Drag? result = onStart(position);
         if (result != null && hapticFeedbackOnStart) {
           HapticFeedback.selectionClick();

@@ -36,7 +36,7 @@ mixin _WebDavSyncWallpaperPack
           phase: SyncPhase.uploading,
           completed: 0,
           total: 1,
-          currentLabel: '壁纸库压缩包',
+          currentLabel: 'Wallpaper archive',
         ),
       );
       await _writeLiveArchive(

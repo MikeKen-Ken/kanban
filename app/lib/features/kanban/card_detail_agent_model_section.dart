@@ -144,7 +144,7 @@ class _CardDetailAgentModelSectionState
     return [
       DropdownMenuItem(
         value: _inherit,
-        child: Text('默认', style: style, overflow: TextOverflow.ellipsis),
+        child: Text('Default', style: style, overflow: TextOverflow.ellipsis),
       ),
       for (final option in options)
         DropdownMenuItem(
@@ -247,7 +247,7 @@ class _CardDetailAgentModelSectionState
           Row(
             children: [
               _dropdown(
-                label: 'AI 平台',
+                label: 'AI platform',
                 value: widget.agentEngine ?? _inherit,
                 items: _items(
                   options: [
@@ -259,7 +259,7 @@ class _CardDetailAgentModelSectionState
               ),
               const SizedBox(width: 6),
               _dropdown(
-                label: '模型',
+                label: 'Model',
                 value: widget.agentModelId ?? _inherit,
                 items: _items(
                   options: [
@@ -289,7 +289,7 @@ class _CardDetailAgentModelSectionState
               if (reasoning != null) ...[
                 const SizedBox(width: 6),
                 _dropdown(
-                  label: '推理程度',
+                  label: 'Reasoning effort',
                   value: widget.agentModelParamValues[reasoning.id] ?? _inherit,
                   items: _items(
                     options: [
@@ -306,7 +306,7 @@ class _CardDetailAgentModelSectionState
               if (contextParam != null) ...[
                 const SizedBox(width: 6),
                 _dropdown(
-                  label: '上下文',
+                  label: 'Context',
                   value:
                       widget.agentModelParamValues[contextParam.id] ?? _inherit,
                   items: _items(
@@ -323,21 +323,21 @@ class _CardDetailAgentModelSectionState
               ],
               const SizedBox(width: 6),
               _compactToggle(
-                label: '允许脏工作区',
+                label: 'Allow dirty workspaces',
                 value: widget.agentAllowDirtyWorkspace == true,
                 onChanged: (value) => _emit(
                   agentAllowDirtyWorkspace: value ? true : null,
                 ),
               ),
               _compactToggle(
-                label: '开沙箱',
+                label: 'Enable sandbox',
                 value: widget.agentEnableSandbox == true,
                 onChanged: (value) => _emit(
                   agentEnableSandbox: value ? true : null,
                 ),
               ),
               _compactToggle(
-                label: '需要测试',
+                label: 'Tests required',
                 value: widget.agentRequireTests == true,
                 onChanged: (value) => _emit(
                   agentRequireTests: value ? true : null,

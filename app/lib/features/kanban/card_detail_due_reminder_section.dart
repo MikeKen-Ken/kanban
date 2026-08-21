@@ -26,7 +26,7 @@ class CardDetailDueReminderSection extends StatelessWidget {
       initialDate: dueDate ?? now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
-      helpText: '选择截止日期',
+      helpText: 'Select due date',
     );
     if (picked != null && context.mounted) {
       onDueDateChanged(picked);
@@ -41,13 +41,13 @@ class CardDetailDueReminderSection extends StatelessWidget {
       initialDate: initial,
       firstDate: now.subtract(const Duration(days: 1)),
       lastDate: DateTime(now.year + 5),
-      helpText: '选择提醒日期',
+      helpText: 'Select reminder date',
     );
     if (date == null || !context.mounted) return;
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
-      helpText: '选择提醒时间',
+      helpText: 'Select reminder time',
     );
     if (time == null || !context.mounted) return;
     onReminderChanged(
@@ -78,7 +78,7 @@ class CardDetailDueReminderSection extends StatelessWidget {
             icon: const Icon(Icons.event, size: 18),
             label: Text(
               dueDate == null
-                  ? '设置日期'
+                  ? 'Set date'
                   : DateFormat.yMMMd('zh_CN').format(dueDate!),
             ),
           ),
@@ -86,7 +86,7 @@ class CardDetailDueReminderSection extends StatelessWidget {
             const SizedBox(width: 8),
             TextButton(
               onPressed: () => onDueDateChanged(null),
-              child: const Text('清除'),
+              child: const Text('Clear'),
             ),
           ],
         ],
@@ -123,14 +123,14 @@ class CardDetailDueReminderSection extends StatelessWidget {
           icon: const Icon(Icons.notifications_outlined, size: 18),
           label: Text(
             reminderAt == null
-                ? '设置提醒'
+                ? 'Set reminder'
                 : DateFormat('MMMd HH:mm', 'zh_CN').format(reminderAt!),
           ),
         ),
         if (reminderAt != null)
           TextButton(
             onPressed: () => onReminderChanged(null),
-            child: const Text('清除'),
+            child: const Text('Clear'),
           ),
       ],
     );
@@ -142,11 +142,11 @@ class CardDetailDueReminderSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('截止日期', style: theme.textTheme.titleSmall),
+        Text('Due date', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         _buildDueDateRow(context),
         const SizedBox(height: 20),
-        Text('提醒', style: theme.textTheme.titleSmall),
+        Text('Reminder', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         _buildReminderRow(context),
       ],

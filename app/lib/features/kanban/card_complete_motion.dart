@@ -148,8 +148,8 @@ Rect? _bestRect(
     final rect = _rectOfState(anchor.state);
     if (rect == null) continue;
     fallback ??= rect;
-    final onScreen = screenSize != null &&
-        isRectOnScreen(rect, screenSize, minVisible: 24);
+    final onScreen =
+        screenSize != null && isRectOnScreen(rect, screenSize, minVisible: 24);
     if (preferColumnId != null &&
         anchor.columnId == preferColumnId &&
         (preferred == null || onScreen)) {
@@ -405,7 +405,8 @@ Future<String?> playCardCompleteFlight({
         ) ??
         startRect.translate(96, -28);
     final fadeOut = !isRectOnScreen(target, screenSize, minVisible: 24);
-    final destScale = startRect.width <= 0 ? 1.0 : target.width / startRect.width;
+    final destScale =
+        startRect.width <= 0 ? 1.0 : target.width / startRect.width;
 
     final controller = AnimationController(
       vsync: overlayState,

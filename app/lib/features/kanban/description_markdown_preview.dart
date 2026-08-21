@@ -43,7 +43,7 @@ class DescriptionMarkdownPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final source = data.trim().isEmpty ? '_暂无备注_' : data;
+    final source = data.trim().isEmpty ? '_No description_' : data;
 
     final body = MarkdownBody(
       data: source,

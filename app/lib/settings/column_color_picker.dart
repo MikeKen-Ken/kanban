@@ -17,7 +17,7 @@ const List<Color> kQuickColorPresets = [
 Future<int?> showColumnColorPicker({
   required BuildContext context,
   int? currentColorValue,
-  String title = '选择颜色',
+  String title = 'Choose color',
   bool allowDefault = true,
 }) {
   return showDialog<int?>(
@@ -187,7 +187,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: FilterChip(
-                  label: const Text('默认'),
+                  label: const Text('Default'),
                   selected: _useDefault,
                   onSelected: (v) => setState(() => _useDefault = v),
                 ),
@@ -236,13 +236,13 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, widget.initialColorValue),
-          child: const Text('取消'),
+          child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: () {
             Navigator.pop(context, _useDefault ? null : _color.toARGB32());
           },
-          child: const Text('确定'),
+          child: const Text('OK'),
         ),
       ],
     );

@@ -59,8 +59,7 @@ class _DescriptionExpandDialogState extends State<DescriptionExpandDialog> {
       }
       final value = widget.controller.value;
       if (value.composing.isValid) {
-        widget.controller.value =
-            value.copyWith(composing: TextRange.empty);
+        widget.controller.value = value.copyWith(composing: TextRange.empty);
       }
       Navigator.pop(context);
       return KeyEventResult.handled;
@@ -74,17 +73,17 @@ class _DescriptionExpandDialogState extends State<DescriptionExpandDialog> {
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            tooltip: '缩小',
+            tooltip: 'Minimize',
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.close_fullscreen),
           ),
-          title: const Text('备注'),
+          title: const Text('Description'),
           actions: [
             TextButton(
               onPressed: () => setState(
                 () => _previewMarkdown = !_previewMarkdown,
               ),
-              child: Text(_previewMarkdown ? '编辑' : '预览'),
+              child: Text(_previewMarkdown ? 'Edit' : 'Preview'),
             ),
           ],
         ),
@@ -105,7 +104,7 @@ class _DescriptionExpandDialogState extends State<DescriptionExpandDialog> {
                   expands: true,
                   textAlignVertical: TextAlignVertical.top,
                   decoration: const InputDecoration(
-                    hintText: '支持 Markdown…',
+                    hintText: 'Markdown supported…',
                     border: OutlineInputBorder(),
                     alignLabelWithHint: true,
                   ),

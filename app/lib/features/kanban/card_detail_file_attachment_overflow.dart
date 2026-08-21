@@ -11,7 +11,7 @@ List<PopupMenuEntry<String>> cardFileAttachmentOverflowItems({
         value: 'open',
         child: ListTile(
           leading: Icon(Icons.open_in_new_outlined),
-          title: Text('打开'),
+          title: Text('Open'),
           contentPadding: EdgeInsets.zero,
         ),
       ),
@@ -20,7 +20,7 @@ List<PopupMenuEntry<String>> cardFileAttachmentOverflowItems({
         value: 'directory',
         child: ListTile(
           leading: Icon(Icons.folder_open_outlined),
-          title: Text('打开所在文件夹'),
+          title: Text('Open containing folder'),
           contentPadding: EdgeInsets.zero,
         ),
       ),
@@ -32,7 +32,7 @@ List<PopupMenuEntry<String>> cardFileAttachmentOverflowItems({
           color: colors.error,
         ),
         title: Text(
-          '删除文件',
+          'Delete file',
           style: TextStyle(color: colors.error),
         ),
         contentPadding: EdgeInsets.zero,

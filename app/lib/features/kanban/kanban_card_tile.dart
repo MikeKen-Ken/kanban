@@ -109,21 +109,22 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       items: [
         const PopupMenuItem<String>(
           value: 'copy',
-          child: Text('复制'),
+          child: Text('Copy'),
         ),
         const PopupMenuItem<String>(
           value: 'duplicate',
-          child: Text('克隆'),
+          child: Text('Clone'),
         ),
         PopupMenuItem<String>(
           value: 'transfer',
           enabled: canTransfer,
-          child: Text(canTransfer ? '转移到…' : '转移到…（无其他项目）'),
+          child:
+              Text(canTransfer ? 'Move to…' : 'Move to… (no other projects)'),
         ),
         PopupMenuItem<String>(
           value: 'delete',
           child: Text(
-            '删除',
+            'Delete',
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ),
@@ -152,7 +153,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
       ClipboardData(text: formatCardCopyText(widget.card)),
     );
     if (mounted) {
-      showAppSnackBar(context, message: '已复制卡片文本');
+      showAppSnackBar(context, message: 'Card text copied');
     }
   }
 
@@ -162,7 +163,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
         .read<BoardController>()
         .duplicateCard(widget.columnId, widget.card.id);
     if (copiedId == null && mounted) {
-      showAppSnackBar(context, message: '克隆失败：卡片不存在');
+      showAppSnackBar(context, message: 'Clone failed: card not found');
     }
   }
 
@@ -412,400 +413,410 @@ class _CardContent extends StatelessWidget {
         child: BackdropFilter(
           filter: kanbanGlassBlur(18),
           child: Card(
-      // 拖拽反馈去掉列间距 margin；间距由外层 Padding 承担
-      margin: EdgeInsets.zero,
-      color: cardBackground,
-      surfaceTintColor: Colors.transparent,
-      // 仅反馈层抬升阴影；列表态 elevation 0，避免本体再垫一层阴影板
-      elevation: dragging ? 6 : 0,
-      shadowColor: Colors.black54,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: cardOutline,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        splashFactory: suppressInk ? NoSplash.splashFactory : null,
-        highlightColor: suppressInk ? Colors.transparent : null,
-        splashColor: suppressInk ? Colors.transparent : null,
-        hoverColor: suppressInk ? Colors.transparent : null,
-        focusColor: suppressInk ? Colors.transparent : null,
-        onTap: dragging || columnId == null || onOpenDetail == null
-            ? null
-            : onOpenDetail,
-        onSecondaryTapDown:
-            dragging || columnId == null || onContextMenu == null
-                ? null
-                : (details) => onContextMenu!(details.globalPosition),
-        onLongPress: dragging ||
-                columnId == null ||
-                onContextMenu == null ||
-                !enableLongPressContextMenu
-            ? null
-            : () {
-                // 长按无精确落点时，以卡片中心为菜单锚点
-                final box = context.findRenderObject() as RenderBox?;
-                if (box == null || !box.hasSize) return;
-                final center = box.size.center(Offset.zero);
-                onContextMenu!(box.localToGlobal(center));
-              },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (hasConflict)
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                color: colorScheme.errorContainer,
-                child: Text(
-                  '冲突',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onErrorContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            if (cover != null)
-              GestureDetector(
-                onTap: dragging
-                    ? null
-                    : () => showCardAttachmentViewer(
-                          context: context,
-                          attachments: card.sortedAttachments,
-                          initialIndex: 0,
-                        ),
-                child: SizedBox(
-                  height: 132,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CardAttachmentImage(
-                        attachmentId: cover.id,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12),
-                        ),
-                      ),
-                      if (extraImageCount > 0)
-                        Positioned(
-                          right: 8,
-                          bottom: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '+$extraImageCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+            // 拖拽反馈去掉列间距 margin；间距由外层 Padding 承担
+            margin: EdgeInsets.zero,
+            color: cardBackground,
+            surfaceTintColor: Colors.transparent,
+            // 仅反馈层抬升阴影；列表态 elevation 0，避免本体再垫一层阴影板
+            elevation: dragging ? 6 : 0,
+            shadowColor: Colors.black54,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: cardOutline,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              splashFactory: suppressInk ? NoSplash.splashFactory : null,
+              highlightColor: suppressInk ? Colors.transparent : null,
+              splashColor: suppressInk ? Colors.transparent : null,
+              hoverColor: suppressInk ? Colors.transparent : null,
+              focusColor: suppressInk ? Colors.transparent : null,
+              onTap: dragging || columnId == null || onOpenDetail == null
+                  ? null
+                  : onOpenDetail,
+              onSecondaryTapDown:
+                  dragging || columnId == null || onContextMenu == null
+                      ? null
+                      : (details) => onContextMenu!(details.globalPosition),
+              onLongPress: dragging ||
+                      columnId == null ||
+                      onContextMenu == null ||
+                      !enableLongPressContextMenu
+                  ? null
+                  : () {
+                      // 长按无精确落点时，以卡片中心为菜单锚点
+                      final box = context.findRenderObject() as RenderBox?;
+                      if (box == null || !box.hasSize) return;
+                      final center = box.size.center(Offset.zero);
+                      onContextMenu!(box.localToGlobal(center));
+                    },
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    // note: 仅标题时与勾选框垂直居中；有标签/描述等时仍顶对齐
-                    crossAxisAlignment:
-                        _isTitleOnlyContent(dueInfo, descriptionSummary)
-                            ? CrossAxisAlignment.center
-                            : CrossAxisAlignment.start,
-                    children: [
-                      if (columnId != null)
-                        CardDragInteractionBlocker(
-                          child: CardCompleteCheckbox(
-                            value: card.completed,
-                            onChanged: (_) async {
-                              await onToggleCompleted?.call();
-                            },
-                          ),
-                        )
-                      else
-                        const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                  if (hasConflict)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      color: colorScheme.errorContainer,
+                      child: Text(
+                        'Conflict',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  if (cover != null)
+                    GestureDetector(
+                      onTap: dragging
+                          ? null
+                          : () => showCardAttachmentViewer(
+                                context: context,
+                                attachments: card.sortedAttachments,
+                                initialIndex: 0,
+                              ),
+                      child: SizedBox(
+                        height: 132,
+                        child: Stack(
+                          fit: StackFit.expand,
                           children: [
-                            if (isPinned)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.push_pin,
-                                      size: 14,
-                                      color: colorScheme.primary,
+                            CardAttachmentImage(
+                              attachmentId: cover.id,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(12),
+                              ),
+                            ),
+                            if (extraImageCount > 0)
+                              Positioned(
+                                right: 8,
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '+$extraImageCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '已置顶',
-                                      style:
-                                          theme.textTheme.labelSmall?.copyWith(
-                                        color: colorScheme.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            if (card.labels.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: Wrap(
-                                  spacing: 4,
-                                  runSpacing: 4,
-                                  children: card.labels.map((key) {
-                                    final label = findKanbanLabel(
-                                        key, customLabels, themeId);
-                                    if (label == null) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    final chip = Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            label.color.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          // note: 仅标题时与勾选框垂直居中；有标签/描述等时仍顶对齐
+                          crossAxisAlignment:
+                              _isTitleOnlyContent(dueInfo, descriptionSummary)
+                                  ? CrossAxisAlignment.center
+                                  : CrossAxisAlignment.start,
+                          children: [
+                            if (columnId != null)
+                              CardDragInteractionBlocker(
+                                child: CardCompleteCheckbox(
+                                  value: card.completed,
+                                  onChanged: (_) async {
+                                    await onToggleCompleted?.call();
+                                  },
+                                ),
+                              )
+                            else
+                              const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isPinned)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
                                       child: Row(
-                                        mainAxisSize: MainAxisSize.min,
                                         children: [
+                                          Icon(
+                                            Icons.push_pin,
+                                            size: 14,
+                                            color: colorScheme.primary,
+                                          ),
+                                          const SizedBox(width: 4),
                                           Text(
-                                            label.name,
+                                            'Pinned',
                                             style: theme.textTheme.labelSmall
                                                 ?.copyWith(
-                                              color: label.color,
+                                              color: colorScheme.primary,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                         ],
                                       ),
-                                    );
-                                    final tip = label.description;
-                                    if (tip == null || tip.isEmpty) {
-                                      return chip;
-                                    }
-                                    return Tooltip(message: tip, child: chip);
-                                  }).toList(),
-                                ),
-                              ),
-                            Text(
-                              card.title,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                height: 1.25,
-                                leadingDistribution:
-                                    TextLeadingDistribution.even,
-                                decoration: card.completed
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                                color: card.completed
-                                    ? colorScheme.onSurface
-                                        .withValues(alpha: 0.5)
-                                    : null,
-                              ),
-                            ),
-                            if (descriptionSummary != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                descriptionSummary,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                softWrap: true,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                            if (dueInfo != null ||
-                                card.priority != CardPriority.none ||
-                                card.hasChecklist ||
-                                card.hasVerificationFeedback ||
-                                card.hasLinks ||
-                                card.hasBlockedBy ||
-                                card.hasRelated) ...[
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  if (dueInfo != null) dueInfo,
-                                  if (card.priority != CardPriority.none)
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.flag,
-                                          size: 14,
-                                          color: card.priority.color(
-                                            colorScheme,
-                                            theme: themePreset,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          card.priority.label,
-                                          style: theme.textTheme.labelSmall
-                                              ?.copyWith(
-                                            color: card.priority.color(
-                                              colorScheme,
-                                              theme: themePreset,
+                                    ),
+                                  if (card.labels.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Wrap(
+                                        spacing: 4,
+                                        runSpacing: 4,
+                                        children: card.labels.map((key) {
+                                          final label = findKanbanLabel(
+                                              key, customLabels, themeId);
+                                          if (label == null) {
+                                            return const SizedBox.shrink();
+                                          }
+                                          final chip = Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
                                             ),
+                                            decoration: BoxDecoration(
+                                              color: label.color
+                                                  .withValues(alpha: 0.2),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  label.name,
+                                                  style: theme
+                                                      .textTheme.labelSmall
+                                                      ?.copyWith(
+                                                    color: label.color,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          final tip = label.description;
+                                          if (tip == null || tip.isEmpty) {
+                                            return chip;
+                                          }
+                                          return Tooltip(
+                                              message: tip, child: chip);
+                                        }).toList(),
+                                      ),
+                                    ),
+                                  Text(
+                                    card.title,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      height: 1.25,
+                                      leadingDistribution:
+                                          TextLeadingDistribution.even,
+                                      decoration: card.completed
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                      color: card.completed
+                                          ? colorScheme.onSurface
+                                              .withValues(alpha: 0.5)
+                                          : null,
+                                    ),
+                                  ),
+                                  if (descriptionSummary != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      descriptionSummary,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: true,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                  if (dueInfo != null ||
+                                      card.priority != CardPriority.none ||
+                                      card.hasChecklist ||
+                                      card.hasVerificationFeedback ||
+                                      card.hasLinks ||
+                                      card.hasBlockedBy ||
+                                      card.hasRelated) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      children: [
+                                        if (dueInfo != null) dueInfo,
+                                        if (card.priority != CardPriority.none)
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.flag,
+                                                size: 14,
+                                                color: card.priority.color(
+                                                  colorScheme,
+                                                  theme: themePreset,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 2),
+                                              Text(
+                                                card.priority.label,
+                                                style: theme
+                                                    .textTheme.labelSmall
+                                                    ?.copyWith(
+                                                  color: card.priority.color(
+                                                    colorScheme,
+                                                    theme: themePreset,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
+                                        if (card.hasChecklist)
+                                          _CardMetaIconBadge(
+                                            icon: Icons.checklist,
+                                            label:
+                                                '${card.checklistDone}/${card.checklist.length}',
+                                            colorScheme: colorScheme,
+                                            textTheme: theme.textTheme,
+                                          ),
+                                        if (card.hasVerificationFeedback)
+                                          _CardMetaIconBadge(
+                                            icon: Icons.fact_check_outlined,
+                                            label:
+                                                '${card.verificationFeedbackDone}/${card.verificationFeedback.length}',
+                                            colorScheme: colorScheme,
+                                            textTheme: theme.textTheme,
+                                          ),
+                                        if (card.hasLinks)
+                                          _CardMetaIconBadge(
+                                            icon: Icons.link,
+                                            label: '${card.links.length}',
+                                            colorScheme: colorScheme,
+                                            textTheme: theme.textTheme,
+                                          ),
+                                        if (card.hasBlockedBy)
+                                          _CardMetaIconBadge(
+                                            icon: Icons.block_outlined,
+                                            label: _blockedByCountLabel(),
+                                            colorScheme: colorScheme,
+                                            textTheme: theme.textTheme,
+                                          ),
+                                        if (card.hasRelated)
+                                          _CardMetaIconBadge(
+                                            icon: Icons.account_tree_outlined,
+                                            colorScheme: colorScheme,
+                                            textTheme: theme.textTheme,
+                                          ),
                                       ],
                                     ),
-                                  if (card.hasChecklist)
-                                    _CardMetaIconBadge(
-                                      icon: Icons.checklist,
-                                      label:
-                                          '${card.checklistDone}/${card.checklist.length}',
-                                      colorScheme: colorScheme,
-                                      textTheme: theme.textTheme,
-                                    ),
-                                  if (card.hasVerificationFeedback)
-                                    _CardMetaIconBadge(
-                                      icon: Icons.fact_check_outlined,
-                                      label:
-                                          '${card.verificationFeedbackDone}/${card.verificationFeedback.length}',
-                                      colorScheme: colorScheme,
-                                      textTheme: theme.textTheme,
-                                    ),
-                                  if (card.hasLinks)
-                                    _CardMetaIconBadge(
-                                      icon: Icons.link,
-                                      label: '${card.links.length}',
-                                      colorScheme: colorScheme,
-                                      textTheme: theme.textTheme,
-                                    ),
-                                  if (card.hasBlockedBy)
-                                    _CardMetaIconBadge(
-                                      icon: Icons.block_outlined,
-                                      label: _blockedByCountLabel(),
-                                      colorScheme: colorScheme,
-                                      textTheme: theme.textTheme,
-                                    ),
-                                  if (card.hasRelated)
-                                    _CardMetaIconBadge(
-                                      icon: Icons.account_tree_outlined,
-                                      colorScheme: colorScheme,
-                                      textTheme: theme.textTheme,
-                                    ),
+                                  ],
                                 ],
                               ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      // 操作列：置顶在上，三点菜单紧挨其正下方，尽量不拉宽卡片横向布局
-                      if (!dragging && columnId != null)
-                        CardDragInteractionBlocker(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: isPinned ? '取消置顶' : '置顶',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 28,
-                                  minHeight: 28,
-                                ),
-                                onPressed: () => context
-                                    .read<BoardController>()
-                                    .toggleCardPin(columnId!, card.id),
-                                icon: Icon(
-                                  isPinned
-                                      ? Icons.push_pin
-                                      : Icons.push_pin_outlined,
-                                  size: 18,
-                                  color: isPinned
-                                      ? colorScheme.primary
-                                      : colorScheme.onSurfaceVariant
-                                          .withValues(alpha: 0.55),
-                                ),
-                              ),
-                              if (showContextMenuButton && onContextMenu != null)
-                                Builder(
-                                  builder: (buttonContext) {
-                                    return IconButton(
-                                      key: const ValueKey(
-                                          'card-context-menu-button'),
-                                      tooltip: '更多（转移/删除）',
+                            ),
+                            // 操作列：置顶在上，三点菜单紧挨其正下方，尽量不拉宽卡片横向布局
+                            if (!dragging && columnId != null)
+                              CardDragInteractionBlocker(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: isPinned ? 'Unpin' : 'Pin',
                                       visualDensity: VisualDensity.compact,
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(
                                         minWidth: 28,
                                         minHeight: 28,
                                       ),
-                                      onPressed: () {
-                                        final box = buttonContext
-                                            .findRenderObject() as RenderBox?;
-                                        if (box == null || !box.hasSize) {
-                                          return;
-                                        }
-                                        final anchor = box.localToGlobal(
-                                          box.size.center(Offset.zero),
-                                        );
-                                        onContextMenu!(anchor);
-                                      },
+                                      onPressed: () => context
+                                          .read<BoardController>()
+                                          .toggleCardPin(columnId!, card.id),
                                       icon: Icon(
-                                        Icons.more_vert,
+                                        isPinned
+                                            ? Icons.push_pin
+                                            : Icons.push_pin_outlined,
                                         size: 18,
-                                        color: colorScheme.onSurfaceVariant
-                                            .withValues(alpha: 0.55),
+                                        color: isPinned
+                                            ? colorScheme.primary
+                                            : colorScheme.onSurfaceVariant
+                                                .withValues(alpha: 0.55),
                                       ),
-                                    );
-                                  },
+                                    ),
+                                    if (showContextMenuButton &&
+                                        onContextMenu != null)
+                                      Builder(
+                                        builder: (buttonContext) {
+                                          return IconButton(
+                                            key: const ValueKey(
+                                                'card-context-menu-button'),
+                                            tooltip: 'More (move/delete)',
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 28,
+                                              minHeight: 28,
+                                            ),
+                                            onPressed: () {
+                                              final box = buttonContext
+                                                      .findRenderObject()
+                                                  as RenderBox?;
+                                              if (box == null || !box.hasSize) {
+                                                return;
+                                              }
+                                              final anchor = box.localToGlobal(
+                                                box.size.center(Offset.zero),
+                                              );
+                                              onContextMenu!(anchor);
+                                            },
+                                            icon: Icon(
+                                              Icons.more_vert,
+                                              size: 18,
+                                              color: colorScheme
+                                                  .onSurfaceVariant
+                                                  .withValues(alpha: 0.55),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                  ],
                                 ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
-                    ],
-                  ),
-                  if (_updatedAtLabel() case final updatedLabel?) ...[
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          updatedLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.72),
-                            fontSize: 11,
+                        if (_updatedAtLabel() case final updatedLabel?) ...[
+                          const SizedBox(height: 4),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                updatedLabel,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.72),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
           ),
         ),
       ),
@@ -816,7 +827,7 @@ class _CardContent extends StatelessWidget {
   String? _updatedAtLabel() {
     final formatted = formatSmartCompactDateTime(card.updatedAt);
     if (formatted == null) return null;
-    return '更新于 $formatted';
+    return 'Updated $formatted';
   }
 
   /// 依赖计数：能解析前置卡时展示「已完成/总数」，否则仅展示总数。

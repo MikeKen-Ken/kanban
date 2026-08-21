@@ -43,19 +43,19 @@ class CardDetailRelationsSection extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('添加链接'),
+        title: const Text('Add link'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: titleController,
-              decoration: const InputDecoration(labelText: '标题（可选）'),
+              decoration: const InputDecoration(labelText: 'Title (optional)'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: urlController,
               autofocus: true,
-              decoration: const InputDecoration(labelText: '网址'),
+              decoration: const InputDecoration(labelText: 'URL'),
               keyboardType: TextInputType.url,
             ),
           ],
@@ -63,11 +63,11 @@ class CardDetailRelationsSection extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('添加'),
+            child: const Text('Add'),
           ),
         ],
       ),
@@ -106,7 +106,7 @@ class CardDetailRelationsSection extends StatelessWidget {
       }
     }
     if (candidates.isEmpty) {
-      showAppSnackBar(context, message: '当前看板没有其他可关联的卡片');
+      showAppSnackBar(context, message: 'There are no other cards to link');
       return;
     }
     final picked = await showModalBottomSheet<String>(
@@ -144,7 +144,8 @@ class CardDetailRelationsSection extends StatelessWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: Text(boardController.findCardById(id)?.title ?? '未知卡片'),
+          title:
+              Text(boardController.findCardById(id)?.title ?? 'Unknown card'),
           trailing: IconButton(
             icon: const Icon(Icons.close, size: 18),
             onPressed: () => onRemove(id),
@@ -167,15 +168,16 @@ class CardDetailRelationsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('链接', style: theme.textTheme.titleSmall),
+            Text('Links', style: theme.textTheme.titleSmall),
             const HelpTipIcon(
-              message: '可添加外部网页书签（打开网址用，不是卡片之间的依赖/关联）',
+              message:
+                  'Add external web bookmarks for opening URLs; these are not card dependencies or relations',
             ),
             const Spacer(),
             TextButton.icon(
               onPressed: () => _addLink(context),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('添加'),
+              label: const Text('Add'),
             ),
           ],
         ),
@@ -190,7 +192,7 @@ class CardDetailRelationsSection extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: IconButton(
-              tooltip: '删除链接',
+              tooltip: 'Delete link',
               onPressed: () => onLinksChanged(
                 links.where((item) => item.id != link.id).toList(),
               ),
@@ -204,22 +206,24 @@ class CardDetailRelationsSection extends StatelessWidget {
         const SizedBox(height: 20),
         Row(
           children: [
-            Text('依赖（阻塞本卡）', style: theme.textTheme.titleSmall),
+            Text('Dependencies (blocking this card)',
+                style: theme.textTheme.titleSmall),
             const HelpTipIcon(
-              message: '前置卡未完成前，本卡应视为被阻塞；点条目可跳转查看。',
+              message:
+                  'This card is blocked until its prerequisites are complete; click an item to open it.',
             ),
             const Spacer(),
             TextButton.icon(
               onPressed: () => _pickRelatedCard(
                 context: context,
-                title: '选择阻塞本卡的前置任务',
+                title: 'Select prerequisites blocking this card',
                 onPicked: (id) {
                   if (blockedByIds.contains(id) || id == cardId) return;
                   onBlockedByIdsChanged([...blockedByIds, id]);
                 },
               ),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('添加'),
+              label: const Text('Add'),
             ),
           ],
         ),
@@ -233,22 +237,24 @@ class CardDetailRelationsSection extends StatelessWidget {
         const SizedBox(height: 20),
         Row(
           children: [
-            Text('关联（相关卡片）', style: theme.textTheme.titleSmall),
+            Text('Relations (related cards)',
+                style: theme.textTheme.titleSmall),
             const HelpTipIcon(
-              message: '无先后关系，仅便于跳转与追溯；不会阻塞本卡。',
+              message:
+                  'No ordering relationship; useful for navigation and traceability. Does not block this card.',
             ),
             const Spacer(),
             TextButton.icon(
               onPressed: () => _pickRelatedCard(
                 context: context,
-                title: '选择关联卡片',
+                title: 'Select related cards',
                 onPicked: (id) {
                   if (relatedIds.contains(id) || id == cardId) return;
                   onRelatedIdsChanged([...relatedIds, id]);
                 },
               ),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('添加'),
+              label: const Text('Add'),
             ),
           ],
         ),

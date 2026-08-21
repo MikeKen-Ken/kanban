@@ -44,7 +44,7 @@ part 'webdav_sync_backup.dart';
 
 enum SyncStatus { idle, syncing, success, error }
 
-const kDownloadWallpaperLibraryHint = '部分壁纸未在本机，请下载壁纸库';
+const kDownloadWallpaperLibraryHint = 'Some wallpapers are missing locally; download the wallpaper library';
 
 typedef BackupPackageCapture = Future<BackupPackage> Function();
 typedef BackupPackageApply = Future<void> Function(BackupPackage package);

@@ -658,7 +658,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       await _persist();
     } catch (error) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '保存失败：$error');
+      showAppSnackBar(context, message: 'Save failed: $error');
       return;
     }
     if (mounted) Navigator.pop(context);
@@ -689,7 +689,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     } catch (error) {
       _completed = markCompletedLocally;
       if (!mounted) return;
-      showAppSnackBar(context, message: '保存失败：$error');
+      showAppSnackBar(context, message: 'Save failed: $error');
       return;
     }
 
@@ -699,7 +699,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         await _ensureInReworkForIncompleteFeedback(feedbackSnapshot);
       } catch (error) {
         if (!mounted) return;
-        showAppSnackBar(context, message: '移入待返工失败：$error');
+        showAppSnackBar(context, message: 'Move to rework failed: $error');
         return;
       }
       if (mounted) _closeWithoutPersist();
@@ -765,7 +765,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
         return;
       }
       if (!mounted) return;
-      showAppSnackBar(context, message: '完成失败：$error');
+      showAppSnackBar(context, message: 'Complete failed: $error');
       return;
     }
     if (mounted) _closeWithoutPersist();
@@ -797,25 +797,26 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
   }
 
   Future<void> _saveAsTemplate() async {
-    final nameController = TextEditingController(text: '$_effectiveTitle 模板');
+    final nameController =
+        TextEditingController(text: '$_effectiveTitle template');
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('保存为模板'),
+        title: const Text('Save as template'),
         content: TextField(
           controller: nameController,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '模板名称'),
+          decoration: const InputDecoration(labelText: 'Template name'),
           onSubmitted: (value) => Navigator.pop(context, value.trim()),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, nameController.text.trim()),
-            child: const Text('保存'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -832,20 +833,21 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     await _boardController.saveCardAsTemplate(card: card, name: name);
     _persisted = false;
     if (!mounted) return;
-    showAppSnackBar(context, message: '已保存模板「$name」');
+    showAppSnackBar(context, message: 'Template "$name" saved');
   }
 
   Future<void> _transferToOtherProject() async {
     final controller = context.read<BoardController>();
     if (controller.projects.length <= 1) {
-      showAppSnackBar(context, message: '没有其他可转移的项目');
+      showAppSnackBar(context,
+          message: 'There are no other projects to move to');
       return;
     }
     try {
       await _persist();
     } catch (error) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '保存失败：$error');
+      showAppSnackBar(context, message: 'Save failed: $error');
       return;
     }
     if (!mounted) return;
@@ -898,7 +900,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     } catch (error) {
       if (!mounted) return;
       _safeSetState(() => _resolvingConflict = false);
-      showAppSnackBar(context, message: '解决冲突失败：$error');
+      showAppSnackBar(context, message: 'Resolve conflict failed: $error');
     }
   }
 
@@ -925,7 +927,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final picked = await showColumnColorPicker(
       context: context,
       currentColorValue: _colorValue,
-      title: '卡片背景色',
+      title: 'Card background color',
     );
     if (!mounted || picked == _colorValue) return;
     _safeSetState(() => _colorValue = picked);
@@ -999,7 +1001,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       context: context,
       id: id,
       items: _checklist,
-      dialogTitle: '编辑子任务',
+      dialogTitle: 'Edit subtask',
     );
     if (!mounted || identical(next, _checklist)) return;
     _safeSetState(() => _checklist = next);
@@ -1042,7 +1044,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
       context: context,
       id: id,
       items: _verificationFeedback,
-      dialogTitle: '编辑验证反馈',
+      dialogTitle: 'Edit verification feedback',
     );
     if (!mounted || identical(next, _verificationFeedback)) return;
     _safeSetState(() => _verificationFeedback = next);
@@ -1104,7 +1106,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                   : null,
                             ),
                             decoration: const InputDecoration(
-                              hintText: '卡片标题',
+                              hintText: 'Card title',
                               border: InputBorder.none,
                             ),
                           ),
@@ -1193,10 +1195,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Text('备注', style: theme.textTheme.titleSmall),
+                            Text('Description',
+                                style: theme.textTheme.titleSmall),
                             const Spacer(),
                             IconButton(
-                              tooltip: '放大编辑',
+                              tooltip: 'Expand editor',
                               onPressed: _openDescriptionExpanded,
                               icon: const Icon(
                                 Icons.open_in_full,
@@ -1209,7 +1212,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 () => _previewMarkdown = !_previewMarkdown,
                               ),
                               child: Text(
-                                _previewMarkdown ? '编辑' : '预览',
+                                _previewMarkdown ? 'Edit' : 'Preview',
                               ),
                             ),
                           ],
@@ -1232,7 +1235,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '正在放大编辑…',
+                              'Expanded editor…',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -1245,19 +1248,19 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                             focusNode: _descFocusNode,
                             maxLines: 6,
                             decoration: const InputDecoration(
-                              hintText: '支持 Markdown…',
+                              hintText: 'Markdown supported…',
                               border: OutlineInputBorder(),
                             ),
                           ),
                         const SizedBox(height: 20),
                         Row(
                           children: [
-                            Text('标签', style: theme.textTheme.titleSmall),
+                            Text('Labels', style: theme.textTheme.titleSmall),
                             const Spacer(),
                             TextButton.icon(
                               onPressed: () => showLabelEditorDialog(context),
                               icon: const Icon(Icons.edit_outlined, size: 18),
-                              label: const Text('编辑'),
+                              label: const Text('Edit'),
                             ),
                           ],
                         ),
@@ -1306,7 +1309,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _editVerificationFeedbackItem,
                         ),
                         const SizedBox(height: 20),
-                        Text('优先级', style: theme.textTheme.titleSmall),
+                        Text('Priority', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -1332,7 +1335,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           }).toList(),
                         ),
                         const SizedBox(height: 20),
-                        Text('卡片背景色', style: theme.textTheme.titleSmall),
+                        Text('Card background color',
+                            style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         // 快捷色与「更多颜色」同一行；小屏可横向滚动。
                         SingleChildScrollView(
@@ -1354,7 +1358,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                   size: 18,
                                 ),
                                 label: Text(
-                                  _isCustomCardColor ? '自定义…' : '更多颜色…',
+                                  _isCustomCardColor
+                                      ? 'Custom…'
+                                      : 'More colors…',
                                 ),
                               ),
                               if (_colorValue != null) ...[
@@ -1376,7 +1382,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 TextButton(
                                   onPressed: () =>
                                       _safeSetState(() => _colorValue = null),
-                                  child: const Text('清除'),
+                                  child: const Text('Clear'),
                                 ),
                               ],
                             ],
@@ -1412,7 +1418,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                               _safeSetState(() => _reminderAt = value),
                         ),
                         const SizedBox(height: 20),
-                        Text('重复', style: theme.textTheme.titleSmall),
+                        Text('Recurrence', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -1442,7 +1448,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           Row(
                             children: [
                               Text(
-                                '每隔',
+                                'Every',
                                 style: theme.textTheme.bodyMedium,
                               ),
                               const SizedBox(width: 8),

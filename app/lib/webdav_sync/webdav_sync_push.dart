@@ -73,7 +73,7 @@ mixin _WebDavSyncPush
           phase: SyncPhase.uploading,
           completed: 0,
           total: 1,
-          currentLabel: '工作区压缩包',
+          currentLabel: 'Workspace archive',
         ),
       );
       await _writeLiveArchive(
@@ -88,7 +88,7 @@ mixin _WebDavSyncPush
           phase: SyncPhase.uploading,
           completed: 1,
           total: 1,
-          currentLabel: '工作区压缩包',
+          currentLabel: 'Workspace archive',
         ),
       );
 

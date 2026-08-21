@@ -900,10 +900,10 @@ enum CardRecurrence {
   monthly;
 
   String get label => switch (this) {
-        CardRecurrence.none => '不重复',
-        CardRecurrence.daily => '每天',
-        CardRecurrence.weekly => '每周',
-        CardRecurrence.monthly => '每月',
+        CardRecurrence.none => 'Does not repeat',
+        CardRecurrence.daily => 'Daily',
+        CardRecurrence.weekly => 'Weekly',
+        CardRecurrence.monthly => 'Monthly',
       };
 
   /// 详情菜单展示顺序：周期在前，「不重复」最后。
@@ -917,9 +917,9 @@ enum CardRecurrence {
   /// 间隔选择器单位文案（天/周/月）。
   String get intervalUnitLabel => switch (this) {
         CardRecurrence.none => '',
-        CardRecurrence.daily => '天',
-        CardRecurrence.weekly => '周',
-        CardRecurrence.monthly => '月',
+        CardRecurrence.daily => 'day(s)',
+        CardRecurrence.weekly => 'week(s)',
+        CardRecurrence.monthly => 'month(s)',
       };
 
   /// 「每 N 天/周/月」展示文案；N=1 时回落到每天/每周/每月。
@@ -927,7 +927,7 @@ enum CardRecurrence {
     final n = normalizeRecurrenceInterval(interval);
     if (this == CardRecurrence.none) return label;
     if (n == 1) return label;
-    return '每$n$intervalUnitLabel';
+    return 'Every $n $intervalUnitLabel';
   }
 
   static CardRecurrence fromString(String? value) {

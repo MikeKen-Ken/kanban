@@ -24,17 +24,17 @@ void main() {
       formatCardCopyText(card),
       '示例标题\n'
       '\n'
-      '备注\n'
+      'Description\n'
       '一段备注\n'
       '\n'
-      '子任务\n'
+      'Subtasks\n'
       '- [x] 已做\n'
       '- [ ] 未做\n'
       '\n'
-      '验证反馈\n'
+      'Verification feedback\n'
       '- [ ] 请补测试\n'
       '\n'
-      '提交号\n'
+      'Commit\n'
       'abc1234',
     );
   });

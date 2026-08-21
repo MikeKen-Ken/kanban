@@ -5,7 +5,8 @@ import 'verify_column.dart';
 const needResourceLabelKey = 'need_resource';
 
 /// 带有「缺资源」标签时，卡片只能留在「阻塞中」列。
-const needResourceMustStayInBlockedMessage = '带有「缺资源」标签的卡片只能留在阻塞中列';
+const needResourceMustStayInBlockedMessage =
+    'Cards with the "Needs resources" label must stay in the Blocked column';
 
 /// [labels] 是否含「缺资源」。
 bool cardHasNeedResourceLabel(Iterable<String> labels) =>

@@ -8,9 +8,8 @@ bool shouldDiscardBlankCard({
   required String editedDescription,
   bool hasOtherMetadata = false,
 }) {
-  final title = editedTitle.trim().isEmpty
-      ? originalTitle.trim()
-      : editedTitle.trim();
+  final title =
+      editedTitle.trim().isEmpty ? originalTitle.trim() : editedTitle.trim();
   final description = editedDescription.trim();
   if (title.isNotEmpty || description.isNotEmpty) return false;
   if (hasOtherMetadata) return false;

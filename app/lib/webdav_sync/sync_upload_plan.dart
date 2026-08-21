@@ -100,20 +100,20 @@ SyncUploadPlan buildSyncUploadPlan({
 
   consider(
     kind: SyncUploadKind.projectsManifest,
-    label: '项目清单',
+    label: 'Project manifest',
     current: workspace.manifest.toJson(),
     previous: baseline?.manifest.toJson(),
   );
   consider(
     kind: SyncUploadKind.appTrash,
-    label: '应用回收站',
+    label: 'App Trash',
     current: workspace.appTrash.toJson(),
     previous: baseline?.appTrash.toJson(),
   );
   if (!workspace.sharedContent.isUninitialized) {
     consider(
       kind: SyncUploadKind.sharedContent,
-      label: '共享内容',
+    label: 'Shared content',
       current: workspace.sharedContent.toJson(),
       previous: baseline?.sharedContent.isUninitialized == true
           ? null
@@ -147,21 +147,21 @@ SyncUploadPlan buildSyncUploadPlan({
 
     consider(
       kind: SyncUploadKind.boardMetadata,
-      label: '$title / 看板',
+    label: '$title / Board',
       current: board.toMetadataJson(),
       previous: baseBoard?.toMetadataJson(),
       projectId: projectId,
     );
     consider(
       kind: SyncUploadKind.settings,
-      label: '$title / 设置',
+    label: '$title / Settings',
       current: settings.toJson(),
       previous: baseSettings?.toJson(),
       projectId: projectId,
     );
     consider(
       kind: SyncUploadKind.trash,
-      label: '$title / 回收站',
+    label: '$title / Trash',
       current: trash.toJson(),
       previous: baseTrash?.toJson(),
       projectId: projectId,

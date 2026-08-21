@@ -22,7 +22,7 @@ class CardDetailPinButton extends StatelessWidget {
     final controller = context.read<BoardController>();
 
     return IconButton(
-      tooltip: pinned ? '取消置顶' : '置顶',
+      tooltip: pinned ? 'Unpin' : 'Pin',
       onPressed: () => controller.toggleCardPin(columnId, cardId),
       icon: Icon(
         pinned ? Icons.push_pin : Icons.push_pin_outlined,

@@ -130,7 +130,7 @@ class _KanbanCardContextMenuOverlay<T> extends StatelessWidget {
     final position = _menuPosition(context);
     final padding =
         popupTheme.menuPadding?.resolve(Directionality.of(context)) ??
-        const EdgeInsets.symmetric(vertical: 8);
+            const EdgeInsets.symmetric(vertical: 8);
 
     final menuPanel = Listener(
       behavior: HitTestBehavior.translucent,

@@ -10,13 +10,13 @@ String formatCardCopyText(KanbanCard card) {
   final description = card.description?.trim();
   if (description != null && description.isNotEmpty) {
     buffer.writeln();
-    buffer.writeln('备注');
+    buffer.writeln('Description');
     buffer.writeln(description);
   }
 
   if (card.checklist.isNotEmpty) {
     buffer.writeln();
-    buffer.writeln('子任务');
+    buffer.writeln('Subtasks');
     for (final item in card.checklist) {
       buffer.writeln(_checklistLine(item));
     }
@@ -24,7 +24,7 @@ String formatCardCopyText(KanbanCard card) {
 
   if (card.verificationFeedback.isNotEmpty) {
     buffer.writeln();
-    buffer.writeln('验证反馈');
+    buffer.writeln('Verification feedback');
     for (final item in card.verificationFeedback) {
       buffer.writeln(_checklistLine(item));
     }
@@ -33,7 +33,7 @@ String formatCardCopyText(KanbanCard card) {
   final commitRef = card.commitRef?.trim();
   if (commitRef != null && commitRef.isNotEmpty) {
     buffer.writeln();
-    buffer.writeln('提交号');
+    buffer.writeln('Commit');
     buffer.writeln(commitRef);
   }
 

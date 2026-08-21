@@ -71,7 +71,7 @@ class SyncActionsSwitcher extends StatelessWidget {
         compact: compact,
         showDropdownArrow: false,
         onTap: () {
-          showAppSnackBar(context, message: '正在同步…可点取消按钮');
+          showAppSnackBar(context, message: 'Syncing… click Cancel to stop');
         },
         onCancel: onCancel,
       );
@@ -80,7 +80,7 @@ class SyncActionsSwitcher extends StatelessWidget {
         longPressDelay: controller.appSettings.dragDelay,
         onCommit: (action) => runSyncManualAction(context, controller, action),
         child: PopupMenuButton<SyncManualAction>(
-          tooltip: '同步（短按菜单，长按滑动快速选择；滑到「取消」松手可放弃）',
+          tooltip: 'Sync (tap for menu, hold and drag to choose; release on Cancel to stop)',
           constraints: const BoxConstraints(
             minWidth: _menuMinWidth,
             maxWidth: _menuMaxWidth,
@@ -148,7 +148,7 @@ class _SyncStatusTrigger extends StatelessWidget {
 
     final syncing = status == SyncStatus.syncing;
     final label = conflictCount > 0
-        ? '有 $conflictCount 处冲突'
+        ? '$conflictCount sync conflict(s)'
         : syncStatusWithLastSuccessLabel(
             status,
             lastSyncedAt,
@@ -156,7 +156,7 @@ class _SyncStatusTrigger extends StatelessWidget {
             pendingUploadCount: pendingUploadCount,
           );
     final compactLabel = conflictCount > 0
-        ? '冲突 $conflictCount'
+        ? 'Conflicts: $conflictCount'
         : compactSyncStatusLabel(
             status,
             lastSyncedAt,
@@ -165,10 +165,10 @@ class _SyncStatusTrigger extends StatelessWidget {
           );
 
     final lastSuccess = lastSyncedAt == null
-        ? '尚未成功同步'
-        : '上次成功同步：${formatSyncTime(lastSyncedAt!)}';
+        ? 'No successful sync yet'
+        : 'Last successful sync: ${formatSyncTime(lastSyncedAt!)}';
     final pendingDetail = pendingUploadCount > 0
-        ? '有未上传的工作区变更'
+        ? 'Workspace changes are not uploaded'
         : null;
 
     final progressDetail = progress == null
@@ -176,19 +176,19 @@ class _SyncStatusTrigger extends StatelessWidget {
         : [
             progress!.phaseLabel,
             if (progress!.hasTotal) '${progress!.completed}/${progress!.total}',
-            if (progress!.skipped > 0) '跳过 ${progress!.skipped} 个未变更文件',
+            if (progress!.skipped > 0) 'Skipped ${progress!.skipped} unchanged file(s)',
             if (progress!.currentLabel != null) progress!.currentLabel!,
           ].join(' · ');
 
     final tooltip = conflictCount > 0
-        ? '有未解决的同步冲突，点击进入冲突中心'
+        ? 'Unresolved sync conflicts; click to open Conflict Center'
         : syncing
-            ? (progressDetail == null ? '正在同步…可点击取消' : '$progressDetail\n可点击取消')
+            ? (progressDetail == null ? 'Syncing… click to cancel' : '$progressDetail\nClick to cancel')
             : error == null
                 ? [
                     lastSuccess,
                     if (pendingDetail != null) pendingDetail,
-                    '短按菜单，长按滑动快速选择；滑到「取消」松手可放弃',
+                    'Tap for menu; hold and drag to choose; release on Cancel to stop',
                   ].join('\n')
                 : [
                     error!,
@@ -234,7 +234,7 @@ class _SyncStatusTrigger extends StatelessWidget {
     final cancelButton = onCancel == null
         ? null
         : IconButton(
-            tooltip: '取消同步',
+            tooltip: 'Cancel sync',
             onPressed: onCancel,
             icon: Icon(
               Icons.close,
@@ -255,7 +255,7 @@ class _SyncStatusTrigger extends StatelessWidget {
 
     return Semantics(
       liveRegion: true,
-      label: syncing ? '$label，可取消' : label,
+      label: syncing ? '$label; can cancel' : label,
       button: true,
       child: Tooltip(
         message: tooltip,

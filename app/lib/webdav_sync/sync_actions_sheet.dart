@@ -126,9 +126,9 @@ Future<void> runSyncManualAction(
     case SyncManualAction.upload:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: '上传并覆盖云端工作区？',
-        body: '云端现有看板数据将被本机工作区压缩包覆盖，且无法自动撤销。确定继续吗？',
-        confirmLabel: '覆盖云端',
+        title: 'Upload and replace cloud workspace?',
+        body: 'Existing cloud board data will be replaced by the local workspace archive and cannot be undone automatically. Continue?',
+        confirmLabel: 'Replace cloud data',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.uploadNow());
@@ -136,9 +136,9 @@ Future<void> runSyncManualAction(
     case SyncManualAction.download:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: '下载并覆盖本机工作区？',
-        body: '本机现有看板数据将被云端工作区压缩包替换，未同步的本地修改会丢失。确定继续吗？',
-        confirmLabel: '覆盖本机',
+        title: 'Download and replace local workspace?',
+        body: 'Existing local board data will be replaced by the cloud workspace archive. Unsynced local changes will be lost. Continue?',
+        confirmLabel: 'Replace local data',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.downloadNow());
@@ -149,9 +149,9 @@ Future<void> runSyncManualAction(
     case SyncManualAction.uploadWallpapers:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: '上传并覆盖云端壁纸库？',
-        body: '云端壁纸压缩包将被本机壁纸库覆盖。确定继续吗？',
-        confirmLabel: '覆盖云端壁纸',
+        title: 'Upload and replace cloud wallpaper library?',
+        body: 'The cloud wallpaper archive will be replaced by the local wallpaper library. Continue?',
+        confirmLabel: 'Replace cloud wallpapers',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.uploadWallpapersNow());
@@ -159,9 +159,9 @@ Future<void> runSyncManualAction(
     case SyncManualAction.downloadWallpapers:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: '下载并覆盖本机壁纸库？',
-        body: '本机壁纸库将被云端壁纸压缩包替换。确定继续吗？',
-        confirmLabel: '覆盖本机壁纸',
+        title: 'Download and replace local wallpaper library?',
+        body: 'The local wallpaper library will be replaced by the cloud wallpaper archive. Continue?',
+        confirmLabel: 'Replace local wallpapers',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.downloadWallpapersNow());

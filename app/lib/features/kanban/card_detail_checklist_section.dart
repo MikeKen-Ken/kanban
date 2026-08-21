@@ -36,11 +36,11 @@ Future<List<ChecklistItem>> editChecklistLikeItem({
               text.isEmpty ? '' : checklistItemEditCancelled,
             );
           },
-          child: const Text('取消'),
+          child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-          child: const Text('保存'),
+          child: const Text('Save'),
         ),
       ],
     ),
@@ -101,7 +101,7 @@ class CardDetailChecklistSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('验证反馈', style: theme.textTheme.titleSmall),
+            Text('Verification feedback', style: theme.textTheme.titleSmall),
             if (verificationFeedback.isNotEmpty) ...[
               const SizedBox(width: 8),
               Text(
@@ -143,7 +143,7 @@ class CardDetailChecklistSection extends StatelessWidget {
                 controller: verificationFeedbackInput,
                 focusNode: verificationFeedbackFocusNode,
                 decoration: const InputDecoration(
-                  hintText: '添加验证反馈…',
+                  hintText: 'Add verification feedback…',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -159,7 +159,7 @@ class CardDetailChecklistSection extends StatelessWidget {
         const SizedBox(height: 20),
         Row(
           children: [
-            Text('子任务', style: theme.textTheme.titleSmall),
+            Text('Subtasks', style: theme.textTheme.titleSmall),
             if (checklist.isNotEmpty) ...[
               const SizedBox(width: 8),
               Text(
@@ -201,7 +201,7 @@ class CardDetailChecklistSection extends StatelessWidget {
                 controller: checklistInput,
                 focusNode: checklistFocusNode,
                 decoration: const InputDecoration(
-                  hintText: '添加子任务…',
+                  hintText: 'Add a subtask…',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),

@@ -37,7 +37,8 @@ class CardDetailAttachmentsSection extends StatelessWidget {
     return count;
   }
 
-  Future<CardImageAddSource?> _resolveImageAddSource(BuildContext context) async {
+  Future<CardImageAddSource?> _resolveImageAddSource(
+      BuildContext context) async {
     if (Platform.isAndroid) {
       return showCardImageAddSourceSheet(context);
     }
@@ -51,7 +52,8 @@ class CardDetailAttachmentsSection extends StatelessWidget {
     if (attachments.length >= KanbanCard.maxAttachments) {
       showAppSnackBar(
         context,
-        message: '每张卡片最多 ${KanbanCard.maxAttachments} 张图片',
+        message:
+            'Each card can have at most ${KanbanCard.maxAttachments} images',
       );
       return;
     }
@@ -97,7 +99,10 @@ class CardDetailAttachmentsSection extends StatelessWidget {
           attachmentId,
         );
     if (!context.mounted) return;
-    final updated = context.read<BoardController>().board?.columns
+    final updated = context
+        .read<BoardController>()
+        .board
+        ?.columns
         .where((col) => col.id == columnId)
         .expand((col) => col.cards)
         .where((card) => card.id == cardId)
@@ -160,7 +165,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('图片', style: theme.textTheme.titleSmall),
+            Text('Images', style: theme.textTheme.titleSmall),
             const Spacer(),
             Text(
               '${attachments.length}/${KanbanCard.maxAttachments}',
@@ -173,16 +178,16 @@ class CardDetailAttachmentsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: MaterialBanner(
-              content: Text('有 $missingCount 张图片未下载到本机，请检查同步'),
+              content: Text(
+                  '$missingCount images are not available locally; check sync'),
               leading: Icon(
                 Icons.cloud_off_outlined,
                 color: theme.colorScheme.error,
               ),
               actions: [
                 TextButton(
-                  onPressed: () =>
-                      context.read<BoardController>().mergeNow(),
-                  child: const Text('合并同步'),
+                  onPressed: () => context.read<BoardController>().mergeNow(),
+                  child: const Text('Merge sync'),
                 ),
               ],
             ),
@@ -206,7 +211,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
                       if (!isCover)
                         ListTile(
                           leading: const Icon(Icons.photo),
-                          title: const Text('设为封面'),
+                          title: const Text('Set as cover'),
                           onTap: () => Navigator.pop(ctx, 'cover'),
                         ),
                       ListTile(
@@ -215,7 +220,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
                           color: theme.colorScheme.error,
                         ),
                         title: Text(
-                          '删除图片',
+                          'Delete image',
                           style: TextStyle(color: theme.colorScheme.error),
                         ),
                         onTap: () => Navigator.pop(ctx, 'delete'),
@@ -234,7 +239,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
           ),
         const SizedBox(height: 8),
         Text(
-          '长按拖动可调整顺序',
+          'Long-press and drag to reorder',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -245,7 +250,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
               ? null
               : () => _pickAttachments(context),
           icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-          label: const Text('添加图片'),
+          label: const Text('Add image'),
         ),
         if (Platform.isWindows) ...[
           const SizedBox(height: 8),
@@ -257,7 +262,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
                       source: CardImageAddSource.clipboard,
                     ),
             icon: const Icon(Icons.content_paste_go_outlined, size: 18),
-            label: const Text('粘贴图片'),
+            label: const Text('Paste image'),
           ),
         ],
       ],

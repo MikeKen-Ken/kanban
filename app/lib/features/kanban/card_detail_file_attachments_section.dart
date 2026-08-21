@@ -68,7 +68,8 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
     if (attachments.length >= KanbanCard.maxFileAttachments) {
       showAppSnackBar(
         context,
-        message: '每张卡片最多 ${KanbanCard.maxFileAttachments} 个文件',
+        message:
+            'Each card can have at most ${KanbanCard.maxFileAttachments} files',
       );
       return;
     }
@@ -159,7 +160,7 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('文件', style: theme.textTheme.titleSmall),
+            Text('Files', style: theme.textTheme.titleSmall),
             const Spacer(),
             Text(
               '${attachments.length}/${KanbanCard.maxFileAttachments}',
@@ -172,7 +173,8 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: MaterialBanner(
-              content: Text('有 $missingCount 个文件未下载到本机，请检查同步'),
+              content: Text(
+                  '$missingCount files are not available locally; check sync'),
               leading: Icon(
                 Icons.cloud_off_outlined,
                 color: theme.colorScheme.error,
@@ -180,7 +182,7 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () => context.read<BoardController>().mergeNow(),
-                  child: const Text('合并同步'),
+                  child: const Text('Merge sync'),
                 ),
               ],
             ),
@@ -201,7 +203,7 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
                   ),
                   subtitle: missing
                       ? Text(
-                          '尚未同步到本机',
+                          'Not synced locally',
                           style: TextStyle(color: theme.colorScheme.error),
                         )
                       : sizeLabel.isEmpty
@@ -234,7 +236,7 @@ class CardDetailFileAttachmentsSection extends StatelessWidget {
               ? null
               : () => _pickFiles(context),
           icon: const Icon(Icons.attach_file_outlined, size: 18),
-          label: const Text('添加文件'),
+          label: const Text('Add file'),
         ),
       ],
     );

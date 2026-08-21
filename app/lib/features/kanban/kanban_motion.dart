@@ -44,8 +44,7 @@ List<TrackedKanbanCard> reconcileTrackedKanbanCards({
       .length;
   final insertedCount = next
       .where(
-        (card) =>
-            !previousActiveIds.contains(card.id) && card.id != holdCardId,
+        (card) => !previousActiveIds.contains(card.id) && card.id != holdCardId,
       )
       .length;
   final animate = previous.isNotEmpty &&
@@ -81,8 +80,7 @@ List<TrackedKanbanCard> reconcileTrackedKanbanCards({
     for (final card in next)
       TrackedKanbanCard(
         card: card,
-        animateEnter:
-            insertedIds.contains(card.id) && card.id != holdCardId,
+        animateEnter: insertedIds.contains(card.id) && card.id != holdCardId,
       ),
   ];
 
