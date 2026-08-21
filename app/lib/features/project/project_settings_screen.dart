@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -34,6 +36,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
   double? _cardOpacityDraft;
   bool _saving = false;
   bool _backgroundBusy = false;
+  Timer? _textSaveDebounce;
 
   @override
   void initState() {
@@ -50,34 +53,55 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
 
   @override
   void dispose() {
+    _textSaveDebounce?.cancel();
     _doneColumnController.dispose();
     super.dispose();
   }
 
-  Future<void> _save() async {
+  ProjectSettings? _draftSettings() {
     final name = _doneColumnController.text.trim();
-    if (name.isEmpty) {
-      showAppSnackBar(context, message: 'Done column name cannot be empty');
-      return;
-    }
-
-    setState(() => _saving = true);
-    final controller = context.read<BoardController>();
     final themeId =
         _selectedThemeId == kDefaultProjectThemeId ? '' : _selectedThemeId;
-    // note: 主动保存视为采用当前编辑结果，一并清除未解决的设置冲突
-    await controller.saveProjectSettings(
-      controller.projectSettings.copyWith(
-        doneColumnName: name,
-        themeId: themeId,
-        columnWipLimits: _wipLimits,
-        swimlaneMode: _swimlaneMode,
-        agentMcpTags: _agentMcpTags,
-        clearConflictSide: true,
-      ),
-    );
+    if (name.isEmpty) return null;
+    return context.read<BoardController>().projectSettings.copyWith(
+          doneColumnName: name,
+          themeId: themeId,
+          columnWipLimits: _wipLimits,
+          swimlaneMode: _swimlaneMode,
+          agentMcpTags: _agentMcpTags,
+          clearConflictSide: true,
+        );
+  }
+
+  Future<void> _persistDraft({bool showError = false}) async {
+    final draft = _draftSettings();
+    if (draft == null) {
+      if (showError) {
+        showAppSnackBar(context, message: 'Done column name cannot be empty');
+      }
+      return;
+    }
+    if (mounted) setState(() => _saving = true);
+    await context.read<BoardController>().saveProjectSettings(draft);
     if (!mounted) return;
     setState(() => _saving = false);
+  }
+
+  void _scheduleTextAutoSave() {
+    _textSaveDebounce?.cancel();
+    _textSaveDebounce = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_persistDraft());
+    });
+  }
+
+  void _autoSave() {
+    unawaited(_persistDraft());
+  }
+
+  Future<void> _save() async {
+    _textSaveDebounce?.cancel();
+    await _persistDraft(showError: true);
+    if (!mounted || _saving) return;
     showAppSnackBar(context,
         message: 'Project settings saved and will sync automatically');
     Navigator.pop(context);
@@ -299,8 +323,10 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                       return _ThemeOptionTile(
                         preset: preset,
                         selected: selected,
-                        onTap: () =>
-                            setState(() => _selectedThemeId = preset.id),
+                        onTap: () {
+                          setState(() => _selectedThemeId = preset.id);
+                          _autoSave();
+                        },
                       );
                     }).toList(),
                   ),
@@ -515,6 +541,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   child: TextFormField(
                     controller: _doneColumnController,
+                    onChanged: (_) => _scheduleTextAutoSave(),
                     decoration: const InputDecoration(
                       labelText: 'Done column name',
                       hintText: ProjectSettings.defaultDoneColumnName,
@@ -544,6 +571,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                     onChanged: (value) {
                       if (value == null) return;
                       setState(() => _swimlaneMode = value);
+                      _autoSave();
                     },
                   ),
                 ),
@@ -603,6 +631,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                               _wipLimits[column.id] = limit;
                             }
                           });
+                          _autoSave();
                         },
                       ),
                     ),
@@ -618,7 +647,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Save'),
+                  : const Text('Save now'),
             ),
             const SizedBox(height: 12),
             Row(
@@ -632,7 +661,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Theme and board options are saved when you click Save. Agent MCP tags, background, overlay, and card opacity apply and sync immediately.',
+                    'All project settings save automatically when changed. Save now closes this panel after persisting the current values.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
