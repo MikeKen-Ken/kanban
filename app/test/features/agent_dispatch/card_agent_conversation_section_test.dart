@@ -45,13 +45,13 @@ void main() {
     }
   });
 
-  testWidgets('提交追问后关闭对话并请求关闭上层界面', (tester) async {
+  testWidgets('提交追问后关闭对话并通知上层同步', (tester) async {
     tester.view.physicalSize = const Size(1200, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    var parentClosed = false;
+    var parentSynced = false;
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: controller,
@@ -59,8 +59,8 @@ void main() {
           home: Scaffold(
             body: CardAgentConversationSection(
               cardId: cardId,
-              onSubmittedClose: () async {
-                parentClosed = true;
+              onConversationChanged: () async {
+                parentSynced = true;
               },
             ),
           ),
@@ -71,7 +71,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('card-agent-conversation-open')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('提交追问'), findsOneWidget);
+    expect(find.text('Submit follow-up'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('card-agent-conversation-input')),
@@ -82,7 +82,7 @@ void main() {
     );
     expect(find.text('请默认关闭窗口'), findsOneWidget);
     await tester.runAsync(() async {
-      await tester.tap(find.text('提交追问'));
+      await tester.tap(find.text('Submit follow-up'));
       await tester.pump();
       await Future<void>.delayed(const Duration(seconds: 3));
     });
@@ -94,18 +94,18 @@ void main() {
       live.verificationFeedback.map((item) => item.text).toList(),
       contains('Agent 追问：请默认关闭窗口'),
     );
-    expect(parentClosed, isTrue);
+    expect(parentSynced, isTrue);
     expect(live.agentConversationMarkdown, contains('请默认关闭窗口'));
     expect(controller.findColumnIdForCard(cardId), 'rework');
   });
 
-  testWidgets('点关闭只退出对话，不关闭上层', (tester) async {
+  testWidgets('点关闭退出对话并通知上层同步', (tester) async {
     tester.view.physicalSize = const Size(1200, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    var parentClosed = false;
+    var parentSynced = false;
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: controller,
@@ -113,8 +113,8 @@ void main() {
           home: Scaffold(
             body: CardAgentConversationSection(
               cardId: cardId,
-              onSubmittedClose: () async {
-                parentClosed = true;
+              onConversationChanged: () async {
+                parentSynced = true;
               },
             ),
           ),
@@ -125,12 +125,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('card-agent-conversation-open')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('关闭'));
+    await tester.tap(find.text('Close'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('提交追问'), findsNothing);
-    expect(parentClosed, isFalse);
+    expect(find.text('Submit follow-up'), findsNothing);
+    expect(parentSynced, isTrue);
   });
 
   testWidgets('输入非空时点空白等同提交追问', (tester) async {
@@ -139,7 +139,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    var parentClosed = false;
+    var parentSynced = false;
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: controller,
@@ -147,8 +147,8 @@ void main() {
           home: Scaffold(
             body: CardAgentConversationSection(
               cardId: cardId,
-              onSubmittedClose: () async {
-                parentClosed = true;
+              onConversationChanged: () async {
+                parentSynced = true;
               },
             ),
           ),
@@ -181,7 +181,7 @@ void main() {
       live.verificationFeedback.map((item) => item.text).toList(),
       contains('Agent 追问：点空白也要提交'),
     );
-    expect(parentClosed, isTrue);
+    expect(parentSynced, isTrue);
     expect(live.agentConversationMarkdown, contains('点空白也要提交'));
     expect(controller.findColumnIdForCard(cardId), 'rework');
   });
@@ -192,7 +192,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    var parentClosed = false;
+    var parentSynced = false;
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: controller,
@@ -200,8 +200,8 @@ void main() {
           home: Scaffold(
             body: CardAgentConversationSection(
               cardId: cardId,
-              onSubmittedClose: () async {
-                parentClosed = true;
+              onConversationChanged: () async {
+                parentSynced = true;
               },
             ),
           ),
@@ -219,9 +219,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('提交追问'), findsNothing);
-    expect(parentClosed, isFalse);
+    expect(find.text('Submit follow-up'), findsNothing);
+    expect(parentSynced, isTrue);
     expect(controller.findCardById(cardId)!.verificationFeedback, isEmpty);
     expect(controller.findColumnIdForCard(cardId), 'todo');
   });
 }
+

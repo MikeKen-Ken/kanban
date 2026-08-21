@@ -724,7 +724,7 @@ import {
   writeFileSync as writeFileSync3
 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { dirname, join as join3 } from "node:path";
+import { dirname, join as join4 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // src/cursor_token_usage.ts
@@ -1901,6 +1901,19 @@ function pushMessage(out, message) {
   out.push({ role: message.role, text });
 }
 
+// src/codex_windows_env.ts
+import { join as join3 } from "node:path";
+function buildCodexProcessEnv(env = process.env) {
+  if (process.platform !== "win32") return { ...env };
+  const systemRoot = env.SystemRoot ?? env.SYSTEMROOT;
+  const commandShell = systemRoot ? join3(systemRoot, "System32", "cmd.exe") : "cmd.exe";
+  return {
+    ...env,
+    ComSpec: commandShell,
+    COMSPEC: commandShell
+  };
+}
+
 // src/worker_log.ts
 import { writeSync as writeSync2 } from "node:fs";
 function workerLog(line, source = "worker", level = "info") {
@@ -1918,8 +1931,8 @@ function workerLogRecords(records) {
 
 // src/run_codex.ts
 function resolveCodexCommand() {
-  const packageRoot = join3(dirname(fileURLToPath(import.meta.url)), "..");
-  const bundledCli = join3(
+  const packageRoot = join4(dirname(fileURLToPath(import.meta.url)), "..");
+  const bundledCli = join4(
     packageRoot,
     "node_modules",
     "@openai",
@@ -1964,9 +1977,9 @@ async function runCodex(job, cancellation) {
   if (!mcpUrl) {
     return { ok: false, error: "\u672C\u8F6E claim \u7F3A\u5C11 scoped MCP \u7AEF\u70B9" };
   }
-  const temp = mkdtempSync2(join3(tmpdir2(), "kanban-codex-"));
-  const promptFile = join3(temp, "prompt.txt");
-  const lastMessageFile = join3(temp, "last.txt");
+  const temp = mkdtempSync2(join4(tmpdir2(), "kanban-codex-"));
+  const promptFile = join4(temp, "prompt.txt");
+  const lastMessageFile = join4(temp, "last.txt");
   try {
     writeFileSync3(promptFile, job.prompt, "utf8");
     const agentHome = createCodexAgentHome({
@@ -2059,7 +2072,10 @@ async function runCodex(job, cancellation) {
       });
       child = spawn2(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
-        env: { ...process.env, CODEX_HOME: agentHome.home },
+        env: {
+          ...buildCodexProcessEnv(),
+          CODEX_HOME: agentHome.home
+        },
         stdio: ["pipe", "pipe", "pipe"],
         shell: codex.shell
       });
@@ -2473,7 +2489,7 @@ var CursorShellSpanEmitter = class {
 // src/run_cursor.ts
 import { mkdirSync as mkdirSync3 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 import {
   Agent,
   Cursor as Cursor2,
@@ -2484,7 +2500,7 @@ import {
 // src/cursor_mcp_servers.ts
 import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { join as join4 } from "node:path";
+import { join as join5 } from "node:path";
 var KANBAN_MCP_SERVER = "kanbanMCP";
 function scopedKanbanMcpServer(url) {
   return { type: "http", url: url.trim() };
@@ -2503,8 +2519,8 @@ function mergeCursorMcpServers(options) {
 function loadCursorMcpServers(options) {
   const home = options.homeDir ?? homedir2();
   const servers = mergeCursorMcpServers({
-    userJson: readOptionalFile(join4(home, ".cursor", "mcp.json")),
-    projectJson: readOptionalFile(join4(options.cwd, ".cursor", "mcp.json")),
+    userJson: readOptionalFile(join5(home, ".cursor", "mcp.json")),
+    projectJson: readOptionalFile(join5(options.cwd, ".cursor", "mcp.json")),
     scopedKanbanUrl: options.scopedKanbanUrl,
     projectMcpTags: options.projectMcpTags
   });
@@ -3213,7 +3229,7 @@ async function runCursor(job, cancellation) {
     const askUserTool = createAskUserTool(job, cancellation, (text) => {
       live.push({ role: "user", text });
     });
-    const storeDir = join5(homedir3(), ".cursor", "kanban-agent-jsonl-store");
+    const storeDir = join6(homedir3(), ".cursor", "kanban-agent-jsonl-store");
     mkdirSync3(storeDir, { recursive: true });
     const mcp = loadCursorMcpServers({
       cwd: job.cwd,
@@ -3559,7 +3575,7 @@ import {
   writeFileSync as writeFileSync4
 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import { isAbsolute, join as join6 } from "node:path";
+import { isAbsolute, join as join7 } from "node:path";
 
 // src/dispatch_scoped_tool_prompt.ts
 var DISPATCH_SCOPED_TOOL_NAMES = [
@@ -3644,13 +3660,13 @@ MUST NOT \u628A glob \u76EE\u6807\u6307\u5230 \`.git\`\u3001\`.svn\` \u6216 \`bu
 
 // src/session_context.ts
 function readBatchArchitecture(cwd) {
-  const path = join6(cwd, "docs", "Architecture.md");
+  const path = join7(cwd, "docs", "Architecture.md");
   if (!existsSync6(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
   return readFileSync5(path, "utf8");
 }
 function createSessionContext(options) {
   const tempDir = mkdtempSync3(
-    join6(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
+    join7(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
   );
   const attachmentPaths = [];
   const payload = structuredClone(options.claim.payload);
@@ -3673,7 +3689,7 @@ function createSessionContext(options) {
   const imagePaths = [];
   for (let index = 0; index < options.claim.images.length; index += 1) {
     const image = options.claim.images[index];
-    const path = join6(
+    const path = join7(
       tempDir,
       `image-${index + 1}.${extensionForMime(image.mimeType)}`
     );
@@ -3741,7 +3757,7 @@ function safeFileName(value, fallback) {
   return normalized || fallback;
 }
 function uniquePath(root, fileName) {
-  const path = join6(root, fileName);
+  const path = join7(root, fileName);
   if (!isAbsolute(path)) throw new Error("\u4E34\u65F6\u9644\u4EF6\u8DEF\u5F84\u4E0D\u662F\u7EDD\u5BF9\u8DEF\u5F84");
   return path;
 }
@@ -3766,9 +3782,9 @@ import {
   statSync as statSync2
 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
-import { join as join7, relative } from "node:path";
+import { join as join8, relative } from "node:path";
 var RULE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".mdc"]);
-function readUserCursorRules(root = join7(homedir4(), ".cursor", "rules")) {
+function readUserCursorRules(root = join8(homedir4(), ".cursor", "rules")) {
   if (!existsSync7(root)) return { text: "", count: 0, bytes: 0 };
   const paths = collectRulePaths(root).sort((a, b) => a.localeCompare(b));
   const sections = [];
@@ -3789,7 +3805,7 @@ function readUserCursorRules(root = join7(homedir4(), ".cursor", "rules")) {
 function collectRulePaths(root) {
   const result = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join7(root, entry.name);
+    const path = join8(root, entry.name);
     if (entry.isDirectory()) {
       result.push(...collectRulePaths(path));
       continue;

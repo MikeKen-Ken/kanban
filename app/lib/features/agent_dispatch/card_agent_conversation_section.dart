@@ -10,18 +10,20 @@ import 'agent_dispatch_registry.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_interaction.dart';
 import 'agent_interaction_prompt.dart';
+import 'card_agent_follow_up_panel.dart';
 
 class CardAgentConversationSection extends StatelessWidget {
   const CardAgentConversationSection({
     required this.cardId,
-    this.onSubmittedClose,
+    Future<void> Function()? onConversationChanged,
+    Future<void> Function()? onSubmittedClose,
     super.key,
-  });
+  }) : onConversationChanged = onConversationChanged ?? onSubmittedClose;
 
   final String cardId;
 
-  /// 提交追问或回复成功后关闭对话与上层界面（卡片详情等）。
-  final Future<void> Function()? onSubmittedClose;
+  /// 追问增删改写入看板后回调，供卡片详情同步本地验证反馈列表（不关闭详情）。
+  final Future<void> Function()? onConversationChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +39,7 @@ class CardAgentConversationSection extends StatelessWidget {
               showCardAgentConversationDialog(
                 context: context,
                 cardId: cardId,
-                onSubmittedClose: onSubmittedClose,
+                onConversationChanged: onConversationChanged,
               );
             },
       icon: Icon(hasHistory ? Icons.forum : Icons.forum_outlined),
@@ -49,14 +51,14 @@ class CardAgentConversationSection extends StatelessWidget {
 Future<void> showCardAgentConversationDialog({
   required BuildContext context,
   required String cardId,
-  Future<void> Function()? onSubmittedClose,
+  Future<void> Function()? onConversationChanged,
 }) {
   return showDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (_) => _CardAgentConversationDialog(
       cardId: cardId,
-      onSubmittedClose: onSubmittedClose,
+      onConversationChanged: onConversationChanged,
     ),
   );
 }
@@ -64,11 +66,11 @@ Future<void> showCardAgentConversationDialog({
 class _CardAgentConversationDialog extends StatefulWidget {
   const _CardAgentConversationDialog({
     required this.cardId,
-    this.onSubmittedClose,
+    this.onConversationChanged,
   });
 
   final String cardId;
-  final Future<void> Function()? onSubmittedClose;
+  final Future<void> Function()? onConversationChanged;
 
   @override
   State<_CardAgentConversationDialog> createState() =>
@@ -78,6 +80,7 @@ class _CardAgentConversationDialog extends StatefulWidget {
 class _CardAgentConversationDialogState
     extends State<_CardAgentConversationDialog> {
   final _input = TextEditingController();
+  final _selectedFollowUpIds = <String>{};
   late BoardController _board;
   late AgentDispatchService _service;
   bool _sending = false;
@@ -94,7 +97,16 @@ class _CardAgentConversationDialogState
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final live = _board.findCardById(widget.cardId);
+    final validIds = {
+      for (final item in agentFollowUpFeedbackItems(
+        live?.verificationFeedback ?? const [],
+      ))
+        item.id,
+    };
+    _selectedFollowUpIds.removeWhere((id) => !validIds.contains(id));
+    setState(() {});
   }
 
   @override
@@ -105,10 +117,25 @@ class _CardAgentConversationDialogState
     super.dispose();
   }
 
+  Future<void> _notifyConversationChanged() async {
+    final callback = widget.onConversationChanged;
+    if (callback == null) return;
+    await callback();
+  }
+
+  Future<void> _closeDialog({bool notify = true}) async {
+    if (!mounted) {
+      if (notify) await _notifyConversationChanged();
+      return;
+    }
+    Navigator.of(context, rootNavigator: true).pop();
+    if (notify) await _notifyConversationChanged();
+  }
+
   Future<void> _onBarrierTap() async {
     if (_sending) return;
     if (_input.text.trim().isEmpty) {
-      Navigator.of(context).pop();
+      await _closeDialog();
       return;
     }
     // 先关闭界面，再在后台完成持久化，避免空白处点击一直等待磁盘写入。
@@ -118,6 +145,8 @@ class _CardAgentConversationDialogState
   Future<void> _send({bool closeDialogImmediately = false}) async {
     final text = _input.text.trim();
     if (_sending || text.isEmpty) return;
+    // 提前捕获：立即关对话框后 State 可能已 dispose，仍需通知详情刷新。
+    final onChanged = widget.onConversationChanged;
     setState(() => _sending = true);
     if (closeDialogImmediately && mounted) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -126,10 +155,12 @@ class _CardAgentConversationDialogState
       final pending = _service.pendingInteraction;
       if (pending?.cardId == widget.cardId) {
         final sent = await _service.submitInteractionReply(text);
-        if (!sent && mounted) {
-          showAppSnackBar(context,
-              message:
-                  'Failed to send reply; confirm that Worker is still running');
+        if (!sent) {
+          if (mounted) {
+            showAppSnackBar(context,
+                message:
+                    'Failed to send reply; confirm that Worker is still running');
+          }
           return;
         }
       } else {
@@ -157,13 +188,148 @@ class _CardAgentConversationDialogState
             await _board.setCardAgentConversation(widget.cardId, markdown);
         if (historyError != null) throw StateError(historyError);
       }
-      _input.clear();
-      if (!mounted) return;
-      final closer = widget.onSubmittedClose;
-      Navigator.of(context, rootNavigator: true).pop();
-      await closer?.call();
+      if (mounted) {
+        _input.clear();
+        if (!closeDialogImmediately) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      }
+      await onChanged?.call();
     } catch (error) {
       if (mounted) showAppSnackBar(context, message: 'Send failed: $error');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _persistFollowUpFeedbackRemoval(Set<String> removeIds) async {
+    final columnId = _board.findColumnIdForCard(widget.cardId);
+    final card = _board.findCardById(widget.cardId);
+    if (columnId == null || card == null || removeIds.isEmpty) return;
+
+    final removedBodies = <String>[];
+    final nextFeedback = <ChecklistItem>[];
+    for (final item in card.verificationFeedback) {
+      if (!removeIds.contains(item.id)) {
+        nextFeedback.add(item);
+        continue;
+      }
+      final body = agentFollowUpFeedbackBody(item.text);
+      if (body != null) removedBodies.add(body);
+    }
+    if (removedBodies.isEmpty &&
+        nextFeedback.length == card.verificationFeedback.length) {
+      return;
+    }
+
+    final error = await _board.updateCardFull(
+      columnId,
+      widget.cardId,
+      verificationFeedback: nextFeedback,
+    );
+    if (error != null) throw StateError(error);
+    var markdown =
+        _board.findCardById(widget.cardId)?.agentConversationMarkdown ?? '';
+    for (final body in removedBodies) {
+      markdown = removeAgentConversationUserReply(markdown, body);
+    }
+    final historyError =
+        await _board.setCardAgentConversation(widget.cardId, markdown);
+    if (historyError != null) throw StateError(historyError);
+    _selectedFollowUpIds.removeWhere(removeIds.contains);
+    await _notifyConversationChanged();
+  }
+
+  Future<void> _deleteSelectedFollowUps() async {
+    if (_sending || _selectedFollowUpIds.isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      await _persistFollowUpFeedbackRemoval(
+        Set<String>.from(_selectedFollowUpIds),
+      );
+    } catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, message: 'Delete follow-up failed: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _editFollowUp(String id) async {
+    if (_sending) return;
+    final columnId = _board.findColumnIdForCard(widget.cardId);
+    final card = _board.findCardById(widget.cardId);
+    if (columnId == null || card == null) return;
+    final current =
+        card.verificationFeedback.where((item) => item.id == id).firstOrNull;
+    final oldBody =
+        current == null ? null : agentFollowUpFeedbackBody(current.text);
+    if (current == null || oldBody == null) return;
+
+    final controller = TextEditingController(text: oldBody);
+    final nextBody = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit follow-up'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Follow-up text',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || nextBody == null) return;
+    if (nextBody == oldBody) return;
+
+    setState(() => _sending = true);
+    try {
+      if (nextBody.isEmpty) {
+        await _persistFollowUpFeedbackRemoval({id});
+        return;
+      }
+      final nextFeedback = [
+        for (final item in card.verificationFeedback)
+          if (item.id == id)
+            item.copyWith(text: '$agentFollowUpFeedbackPrefix$nextBody')
+          else
+            item,
+      ];
+      final error = await _board.updateCardFull(
+        columnId,
+        widget.cardId,
+        verificationFeedback: nextFeedback,
+      );
+      if (error != null) throw StateError(error);
+      final markdown = replaceAgentConversationUserReply(
+        _board.findCardById(widget.cardId)?.agentConversationMarkdown,
+        oldBody,
+        nextBody,
+      );
+      final historyError =
+          await _board.setCardAgentConversation(widget.cardId, markdown);
+      if (historyError != null) throw StateError(historyError);
+      await _notifyConversationChanged();
+    } catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, message: 'Edit follow-up failed: $error');
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -213,6 +379,9 @@ class _CardAgentConversationDialogState
   Widget build(BuildContext context) {
     final card = _board.findCardById(widget.cardId);
     final history = card?.agentConversationMarkdown?.trim() ?? '';
+    final followUps = agentFollowUpFeedbackItems(
+      card?.verificationFeedback ?? const [],
+    );
     final hasMarkdownFile = card?.fileAttachments.any(
           (attachment) =>
               attachment.fileName == KanbanCard.agentConversationFileName,
@@ -257,6 +426,23 @@ class _CardAgentConversationDialogState
                             ),
                     ),
                   ),
+                  if (!waiting)
+                    CardAgentFollowUpPanel(
+                      items: followUps,
+                      selectedIds: _selectedFollowUpIds,
+                      enabled: !_sending,
+                      onToggleSelected: (id) {
+                        setState(() {
+                          if (_selectedFollowUpIds.contains(id)) {
+                            _selectedFollowUpIds.remove(id);
+                          } else {
+                            _selectedFollowUpIds.add(id);
+                          }
+                        });
+                      },
+                      onEdit: _editFollowUp,
+                      onDeleteSelected: _deleteSelectedFollowUps,
+                    ),
                   const SizedBox(height: 12),
                   if (waiting && pending != null)
                     Flexible(
@@ -264,6 +450,7 @@ class _CardAgentConversationDialogState
                         child: AgentInteractionPrompt(
                           event: pending,
                           onReply: (text) async {
+                            final onChanged = widget.onConversationChanged;
                             final sent = await _service.submitInteractionReply(
                               text,
                             );
@@ -275,11 +462,13 @@ class _CardAgentConversationDialogState
                               );
                               return false;
                             }
-                            if (sent && mounted) {
-                              _input.clear();
-                              final closer = widget.onSubmittedClose;
-                              Navigator.of(context, rootNavigator: true).pop();
-                              await closer?.call();
+                            if (sent) {
+                              if (mounted) {
+                                _input.clear();
+                                Navigator.of(context, rootNavigator: true)
+                                    .pop();
+                              }
+                              await onChanged?.call();
                             }
                             return sent;
                           },
@@ -326,7 +515,7 @@ class _CardAgentConversationDialogState
                   label: const Text('Open Markdown file'),
                 ),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: _sending ? null : () => _closeDialog(),
                 child: const Text('Close'),
               ),
               if (!waiting)

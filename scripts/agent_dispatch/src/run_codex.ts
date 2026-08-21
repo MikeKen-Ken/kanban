@@ -39,6 +39,7 @@ import {
   type ConversationTranscriptMessage,
 } from "./assistant_text.ts";
 import { buildConversationTranscript } from "./conversation_transcript.ts";
+import { buildCodexProcessEnv } from "./codex_windows_env.ts";
 import { workerLog, workerLogRecords } from "./worker_log.ts";
 
 export function resolveCodexCommand(): {
@@ -212,7 +213,10 @@ export async function runCodex(
       });
       child = spawn(codex.command, [...codex.prefixArgs, ...args], {
         cwd: job.cwd,
-        env: { ...process.env, CODEX_HOME: agentHome.home },
+        env: {
+          ...buildCodexProcessEnv(),
+          CODEX_HOME: agentHome.home,
+        },
         stdio: ["pipe", "pipe", "pipe"],
         shell: codex.shell,
       });

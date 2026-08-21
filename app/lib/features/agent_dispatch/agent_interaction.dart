@@ -172,11 +172,58 @@ String appendAgentConversationUserReply(String? current, String text) {
   return '${buffer.toString().trimRight()}\n';
 }
 
+/// 从验证反馈文案取出 Agent 追问正文；非追问项返回 `null`。
+String? agentFollowUpFeedbackBody(String feedbackText) {
+  if (!feedbackText.startsWith(agentFollowUpFeedbackPrefix)) return null;
+  return feedbackText.substring(agentFollowUpFeedbackPrefix.length);
+}
+
 /// 删除最后一段与追问正文完全匹配的用户消息，和追加追问保持 LIFO 对称。
 String removeAgentConversationUserReply(String? current, String text) {
+  final hit = _findLastMatchingUserSection(current, text);
+  if (hit == null) return current ?? '';
+  final markdown = current ?? '';
+  final remaining =
+      '${markdown.substring(0, hit.start)}${markdown.substring(hit.end)}';
+  return remaining.trim().isEmpty ? '' : '${remaining.trimRight()}\n';
+}
+
+/// 将最后一段与 [oldText] 匹配的用户消息正文替换为 [newText]。
+String replaceAgentConversationUserReply(
+  String? current,
+  String oldText,
+  String newText,
+) {
+  final normalizedNew = newText.trim();
+  if (normalizedNew.isEmpty) {
+    return removeAgentConversationUserReply(current, oldText);
+  }
+  final hit = _findLastMatchingUserSection(current, oldText);
+  if (hit == null) return current ?? '';
+  final markdown = current ?? '';
+  return '${markdown.substring(0, hit.bodyStart)}'
+      '$normalizedNew'
+      '${markdown.substring(hit.bodyEnd)}';
+}
+
+class _UserSectionHit {
+  const _UserSectionHit({
+    required this.start,
+    required this.end,
+    required this.bodyStart,
+    required this.bodyEnd,
+  });
+
+  final int start;
+  final int end;
+  final int bodyStart;
+  final int bodyEnd;
+}
+
+_UserSectionHit? _findLastMatchingUserSection(String? current, String text) {
   final normalized = text.trim();
   final markdown = current ?? '';
-  if (normalized.isEmpty || markdown.trim().isEmpty) return markdown;
+  if (normalized.isEmpty || markdown.trim().isEmpty) return null;
 
   final sections = RegExp(r'^### 用户\s*$', multiLine: true).allMatches(markdown);
   for (final section in sections.toList().reversed) {
@@ -199,11 +246,17 @@ String removeAgentConversationUserReply(String? current, String text) {
         (markdown[removalEnd] == '\n' || markdown[removalEnd] == '\r')) {
       removalEnd++;
     }
-    final remaining = '${markdown.substring(0, start)}'
-        '${markdown.substring(removalEnd)}';
-    return remaining.trim().isEmpty ? '' : '${remaining.trimRight()}\n';
+    final bodyStart = section.end +
+        markdown.substring(section.end, end).indexOf(body);
+    final bodyEnd = bodyStart + body.length;
+    return _UserSectionHit(
+      start: start,
+      end: removalEnd,
+      bodyStart: bodyStart,
+      bodyEnd: bodyEnd,
+    );
   }
-  return markdown;
+  return null;
 }
 
 final _sessionHeaderLinePattern = RegExp(r'^## 会话[^\n]*', multiLine: true);

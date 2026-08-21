@@ -50,6 +50,24 @@ void main() {
     );
   });
 
+  test('编辑追问会替换最后一个对应的用户对话段', () {
+    const original = '## 会话 2026-08-20 10:00\n\n'
+        '### 用户\n'
+        '初始任务\n\n'
+        '### 用户\n'
+        '旧追问\n';
+
+    final markdown = replaceAgentConversationUserReply(
+      original,
+      '旧追问',
+      '新追问',
+    );
+
+    expect(markdown, contains('### 用户\n初始任务'));
+    expect(markdown, contains('### 用户\n新追问'));
+    expect(markdown, isNot(contains('旧追问')));
+  });
+
   test('问题正文里的编号列表会还原为点选选项', () {
     final event = parseAgentInteractionEvent(
       '@@KANBAN_INTERACTION@@'

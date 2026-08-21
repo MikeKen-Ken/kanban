@@ -525,7 +525,12 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final checklist = List<ChecklistItem>.from(_checklist);
     final verificationFeedback =
         List<ChecklistItem>.from(_verificationFeedback);
-    final removedAgentFollowUpTexts = widget.card.verificationFeedback
+    final liveFeedback = _boardController
+            .findCardById(widget.card.id)
+            ?.verificationFeedback ??
+        widget.card.verificationFeedback;
+    // 以看板上已落盘的反馈为基准，避免详情打开快照与对话面板即时同步交错时误删新追问。
+    final removedAgentFollowUpTexts = liveFeedback
         .where(
           (original) =>
               original.text.startsWith(agentFollowUpFeedbackPrefix) &&
@@ -664,14 +669,74 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     if (mounted) Navigator.pop(context);
   }
 
-  /// 追问已写入看板后，同步详情本地列表再保存关闭，避免打开快照覆盖反馈/附件。
-  Future<void> _saveAndCloseAfterAgentFollowUp() async {
+  /// 对话面板写入看板后，立即同步详情本地验证反馈/附件，不关闭详情。
+  Future<void> _syncFromLiveAfterAgentConversation() async {
     final live = _liveCard;
-    if (live != null) {
+    if (live == null || !mounted) return;
+    _safeSetState(() {
       _verificationFeedback = [...live.verificationFeedback];
       _fileAttachments = [...live.sortedFileAttachments];
+    });
+  }
+
+  /// 删除/编辑 Agent 追问类验证反馈时，立刻回写对话 Markdown（不等到详情保存）。
+  Future<void> _syncAgentConversationForFeedbackChange({
+    required List<ChecklistItem> previous,
+    required List<ChecklistItem> next,
+  }) async {
+    final previousFollowUps = {
+      for (final item in previous)
+        if (agentFollowUpFeedbackBody(item.text) != null) item.id: item,
+    };
+    final nextFollowUps = {
+      for (final item in next)
+        if (agentFollowUpFeedbackBody(item.text) != null) item.id: item,
+    };
+    final removedBodies = <String>[];
+    for (final entry in previousFollowUps.entries) {
+      if (nextFollowUps.containsKey(entry.key)) continue;
+      final body = agentFollowUpFeedbackBody(entry.value.text);
+      if (body != null) removedBodies.add(body);
     }
-    await _save();
+    final replacements = <({String from, String to})>[];
+    for (final entry in nextFollowUps.entries) {
+      final before = previousFollowUps[entry.key];
+      if (before == null) continue;
+      final from = agentFollowUpFeedbackBody(before.text);
+      final to = agentFollowUpFeedbackBody(entry.value.text);
+      if (from == null || to == null || from == to) continue;
+      replacements.add((from: from, to: to));
+    }
+    if (removedBodies.isEmpty && replacements.isEmpty) return;
+
+    final columnId =
+        _boardController.findColumnIdForCard(widget.card.id) ?? widget.columnId;
+    final persistError = await _boardController.updateCardFull(
+      columnId,
+      widget.card.id,
+      verificationFeedback: next,
+    );
+    if (persistError != null) throw StateError(persistError);
+
+    var markdown = _boardController
+            .findCardById(widget.card.id)
+            ?.agentConversationMarkdown ??
+        '';
+    for (final text in removedBodies) {
+      markdown = removeAgentConversationUserReply(markdown, text);
+    }
+    for (final change in replacements) {
+      markdown = replaceAgentConversationUserReply(
+        markdown,
+        change.from,
+        change.to,
+      );
+    }
+    final historyError = await _boardController.setCardAgentConversation(
+      widget.card.id,
+      markdown,
+    );
+    if (historyError != null) throw StateError(historyError);
   }
 
   /// 待验证详情：先保存编辑，再按看板完成逻辑移入「已完成」并关闭。
@@ -1032,14 +1097,25 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     });
   }
 
-  void _removeVerificationFeedbackItem(String id) {
-    _safeSetState(() {
-      _verificationFeedback =
-          _verificationFeedback.where((item) => item.id != id).toList();
-    });
+  Future<void> _removeVerificationFeedbackItem(String id) async {
+    final previous = List<ChecklistItem>.from(_verificationFeedback);
+    final next =
+        _verificationFeedback.where((item) => item.id != id).toList();
+    _safeSetState(() => _verificationFeedback = next);
+    try {
+      await _syncAgentConversationForFeedbackChange(
+        previous: previous,
+        next: next,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _safeSetState(() => _verificationFeedback = previous);
+      showAppSnackBar(context, message: 'Sync conversation failed: $error');
+    }
   }
 
   Future<void> _editVerificationFeedbackItem(String id) async {
+    final previous = List<ChecklistItem>.from(_verificationFeedback);
     final next = await editChecklistLikeItem(
       context: context,
       id: id,
@@ -1048,6 +1124,16 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     );
     if (!mounted || identical(next, _verificationFeedback)) return;
     _safeSetState(() => _verificationFeedback = next);
+    try {
+      await _syncAgentConversationForFeedbackChange(
+        previous: previous,
+        next: next,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _safeSetState(() => _verificationFeedback = previous);
+      showAppSnackBar(context, message: 'Sync conversation failed: $error');
+    }
   }
 
   @override
@@ -1189,7 +1275,8 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           alignment: Alignment.centerLeft,
                           child: CardAgentConversationSection(
                             cardId: widget.card.id,
-                            onSubmittedClose: _saveAndCloseAfterAgentFollowUp,
+                            onConversationChanged:
+                                _syncFromLiveAfterAgentConversation,
                           ),
                         ),
                         const SizedBox(height: 12),
