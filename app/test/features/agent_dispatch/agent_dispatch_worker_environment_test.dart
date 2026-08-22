@@ -60,8 +60,7 @@ HKEY_CURRENT_USER\\Environment
         userPath: r'%USERPROFILE%\dev\flutter\bin',
         userFlutterRoot: r'%USERPROFILE%\dev\flutter',
       ),
-      directoryExists: (path) =>
-          path == r'C:\Users\me\dev\flutter\bin',
+      directoryExists: (path) => path == r'C:\Users\me\dev\flutter\bin',
       pathSeparator: ';',
       totalPhysicalMemoryMb: 32768,
     );
@@ -118,7 +117,9 @@ HKEY_CURRENT_USER\\Environment
       pathSeparator: ';',
     );
 
-    expect(built.environment['Path']!.startsWith(r'C:\node;D:\sdk\flutter\bin;'), isTrue);
+    expect(
+        built.environment['Path']!.startsWith(r'C:\node;D:\sdk\flutter\bin;'),
+        isTrue);
     expect(built.environment['FLUTTER_ROOT'], r'D:\sdk\flutter');
   });
 
@@ -310,8 +311,7 @@ HKEY_CURRENT_USER\\Environment
         },
         separator: ';',
         ctx: p.Context(style: p.Style.windows),
-        fileExists: (path) =>
-            path == r'C:\Program Files\PowerShell\7\pwsh.exe',
+        fileExists: (path) => path == r'C:\Program Files\PowerShell\7\pwsh.exe',
       ),
       r'C:\Program Files\PowerShell\7\pwsh.exe',
     );

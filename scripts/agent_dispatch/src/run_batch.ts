@@ -80,24 +80,24 @@ export async function runBatch(
   };
   const mcp = await dependencies.connectMcp(job.mcpEndpoint);
   let processedCards = 0;
-  workerLog(`Worker 批次启动：endpoint=${job.mcpEndpoint} limit=${limit}`);
+  workerLog(`Worker batch started: endpoint=${job.mcpEndpoint} limit=${limit}`);
   workerLog(
-    `用户 Rule 注入：${userRules.count} 个，${userRules.bytes} bytes；用户 Skill 不写入 prompt`,
+    `Injected user rules: ${userRules.count}, ${userRules.bytes} bytes; user skills are not written to the prompt`,
   );
 
   const cancelledResult = (): DispatchResult => ({
     ok: false,
-    error: "已取消",
+    error: "Cancelled",
     processedCards,
   });
   const drainedResult = (): DispatchResult => ({
     ok: true,
-    summary: `已在当前会话结束后停止；已处理 ${processedCards} 张`,
+    summary: `Stopped after the current session; processed ${processedCards} card(s)`,
     processedCards,
   });
 
   try {
-    workerLog("Worker 已连接完整看板 MCP，正在恢复未完成收尾");
+    workerLog("Worker connected to the full Kanban MCP; recovering unfinished finalization");
     const recovery = await recoverPendingSessions(
       mcp,
       job,
@@ -116,13 +116,13 @@ export async function runBatch(
         ...(liveJob.projectId ? { projectId: liveJob.projectId } : {}),
       });
       if (peek.found !== true) {
-        return completedResult(processedCards, "当前无更多卡片");
+        return completedResult(processedCards, "No more cards available");
       }
 
       const preview = mergeJobWithCardOverrides(liveJob, peek);
       const tree = dependencies.inspectGit(job.cwd);
       if (tree.kind === "dirty" && preview.allowDirtyWorkspace === true) {
-        workerLog(`已允许脏工作区，继续领取：\n${tree.output}`);
+        workerLog(`Dirty workspace allowed; continuing claim:\n${tree.output}`);
       } else {
         const treeError = gitPreflightError(tree);
         if (treeError) {
@@ -138,11 +138,11 @@ export async function runBatch(
         }),
       );
       if (claim.payload.found !== true) {
-        return completedResult(processedCards, "claim 时队列已为空");
+        return completedResult(processedCards, "Queue became empty during claim");
       }
 
       const roundLabel = limit >= 999 ? `${index}` : `${index}/${limit}`;
-      workerLog(`──────── Worker 单卡轮次 ${roundLabel} ────────`);
+      workerLog(`──────── Worker card round ${roundLabel} ────────`);
 
       const cardId = requiredString(claim.payload, "cardId");
       const sessionId = requiredString(claim.payload, "sessionId");
@@ -160,7 +160,7 @@ export async function runBatch(
         const tools = await scoped.listTools();
         if (JSON.stringify(tools) !== JSON.stringify(DISPATCH_SCOPED_TOOL_NAMES)) {
           throw new Error(
-            `scoped MCP 工具门禁失败：实际=${tools.join(",")}，期望=${DISPATCH_SCOPED_TOOL_NAMES.join(",")}`,
+            `Scoped MCP tool gate failed: actual=${tools.join(",")}, expected=${DISPATCH_SCOPED_TOOL_NAMES.join(",")}`,
           );
         }
 
@@ -216,8 +216,8 @@ export async function runBatch(
         };
         logModelOverride(liveJob, roundJob, cardId);
         logClaimedCard(claim.payload);
-        workerLog(`本卡测试：${roundJob.requireTests === false ? "无需" : "需要"}`);
-        workerLog("Worker 正在实施当前卡片");
+        workerLog(`Tests for this card: ${roundJob.requireTests === false ? "not required" : "required"}`);
+        workerLog("Worker is processing the current card");
 
         const agentResult = await runAgentWithRetry(
           dependencies.runAgent,
@@ -225,12 +225,12 @@ export async function runBatch(
           cancellation,
           dependencies.sleep,
         );
-        if (cancellation?.isSkipRequested || agentResult.error === "已跳过") {
+        if (cancellation?.isSkipRequested || agentResult.error === "Skipped") {
           cancellation?.clearSkipRequest();
           await mcp.callJson("dispatch_skip_agent_session", {
             workerToken: job.workerToken,
             sessionId,
-            reason: "用户请求跳过当前卡片",
+            reason: "User requested skipping the current card",
           });
           terminalRecorded = true;
           const afterSkip = dependencies.inspectGit(job.cwd);
@@ -238,26 +238,26 @@ export async function runBatch(
             if (afterSkip.kind === "dirty") {
               return {
                 ok: false,
-                error: `跳过后工作区不干净，停止批次：\n${afterSkip.output}`,
+                error: `Workspace is dirty after skip; stopping batch:\n${afterSkip.output}`,
                 processedCards,
               };
             }
             if (afterSkip.kind === "unknown") {
               return {
                 ok: false,
-                error: `跳过后无法判断工作区状态：${afterSkip.output}`,
+                error: `Unable to determine workspace state after skip: ${afterSkip.output}`,
                 processedCards,
               };
             }
           }
           continue;
         }
-        if (cancellation?.isCancelled || agentResult.error === "已取消") {
+        if (cancellation?.isCancelled || agentResult.error === "Cancelled") {
           await recordRoundFailure(
             mcp,
             job,
             sessionId,
-            "用户取消当前 Agent 会话",
+            "User cancelled the current Agent session",
             true,
           );
           terminalRecorded = true;
@@ -267,12 +267,12 @@ export async function runBatch(
           await mcp.callJson("dispatch_fail_agent_session", {
             workerToken: job.workerToken,
             sessionId,
-            reason: agentResult.error ?? "Agent 会话失败",
+            reason: agentResult.error ?? "Agent session failed",
           });
           terminalRecorded = true;
           return {
             ok: false,
-            error: agentResult.error ?? `第 ${index} 次 Agent 会话失败`,
+            error: agentResult.error ?? `Agent session ${index} failed`,
             processedCards,
           };
         }
@@ -295,13 +295,13 @@ export async function runBatch(
         if (state === "blocked") {
           return {
             ok: false,
-            error: `卡片 ${cardId} 已进入阻塞中，Worker 停止批次`,
+            error: `Card ${cardId} is blocked; Worker is stopping the batch`,
             processedCards,
           };
         }
         if (state === "verify" && pending == null) {
           processedCards += 1;
-          workerLog(`咨询卡 ${cardId} 已送交验证`, "worker", "success");
+          workerLog(`Consultation card ${cardId} was submitted for verification`, "worker", "success");
           continue;
         }
         if (!pending || pending.status !== "declared") {
@@ -309,17 +309,17 @@ export async function runBatch(
             mcp,
             job,
             sessionId,
-            `实施卡 ${cardId} 未声明 ready_to_submit`,
+            `Card ${cardId} did not declare ready_to_submit`,
           );
           terminalRecorded = true;
           return {
             ok: false,
-            error: `实施卡 ${cardId} 未声明 ready_to_submit`,
+            error: `Card ${cardId} did not declare ready_to_submit`,
             processedCards,
           };
         }
 
-        workerLog("Worker 正在提交当前卡片");
+        workerLog("Worker is finalizing the current card");
         const finalized = await validateAndFinalize(
           mcp,
           job,
@@ -331,7 +331,7 @@ export async function runBatch(
               mcp,
               job,
               sessionId,
-              finalized.error ?? "Worker 收尾失败",
+              finalized.error ?? "Worker finalization failed",
             );
             terminalRecorded = true;
           }
@@ -339,14 +339,14 @@ export async function runBatch(
         }
         terminalRecorded = true;
         processedCards += 1;
-        workerLog(`卡片 ${cardId} 已验证、提交并送交人工验证`, "worker", "success");
+        workerLog(`Card ${cardId} was validated, committed, and submitted for manual verification`, "worker", "success");
         if (cancellation?.shouldStopAfterCurrentSession) {
           return cancellation.isCancelled ? cancelledResult() : drainedResult();
         }
       } catch (error) {
         const reason = error instanceof WorkerCancelledError
-          ? "用户取消当前 Agent 会话"
-          : `${postAgent ? "Worker 收尾失败" : "Agent 会话异常"}：${error instanceof Error ? error.message : String(error)}`;
+          ? "User cancelled the current Agent session"
+          : `${postAgent ? "Worker finalization failed" : "Agent session error"}: ${error instanceof Error ? error.message : String(error)}`;
         if (!terminalRecorded) {
           await recordRoundFailure(
             mcp,
@@ -360,9 +360,9 @@ export async function runBatch(
         const dirtySuffix = allowDirtyWorkspace || postAgent
           ? ""
           : tree.kind === "dirty"
-          ? `\n工作区不干净，停止批次：\n${tree.output}`
+          ? `\nWorkspace is dirty; stopping batch:\n${tree.output}`
           : tree.kind === "unknown"
-          ? `\n无法判断工作区状态，停止批次：${tree.output}`
+          ? `\nUnable to determine workspace state; stopping batch: ${tree.output}`
           : "";
         return error instanceof WorkerCancelledError
           ? cancelledResult()
@@ -375,14 +375,14 @@ export async function runBatch(
         }).catch(() => undefined);
       }
     }
-    return completedResult(processedCards, "已达到批次上限");
+    return completedResult(processedCards, "Batch limit reached");
   } catch (error) {
     if (error instanceof WorkerCancelledError) return cancelledResult();
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, error: message, processedCards };
   } finally {
     await mcp.close().catch(() => undefined);
-    workerLog("Worker 已关闭完整看板 MCP 连接");
+    workerLog("Worker closed the full Kanban MCP connection");
   }
 }
 
@@ -410,7 +410,7 @@ async function recoverPendingSessions(
     );
     if (!result.ok) return { ...result, processedCards };
     processedCards += 1;
-    workerLog(`已恢复 pending 会话 ${sessionId}`, "worker", "success");
+    workerLog(`Recovered pending session ${sessionId}`, "worker", "success");
   }
   return { ok: true, processedCards };
 }
@@ -424,7 +424,7 @@ async function validateAndFinalize(
   const cardId = requiredString(pending, "cardId");
   let status = String(pending.status ?? "");
   if (status === "declared") {
-    workerLog("验证已由 Agent 会话完成，Worker 不再复跑测试");
+  workerLog("Validation was completed in the Agent session; Worker will not rerun tests");
     const recorded = await mcp.callJson("dispatch_record_validation_results", {
       workerToken: job.workerToken,
       sessionId,
@@ -432,7 +432,7 @@ async function validateAndFinalize(
     });
     status = String(recorded.status ?? "");
     if (status === "failed") {
-      const reason = String(recorded.error ?? "验证失败");
+      const reason = String(recorded.error ?? "Validation failed");
       await mcp.callJson("dispatch_block_agent_session", {
         workerToken: job.workerToken,
         sessionId,
@@ -442,9 +442,9 @@ async function validateAndFinalize(
     }
   }
   if (!["validated", "committing", "committed", "finalized"].includes(status)) {
-    return { ok: false, error: `pending 状态无法恢复：${status || "未知"}` };
+    return { ok: false, error: `Cannot recover pending status: ${status || "unknown"}` };
   }
-  workerLog("Worker 正在提交并送交验证");
+  workerLog("Worker is committing and submitting for verification");
   const finalized = await mcp.callJson("dispatch_finalize", {
     workerToken: job.workerToken,
     sessionId,
@@ -454,7 +454,7 @@ async function validateAndFinalize(
       ok: false,
       preservePending: true,
       error: String(
-        finalized.error ?? "Git 提交后工作区不干净，拒绝更新看板",
+        finalized.error ?? "Workspace is dirty after the Git commit; refusing to update the board",
       ),
     };
   }
@@ -463,7 +463,7 @@ async function validateAndFinalize(
     String(finalized.sessionId ?? "") !== sessionId ||
     String(finalized.cardId ?? "") !== cardId
   ) {
-    return { ok: false, error: `dispatch_finalize 返回状态不一致：${sessionId}` };
+    return { ok: false, error: `dispatch_finalize returned an inconsistent status: ${sessionId}` };
   }
   return { ok: true };
 }
@@ -484,7 +484,7 @@ async function recordRoundFailure(
     },
   ).catch((error) => {
     workerLog(
-      `记录会话失败状态失败：${error instanceof Error ? error.message : String(error)}`,
+      `Failed to record the session failure state: ${error instanceof Error ? error.message : String(error)}`,
       "worker",
       "warning",
     );
@@ -502,24 +502,24 @@ function assertSessionMatches(
     String(status.sessionId ?? "") !== sessionId ||
     String(status.cardId ?? "") !== cardId
   ) {
-    throw new Error(`Agent 会话状态与 claim 不一致：${sessionId}/${cardId}`);
+    throw new Error(`Agent session status does not match the claim: ${sessionId}/${cardId}`);
   }
 }
 
 function cardState(card: Record<string, unknown>): "verify" | "blocked" | "active" {
   const columnId = String(card.columnId ?? "");
   const columnName = String(card.columnName ?? "");
-  if (columnId === "verify" || columnName === "待验证") return "verify";
-  if (columnId === "blocked" || columnName === "阻塞中") return "blocked";
+  if (columnId === "verify" || columnName === "Verify" || columnName === "待验证") return "verify";
+  if (columnId === "blocked" || columnName === "Blocked" || columnName === "阻塞中") return "blocked";
   return "active";
 }
 
 function gitPreflightError(tree: GitWorkingTree): string | undefined {
   if (tree.kind === "dirty") {
-    return `工作区不干净，未领取卡片：\n${tree.output}`;
+    return `Workspace is dirty; card was not claimed:\n${tree.output}`;
   }
   if (tree.kind === "unknown") {
-    return `无法判断 Git 工作区，未领取卡片：${tree.output}`;
+    return `Unable to determine Git workspace state; card was not claimed: ${tree.output}`;
   }
   return undefined;
 }
@@ -529,7 +529,7 @@ function requiredString(
   key: string,
 ): string {
   const value = String(record[key] ?? "").trim();
-  if (!value) throw new Error(`协议字段 ${key} 不能为空`);
+  if (!value) throw new Error(`Protocol field ${key} cannot be empty`);
   return value;
 }
 
@@ -543,10 +543,10 @@ function completedResult(
   processedCards: number,
   reason: string,
 ): DispatchResult {
-  workerLog(`Worker 批次完成：${reason}；已处理 ${processedCards} 张`, "worker", "success");
+  workerLog(`Worker batch completed: ${reason}; processed ${processedCards} card(s)`, "worker", "success");
   return {
     ok: true,
-    summary: `Worker 批次完成：${reason}；已处理 ${processedCards} 张`,
+    summary: `Worker batch completed: ${reason}; processed ${processedCards} card(s)`,
     processedCards,
   };
 }
@@ -564,10 +564,10 @@ function logClaimedCard(payload: Record<string, unknown>): void {
     if (kind === "title" && !title) title = text;
     else details.push(text);
   }
-  workerLog(`当前卡片：${title || String(payload.cardId ?? "未命名卡片")}`);
+  workerLog(`Current card: ${title || String(payload.cardId ?? "Untitled card")}`);
   if (details.length > 0) {
     const detail = details.join("\n").slice(0, 800);
-    workerLog(`当前任务：${detail}`);
+    workerLog(`Current task: ${detail}`);
   }
 }
 
@@ -595,6 +595,6 @@ function logModelOverride(
     return;
   }
   workerLog(
-    `本卡覆盖：engine=${round.engine} model=${round.model ?? "(平台默认)"} params=${JSON.stringify(round.modelParams ?? [])} cardId=${cardId}`,
+    `Card override: engine=${round.engine} model=${round.model ?? "(platform default)"} params=${JSON.stringify(round.modelParams ?? [])} cardId=${cardId}`,
   );
 }
