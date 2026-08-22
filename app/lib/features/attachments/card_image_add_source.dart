@@ -8,9 +8,9 @@ enum CardImageAddSource {
 
 extension CardImageAddSourceLabel on CardImageAddSource {
   String get label => switch (this) {
-        CardImageAddSource.gallery => '从相册选择',
-        CardImageAddSource.camera => '拍照',
-        CardImageAddSource.clipboard => '粘贴图片',
+        CardImageAddSource.gallery => 'Choose from gallery',
+        CardImageAddSource.camera => 'Take photo',
+        CardImageAddSource.clipboard => 'Paste image',
       };
 
   IconData get icon => switch (this) {

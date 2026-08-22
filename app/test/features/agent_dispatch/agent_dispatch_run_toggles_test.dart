@@ -24,11 +24,11 @@ void main() {
       ),
     );
 
-    expect(find.text('允许使用卡片参数'), findsOneWidget);
-    expect(find.text('允许脏工作区'), findsOneWidget);
-    expect(find.text('开沙箱'), findsOneWidget);
-    expect(find.text('需要测试'), findsOneWidget);
-    expect(find.text('收尾后主动结束会话'), findsOneWidget);
+    expect(find.text('Allow card parameters'), findsOneWidget);
+    expect(find.text('Allow dirty workspace'), findsOneWidget);
+    expect(find.text('Enable sandbox'), findsOneWidget);
+    expect(find.text('Tests required'), findsOneWidget);
+    expect(find.text('End session when finished'), findsOneWidget);
     expect(find.byType(Checkbox), findsNWidgets(5));
     expect(find.byType(Switch), findsNothing);
     expect(find.byType(ToggleButtons), findsNothing);
@@ -67,7 +67,7 @@ void main() {
     final checkbox = tester.widget<Checkbox>(find.byType(Checkbox).first);
     expect(checkbox.value, isFalse);
 
-    await tester.tap(find.text('允许使用卡片参数'));
+    await tester.tap(find.text('Allow card parameters'));
     await tester.pump();
 
     expect(ignoreCardParams, isFalse);

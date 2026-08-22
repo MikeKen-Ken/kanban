@@ -349,7 +349,7 @@ void main() {
     expect(find.text('Push'), findsOneWidget);
     expect(find.text('Sleep'), findsOneWidget);
     expect(find.text('Shut down'), findsOneWidget);
-    expect(find.text('失败后仍执行'), findsOneWidget);
+    expect(find.text('Continue after failure'), findsOneWidget);
     expect(find.text('添加上传'), findsNothing);
     expect(find.text('WebDAV 全量上传'), findsNothing);
   });
@@ -377,7 +377,7 @@ void main() {
     );
 
     expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
-    await tester.tap(find.text('失败后仍执行'));
+    await tester.tap(find.text('Continue after failure'));
     await tester.pump();
     expect(runOnFailure, isFalse);
     expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
@@ -404,7 +404,7 @@ void main() {
         isA<Exception>().having(
           (error) => '$error',
           'message',
-          contains('工作区不干净'),
+          contains('Working tree is dirty'),
         ),
       ),
     );
@@ -438,7 +438,7 @@ void main() {
         isA<Exception>().having(
           (error) => '$error',
           'message',
-          contains('已 abort'),
+          contains('aborted'),
         ),
       ),
     );

@@ -525,10 +525,9 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final checklist = List<ChecklistItem>.from(_checklist);
     final verificationFeedback =
         List<ChecklistItem>.from(_verificationFeedback);
-    final liveFeedback = _boardController
-            .findCardById(widget.card.id)
-            ?.verificationFeedback ??
-        widget.card.verificationFeedback;
+    final liveFeedback =
+        _boardController.findCardById(widget.card.id)?.verificationFeedback ??
+            widget.card.verificationFeedback;
     // 以看板上已落盘的反馈为基准，避免详情打开快照与对话面板即时同步交错时误删新追问。
     final removedAgentFollowUpTexts = liveFeedback
         .where(
@@ -1099,8 +1098,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
 
   Future<void> _removeVerificationFeedbackItem(String id) async {
     final previous = List<ChecklistItem>.from(_verificationFeedback);
-    final next =
-        _verificationFeedback.where((item) => item.id != id).toList();
+    final next = _verificationFeedback.where((item) => item.id != id).toList();
     _safeSetState(() => _verificationFeedback = next);
     try {
       await _syncAgentConversationForFeedbackChange(
@@ -1286,7 +1284,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                                 style: theme.textTheme.titleSmall),
                             const Spacer(),
                             IconButton(
-                              tooltip: 'Expand editor',
+                              tooltip: 'Open full editor',
                               onPressed: _openDescriptionExpanded,
                               icon: const Icon(
                                 Icons.open_in_full,
@@ -1422,8 +1420,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
                           }).toList(),
                         ),
                         const SizedBox(height: 20),
-                        Text('Card background color',
-                            style: theme.textTheme.titleSmall),
+                        Text('Card color', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         // 快捷色与「更多颜色」同一行；小屏可横向滚动。
                         SingleChildScrollView(

@@ -315,8 +315,16 @@ String? _phaseFromLog(String message) {
   if (message.contains('咨询卡') && message.contains('送交验证')) return 'Verify';
   if (message.contains('Worker 批次完成')) return 'Complete';
   final afterQueue = _afterQueuePattern.firstMatch(message);
-  if (afterQueue != null) return afterQueue.group(1);
-  if (message.contains('完成后队列：开始')) return 'After-completion queue';
+  if (afterQueue != null) {
+    return switch (afterQueue.group(1)) {
+      '上传' => 'Upload',
+      '推送' => 'Push',
+      '休眠' => 'Sleep',
+      '关机' => 'Shutdown',
+      _ => afterQueue.group(1),
+    };
+  }
+  if (message.contains('完成后队列：开始')) return 'Completion queue';
   return null;
 }
 

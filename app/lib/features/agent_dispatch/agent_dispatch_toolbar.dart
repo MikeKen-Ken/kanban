@@ -38,7 +38,7 @@ class _AgentDispatchToolbarButtonState
     if (!isAgentDispatchDesktop) return const SizedBox.shrink();
     final runningCount = _registry.runningCount;
     final tooltip = runningCount > 0
-        ? 'Agent Dispatch ($runningCount project(s) running)'
+        ? 'Agent Dispatch · $runningCount running'
         : 'Agent Dispatch';
     return IconButton(
       tooltip: tooltip,

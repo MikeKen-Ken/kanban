@@ -32,13 +32,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('允许脏工作区'), findsOneWidget);
-    expect(find.text('开沙箱'), findsOneWidget);
-    expect(find.text('需要测试'), findsOneWidget);
+    expect(find.text('Allow dirty workspace'), findsOneWidget);
+    expect(find.text('Enable sandbox'), findsOneWidget);
+    expect(find.text('Tests required'), findsOneWidget);
     final requireTestsCheckbox = tester.widgetList<Checkbox>(
       find.descendant(
         of: find.ancestor(
-          of: find.text('需要测试'),
+          of: find.text('Tests required'),
           matching: find.byType(InkWell),
         ),
         matching: find.byType(Checkbox),

@@ -60,7 +60,7 @@ class _AgentInteractionPromptState extends State<AgentInteractionPrompt> {
       builder: (dialogContext) {
         return AlertDialog(
           key: const ValueKey('agent-dispatch-interaction-dialog'),
-          title: const Text('Agent needs your choice'),
+          title: const Text('Your input is needed'),
           content: SizedBox(
             width: 420,
             child: Column(

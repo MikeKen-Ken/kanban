@@ -24,7 +24,7 @@ class CardDetailCommitRefSection extends StatelessWidget {
           onChanged: (_) => onChanged(),
           decoration: const InputDecoration(
             hintText:
-                'Git short hash (7 characters; full hashes are shortened automatically)',
+                'Short Git hash (7+ characters; full hashes are shortened)',
             isDense: true,
             border: OutlineInputBorder(),
           ),

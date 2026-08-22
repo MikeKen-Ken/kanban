@@ -26,7 +26,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const AgentDispatchSectionHeader(
-          title: 'After-completion queue',
+          title: 'Completion queue',
           tone: AgentDispatchSectionTone.queue,
         ),
         const SizedBox(height: 4),
@@ -59,7 +59,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
           children: [
             for (final step in AgentDispatchAfterStep.values)
               ActionChip(
-                tooltip: 'Add to after-completion queue',
+                tooltip: 'Add action',
                 label: Text(step.label),
                 onPressed: !enabled || steps.contains(step)
                     ? null

@@ -57,8 +57,9 @@ AttachmentAddAnalysis analyzeFileAttachmentPicks({
   if (remaining <= 0) {
     issues.add(
       AttachmentAddIssue(
-        label: '数量已满',
-        reason: '每张卡片最多 $maxCount 个文件，请先删除后再添加',
+        label: 'Limit reached',
+        reason:
+            'Each card supports up to $maxCount files. Remove one before adding more.',
         canForceSubmit: false,
       ),
     );
@@ -68,8 +69,9 @@ AttachmentAddAnalysis analyzeFileAttachmentPicks({
   if (picked.length > remaining) {
     issues.add(
       AttachmentAddIssue(
-        label: '选择数量',
-        reason: '已选 ${picked.length} 个，当前最多还能添加 $remaining 个',
+        label: 'Too many selected',
+        reason:
+            'You selected ${picked.length}; only $remaining more can be added.',
         canForceSubmit: true,
       ),
     );
@@ -80,7 +82,7 @@ AttachmentAddAnalysis analyzeFileAttachmentPicks({
       issues.add(
         AttachmentAddIssue(
           label: file.fileName,
-          reason: '文件内容为空，无法添加',
+          reason: 'The file is empty and cannot be added.',
           canForceSubmit: false,
         ),
       );
@@ -91,7 +93,7 @@ AttachmentAddAnalysis analyzeFileAttachmentPicks({
         AttachmentAddIssue(
           label: file.fileName,
           reason:
-              '大小 ${formatAttachmentByteSize(file.bytes.length)}，超过单文件 ${maxCardFileMegabytes()} MB 限制',
+              'Size ${formatAttachmentByteSize(file.bytes.length)} exceeds the ${maxCardFileMegabytes()} MB file limit.',
           canForceSubmit: true,
         ),
       );
@@ -113,8 +115,9 @@ AttachmentAddAnalysis analyzeImageAttachmentPicks({
   if (remaining <= 0) {
     issues.add(
       AttachmentAddIssue(
-        label: '数量已满',
-        reason: '每张卡片最多 $maxCount 张图片，请先删除后再添加',
+        label: 'Limit reached',
+        reason:
+            'Each card supports up to $maxCount images. Remove one before adding more.',
         canForceSubmit: false,
       ),
     );
@@ -124,8 +127,9 @@ AttachmentAddAnalysis analyzeImageAttachmentPicks({
   if (picked.length > remaining) {
     issues.add(
       AttachmentAddIssue(
-        label: '选择数量',
-        reason: '已选 ${picked.length} 张，当前最多还能添加 $remaining 张',
+        label: 'Too many selected',
+        reason:
+            'You selected ${picked.length}; only $remaining more can be added.',
         canForceSubmit: true,
       ),
     );
@@ -136,7 +140,7 @@ AttachmentAddAnalysis analyzeImageAttachmentPicks({
       issues.add(
         AttachmentAddIssue(
           label: image.fileName,
-          reason: '图片内容为空，无法添加',
+          reason: 'The image is empty and cannot be added.',
           canForceSubmit: false,
         ),
       );
@@ -146,7 +150,7 @@ AttachmentAddAnalysis analyzeImageAttachmentPicks({
       issues.add(
         AttachmentAddIssue(
           label: image.fileName,
-          reason: '无法识别为有效图片',
+          reason: 'This is not a valid image.',
           canForceSubmit: false,
         ),
       );
@@ -157,7 +161,7 @@ AttachmentAddAnalysis analyzeImageAttachmentPicks({
         AttachmentAddIssue(
           label: image.fileName,
           reason:
-              '原图 ${formatAttachmentByteSize(image.bytes.length)} 较大，处理与同步可能较慢',
+              'The original image is large (${formatAttachmentByteSize(image.bytes.length)}); processing and sync may be slower.',
           canForceSubmit: true,
         ),
       );
@@ -181,16 +185,17 @@ List<T> trimPickedAttachmentsForAdd<T>(
 String forceSubmitConfirmMessage(AttachmentAddAnalysis analysis) {
   final reasons = <String>{};
   for (final issue in analysis.issues) {
-    if (issue.label == '选择数量') {
-      reasons.add('超出数量的文件将只添加允许范围内的部分');
-    } else if (issue.reason.contains('超过单文件')) {
-      reasons.add('大文件可能导致同步缓慢、失败或占用更多存储');
-    } else if (issue.reason.contains('较大')) {
-      reasons.add('大图处理与同步可能较慢');
+    if (issue.label == 'Too many selected') {
+      reasons.add('Only items within the card limit will be added');
+    } else if (issue.reason.contains('file limit')) {
+      reasons.add(
+          'Large files may slow sync, fail to upload, or use more storage');
+    } else if (issue.reason.contains('processing and sync')) {
+      reasons.add('Large images may take longer to process and sync');
     }
   }
   if (reasons.isEmpty) {
-    return '这些附件不符合推荐限制，继续添加可能影响性能或同步。确定仍要添加吗？';
+    return 'These attachments exceed the recommended limits and may affect performance or sync. Add anyway?';
   }
-  return '${reasons.join('；')}。确定仍要添加吗？';
+  return '${reasons.join(' ')} Add anyway?';
 }

@@ -37,7 +37,7 @@ class AgentDispatchWorkspace extends StatelessWidget {
               Expanded(
                 flex: 10,
                 child: _ScrollablePane(
-                  title: 'Dispatch configuration',
+                  title: 'Configuration',
                   child: settings,
                 ),
               ),
@@ -64,7 +64,7 @@ class AgentDispatchWorkspace extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const _PaneTitle(
-                title: 'Dispatch configuration',
+                title: 'Configuration',
                 tone: AgentDispatchSectionTone.configuration,
               ),
               const SizedBox(height: 12),
@@ -171,7 +171,7 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
               children: [
                 IconButton(
                   key: const ValueKey('agent-dispatch-skill-expand'),
-                  tooltip: _expanded ? 'Collapse Skill' : 'Expand Skill',
+                  tooltip: _expanded ? 'Collapse skill' : 'Expand skill',
                   onPressed: () => setState(() => _expanded = !_expanded),
                   icon: Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
@@ -185,13 +185,13 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Open Skill directory',
+                  tooltip: 'Open skill folder',
                   onPressed:
                       widget.enabled ? widget.onOpenSkillDirectory : null,
                   icon: const Icon(Icons.folder_open_outlined, size: 20),
                 ),
                 IconButton(
-                  tooltip: 'Reload Skill',
+                  tooltip: 'Reload skill',
                   onPressed: widget.enabled ? widget.onRefreshSkill : null,
                   icon: const Icon(Icons.refresh, size: 20),
                 ),

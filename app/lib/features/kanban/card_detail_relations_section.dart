@@ -210,13 +210,13 @@ class CardDetailRelationsSection extends StatelessWidget {
                 style: theme.textTheme.titleSmall),
             const HelpTipIcon(
               message:
-                  'This card is blocked until its prerequisites are complete; click an item to open it.',
+                  'Blocked until prerequisites are complete. Click an item to open it.',
             ),
             const Spacer(),
             TextButton.icon(
               onPressed: () => _pickRelatedCard(
                 context: context,
-                title: 'Select prerequisites blocking this card',
+                title: 'Select prerequisites',
                 onPicked: (id) {
                   if (blockedByIds.contains(id) || id == cardId) return;
                   onBlockedByIdsChanged([...blockedByIds, id]);
@@ -240,8 +240,7 @@ class CardDetailRelationsSection extends StatelessWidget {
             Text('Relations (related cards)',
                 style: theme.textTheme.titleSmall),
             const HelpTipIcon(
-              message:
-                  'No ordering relationship; useful for navigation and traceability. Does not block this card.',
+              message: 'Related for navigation only; does not block this card.',
             ),
             const Spacer(),
             TextButton.icon(

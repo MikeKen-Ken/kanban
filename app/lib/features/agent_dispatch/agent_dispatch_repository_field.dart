@@ -88,7 +88,7 @@ class AgentDispatchRepositoryField extends StatelessWidget {
                                 ),
                               ),
                               IconButton(
-                                tooltip: 'Delete this repository history',
+                                tooltip: 'Remove saved repository',
                                 visualDensity: VisualDensity.compact,
                                 iconSize: 18,
                                 onPressed: () {

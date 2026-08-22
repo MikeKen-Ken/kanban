@@ -187,7 +187,7 @@ class CardDetailAttachmentsSection extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () => context.read<BoardController>().mergeNow(),
-                  child: const Text('Merge sync'),
+                  child: const Text('Sync now'),
                 ),
               ],
             ),

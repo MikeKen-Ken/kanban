@@ -141,7 +141,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
           SettingsSection(
             icon: Icons.system_update_alt_outlined,
             title: 'Software updates',
-            subtitle: 'Get installers from GitHub Releases',
+            subtitle: 'Download the latest installer',
             children: [
               ListTile(
                 leading: const Icon(Icons.info_outline),

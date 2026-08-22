@@ -27,7 +27,7 @@ void main() {
     expect(find.byType(VerticalDivider), findsNWidgets(2));
     expect(find.text('Worker 内容'), findsOneWidget);
     expect(find.text('Skill 内容'), findsOneWidget);
-    expect(find.text('调度配置'), findsOneWidget);
+    expect(find.text('Configuration'), findsOneWidget);
     expect(find.text('批次配置'), findsNothing);
     expect(find.text('对话内容'), findsOneWidget);
   });
@@ -120,14 +120,14 @@ void main() {
     expect(find.textContaining('系统就绪'), findsOneWidget);
     expect(find.textContaining('工具：glob'), findsNothing);
     expect(find.textContaining('思考中'), findsNothing);
-    expect(find.textContaining('工具：grep'), findsOneWidget);
+    expect(find.textContaining('Tool: grep'), findsOneWidget);
 
     await tester
         .tap(find.byKey(const ValueKey('agent-dispatch-log-source-mcp')));
     await tester.pump();
 
     expect(find.textContaining('系统就绪'), findsNothing);
-    expect(find.textContaining('工具：grep'), findsOneWidget);
+    expect(find.textContaining('Tool: grep'), findsOneWidget);
   });
 
   testWidgets('离开底部后新日志不强制滚到底', (tester) async {
@@ -199,9 +199,15 @@ void main() {
       ),
     );
 
-    expect(find.text('失败 '), findsOneWidget);
-    expect(find.text('警告 '), findsOneWidget);
-    expect(find.text('最新 Token '), findsOneWidget);
+    expect(find.text('Error '), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-dispatch-log-level-warning')),
+        matching: find.textContaining('Warning'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Latest token'), findsOneWidget);
     expect(find.text('46'), findsOneWidget);
 
     await tester.tap(
@@ -268,15 +274,15 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('9秒'), findsNothing);
+    expect(find.text('9s'), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('agent-dispatch-card-elapsed')),
-        matching: find.textContaining('秒'),
+        matching: find.textContaining('s'),
       ),
       findsOneWidget,
     );
-    expect(find.textContaining('步骤 3'), findsOneWidget);
+    expect(find.textContaining('Steps 3'), findsOneWidget);
     expect(find.textContaining('cursor'), findsOneWidget);
   });
 
@@ -321,7 +327,8 @@ void main() {
     expect(find.textContaining('完成甲'), findsOneWidget);
     expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-2')));
     await tester.pumpAndSettle();
@@ -336,14 +343,15 @@ void main() {
     expect(copied, isNot(contains('完成甲')));
     expect(copied, isNot(contains('启动批次')));
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-all')));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('完成甲'), findsOneWidget);
     expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
-    expect(find.text('全部任务'), findsOneWidget);
+    expect(find.text('All tasks'), findsOneWidget);
   });
 
   testWidgets('切换任务后状态区跟随该卡，并可跳回运行中卡片', (tester) async {
@@ -401,7 +409,8 @@ void main() {
     expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
         findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-1')));
     await tester.pumpAndSettle();
@@ -413,11 +422,12 @@ void main() {
       '任务甲',
     );
     expect(find.text('已完成的需求'), findsOneWidget);
-    expect(find.text('已完成'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
         findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-jump-running-card')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-jump-running-card')));
     await tester.pumpAndSettle();
 
     expect(

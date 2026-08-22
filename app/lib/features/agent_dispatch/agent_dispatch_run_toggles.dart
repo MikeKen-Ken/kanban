@@ -61,7 +61,7 @@ class AgentDispatchRunToggles extends StatelessWidget {
           onChanged: onRequireTestsChanged,
         ),
         _Toggle(
-          title: 'End session after finalization',
+          title: 'End session when finished',
           value: terminateAfterDispatchTerminal,
           enabled: enabled,
           onChanged: onTerminateAfterDispatchTerminalChanged,

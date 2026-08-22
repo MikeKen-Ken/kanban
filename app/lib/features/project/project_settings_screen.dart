@@ -102,8 +102,7 @@ class _ProjectSettingsScreenState extends State<ProjectSettingsScreen> {
     _textSaveDebounce?.cancel();
     await _persistDraft(showError: true);
     if (!mounted || _saving) return;
-    showAppSnackBar(context,
-        message: 'Project settings saved and will sync automatically');
+    showAppSnackBar(context, message: 'Project settings saved');
     Navigator.pop(context);
   }
 
