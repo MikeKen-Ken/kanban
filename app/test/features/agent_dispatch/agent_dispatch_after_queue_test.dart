@@ -10,13 +10,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 AgentDispatchAfterQueueHost _host({
   Future<void> Function()? uploadAll,
   Future<void> Function()? gitPush,
-  Future<void> Function()? sleep,
+  Future<void> Function()? hibernate,
   Future<void> Function()? shutdown,
 }) {
   return AgentDispatchAfterQueueHost(
     uploadAll: uploadAll ?? () async => fail('不应上传'),
     gitPush: gitPush ?? () async => fail('不应推送'),
-    sleep: sleep ?? () async => fail('不应休眠'),
+    hibernate: hibernate ?? () async => fail('不应休眠'),
     shutdown: shutdown ?? () async => fail('不应关机'),
   );
 }
@@ -25,20 +25,27 @@ void main() {
   test('按钮文案使用短标签', () {
     expect(AgentDispatchAfterStep.webdavUpload.label, 'Upload');
     expect(AgentDispatchAfterStep.gitPush.label, 'Push');
-    expect(AgentDispatchAfterStep.sleep.label, 'Sleep');
+    expect(AgentDispatchAfterStep.hibernate.label, 'Hibernate');
     expect(AgentDispatchAfterStep.shutdown.label, 'Shut down');
   });
 
   test('解析完成后队列时去重并保持顺序', () {
     expect(
       parseAgentDispatchAfterQueue(
-        ['webdavUpload', 'gitPush', 'sleep', 'webdavUpload'],
+        ['webdavUpload', 'gitPush', 'hibernate', 'webdavUpload'],
       ),
       [
         AgentDispatchAfterStep.webdavUpload,
         AgentDispatchAfterStep.gitPush,
-        AgentDispatchAfterStep.sleep,
+        AgentDispatchAfterStep.hibernate,
       ],
+    );
+  });
+
+  test('旧版 sleep 步骤名仍解析为 hibernate', () {
+    expect(
+      parseAgentDispatchAfterQueue(['sleep']),
+      [AgentDispatchAfterStep.hibernate],
     );
   });
 
@@ -48,14 +55,14 @@ void main() {
     await runAgentDispatchAfterQueue(
       steps: const [
         AgentDispatchAfterStep.webdavUpload,
-        AgentDispatchAfterStep.sleep,
+        AgentDispatchAfterStep.hibernate,
       ],
       host: _host(
         uploadAll: () async {
           await Future<void>.delayed(const Duration(milliseconds: 20));
           uploadDone = true;
         },
-        sleep: () async {
+        hibernate: () async {
           expect(uploadDone, isTrue);
           slept = true;
         },
@@ -70,14 +77,14 @@ void main() {
     await runAgentDispatchAfterQueue(
       steps: const [
         AgentDispatchAfterStep.gitPush,
-        AgentDispatchAfterStep.sleep,
+        AgentDispatchAfterStep.hibernate,
       ],
       host: _host(
         gitPush: () async {
           await Future<void>.delayed(const Duration(milliseconds: 20));
           pushed = true;
         },
-        sleep: () async {
+        hibernate: () async {
           expect(pushed, isTrue);
           slept = true;
         },
@@ -92,7 +99,7 @@ void main() {
       runAgentDispatchAfterQueue(
         steps: const [
           AgentDispatchAfterStep.webdavUpload,
-          AgentDispatchAfterStep.sleep,
+          AgentDispatchAfterStep.hibernate,
         ],
         host: _host(
           uploadAll: () async => throw Exception('上传失败'),
@@ -110,7 +117,7 @@ void main() {
       runAgentDispatchAfterQueue(
         steps: const [
           AgentDispatchAfterStep.gitPush,
-          AgentDispatchAfterStep.sleep,
+          AgentDispatchAfterStep.hibernate,
         ],
         host: _host(
           gitPush: () async => throw Exception('推送失败'),
@@ -125,7 +132,7 @@ void main() {
   test('Windows 拒绝休眠请求时抛出失败', () async {
     var command = '';
     await expectLater(
-      windowsSleepNow(
+      windowsHibernateNow(
         runner: (executable, arguments) async {
           expect(executable, 'powershell');
           command = arguments.last;
@@ -153,7 +160,7 @@ void main() {
       afterQueue: [
         AgentDispatchAfterStep.webdavUpload,
         AgentDispatchAfterStep.gitPush,
-        AgentDispatchAfterStep.sleep,
+        AgentDispatchAfterStep.hibernate,
       ],
     );
 
@@ -296,7 +303,7 @@ void main() {
 
   test('批次结束解析完成后队列时以最新配置为准', () {
     final latest = resolveAfterQueueForBatchEnd(
-      liveSteps: const [AgentDispatchAfterStep.sleep],
+      liveSteps: const [AgentDispatchAfterStep.hibernate],
       liveRunOnFailure: false,
       resolved: (
         steps: const [
@@ -347,7 +354,7 @@ void main() {
 
     expect(find.text('Upload'), findsOneWidget);
     expect(find.text('Push'), findsOneWidget);
-    expect(find.text('Sleep'), findsOneWidget);
+    expect(find.text('Hibernate'), findsOneWidget);
     expect(find.text('Shut down'), findsOneWidget);
     expect(find.text('Continue after failure'), findsOneWidget);
     expect(find.text('添加上传'), findsNothing);

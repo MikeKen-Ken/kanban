@@ -6,18 +6,19 @@ import '../mcp/mcp_git_commit.dart';
 enum AgentDispatchAfterStep {
   webdavUpload,
   gitPush,
-  sleep,
+  hibernate,
   shutdown;
 
   String get label => switch (this) {
         AgentDispatchAfterStep.webdavUpload => 'Upload',
         AgentDispatchAfterStep.gitPush => 'Push',
-        AgentDispatchAfterStep.sleep => 'Sleep',
+        AgentDispatchAfterStep.hibernate => 'Hibernate',
         AgentDispatchAfterStep.shutdown => 'Shut down',
       };
 
   static AgentDispatchAfterStep? tryParse(String? name) {
     if (name == null || name.isEmpty) return null;
+    if (name == 'sleep') return AgentDispatchAfterStep.hibernate;
     for (final step in AgentDispatchAfterStep.values) {
       if (step.name == name) return step;
     }
@@ -29,13 +30,13 @@ class AgentDispatchAfterQueueHost {
   const AgentDispatchAfterQueueHost({
     required this.uploadAll,
     required this.gitPush,
-    required this.sleep,
+    required this.hibernate,
     required this.shutdown,
   });
 
   final Future<void> Function() uploadAll;
   final Future<void> Function() gitPush;
-  final Future<void> Function() sleep;
+  final Future<void> Function() hibernate;
   final Future<void> Function() shutdown;
 }
 
@@ -141,8 +142,8 @@ Future<void> runAgentDispatchAfterQueue({
         await host.uploadAll();
       case AgentDispatchAfterStep.gitPush:
         await host.gitPush();
-      case AgentDispatchAfterStep.sleep:
-        await host.sleep();
+      case AgentDispatchAfterStep.hibernate:
+        await host.hibernate();
       case AgentDispatchAfterStep.shutdown:
         await host.shutdown();
     }
@@ -156,12 +157,12 @@ Future<void> abortStaleWindowsPowerAction() async {
   await Process.run('shutdown', ['/a']);
 }
 
-Future<void> windowsSleepNow({
+Future<void> windowsHibernateNow({
   Future<ProcessResult> Function(String executable, List<String> arguments)?
       runner,
 }) async {
   if (!Platform.isWindows) {
-    throw UnsupportedError('Sleep is supported only on Windows');
+    throw UnsupportedError('Hibernate is supported only on Windows');
   }
   // 立即进入休眠，不创建计划任务或延时关机，因此不会在下次开机重复执行。
   // SetSuspendState 返回 false 时 PowerShell 默认仍以 0 退出，必须显式转为失败。
@@ -177,13 +178,14 @@ Future<void> windowsSleepNow({
           '\$suspended = [System.Windows.Forms.Application]::SetSuspendState('
           '[System.Windows.Forms.PowerState]::Hibernate, \$false, \$false); '
           'if (-not \$suspended) { '
-          'Write-Error "Windows rejected the sleep request"; exit 1 }',
+          'Write-Error "Windows rejected the hibernate request"; exit 1 }',
     ],
   );
   if (result.exitCode != 0) {
     final err = '${result.stderr}'.trim();
-    throw Exception(
-        err.isEmpty ? 'Sleep command failed (exit ${result.exitCode})' : err);
+    throw Exception(err.isEmpty
+        ? 'Hibernate command failed (exit ${result.exitCode})'
+        : err);
   }
 }
 

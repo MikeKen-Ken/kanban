@@ -702,7 +702,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       afterQueueHost: AgentDispatchAfterQueueHost(
         uploadAll: board.uploadNow,
         gitPush: () => gitPushWithRebase(repoPath: options.repoPath),
-        sleep: windowsSleepNow,
+        hibernate: windowsHibernateNow,
         shutdown: windowsShutdownNow,
       ),
     );

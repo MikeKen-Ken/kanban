@@ -319,7 +319,7 @@ String? _phaseFromLog(String message) {
     return switch (afterQueue.group(1)) {
       '上传' => 'Upload',
       '推送' => 'Push',
-      '休眠' => 'Sleep',
+      '休眠' => 'Hibernate',
       '关机' => 'Shutdown',
       _ => afterQueue.group(1),
     };

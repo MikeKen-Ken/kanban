@@ -498,7 +498,7 @@ disable-model-invocation: true
   test('按项目完成后队列 JSON 往返', () {
     const original = AgentDispatchSettings(
       afterQueueByProject: {
-        'a': [AgentDispatchAfterStep.gitPush, AgentDispatchAfterStep.sleep],
+        'a': [AgentDispatchAfterStep.gitPush, AgentDispatchAfterStep.hibernate],
         'b': [AgentDispatchAfterStep.webdavUpload],
       },
       runAfterQueueOnFailureByProject: {
@@ -509,7 +509,7 @@ disable-model-invocation: true
     final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
     expect(roundTrip.afterQueueFor('a'), [
       AgentDispatchAfterStep.gitPush,
-      AgentDispatchAfterStep.sleep,
+      AgentDispatchAfterStep.hibernate,
     ]);
     expect(roundTrip.afterQueueFor('b'), [AgentDispatchAfterStep.webdavUpload]);
     expect(roundTrip.runAfterQueueOnFailureFor('a'), isTrue);

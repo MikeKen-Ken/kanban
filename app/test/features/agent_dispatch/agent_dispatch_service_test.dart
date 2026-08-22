@@ -103,13 +103,13 @@ void main() {
     service.updateAfterQueue(
       steps: const [
         AgentDispatchAfterStep.gitPush,
-        AgentDispatchAfterStep.sleep,
+        AgentDispatchAfterStep.hibernate,
       ],
       runOnFailure: false,
     );
     expect(service.debugAfterQueue, [
       AgentDispatchAfterStep.gitPush,
-      AgentDispatchAfterStep.sleep,
+      AgentDispatchAfterStep.hibernate,
     ]);
     expect(service.debugRunAfterQueueOnFailure, isFalse);
     service.updateAfterQueue(steps: const [], runOnFailure: true);

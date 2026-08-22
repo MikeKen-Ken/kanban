@@ -165,7 +165,7 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
       afterQueueHost: AgentDispatchAfterQueueHost(
         uploadAll: board.uploadNow,
         gitPush: () => gitPushWithRebase(repoPath: options.repoPath),
-        sleep: windowsSleepNow,
+        hibernate: windowsHibernateNow,
         shutdown: windowsShutdownNow,
       ),
     )
