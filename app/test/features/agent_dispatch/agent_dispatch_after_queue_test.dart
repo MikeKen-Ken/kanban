@@ -103,7 +103,7 @@ void main() {
         ],
         host: _host(
           uploadAll: () async => throw Exception('上传失败'),
-          sleep: () async => slept = true,
+          hibernate: () async => slept = true,
         ),
       ),
       throwsException,
@@ -121,7 +121,7 @@ void main() {
         ],
         host: _host(
           gitPush: () async => throw Exception('推送失败'),
-          sleep: () async => slept = true,
+          hibernate: () async => slept = true,
         ),
       ),
       throwsException,
@@ -130,12 +130,11 @@ void main() {
   });
 
   test('Windows 拒绝休眠请求时抛出失败', () async {
-    var command = '';
     await expectLater(
       windowsHibernateNow(
         runner: (executable, arguments) async {
-          expect(executable, 'powershell');
-          command = arguments.last;
+          expect(executable, 'shutdown');
+          expect(arguments, ['/h']);
           return ProcessResult(1, 1, '', 'Windows 拒绝休眠请求');
         },
       ),
@@ -147,9 +146,6 @@ void main() {
         ),
       ),
     );
-    expect(command, contains(r'$suspended'));
-    expect(command, contains('PowerState]::Hibernate'));
-    expect(command, contains('exit 1'));
   }, skip: !Platform.isWindows);
 
   test('保存并加载完成后队列', () async {

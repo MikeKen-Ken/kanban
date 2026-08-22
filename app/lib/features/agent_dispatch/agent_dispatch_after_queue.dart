@@ -164,22 +164,11 @@ Future<void> windowsHibernateNow({
   if (!Platform.isWindows) {
     throw UnsupportedError('Hibernate is supported only on Windows');
   }
-  // 立即进入休眠，不创建计划任务或延时关机，因此不会在下次开机重复执行。
-  // SetSuspendState 返回 false 时 PowerShell 默认仍以 0 退出，必须显式转为失败。
+  // shutdown /h 进入 S4 休眠；/h 不支持 /t 延时，也不会留下跨重启的关机倒计时。
+  // 不用 SetSuspendState(Suspend/Hibernate)：后者在部分系统上会退化为 S3 睡眠。
   final result = await (runner ?? Process.run)(
-    'powershell',
-    const [
-      '-NoProfile',
-      '-NonInteractive',
-      '-WindowStyle',
-      'Hidden',
-      '-Command',
-      'Add-Type -AssemblyName System.Windows.Forms; '
-          '\$suspended = [System.Windows.Forms.Application]::SetSuspendState('
-          '[System.Windows.Forms.PowerState]::Hibernate, \$false, \$false); '
-          'if (-not \$suspended) { '
-          'Write-Error "Windows rejected the hibernate request"; exit 1 }',
-    ],
+    'shutdown',
+    const ['/h'],
   );
   if (result.exitCode != 0) {
     final err = '${result.stderr}'.trim();
