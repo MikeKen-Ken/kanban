@@ -167,7 +167,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                       Text(
                         (_progress ?? 0) >= 0.999
                             ? 'Download complete; extracting and installing… do not close the window'
-                            : '下载 ${((_progress ?? 0) * 100).toStringAsFixed(0)}%',
+                            : 'Downloading ${((_progress ?? 0) * 100).toStringAsFixed(0)}%',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -255,7 +255,7 @@ Future<void> maybePromptAppUpdate(BuildContext context) async {
     if (skipped != null &&
         skipped == result.release!.versionLabel &&
         // 同版本刷新包仍提示
-        result.message?.contains('同版本') != true) {
+        result.message?.contains('Same-version') != true) {
       return;
     }
     if (!context.mounted) return;

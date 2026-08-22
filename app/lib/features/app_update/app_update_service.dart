@@ -40,7 +40,7 @@ class AppUpdateService {
       return AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuild: currentBuild,
-        message: '当前平台不支持软件内更新',
+        message: 'In-app updates are not supported on this platform',
       );
     }
 
@@ -51,10 +51,17 @@ class AppUpdateService {
       return AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuild: currentBuild,
-        message: '没有已发布的正式 Release（草稿对客户端不可见）',
+        message: 'No published release is available (drafts are not visible to clients)',
       );
     }
 
+    // GitHub/Atom/jsDelivr usually return newest first, but that is not a
+    // contract.  Selecting by version prevents an older feed entry from
+    // masking a newer release such as 1.0.143.
+    pool.sort(
+      (left, right) =>
+          VersionCompare.compare(right.versionLabel, left.versionLabel),
+    );
     final release = pool.first;
     final asset = await _client.resolvePlatformAsset(
       release,
@@ -66,7 +73,7 @@ class AppUpdateService {
         currentVersion: currentVersion,
         currentBuild: currentBuild,
         release: release,
-        message: '该 Release 没有适合当前平台的安装包',
+        message: 'This release has no installer for the current platform',
       );
     }
 
@@ -168,13 +175,13 @@ class AppUpdateService {
     final release = check.release;
     final asset = check.asset;
     if (release == null || asset == null || !check.updateAvailable) {
-      throw StateError('没有可安装的更新');
+      throw StateError('No installable update is available');
     }
 
     final tempDir = await getTemporaryDirectory();
     final downloadPath = p.join(
       tempDir.path,
-      'kanban_download_${asset.name}',
+      localDownloadFileName(release, asset),
     );
     final file = File(downloadPath);
     if (!await _ensureLocalPackage(file, asset)) {
@@ -197,7 +204,7 @@ class AppUpdateService {
       return;
     }
 
-    throw UnsupportedError('当前平台不支持自动安装');
+    throw UnsupportedError('Automatic installation is not supported on this platform');
   }
 
   /// 本地是否已有可直接安装的完整包。
@@ -232,6 +239,22 @@ class AppUpdateService {
   }
 
   /// 本地安装包是否可跳过重新下载直接安装。
+  @visibleForTesting
+  static String localDownloadFileName(
+    GithubReleaseInfo release,
+    GithubReleaseAsset asset,
+  ) {
+    final releaseKey = release.versionLabel.replaceAll(
+      RegExp(r'[^A-Za-z0-9._-]'),
+      '_',
+    );
+    final assetKey = asset.name.replaceAll(
+      RegExp(r'[^A-Za-z0-9._-]'),
+      '_',
+    );
+    return 'kanban_download_${releaseKey}_$assetKey';
+  }
+
   @visibleForTesting
   static bool isReusableDownloadedPackage({
     required bool exists,
