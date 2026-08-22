@@ -597,10 +597,11 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         _taskFilter != null && tasks.any((task) => task.ordinal == _taskFilter)
             ? _taskFilter
             : null;
-    final actionLog = AgentDispatchLogTasks.slice(
+    final rawActionLog = AgentDispatchLogTasks.slice(
       widget.controller.text,
       selectedTask,
     );
+    final actionLog = AgentDispatchLogEntry.displayText(rawActionLog);
     final canAct = actionLog.trim().isNotEmpty;
     final summary = _summary();
     final displayed = AgentDispatchDisplayedCard.resolve(
@@ -681,7 +682,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         AgentDispatchCardStatusPane(
           progress: displayed.progress,
           running: displayed.running,
-          logText: displayed.logSlice,
+          logText: AgentDispatchLogEntry.displayText(displayed.logSlice),
           showJumpToRunning: displayed.canJumpToRunning,
           onJumpToRunning: displayed.canJumpToRunning
               ? () => _jumpToRunningCard(displayed.runningOrdinal)

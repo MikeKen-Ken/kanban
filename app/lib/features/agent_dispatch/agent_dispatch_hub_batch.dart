@@ -139,8 +139,8 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
   service.appendLog(
     '\n—— ${DateTime.now().toLocal().toString().substring(0, 19)} 新运行 ——',
   );
-  service.appendLog('引擎：${options.engine.label}');
-  service.appendLog('由调度总览启动');
+  service.appendLog('Engine: ${options.engine.label}');
+  service.appendLog('Started from overview');
 
   unawaited(
     service
@@ -172,11 +172,11 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
         .then((result) {
       if (result.ok) {
         service.appendLog(
-          result.summary ?? '完成',
+          result.summary ?? 'Complete',
           level: AgentDispatchLogLevel.success,
         );
-      } else if (result.error == '已取消') {
-        service.appendLog('已停止运行', level: AgentDispatchLogLevel.warning);
+      } else if (result.error == 'Canceled') {
+        service.appendLog('Run stopped', level: AgentDispatchLogLevel.warning);
       }
     }),
   );

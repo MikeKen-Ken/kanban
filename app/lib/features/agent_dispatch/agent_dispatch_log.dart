@@ -80,24 +80,24 @@ class AgentDispatchLogEntry {
     const replacements = <String, String>{
       'Worker 批次启动：': 'Worker batch started: ',
       'Worker 已连接完整看板 MCP，正在恢复未完成收尾':
-          'Worker connected to Kanban MCP; recovering unfinished finalization',
+          'Connected to Kanban MCP; recovering pending finalization',
       '当前无更多卡片': 'No more cards',
       'claim 时队列已为空': 'The queue was empty during claim',
-      'Worker 正在实施当前卡片': 'Worker is implementing the current card',
-      'Worker 正在提交当前卡片': 'Worker is submitting the current card',
-      'Worker 正在提交并送交验证': 'Worker is submitting and sending for verification',
-      'Worker 已关闭完整看板 MCP 连接': 'Worker closed the Kanban MCP connection',
+      'Worker 正在实施当前卡片': 'Implementing current card',
+      'Worker 正在提交当前卡片': 'Submitting current card',
+      'Worker 正在提交并送交验证': 'Submitting for verification',
+      'Worker 已关闭完整看板 MCP 连接': 'Kanban MCP connection closed',
       '验证已由 Agent 会话完成，Worker 不再复跑测试':
-          'Verification completed in the Agent session; Worker will not rerun tests',
+          'Verified in Agent session; tests will not be rerun',
       'Worker 批次完成：': 'Worker batch complete: ',
       '当前卡片：': 'Current card: ',
       '当前任务：': 'Current task: ',
       '引擎：': 'Engine: ',
-      '由调度总览启动': 'Started from Dispatch overview',
+      '由调度总览启动': 'Started from overview',
       '已停止运行': 'Run stopped',
-      '本地会话已创建，开始执行…': 'Local session created; starting execution…',
+      '本地会话已创建，开始执行…': 'Session created; starting…',
       '收尾工具已成功': 'Finalization tool succeeded',
-      '思考完成（': 'Thinking completed (',
+      '思考完成（': 'Thinking done (',
       ' 秒）': 's)',
       '已处理 ': 'Processed ',
       ' 张': ' card(s)',
@@ -105,14 +105,37 @@ class AgentDispatchLogEntry {
       '第 ': 'Attempt ',
       ' 次 Agent 会话失败': ' Agent session failed',
       '自动重试': 'automatic retry',
-      '完成后队列：开始': 'After-completion queue started',
-      '完成后队列：已完成': 'After-completion queue completed',
+      '完成后队列：开始': 'Completion queue started',
+      '完成后队列：已完成': 'Completion queue completed',
+      'Worker 环境：': 'Worker environment: ',
+      '已合并用户/系统 PATH，并加入': 'Merged user/system PATH; added',
+      '已加入': 'Added',
+      '沿用看板进程 PATH': 'Using app process PATH',
+      'Node 堆上限': 'Node heap limit',
+      '（用户指定）': ' (user-set)',
+      '（本机物理内存 ': ' (about 75% of ',
+      ' 的约 75%）': ' physical memory)',
+      '；': '; ',
+      '思考：': 'Thinking: ',
+      '助手：': 'Assistant: ',
+      '思考中…': 'Thinking…',
+      '思考中': 'Thinking',
+      '工具结果：': 'Tool result: ',
+      '工具：': 'Tool: ',
+      '命令：（空）': 'Command: (empty)',
+      '命令：': 'Command: ',
+      '步骤：': 'Step: ',
     };
     for (final entry in replacements.entries) {
       displayed = displayed.replaceAll(entry.key, entry.value);
     }
     return displayed;
   }
+
+  /// Converts a complete raw log for copy/export without changing the stored
+  /// protocol text used by progress parsing and legacy history.
+  static String displayText(String text) =>
+      text.split('\n').map(displayLine).join('\n');
 
   /// 没有具体内容的进度行不展示，避免刷屏。
   static bool isLowValue(String line) {
@@ -176,6 +199,14 @@ class AgentDispatchLogEntry {
   }
 
   static AgentDispatchLogLevel? _levelFromLabel(String label) {
+    const legacyLabels = <String, AgentDispatchLogLevel>{
+      '信息': AgentDispatchLogLevel.info,
+      '成功': AgentDispatchLogLevel.success,
+      '警告': AgentDispatchLogLevel.warning,
+      '失败': AgentDispatchLogLevel.error,
+    };
+    final legacy = legacyLabels[label];
+    if (legacy != null) return legacy;
     for (final level in AgentDispatchLogLevel.values) {
       if (label == level.label) return level;
     }

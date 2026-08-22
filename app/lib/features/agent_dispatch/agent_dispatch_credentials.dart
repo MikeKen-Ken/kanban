@@ -120,7 +120,7 @@ class AgentDispatchCredentials {
   Future<void> setActiveCursorApiKey(String id) async {
     final meta = await _readMeta();
     if (!meta.any((item) => item.id == id)) {
-      throw StateError('Cursor API Key 不存在');
+      throw StateError('Cursor API key not found');
     }
     await _storage.write(key: _activeIdKey, value: id);
   }
@@ -147,16 +147,15 @@ class AgentDispatchCredentials {
   Future<void> saveCursorApiKey(String value, {String? label}) async {
     final normalized = value.trim();
     if (normalized.isEmpty) {
-      throw const FormatException('Cursor API Key 不能为空');
+      throw const FormatException('Cursor API key cannot be empty');
     }
     final meta = await _readMeta();
     for (final item in meta) {
       final existing = await _readValue(item.id);
       if (existing != normalized) continue;
       await _storage.write(key: _activeIdKey, value: item.id);
-      final nextLabel = label?.trim().isNotEmpty == true
-          ? label!.trim()
-          : item.label;
+      final nextLabel =
+          label?.trim().isNotEmpty == true ? label!.trim() : item.label;
       if (nextLabel != item.label) {
         final updated = [...meta];
         final index = updated.indexWhere((entry) => entry.id == item.id);
@@ -174,7 +173,8 @@ class AgentDispatchCredentials {
     await _storage.write(key: _activeIdKey, value: id);
     final stored = await _readValue(id);
     if (stored != normalized) {
-      throw StateError('Cursor API Key 写入后无法从系统安全存储读回');
+      throw StateError(
+          'Could not read Cursor API key back from secure storage');
     }
   }
 
@@ -182,7 +182,7 @@ class AgentDispatchCredentials {
   Future<void> replaceActiveCursorApiKey(String value, {String? label}) async {
     final normalized = value.trim();
     if (normalized.isEmpty) {
-      throw const FormatException('Cursor API Key 不能为空');
+      throw const FormatException('Cursor API key cannot be empty');
     }
     final activeId = await _readActiveId();
     if (activeId == null) {
@@ -195,16 +195,16 @@ class AgentDispatchCredentials {
       await saveCursorApiKey(normalized, label: label);
       return;
     }
-    final nextLabel = label?.trim().isNotEmpty == true
-        ? label!.trim()
-        : meta[index].label;
+    final nextLabel =
+        label?.trim().isNotEmpty == true ? label!.trim() : meta[index].label;
     await _storage.write(key: _valueKey(activeId), value: normalized);
     final updated = [...meta];
     updated[index] = _CursorApiKeyMeta(id: activeId, label: nextLabel);
     await _writeMeta(updated);
     final stored = await _readValue(activeId);
     if (stored != normalized) {
-      throw StateError('Cursor API Key 写入后无法从系统安全存储读回');
+      throw StateError(
+          'Could not read Cursor API key back from secure storage');
     }
   }
 

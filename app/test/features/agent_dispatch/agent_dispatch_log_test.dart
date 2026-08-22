@@ -9,7 +9,7 @@ void main() {
       source: AgentDispatchLogSource.mcp,
     ).format(DateTime(2026, 8, 13, 9, 8, 7));
 
-    expect(line, '[09:08:07] [MCP] [失败] 调用失败');
+    expect(line, '[09:08:07] [MCP] [Error] 调用失败');
     expect(AgentDispatchLogEntry.levelOf(line), AgentDispatchLogLevel.error);
     expect(AgentDispatchLogEntry.sourceOf(line), AgentDispatchLogSource.mcp);
   });
@@ -18,6 +18,23 @@ void main() {
     final line = '[09:08:07] [失败] 调用失败';
     expect(AgentDispatchLogEntry.levelOf(line), AgentDispatchLogLevel.error);
     expect(AgentDispatchLogEntry.sourceOf(line), AgentDispatchLogSource.system);
+  });
+
+  test('复制和导出日志使用英文显示文本', () {
+    final raw = [
+      '[10:07:43] [Worker] [Info] Worker 环境：已合并用户/系统 PATH，并加入 C:\\flutter\\bin；Node 堆上限 8192MB（用户指定）',
+      '[10:07:50] [AI] [Info] 思考：已收到任务',
+      '[10:07:51] [MCP] [Info] 工具：ready_to_submit',
+    ].join('\n');
+
+    final displayed = AgentDispatchLogEntry.displayText(raw);
+
+    expect(displayed, contains('Worker environment: Merged user/system PATH; added'));
+    expect(displayed, contains('Node heap limit 8192MB'));
+    expect(displayed, contains('Thinking: 已收到任务'));
+    expect(displayed, contains('Tool: ready_to_submit'));
+    expect(displayed, isNot(contains('Worker 环境')));
+    expect(displayed, isNot(contains('工具：')));
   });
 
   test('解析 Worker stdout 的来源与级别前缀', () {
@@ -134,8 +151,8 @@ void main() {
     final tasks = AgentDispatchLogTasks.parse(text.split('\n'));
 
     expect(tasks, hasLength(2));
-    expect(tasks[0].label, '第 1 个任务 · 任务甲');
-    expect(tasks[1].label, '第 2 个任务 · 任务乙');
+    expect(tasks[0].label, 'Task 1 · 任务甲');
+    expect(tasks[1].label, 'Task 2 · 任务乙');
     expect(AgentDispatchLogTasks.slice(text, null), text);
     expect(AgentDispatchLogTasks.slice(text, 2), contains('完成乙'));
     expect(AgentDispatchLogTasks.slice(text, 2), isNot(contains('完成甲')));
@@ -147,7 +164,7 @@ void main() {
       '[09:00:01] [Worker] [信息] ──────── Worker 单卡轮次 2 ────────',
     ]);
     expect(tasks, hasLength(1));
-    expect(tasks.single.label, '第 1 个任务 · 2');
+    expect(tasks.single.label, 'Task 1 · 2');
     expect(tasks.single.roundTotal, 0);
   });
 
