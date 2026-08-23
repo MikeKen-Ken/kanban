@@ -10,7 +10,7 @@ class StatisticsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('统计')),
+      appBar: AppBar(title: const Text('Workspace statistics')),
       body: FutureBuilder<KanbanStatistics>(
         future: context.read<BoardController>().loadStatistics(),
         builder: (context, snapshot) {
@@ -25,29 +25,32 @@ class StatisticsScreen extends StatelessWidget {
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  _MetricCard(label: '全部', value: data.total),
-                  _MetricCard(label: '进行中', value: data.active),
-                  _MetricCard(label: '已完成', value: data.completed),
+                  _MetricCard(label: 'Total', value: data.total),
+                  _MetricCard(label: 'Active', value: data.active),
+                  _MetricCard(label: 'Completed', value: data.completed),
                   _MetricCard(
-                    label: '已逾期',
+                    label: 'Overdue',
                     value: data.overdue,
                     isAlert: data.overdue > 0,
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              Text('最近 7 天完成量', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Completed in the last 7 days',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               _CompletionBars(values: data.completedLast7Days),
               const SizedBox(height: 24),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.timer_outlined),
-                title: const Text('平均完成耗时'),
+                title: const Text('Average completion time'),
                 subtitle: Text(
                   data.averageCompletionHours == null
-                      ? '暂无足够数据'
-                      : '${data.averageCompletionHours!.toStringAsFixed(1)} 小时',
+                      ? 'Not enough data yet'
+                      : '${data.averageCompletionHours!.toStringAsFixed(1)} hours',
                 ),
               ),
             ],
@@ -115,7 +118,8 @@ class _CompletionBars extends StatelessWidget {
           for (var i = 0; i < values.length; i++)
             Expanded(
               child: Semantics(
-                label: '${i + 1} 天前完成 ${values[i]} 项',
+                label:
+                    '${i + 1} day${i == 0 ? '' : 's'} ago: ${values[i]} completed',
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Column(

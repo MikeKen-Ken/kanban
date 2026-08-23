@@ -22,7 +22,7 @@ Future<({String name, int colorValue})?> showLabelFormDialog(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: Text(label == null ? '新建标签' : '编辑标签'),
+        title: Text(label == null ? 'New label' : 'Edit label'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -30,7 +30,7 @@ Future<({String name, int colorValue})?> showLabelFormDialog(
               controller: nameController,
               autofocus: true,
               decoration: const InputDecoration(
-                labelText: '标签名称',
+                labelText: 'Label name',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -54,7 +54,7 @@ Future<({String name, int colorValue})?> showLabelFormDialog(
                     final picked = await showColumnColorPicker(
                       context: context,
                       currentColorValue: colorValue,
-                      title: '标签颜色',
+                      title: 'Label color',
                       allowDefault: false,
                     );
                     if (picked != null) {
@@ -62,7 +62,7 @@ Future<({String name, int colorValue})?> showLabelFormDialog(
                     }
                   },
                   icon: const Icon(Icons.palette_outlined),
-                  label: const Text('选择颜色'),
+                  label: const Text('Choose color'),
                 ),
               ],
             ),
@@ -71,7 +71,7 @@ Future<({String name, int colorValue})?> showLabelFormDialog(
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
@@ -82,7 +82,7 @@ Future<({String name, int colorValue})?> showLabelFormDialog(
                 (name: name, colorValue: colorValue),
               );
             },
-            child: Text(label == null ? '创建' : '保存'),
+            child: Text(label == null ? 'Create' : 'Save'),
           ),
         ],
       ),
@@ -99,7 +99,7 @@ Future<void> _createLabel(BuildContext context) async {
       .read<BoardController>()
       .addCustomLabel(result.name, result.colorValue);
   if (!context.mounted) return;
-  showAppSnackBar(context, message: '已创建标签「${result.name}」');
+  showAppSnackBar(context, message: 'Created label "${result.name}"');
 }
 
 Future<void> _updateLabel(BuildContext context, KanbanLabel label) async {
@@ -111,25 +111,28 @@ Future<void> _updateLabel(BuildContext context, KanbanLabel label) async {
         colorValue: result.colorValue,
       );
   if (!context.mounted) return;
-  showAppSnackBar(context, message: updated ? '标签已更新' : '标签不存在，无法更新');
+  showAppSnackBar(
+    context,
+    message: updated ? 'Label updated' : 'Label no longer exists',
+  );
 }
 
 Future<void> _deleteLabel(BuildContext context, KanbanLabel label) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('删除标签？'),
+      title: const Text('Delete label?'),
       content: Text(
-        '「${label.name}」将移入回收站。已有卡片中的标签引用不会自动替换。',
+        '"${label.name}" will move to Trash. Existing card references will not be replaced.',
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('取消'),
+          child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('删除'),
+          child: const Text('Delete'),
         ),
       ],
     ),
@@ -137,7 +140,7 @@ Future<void> _deleteLabel(BuildContext context, KanbanLabel label) async {
   if (confirmed != true || !context.mounted) return;
   await context.read<BoardController>().removeCustomLabel(label.key);
   if (!context.mounted) return;
-  showAppSnackBar(context, message: '已删除标签「${label.name}」');
+  showAppSnackBar(context, message: 'Deleted label "${label.name}"');
 }
 
 /// 标签编辑界面：集中提供「新增 / 编辑 / 删除」自定义标签操作。
@@ -149,7 +152,7 @@ Future<void> showLabelEditorDialog(BuildContext context) async {
       builder: (dialogContext, setDialogState) {
         final customLabels = controller.appSettings.customLabels;
         return AlertDialog(
-          title: const Text('编辑标签'),
+          title: const Text('Manage labels'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,13 +161,13 @@ Future<void> showLabelEditorDialog(BuildContext context) async {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
-                    '还没有自定义标签',
-                    style: Theme.of(dialogContext).textTheme.bodyMedium
-                        ?.copyWith(
-                          color: Theme.of(dialogContext)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
+                    'No custom labels yet',
+                    style:
+                        Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(dialogContext)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                   ),
                 )
               else
@@ -187,7 +190,7 @@ Future<void> showLabelEditorDialog(BuildContext context) async {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  tooltip: '编辑「${label.name}」',
+                                  tooltip: 'Edit "${label.name}"',
                                   visualDensity: VisualDensity.compact,
                                   icon: const Icon(
                                     Icons.edit_outlined,
@@ -199,13 +202,14 @@ Future<void> showLabelEditorDialog(BuildContext context) async {
                                   },
                                 ),
                                 IconButton(
-                                  tooltip: '删除「${label.name}」',
+                                  tooltip: 'Delete "${label.name}"',
                                   visualDensity: VisualDensity.compact,
                                   icon: Icon(
                                     Icons.delete_outline,
                                     size: 18,
-                                    color:
-                                        Theme.of(dialogContext).colorScheme.error,
+                                    color: Theme.of(dialogContext)
+                                        .colorScheme
+                                        .error,
                                   ),
                                   onPressed: () async {
                                     await _deleteLabel(context, label);
@@ -228,11 +232,11 @@ Future<void> showLabelEditorDialog(BuildContext context) async {
                 setDialogState(() {});
               },
               icon: const Icon(Icons.add),
-              label: const Text('新增标签'),
+              label: const Text('Add label'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('完成'),
+              child: const Text('Done'),
             ),
           ],
         );

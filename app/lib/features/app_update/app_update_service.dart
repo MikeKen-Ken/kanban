@@ -40,7 +40,7 @@ class AppUpdateService {
       return AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuild: currentBuild,
-        message: '当前平台不支持软件内更新',
+        message: 'In-app updates are not supported on this platform',
       );
     }
 
@@ -51,7 +51,7 @@ class AppUpdateService {
       return AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuild: currentBuild,
-        message: '没有已发布的正式 Release（草稿对客户端不可见）',
+        message: 'No published release is available',
       );
     }
 
@@ -66,7 +66,7 @@ class AppUpdateService {
         currentVersion: currentVersion,
         currentBuild: currentBuild,
         release: release,
-        message: '该 Release 没有适合当前平台的安装包',
+        message: 'This release has no installer for the current platform',
       );
     }
 
@@ -100,7 +100,7 @@ class AppUpdateService {
   static String _optionalDateSuffix(DateTime? value) {
     final date = formatAppUpdateDate(value);
     if (date.isEmpty) return '';
-    return '（$date）';
+    return ' ($date)';
   }
 
   Future<bool> _isSameVersionNewerAsset(
@@ -168,7 +168,7 @@ class AppUpdateService {
     final release = check.release;
     final asset = check.asset;
     if (release == null || asset == null || !check.updateAvailable) {
-      throw StateError('没有可安装的更新');
+      throw StateError('No installable update is available');
     }
 
     final tempDir = await getTemporaryDirectory();
@@ -197,7 +197,8 @@ class AppUpdateService {
       return;
     }
 
-    throw UnsupportedError('当前平台不支持自动安装');
+    throw UnsupportedError(
+        'Automatic installation is not supported on this platform');
   }
 
   /// 本地是否已有可直接安装的完整包。

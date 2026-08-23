@@ -8,80 +8,7 @@ import 'agent_dispatch_section_header.dart';
 import 'agent_interaction.dart';
 import 'agent_interaction_prompt.dart';
 
-/// Agent 调度面板的桌面工作区。
-///
-/// 宽窗口使用「调度配置 / Worker（含 Skill） / 运行日志」三列；窄窗口回退为
-/// 纵向滚动，避免字段被压缩到不可用。
-class AgentDispatchWorkspace extends StatelessWidget {
-  const AgentDispatchWorkspace({
-    required this.worker,
-    required this.skill,
-    required this.settings,
-    required this.log,
-    super.key,
-  });
-
-  final Widget worker;
-  final Widget skill;
-  final Widget settings;
-  final Widget log;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 1200) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                flex: 10,
-                child: _ScrollablePane(
-                  title: 'Dispatch configuration',
-                  child: settings,
-                ),
-              ),
-              const VerticalDivider(width: 20),
-              Expanded(
-                flex: 8,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    worker,
-                    const SizedBox(height: 12),
-                    Expanded(child: skill),
-                  ],
-                ),
-              ),
-              const VerticalDivider(width: 20),
-              Expanded(flex: 12, child: log),
-            ],
-          );
-        }
-
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _PaneTitle(
-                title: 'Dispatch configuration',
-                tone: AgentDispatchSectionTone.configuration,
-              ),
-              const SizedBox(height: 12),
-              settings,
-              const Divider(height: 32),
-              worker,
-              const SizedBox(height: 12),
-              skill,
-              const Divider(height: 32),
-              SizedBox(height: 400, child: log),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
+export 'agent_dispatch_workspace_layout.dart';
 
 class AgentDispatchWorkerPane extends StatelessWidget {
   const AgentDispatchWorkerPane({
@@ -741,28 +668,6 @@ class _LogSummary {
   final int errors;
   final int warnings;
   final String? totalTokens;
-}
-
-class _ScrollablePane extends StatelessWidget {
-  const _ScrollablePane({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _PaneTitle(
-          title: title,
-          tone: AgentDispatchSectionTone.configuration,
-        ),
-        const SizedBox(height: 12),
-        Expanded(child: SingleChildScrollView(child: child)),
-      ],
-    );
-  }
 }
 
 class _PaneTitle extends StatelessWidget {

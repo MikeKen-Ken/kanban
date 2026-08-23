@@ -74,7 +74,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
   Future<void> _applyPort() async {
     final parsed = int.tryParse(_portController.text.trim());
     if (parsed == null || parsed < 1 || parsed > 65535) {
-      _snack('端口须为 1–65535');
+      _snack('Port must be between 1 and 65535');
       return;
     }
     final controller = context.read<BoardController>();
@@ -82,7 +82,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
       controller.appSettings.copyWith(mcpPort: parsed),
     );
     await _refreshClientStatus();
-    _snack('端口已更新');
+    _snack('Port updated');
   }
 
   Future<void> _configure(McpClientKind kind) async {
@@ -108,7 +108,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
     );
     if (!mounted) return;
     setState(() => _busy = false);
-    _snack('${cursor.message}；${codex.message}');
+    _snack('${cursor.message}; ${codex.message}');
     await _refreshClientStatus();
   }
 
@@ -117,12 +117,12 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
   }
 
   String _statusLabel(KanbanMcpHost host) {
-    if (!host.isSupported) return '仅 Windows 可用';
+    if (!host.isSupported) return 'Available on Windows only';
     return switch (host.status) {
-      KanbanMcpStatus.stopped => '已停止',
-      KanbanMcpStatus.starting => '启动中…',
-      KanbanMcpStatus.running => '运行中',
-      KanbanMcpStatus.error => '启动失败',
+      KanbanMcpStatus.stopped => 'Stopped',
+      KanbanMcpStatus.starting => 'Starting…',
+      KanbanMcpStatus.running => 'Running',
+      KanbanMcpStatus.error => 'Failed to start',
     };
   }
 
@@ -134,35 +134,35 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
     final supported = McpPaths.isWindowsSupported;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('MCP / AI 控制')),
+      appBar: AppBar(title: const Text('MCP / AI control')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           SettingsSection(
             icon: Icons.hub_outlined,
-            title: '本机 MCP 服务',
-            subtitle: '仅 Windows；不同步。默认 ${McpConstants.endpointUrl()}',
+            title: 'Local MCP service',
+            subtitle:
+                'Windows only; not synced. Default: ${McpConstants.endpointUrl()}',
             children: [
               SwitchListTile(
-                title: const Text('启用 MCP'),
+                title: const Text('Enable MCP'),
                 subtitle: Text(_statusLabel(host)),
                 value: settings.mcpEnabled && supported,
-                onChanged: !supported || _busy
-                    ? null
-                    : (value) => _setEnabled(value),
+                onChanged:
+                    !supported || _busy ? null : (value) => _setEnabled(value),
               ),
               ListTile(
-                title: const Text('端点'),
+                title: const Text('Endpoint'),
                 subtitle: Text(host.endpointUrl),
                 trailing: IconButton(
-                  tooltip: '复制',
+                  tooltip: 'Copy',
                   icon: const Icon(Icons.copy_outlined),
                   onPressed: () async {
                     await Clipboard.setData(
                       ClipboardData(text: host.endpointUrl),
                     );
                     if (!context.mounted) return;
-                    _snack('已复制端点');
+                    _snack('Endpoint copied');
                   },
                 ),
               ),
@@ -184,7 +184,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
                         controller: _portController,
                         enabled: supported && !_busy,
                         decoration: const InputDecoration(
-                          labelText: '端口',
+                          labelText: 'Port',
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
@@ -197,7 +197,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
                     const SizedBox(width: 12),
                     FilledButton(
                       onPressed: supported && !_busy ? _applyPort : null,
-                      child: const Text('应用'),
+                      child: const Text('Apply'),
                     ),
                   ],
                 ),
@@ -207,13 +207,14 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
           const SizedBox(height: 16),
           SettingsSection(
             icon: Icons.psychology_outlined,
-            title: '一键配置客户端',
-            subtitle: '反向写入本机 Cursor / Codex 全局配置，不覆盖其他 MCP',
+            title: 'One-click client setup',
+            subtitle:
+                'Writes to local Cursor / Codex global configuration without overwriting other MCP servers',
             children: [
               SettingsNavigationTile(
                 icon: Icons.flash_on_outlined,
-                title: '一键配置全部',
-                subtitle: '同时写入 Cursor 与 Codex',
+                title: 'Set up all',
+                subtitle: 'Configure both Cursor and Codex',
                 onTap: () {
                   if (!supported || _busy) return;
                   _configureAll();
@@ -222,7 +223,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
               const Divider(),
               SettingsNavigationTile(
                 icon: Icons.code_outlined,
-                title: '配置 Cursor',
+                title: 'Set up Cursor',
                 subtitle: _clientSubtitle(
                   configured: _cursorConfigured,
                   path: McpPaths.cursorMcpJsonPath,
@@ -234,7 +235,7 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
               ),
               SettingsNavigationTile(
                 icon: Icons.terminal_outlined,
-                title: '配置 Codex',
+                title: 'Set up Codex',
                 subtitle: _clientSubtitle(
                   configured: _codexConfigured,
                   path: McpPaths.codexConfigTomlPath,
@@ -249,22 +250,24 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
           const SizedBox(height: 16),
           const SettingsSection(
             icon: Icons.info_outline,
-            title: '使用说明',
-            subtitle: '服务名 kanbanMCP',
+            title: 'How to use it',
+            subtitle: 'Service name: kanbanMCP',
             children: [
               ListTile(
-                title: Text('1. 打开本应用并启用 MCP'),
-                subtitle: Text('服务监听 127.0.0.1，仅本机可访问'),
-              ),
-              ListTile(
-                title: Text('2. 点击一键配置 Cursor 或 Codex'),
-                subtitle: Text('然后重启对应客户端并启用 kanbanMCP'),
-              ),
-              ListTile(
-                title: Text('3. 用 AI 读写任务'),
+                title: Text('1. Open this app and enable MCP'),
                 subtitle: Text(
-                  '可用 list_projects、search_cards、create_card、'
-                  'move_card、complete_card 等工具',
+                    'The service listens on 127.0.0.1 and is available locally only'),
+              ),
+              ListTile(
+                title: Text('2. Set up Cursor or Codex'),
+                subtitle:
+                    Text('Restart the chosen client, then enable kanbanMCP'),
+              ),
+              ListTile(
+                title: Text('3. Use AI to read and update tasks'),
+                subtitle: Text(
+                  'Use tools such as list_projects, search_cards, '
+                  'create_card, move_card, and complete_card',
                 ),
               ),
             ],
@@ -276,9 +279,9 @@ class _McpSettingsScreenState extends State<McpSettingsScreen> {
 
   String _clientSubtitle({required bool? configured, required String? path}) {
     final status = switch (configured) {
-      true => '已配置',
-      false => '未配置',
-      null => '检测中…',
+      true => 'Configured',
+      false => 'Not configured',
+      null => 'Checking…',
     };
     if (path == null || path.isEmpty) return status;
     return '$status · $path';

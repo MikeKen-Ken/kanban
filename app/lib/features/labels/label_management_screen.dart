@@ -18,7 +18,10 @@ class LabelManagementScreen extends StatelessWidget {
           colorValue: result.colorValue,
         );
     if (!context.mounted) return;
-    showAppSnackBar(context, message: updated ? '标签已更新' : '标签不存在，无法更新');
+    showAppSnackBar(
+      context,
+      message: updated ? 'Label updated' : 'Label no longer exists',
+    );
   }
 
   Widget _presetLabelChip(KanbanLabel label) {
@@ -54,10 +57,10 @@ class LabelManagementScreen extends StatelessWidget {
         final theme = Theme.of(context);
         return Scaffold(
           appBar: AppBar(
-            title: const Text('标签管理'),
+            title: const Text('Labels'),
             actions: [
               IconButton(
-                tooltip: '编辑标签',
+                tooltip: 'Manage labels',
                 onPressed: () => showLabelEditorDialog(context),
                 icon: const Icon(Icons.edit_outlined),
               ),
@@ -66,10 +69,10 @@ class LabelManagementScreen extends StatelessWidget {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
             children: [
-              Text('预置标签', style: theme.textTheme.titleSmall),
+              Text('Built-in labels', style: theme.textTheme.titleSmall),
               const SizedBox(height: 4),
               Text(
-                '内置标签，不可编辑或删除',
+                'Built-in labels cannot be edited or deleted',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -83,11 +86,11 @@ class LabelManagementScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              Text('自定义标签', style: theme.textTheme.titleSmall),
+              Text('Custom labels', style: theme.textTheme.titleSmall),
               const SizedBox(height: 10),
               if (customLabels.isEmpty)
                 Text(
-                  '还没有自定义标签',
+                  'No custom labels yet',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -106,7 +109,7 @@ class LabelManagementScreen extends StatelessWidget {
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => showLabelEditorDialog(context),
             icon: const Icon(Icons.edit_outlined),
-            label: const Text('编辑标签'),
+            label: const Text('Manage labels'),
           ),
         );
       },

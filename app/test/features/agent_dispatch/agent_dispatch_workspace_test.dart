@@ -27,8 +27,36 @@ void main() {
     expect(find.byType(VerticalDivider), findsNWidgets(2));
     expect(find.text('Worker 内容'), findsOneWidget);
     expect(find.text('Skill 内容'), findsOneWidget);
-    expect(find.text('调度配置'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-dispatch-layout-wide')),
+        findsOneWidget);
+    expect(find.text('Dispatch configuration'), findsOneWidget);
     expect(find.text('批次配置'), findsNothing);
+    expect(find.text('对话内容'), findsOneWidget);
+  });
+
+  testWidgets('中等窗口保留配置与运行区双列布局', (tester) async {
+    tester.view.physicalSize = const Size(1040, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AgentDispatchWorkspace(
+            worker: Text('Worker 内容'),
+            skill: Text('Skill 内容'),
+            settings: Text('设置内容'),
+            log: Text('对话内容'),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('agent-dispatch-layout-medium')),
+        findsOneWidget);
+    expect(find.byType(VerticalDivider), findsOneWidget);
+    expect(find.text('Dispatch configuration'), findsOneWidget);
     expect(find.text('对话内容'), findsOneWidget);
   });
 
@@ -51,6 +79,8 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const ValueKey('agent-dispatch-layout-compact')),
+        findsOneWidget);
     expect(find.byType(VerticalDivider), findsNothing);
     expect(find.byType(Divider), findsNWidgets(2));
     expect(find.text('Worker 内容'), findsOneWidget);
@@ -174,9 +204,9 @@ void main() {
   testWidgets('日志概览突出失败并可按级别筛选', (tester) async {
     final controller = TextEditingController(
       text: [
-        '[09:00:00] [MCP] [失败] 提交失败：看板未就绪',
-        '[09:00:01] [命令] [警告] 网络连接较慢',
-        '[09:00:02] [Worker] [信息] 本会话 token：input=12 output=34 total=46',
+        '[09:00:00] [MCP] [Error] 提交失败：看板未就绪',
+        '[09:00:01] [Command] [Warning] 网络连接较慢',
+        '[09:00:02] [Worker] [Info] 本会话 token：input=12 output=34 total=46',
       ].join('\n'),
     );
     addTearDown(controller.dispose);
@@ -199,9 +229,9 @@ void main() {
       ),
     );
 
-    expect(find.text('失败 '), findsOneWidget);
-    expect(find.text('警告 '), findsOneWidget);
-    expect(find.text('最新 Token '), findsOneWidget);
+    expect(find.text('Error '), findsOneWidget);
+    expect(find.text('Warning '), findsOneWidget);
+    expect(find.text('Latest token '), findsOneWidget);
     expect(find.text('46'), findsOneWidget);
 
     await tester.tap(
@@ -268,15 +298,15 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('9秒'), findsNothing);
+    expect(find.text('9s'), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('agent-dispatch-card-elapsed')),
-        matching: find.textContaining('秒'),
+        matching: find.textContaining(RegExp(r'^\d+s$')),
       ),
       findsOneWidget,
     );
-    expect(find.textContaining('步骤 3'), findsOneWidget);
+    expect(find.textContaining('Steps 3'), findsOneWidget);
     expect(find.textContaining('cursor'), findsOneWidget);
   });
 
@@ -321,7 +351,8 @@ void main() {
     expect(find.textContaining('完成甲'), findsOneWidget);
     expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-2')));
     await tester.pumpAndSettle();
@@ -336,14 +367,15 @@ void main() {
     expect(copied, isNot(contains('完成甲')));
     expect(copied, isNot(contains('启动批次')));
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-all')));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('完成甲'), findsOneWidget);
     expect(find.textContaining('完成乙', skipOffstage: false), findsOneWidget);
-    expect(find.text('全部任务'), findsOneWidget);
+    expect(find.text('All tasks'), findsOneWidget);
   });
 
   testWidgets('切换任务后状态区跟随该卡，并可跳回运行中卡片', (tester) async {
@@ -401,7 +433,8 @@ void main() {
     expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
         findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-log-task-filter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agent-dispatch-log-task-1')));
     await tester.pumpAndSettle();
@@ -413,11 +446,12 @@ void main() {
       '任务甲',
     );
     expect(find.text('已完成的需求'), findsOneWidget);
-    expect(find.text('已完成'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-dispatch-jump-running-card')),
         findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-dispatch-jump-running-card')));
+    await tester
+        .tap(find.byKey(const ValueKey('agent-dispatch-jump-running-card')));
     await tester.pumpAndSettle();
 
     expect(

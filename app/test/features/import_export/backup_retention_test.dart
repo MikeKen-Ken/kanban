@@ -5,11 +5,12 @@ import 'package:kanban/settings/app_settings.dart';
 void main() {
   group('autoBackupRetentionDaysLabel', () {
     test('0 means never', () {
-      expect(autoBackupRetentionDaysLabel(0), '从不');
+      expect(autoBackupRetentionDaysLabel(0), 'Never');
     });
 
     test('positive days', () {
-      expect(autoBackupRetentionDaysLabel(14), '14 天');
+      expect(autoBackupRetentionDaysLabel(1), '1 day');
+      expect(autoBackupRetentionDaysLabel(14), '14 days');
     });
   });
 

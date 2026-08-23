@@ -46,7 +46,7 @@ abstract final class McpClientConfigurator {
     if (!McpPaths.isWindowsSupported) {
       return const McpConfigureResult(
         ok: false,
-        message: '仅 Windows 支持一键配置 MCP 客户端',
+        message: 'One-click MCP client setup is available on Windows only',
       );
     }
 
@@ -54,7 +54,7 @@ abstract final class McpClientConfigurator {
     if (path == null) {
       return const McpConfigureResult(
         ok: false,
-        message: '无法解析用户配置路径',
+        message: 'Could not resolve the user configuration path',
       );
     }
 
@@ -73,14 +73,14 @@ abstract final class McpClientConfigurator {
       return McpConfigureResult(
         ok: true,
         path: path,
-        message: '已写入 $label 配置，请重启 $label 后启用 MCP',
+        message: '$label configuration saved. Restart $label, then enable MCP.',
       );
     } catch (error) {
       debugPrint('One-click MCP configuration failed: $error');
       return McpConfigureResult(
         ok: false,
         path: path,
-        message: '写入失败：$error',
+        message: 'Could not save configuration: $error',
       );
     }
   }

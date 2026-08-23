@@ -770,8 +770,10 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final modelParameters = _selectedModel?.parameters ?? const [];
     final skillPath = _settings.resolveSkillPath();
     final viewport = MediaQuery.sizeOf(context);
-    final dialogWidth = (viewport.width - 48).clamp(560.0, 1600.0).toDouble();
-    final dialogHeight = (viewport.height - 180).clamp(420.0, 820.0).toDouble();
+    // Account for both the dialog inset and its horizontal content padding.
+    // Otherwise a nominal full-width content box overflows medium windows.
+    final dialogWidth = (viewport.width - 96).clamp(320.0, 1552.0).toDouble();
+    final dialogHeight = (viewport.height - 180).clamp(320.0, 820.0).toDouble();
 
     return AlertDialog(
       insetPadding: const EdgeInsets.all(24),

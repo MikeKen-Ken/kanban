@@ -12,10 +12,10 @@ enum TrashItemType {
   customLabel;
 
   String get label => switch (this) {
-        TrashItemType.card => '卡片',
-        TrashItemType.column => '列',
-        TrashItemType.project => '项目',
-        TrashItemType.customLabel => '标签',
+        TrashItemType.card => 'Card',
+        TrashItemType.column => 'Column',
+        TrashItemType.project => 'Project',
+        TrashItemType.customLabel => 'Label',
       };
 
   static TrashItemType fromName(String? name) {
@@ -199,14 +199,19 @@ class TrashItem {
     return raw == null ? null : KanbanColumn.fromJson(raw);
   }
 
-  ({ProjectEntry entry, KanbanBoard board, ProjectSettings settings, TrashBin projectTrash})?
-      get projectPayload {
+  ({
+    ProjectEntry entry,
+    KanbanBoard board,
+    ProjectSettings settings,
+    TrashBin projectTrash
+  })? get projectPayload {
     if (type != TrashItemType.project) return null;
     final entryRaw = payload['entry'] as Map<String, dynamic>?;
     final boardMeta = payload['board'] as Map<String, dynamic>?;
     final columnsRaw = payload['columns'] as List<dynamic>?;
     final settingsRaw = payload['settings'] as Map<String, dynamic>?;
-    if (entryRaw == null || boardMeta == null || columnsRaw == null) return null;
+    if (entryRaw == null || boardMeta == null || columnsRaw == null)
+      return null;
 
     final columns = columnsRaw
         .map((e) => KanbanColumn.fromJson(e as Map<String, dynamic>))
@@ -216,9 +221,8 @@ class TrashItem {
         ? const ProjectSettings()
         : ProjectSettings.fromJson(settingsRaw);
     final trashRaw = payload['projectTrash'] as Map<String, dynamic>?;
-    final projectTrash = trashRaw == null
-        ? TrashBin.empty
-        : TrashBin.fromJson(trashRaw);
+    final projectTrash =
+        trashRaw == null ? TrashBin.empty : TrashBin.fromJson(trashRaw);
 
     return (
       entry: ProjectEntry.fromJson(entryRaw),
