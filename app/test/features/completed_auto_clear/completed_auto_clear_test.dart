@@ -38,6 +38,14 @@ KanbanBoard _boardWithDone(List<KanbanCard> doneCards) {
 void main() {
   final now = DateTime.utc(2026, 8, 7);
 
+  group('completedAutoClearDaysLabel', () {
+    test('formats disabled, singular, and plural values in English', () {
+      expect(completedAutoClearDaysLabel(0), 'Never');
+      expect(completedAutoClearDaysLabel(1), '1 day');
+      expect(completedAutoClearDaysLabel(30), '30 days');
+    });
+  });
+
   group('completed_auto_clear 纯逻辑', () {
     test('优先使用 completedAt，缺省时回退 updatedAt', () {
       final withCompleted = _card(
@@ -60,9 +68,8 @@ void main() {
         _card(
           id: 'old',
           createdAt: 1,
-          completedAt: now
-              .subtract(const Duration(days: 30))
-              .millisecondsSinceEpoch,
+          completedAt:
+              now.subtract(const Duration(days: 30)).millisecondsSinceEpoch,
         ),
       ]);
       expect(

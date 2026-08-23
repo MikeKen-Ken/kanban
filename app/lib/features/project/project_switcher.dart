@@ -232,15 +232,13 @@ class ProjectSwitcher extends StatelessWidget {
                 },
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxWidth: isAndroid ? 96 : _titleMaxWidth,
+                    maxWidth: isAndroid ? 144 : _titleMaxWidth,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.folder_outlined, size: 20),
-                        const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             displayTitle,

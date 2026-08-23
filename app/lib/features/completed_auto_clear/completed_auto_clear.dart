@@ -8,8 +8,9 @@ const Duration completedAutoClearMinInterval = Duration(hours: 1);
 
 /// 设置项展示文案。
 String completedAutoClearDaysLabel(int days) {
-  if (days <= 0) return '从不';
-  return '$days 天';
+  if (days <= 0) return 'Never';
+  if (days == 1) return '1 day';
+  return '$days days';
 }
 
 /// 用于判断「完成多久」的时间戳：优先 [KanbanCard.completedAt]，否则 [KanbanCard.updatedAt]。

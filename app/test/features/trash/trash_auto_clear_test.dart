@@ -47,11 +47,12 @@ void main() {
 
   group('trashRetentionDaysLabel', () {
     test('0 means never', () {
-      expect(trashRetentionDaysLabel(0), '从不');
+      expect(trashRetentionDaysLabel(0), 'Never');
     });
 
     test('positive days', () {
-      expect(trashRetentionDaysLabel(30), '30 天');
+      expect(trashRetentionDaysLabel(1), '1 day');
+      expect(trashRetentionDaysLabel(30), '30 days');
     });
   });
 

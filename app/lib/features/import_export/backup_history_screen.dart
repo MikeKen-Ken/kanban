@@ -67,7 +67,7 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
       if (!mounted) return;
       setState(() {
         _local = const [];
-        _localError = '本地备份无法读取：$error';
+        _localError = 'Could not read local backups: $error';
         _loading = false;
       });
     }
@@ -84,11 +84,11 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
         await context.read<BoardController>().createTimePointBackup();
       }
       if (!mounted) return;
-      showAppSnackBar(context, message: '本地备份已创建');
+      showAppSnackBar(context, message: 'Local backup created');
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '创建备份失败：$error');
+      showAppSnackBar(context, message: 'Could not create backup: $error');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -100,11 +100,12 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     try {
       await context.read<BoardController>().setAutoBackupDirectory(path);
       if (!mounted) return;
-      showAppSnackBar(context, message: '自动备份将保存到所选文件夹');
+      showAppSnackBar(context,
+          message: 'Automatic backups will use the selected folder');
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '设置备份文件夹失败：$error');
+      showAppSnackBar(context, message: 'Could not set backup folder: $error');
     }
   }
 
@@ -129,11 +130,12 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     try {
       await context.read<BoardController>().setAutoBackupDirectory(null);
       if (!mounted) return;
-      showAppSnackBar(context, message: '已恢复默认自动备份文件夹');
+      showAppSnackBar(context, message: 'Restored the default backup folder');
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '恢复默认文件夹失败：$error');
+      showAppSnackBar(context,
+          message: 'Could not restore the default folder: $error');
     }
   }
 
@@ -141,24 +143,24 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
     final mode = await showDialog<BackupRestoreMode>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('恢复到这个时间点？'),
+        title: const Text('Restore this point-in-time backup?'),
         content: Text(
-          '完全恢复会替换当前工作区；恢复并合并会保留两边新增数据，并将同一字段的冲突标记为“冲突”。\n'
-          '将恢复 ${_formatTime(snapshot.createdAt)} 的完整工作区。'
-          '恢复前会自动保存当前状态。',
+          'Full restore replaces the current workspace. Restore and merge keeps new data from both versions and marks conflicting fields.\n'
+          'The full workspace from ${_formatTime(snapshot.createdAt)} will be restored. '
+          'Your current state is backed up first.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           OutlinedButton(
             onPressed: () => Navigator.pop(context, BackupRestoreMode.merge),
-            child: const Text('恢复并合并'),
+            child: const Text('Restore and merge'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, BackupRestoreMode.replace),
-            child: const Text('完全恢复'),
+            child: const Text('Full restore'),
           ),
         ],
       ),
@@ -177,12 +179,14 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
       if (!mounted) return;
       showAppSnackBar(
         context,
-        message: mode == BackupRestoreMode.merge ? '工作区已合并恢复' : '工作区已恢复',
+        message: mode == BackupRestoreMode.merge
+            ? 'Workspace restored and merged'
+            : 'Workspace restored',
       );
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      showAppSnackBar(context, message: '恢复失败：$error');
+      showAppSnackBar(context, message: 'Could not restore backup: $error');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -192,7 +196,7 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
       DateFormat('yyyy-MM-dd HH:mm:ss').format(value.toLocal());
 
   String _formatSize(int bytes) {
-    if (bytes <= 0) return '大小未知';
+    if (bytes <= 0) return 'Unknown size';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
   }
@@ -225,7 +229,7 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
               const Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
-                  '暂无本地备份',
+                  'No local backups yet',
                   key: ValueKey('local-empty'),
                 ),
               )
@@ -260,19 +264,19 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
       if (!autoBackupRetentionDayOptions.contains(retentionDays)) retentionDays,
     ]..sort();
     final retentionHint = retentionDays <= 0
-        ? '不会自动清理当前备份目录。'
-        : '超过 $retentionDays 天的备份会从当前选中目录清理。';
+        ? 'Backups in the current folder are never removed automatically.'
+        : 'Backups older than $retentionDays days are removed from the selected folder.';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('时间点备份'),
+        title: const Text('Point-in-time backup'),
         actions: [
           IconButton(
-            tooltip: '刷新',
+            tooltip: 'Refresh',
             onPressed: _working || _loading ? null : _reload,
             icon: const Icon(Icons.refresh),
           ),
           PopupMenuButton<String>(
-            tooltip: '自动备份文件夹',
+            tooltip: 'Automatic backup folder',
             onSelected: (value) {
               if (value == 'choose') {
                 _chooseBackupDirectory();
@@ -283,12 +287,12 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'choose',
-                child: Text('选择自动备份文件夹'),
+                child: Text('Choose automatic backup folder'),
               ),
               if (selectedDirectory != null)
                 const PopupMenuItem(
                   value: 'reset',
-                  child: Text('恢复默认文件夹'),
+                  child: Text('Restore default folder'),
                 ),
             ],
           ),
@@ -302,7 +306,7 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.add),
-        label: const Text('立即备份'),
+        label: const Text('Back up now'),
       ),
       body: _loading
           ? const Center(
@@ -315,18 +319,19 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
               children: [
                 Text(
                   selectedDirectory == null
-                      ? '数据有更新时每 10 分钟自动备份。$retentionHint'
-                      : '自动备份文件夹：$selectedDirectory\n数据有更新时每 10 分钟自动备份。$retentionHint',
+                      ? 'Back up automatically every 10 minutes when data changes. $retentionHint'
+                      : 'Automatic backup folder: $selectedDirectory\n'
+                          'Back up automatically every 10 minutes when data changes. $retentionHint',
                 ),
                 const SizedBox(height: 8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.auto_delete_outlined),
-                  title: const Text('自动清理过期备份'),
+                  title: const Text('Automatically remove expired backups'),
                   subtitle: Text(
                     retentionDays <= 0
-                        ? '关闭：保留当前目录中的全部备份'
-                        : '清理当前选中目录中超过 $retentionDays 天的备份',
+                        ? 'Off: keep all backups in the current folder'
+                        : 'Remove backups older than $retentionDays days from the selected folder',
                   ),
                   trailing: DropdownButtonHideUnderline(
                     child: DropdownButton<int>(
@@ -350,7 +355,7 @@ class _BackupHistoryScreenState extends State<BackupHistoryScreen> {
                 ),
                 const SizedBox(height: 12),
                 _section(
-                  '本地备份',
+                  'Local backups',
                   _local,
                   error: _localError,
                 ),

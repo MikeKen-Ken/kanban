@@ -225,13 +225,13 @@ class TrashScreen extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            tooltip: '还原',
+                            tooltip: 'Restore',
                             icon: const Icon(Icons.restore),
                             onPressed: () =>
                                 _confirmRestore(context, controller, item),
                           ),
                           IconButton(
-                            tooltip: '永久删除',
+                            tooltip: 'Delete permanently',
                             icon: Icon(
                               Icons.delete_forever_outlined,
                               color: theme.colorScheme.error,

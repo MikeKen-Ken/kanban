@@ -8,8 +8,9 @@ const Duration trashAutoClearMinInterval = Duration(hours: 1);
 
 /// 设置项展示文案。
 String trashRetentionDaysLabel(int days) {
-  if (days <= 0) return '从不';
-  return '$days 天';
+  if (days <= 0) return 'Never';
+  if (days == 1) return '1 day';
+  return '$days days';
 }
 
 /// 筛选超过保留天数的回收项。

@@ -114,7 +114,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
     final versionLabel = info == null
         ? 'Loading…'
         : currentDateText.isEmpty
-            ? '${info.version}（${info.buildNumber}）'
+            ? '${info.version} (${info.buildNumber})'
             : '${info.version} (${info.buildNumber})\nReleased $currentDateText';
     final remote = check?.release;
     final remoteDateText = formatAppUpdateDate(
@@ -126,7 +126,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
     final remoteSubtitleParts = <String>[
       if (remoteDateText.isNotEmpty) 'Released $remoteDateText',
       if (check?.updateAvailable == true)
-        (check?.message?.contains('same-version') == true
+        (check?.message?.toLowerCase().contains('same-version') == true
             ? 'Same-version package refreshed'
             : 'Update available')
       else
@@ -255,7 +255,7 @@ Future<void> maybePromptAppUpdate(BuildContext context) async {
     if (skipped != null &&
         skipped == result.release!.versionLabel &&
         // 同版本刷新包仍提示
-        result.message?.contains('Same-version') != true) {
+        result.message?.toLowerCase().contains('same-version') != true) {
       return;
     }
     if (!context.mounted) return;

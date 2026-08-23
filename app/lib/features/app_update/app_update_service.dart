@@ -51,7 +51,6 @@ class AppUpdateService {
       return AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuild: currentBuild,
-        message: 'No published release is available (drafts are not visible to clients)',
       );
     }
 
@@ -107,7 +106,7 @@ class AppUpdateService {
   static String _optionalDateSuffix(DateTime? value) {
     final date = formatAppUpdateDate(value);
     if (date.isEmpty) return '';
-    return '（$date）';
+    return ' ($date)';
   }
 
   Future<bool> _isSameVersionNewerAsset(
@@ -204,7 +203,6 @@ class AppUpdateService {
       return;
     }
 
-    throw UnsupportedError('Automatic installation is not supported on this platform');
   }
 
   /// 本地是否已有可直接安装的完整包。

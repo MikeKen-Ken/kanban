@@ -66,7 +66,7 @@ void main() {
 
     expect(
         find.byKey(const ValueKey('backup-history-content')), findsOneWidget);
-    expect(find.textContaining('本地备份无法读取'), findsOneWidget);
+    expect(find.textContaining('Could not read local backups'), findsOneWidget);
     expect(find.byKey(const ValueKey('backup-history-loading')), findsNothing);
   });
 }
