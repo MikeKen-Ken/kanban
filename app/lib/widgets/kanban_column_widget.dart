@@ -9,6 +9,7 @@ import '../features/kanban/card_detail_sheet.dart';
 import '../features/kanban/column_card_preferences.dart';
 import '../features/kanban/kanban_column_list.dart';
 import '../features/kanban/kanban_glass_surface.dart';
+import '../features/kanban/kanban_labels.dart';
 import '../features/kanban/kanban_motion.dart';
 import '../features/templates/create_card_choice_sheet.dart';
 import '../models/kanban_models.dart';
@@ -285,16 +286,38 @@ class KanbanColumnWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final controller = context.watch<BoardController>();
+    final controller = context.read<BoardController>();
+    final columnPrefsData = context.select<BoardController,
+        ({CardSortMode sortMode, List<String> pinnedCardIds})>(
+      (value) {
+        final preferences = value.columnPreferencesFor(column.id);
+        return (
+          sortMode: preferences.sortMode,
+          pinnedCardIds: preferences.pinnedCardIds,
+        );
+      },
+    );
+    final columnPrefs = ColumnCardPreferences(
+      sortMode: columnPrefsData.sortMode,
+      pinnedCardIds: columnPrefsData.pinnedCardIds,
+    );
+    final wipLimit = context.select<BoardController, int?>(
+      (value) => value.projectSettings.wipLimitFor(column.id),
+    );
+    final allColumns = context.select<BoardController, List<KanbanColumn>>(
+      (value) => value.board?.columns ?? const [],
+    );
+    final customLabels = context.select<BoardController, List<KanbanLabel>>(
+      (value) => value.appSettings.customLabels,
+    );
+    final isDoneColumn = context.select<BoardController, bool>(
+      (value) => value.isDoneColumn(column.id),
+    );
     final columnColor =
         column.colorValue != null ? Color(column.colorValue!) : null;
     final cards = _displayCards(controller);
-    final columnPrefs = controller.columnPreferencesFor(column.id);
-    final wipLimit = controller.projectSettings.wipLimitFor(column.id);
     final activeCount = column.cards.where((card) => !card.completed).length;
     final overWip = wipLimit != null && activeCount > wipLimit;
-    final allColumns = controller.board?.columns ?? [];
-    final customLabels = controller.appSettings.customLabels;
     final visibleCount = cards
         .where((c) => c.matchesSearch(searchQuery, customLabels: customLabels))
         .length;
@@ -418,7 +441,6 @@ class KanbanColumnWidget extends StatelessWidget {
                         }
                       },
                       itemBuilder: (_) {
-                        final isDone = controller.isDoneColumn(column.id);
                         return [
                           PopupMenuItem(
                             value: 'sort',
@@ -428,7 +450,7 @@ class KanbanColumnWidget extends StatelessWidget {
                               value: 'color', child: Text('Set color')),
                           const PopupMenuItem(
                               value: 'rename', child: Text('Rename')),
-                          if (isDone)
+                          if (isDoneColumn)
                             const PopupMenuItem(
                               value: 'clear_done',
                               child: Text('Clear all'),
@@ -464,7 +486,9 @@ class KanbanColumnWidget extends StatelessWidget {
                   child: KanbanGlassSurface(
                     borderRadius: BorderRadius.circular(8),
                     tint: colorScheme.surface,
-                    blurSigma: 28,
+                    // The outer column surface already blurs the same backdrop.
+                    // A second overlapping filter doubles GPU work while scrolling.
+                    blurSigma: 0,
                     child: KanbanColumnList(
                       columnId: column.id,
                       cards: cards,

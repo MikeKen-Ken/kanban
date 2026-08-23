@@ -390,7 +390,7 @@ class _KanbanEnterLeaveState extends State<_KanbanEnterLeave>
       child: SizeTransition(
         sizeFactor: _factor,
         alignment: Alignment.topCenter,
-        child: widget.child,
+        child: RepaintBoundary(child: widget.child),
       ),
     );
   }

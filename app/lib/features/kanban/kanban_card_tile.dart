@@ -222,11 +222,25 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<BoardController>();
-    final customLabels = controller.appSettings.customLabels;
-    final themeId = controller.projectSettings.themeId;
-    final cardSurfaceOpacity = controller.projectSettings.cardSurfaceOpacity;
-    final immediateDrag = controller.appSettings.immediateDrag;
+    final visualSettings = context.select<
+        BoardController,
+        ({
+          List<KanbanLabel> customLabels,
+          String themeId,
+          double cardSurfaceOpacity,
+          int dragLongPressMs,
+        })>(
+      (value) => (
+        customLabels: value.appSettings.customLabels,
+        themeId: value.projectSettings.themeId,
+        cardSurfaceOpacity: value.projectSettings.cardSurfaceOpacity,
+        dragLongPressMs: value.appSettings.dragLongPressMs,
+      ),
+    );
+    final customLabels = visualSettings.customLabels;
+    final themeId = visualSettings.themeId;
+    final cardSurfaceOpacity = visualSettings.cardSurfaceOpacity;
+    final immediateDrag = visualSettings.dragLongPressMs <= 0;
 
     if (!widget.card
         .matchesSearch(widget.searchQuery, customLabels: customLabels)) {
@@ -315,7 +329,7 @@ class _KanbanCardTileState extends State<KanbanCardTile> {
             : CardLongPressDraggable<KanbanCard>(
                 data: widget.card,
                 allowedButtonsFilter: primaryButtonOnly,
-                delay: controller.appSettings.dragDelay,
+                delay: Duration(milliseconds: visualSettings.dragLongPressMs),
                 hapticFeedbackOnStart: true,
                 dragAnchorStrategy: anchorStrategy,
                 onDragStarted: _onDragStarted,
@@ -930,14 +944,26 @@ class KanbanCardFlightReplica extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<BoardController>();
+    final visualSettings = context.select<
+        BoardController,
+        ({
+          List<KanbanLabel> customLabels,
+          String themeId,
+          double cardSurfaceOpacity,
+        })>(
+      (value) => (
+        customLabels: value.appSettings.customLabels,
+        themeId: value.projectSettings.themeId,
+        cardSurfaceOpacity: value.projectSettings.cardSurfaceOpacity,
+      ),
+    );
     return _CardContent(
       card: card.copyWith(completed: true),
       dragging: true,
       isPinned: isPinned,
-      customLabels: controller.appSettings.customLabels,
-      themeId: controller.projectSettings.themeId,
-      surfaceOpacity: controller.projectSettings.cardSurfaceOpacity,
+      customLabels: visualSettings.customLabels,
+      themeId: visualSettings.themeId,
+      surfaceOpacity: visualSettings.cardSurfaceOpacity,
     );
   }
 }

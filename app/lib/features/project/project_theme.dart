@@ -359,11 +359,6 @@ ThemeData buildKanbanTheme(ProjectThemePreset preset, Brightness brightness) {
   return ThemeData(
     colorScheme: colorScheme,
     useMaterial3: true,
-    fontFamilyFallback: const [
-      'Microsoft YaHei',
-      'PingFang SC',
-      'Noto Sans CJK SC',
-    ],
     // 顶部浮动提示：主题色容器底 + 圆角，避免默认底部长黑条
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,

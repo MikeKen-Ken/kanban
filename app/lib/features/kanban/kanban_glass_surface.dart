@@ -45,24 +45,28 @@ class KanbanGlassSurface extends StatelessWidget {
             ? Colors.white.withValues(alpha: 0.18)
             : Colors.white.withValues(alpha: 0.62));
 
+    final surface = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [fillTop, fillMiddle, fillBottom],
+          stops: const [0, 0.42, 1],
+        ),
+        border: Border.all(color: edge, width: borderWidth),
+      ),
+      child: child,
+    );
+
     return ClipRRect(
       borderRadius: borderRadius,
-      child: BackdropFilter(
-        filter: kanbanGlassBlur(blurSigma),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: borderRadius,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [fillTop, fillMiddle, fillBottom],
-              stops: const [0, 0.42, 1],
+      child: blurSigma <= 0
+          ? surface
+          : BackdropFilter(
+              filter: kanbanGlassBlur(blurSigma),
+              child: surface,
             ),
-            border: Border.all(color: edge, width: borderWidth),
-          ),
-          child: child,
-        ),
-      ),
     );
   }
 }

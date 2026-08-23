@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,19 +9,34 @@ import '../../controllers/board_controller.dart';
 /// 缩略图/原图字节的进程内缓存，避免拖拽重建时 FutureBuilder 先闪占位色。
 class _AttachmentImageBytesCache {
   static const _maxEntries = 48;
-  static final Map<String, Uint8List> _bytes = {};
+  static const _maxBytes = 24 * 1024 * 1024;
+  static final LinkedHashMap<String, Uint8List> _bytes = LinkedHashMap();
+  static int _byteCount = 0;
 
   static String keyFor(String attachmentId,
           {required bool thumb, String? projectId}) =>
       '${projectId ?? ''}::$attachmentId::${thumb ? 1 : 0}';
 
-  static Uint8List? get(String key) => _bytes[key];
+  static Uint8List? get(String key) {
+    final bytes = _bytes.remove(key);
+    if (bytes != null) _bytes[key] = bytes;
+    return bytes;
+  }
 
   static void put(String key, Uint8List bytes) {
-    if (!_bytes.containsKey(key) && _bytes.length >= _maxEntries) {
-      _bytes.remove(_bytes.keys.first);
+    final previous = _bytes.remove(key);
+    if (previous != null) _byteCount -= previous.lengthInBytes;
+
+    if (bytes.lengthInBytes > _maxBytes) return;
+    while (_bytes.isNotEmpty &&
+        (_bytes.length >= _maxEntries ||
+            _byteCount + bytes.lengthInBytes > _maxBytes)) {
+      final oldestKey = _bytes.keys.first;
+      final removed = _bytes.remove(oldestKey);
+      if (removed != null) _byteCount -= removed.lengthInBytes;
     }
     _bytes[key] = bytes;
+    _byteCount += bytes.lengthInBytes;
   }
 }
 

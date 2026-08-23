@@ -39,12 +39,14 @@ List<TrackedKanbanCard> reconcileTrackedKanbanCards({
     for (final item in previous)
       if (!item.leaving) item.card.id,
   ];
+  final previousActiveIdSet = previousActiveIds.toSet();
   final removedCount = previousActiveIds
       .where((id) => !nextById.containsKey(id) && id != holdCardId)
       .length;
   final insertedCount = next
       .where(
-        (card) => !previousActiveIds.contains(card.id) && card.id != holdCardId,
+        (card) =>
+            !previousActiveIdSet.contains(card.id) && card.id != holdCardId,
       )
       .length;
   final animate = previous.isNotEmpty &&
@@ -73,7 +75,7 @@ List<TrackedKanbanCard> reconcileTrackedKanbanCards({
   };
   final insertedIds = {
     for (final card in next)
-      if (!previousActiveIds.contains(card.id)) card.id,
+      if (!previousActiveIdSet.contains(card.id)) card.id,
   };
 
   final result = <TrackedKanbanCard>[

@@ -5,14 +5,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/features/kanban/kanban_glass_surface.dart';
 
 void main() {
-  test('kanbanGlassBlur 使用 clamp，避免边缘采到透明像素', () {
+  test('kanbanGlassBlur uses clamp to avoid transparent edge sampling', () {
     expect(
       kanbanGlassBlur(28),
       ImageFilter.blur(sigmaX: 28, sigmaY: 28, tileMode: TileMode.clamp),
     );
   });
 
-  testWidgets('KanbanGlassSurface 使用同一套边缘钳制模糊', (tester) async {
+  testWidgets('zero blur skips the backdrop filter', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: KanbanGlassSurface(
+          blurSigma: 0,
+          child: SizedBox(width: 100, height: 100),
+        ),
+      ),
+    );
+
+    expect(find.byType(BackdropFilter), findsNothing);
+  });
+
+  testWidgets('positive blur keeps the configured backdrop filter',
+      (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(

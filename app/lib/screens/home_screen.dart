@@ -19,6 +19,7 @@ import '../features/kanban/board_horizontal_scroll.dart';
 import '../features/kanban/swimlane.dart';
 import '../features/kanban/swimlane_board.dart';
 import '../features/remote_actions/remote_actions_toolbar_button.dart';
+import '../models/kanban_models.dart';
 import '../webdav_sync/sync_actions_sheet.dart';
 import '../webdav_sync/sync_actions_switcher.dart';
 import '../webdav_sync/webdav_sync_service.dart';
@@ -33,13 +34,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  StreamSubscription<SyncStatus>? _syncStatusSubscription;
+
   @override
   void initState() {
     super.initState();
     final controller = context.read<BoardController>();
-    controller.syncStatusStream.listen((status) {
+    _syncStatusSubscription = controller.syncStatusStream.listen((status) {
       if (!mounted) return;
-      setState(() {});
       final syncError = controller.syncError;
       final attachmentWarning = controller.attachmentSyncWarning;
       if (status == SyncStatus.error && syncError != null) {
@@ -52,6 +54,12 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       unawaited(maybePromptAppUpdate(context));
     });
+  }
+
+  @override
+  void dispose() {
+    _syncStatusSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _quickCapture() async {
@@ -331,7 +339,36 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<BoardController>();
+    final chrome = context.select<
+        BoardController,
+        ({
+          bool hasBackground,
+          bool canUndo,
+          String? undoLabel,
+          bool canRedo,
+          String? redoLabel,
+          SwimlaneMode swimlaneMode,
+          List<String> wallpaperIds,
+          String activeWallpaperId,
+          WallpaperPlaybackMode wallpaperPlaybackMode,
+          int wallpaperIntervalSeconds,
+          double overlayOpacity,
+        })>(
+      (value) => (
+        hasBackground: value.hasDisplayableBackground,
+        canUndo: value.canUndo,
+        undoLabel: value.undoLabel,
+        canRedo: value.canRedo,
+        redoLabel: value.redoLabel,
+        swimlaneMode: value.projectSettings.swimlaneMode,
+        wallpaperIds: value.displayableWallpaperIds,
+        activeWallpaperId: value.projectSettings.wallpaperActiveId,
+        wallpaperPlaybackMode: value.projectSettings.wallpaperPlaybackMode,
+        wallpaperIntervalSeconds:
+            value.projectSettings.wallpaperIntervalSeconds,
+        overlayOpacity: value.projectSettings.backgroundOverlayOpacity,
+      ),
+    );
     final compact = MediaQuery.sizeOf(context).width < 600;
     return CallbackShortcuts(
       bindings: {
@@ -359,26 +396,25 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor:
-              controller.hasDisplayableBackground ? Colors.transparent : null,
+          backgroundColor: chrome.hasBackground ? Colors.transparent : null,
           appBar: AppBar(
             title: const ProjectSwitcher(),
             actions: [
               if (!compact)
                 IconButton(
-                  tooltip: controller.canUndo
-                      ? 'Undo: ${controller.undoLabel ?? 'previous action'}'
+                  tooltip: chrome.canUndo
+                      ? 'Undo: ${chrome.undoLabel ?? 'previous action'}'
                       : 'There is nothing to undo',
                   icon: const Icon(Icons.undo),
-                  onPressed: controller.canUndo ? _undoWithFeedback : null,
+                  onPressed: chrome.canUndo ? _undoWithFeedback : null,
                 ),
               if (!compact)
                 IconButton(
-                  tooltip: controller.canRedo
-                      ? 'Redo: ${controller.redoLabel ?? 'previous action'}'
+                  tooltip: chrome.canRedo
+                      ? 'Redo: ${chrome.redoLabel ?? 'previous action'}'
                       : 'There is nothing to redo',
                   icon: const Icon(Icons.redo),
-                  onPressed: controller.canRedo ? _redoWithFeedback : null,
+                  onPressed: chrome.canRedo ? _redoWithFeedback : null,
                 ),
               if (!compact)
                 IconButton(
@@ -394,10 +430,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               if (!compact)
                 IconButton(
-                  tooltip:
-                      'Swimlane: ${controller.projectSettings.swimlaneMode.label}',
+                  tooltip: 'Swimlane: ${chrome.swimlaneMode.label}',
                   icon: Icon(
-                    controller.projectSettings.swimlaneMode == SwimlaneMode.none
+                    chrome.swimlaneMode == SwimlaneMode.none
                         ? Icons.view_agenda_outlined
                         : Icons.view_agenda,
                   ),
@@ -474,30 +509,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ListTile(
                         leading: const Icon(Icons.view_agenda_outlined),
                         title: Text(
-                          'Swimlane: ${controller.projectSettings.swimlaneMode.label}',
+                          'Swimlane: ${chrome.swimlaneMode.label}',
                         ),
                       ),
                     ),
                     PopupMenuItem(
                       value: 'undo',
-                      enabled: controller.canUndo,
+                      enabled: chrome.canUndo,
                       child: ListTile(
                         leading: const Icon(Icons.undo),
                         title: Text(
-                          controller.canUndo
-                              ? 'Undo: ${controller.undoLabel ?? 'previous action'}'
+                          chrome.canUndo
+                              ? 'Undo: ${chrome.undoLabel ?? 'previous action'}'
                               : 'There is nothing to undo',
                         ),
                       ),
                     ),
                     PopupMenuItem(
                       value: 'redo',
-                      enabled: controller.canRedo,
+                      enabled: chrome.canRedo,
                       child: ListTile(
                         leading: const Icon(Icons.redo),
                         title: Text(
-                          controller.canRedo
-                              ? 'Redo: ${controller.redoLabel ?? 'previous action'}'
+                          chrome.canRedo
+                              ? 'Redo: ${chrome.redoLabel ?? 'previous action'}'
                               : 'There is nothing to redo',
                         ),
                       ),
@@ -534,13 +569,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           body: _buildBoardBody(
             compact: compact,
-            wallpaperIds: controller.displayableWallpaperIds,
-            activeWallpaperId: controller.projectSettings.wallpaperActiveId,
-            wallpaperPlaybackMode:
-                controller.projectSettings.wallpaperPlaybackMode,
-            wallpaperIntervalSeconds:
-                controller.projectSettings.wallpaperIntervalSeconds,
-            overlayOpacity: controller.projectSettings.backgroundOverlayOpacity,
+            wallpaperIds: chrome.wallpaperIds,
+            activeWallpaperId: chrome.activeWallpaperId,
+            wallpaperPlaybackMode: chrome.wallpaperPlaybackMode,
+            wallpaperIntervalSeconds: chrome.wallpaperIntervalSeconds,
+            overlayOpacity: chrome.overlayOpacity,
           ),
         ),
       ),
@@ -555,15 +588,29 @@ class _HomeScreenState extends State<HomeScreen> {
     required int wallpaperIntervalSeconds,
     required double overlayOpacity,
   }) {
-    final content = Consumer<BoardController>(
-      builder: (context, controller, _) {
-        if (controller.isLoading) {
+    final content = Selector<
+        BoardController,
+        ({
+          bool isLoading,
+          String? errorMessage,
+          KanbanBoard? board,
+          SwimlaneMode swimlaneMode,
+        })>(
+      selector: (_, value) => (
+        isLoading: value.isLoading,
+        errorMessage: value.errorMessage,
+        board: value.board,
+        swimlaneMode: value.projectSettings.swimlaneMode,
+      ),
+      builder: (context, selected, _) {
+        if (selected.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final board = controller.board;
+        final controller = context.read<BoardController>();
+        final board = selected.board;
         if (board == null) {
-          return Center(child: Text(controller.errorMessage ?? 'Load failed'));
+          return Center(child: Text(selected.errorMessage ?? 'Load failed'));
         }
 
         if (board.columns.isEmpty) {
@@ -576,11 +623,11 @@ class _HomeScreenState extends State<HomeScreen> {
         };
 
         if (compact) {
-          if (controller.projectSettings.swimlaneMode != SwimlaneMode.none) {
+          if (selected.swimlaneMode != SwimlaneMode.none) {
             return SwimlaneBoard(
               board: board,
               visibleCardIds: visibleIds,
-              mode: controller.projectSettings.swimlaneMode,
+              mode: selected.swimlaneMode,
               compact: true,
             );
           }
@@ -604,11 +651,11 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        if (controller.projectSettings.swimlaneMode != SwimlaneMode.none) {
+        if (selected.swimlaneMode != SwimlaneMode.none) {
           return SwimlaneBoard(
             board: board,
             visibleCardIds: visibleIds,
-            mode: controller.projectSettings.swimlaneMode,
+            mode: selected.swimlaneMode,
           );
         }
 
