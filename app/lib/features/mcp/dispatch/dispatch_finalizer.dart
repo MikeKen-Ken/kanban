@@ -99,6 +99,65 @@ Future<CallToolResult> dispatchFinalize(
         tree = await inspectMcpGitTree(repo, runner: gitRunner);
       }
       if (tree.kind == McpGitTreeKind.dirty) {
+        final nested = await findMcpSingleDirtySubmodule(
+          repo,
+          runner: gitRunner,
+        );
+        if (nested != null) {
+          final nestedChanged =
+              await listMcpGitChangedPaths(nested.repoPath, runner: gitRunner);
+          if (nestedChanged == null) {
+            return mcpErrorResult('无法读取嵌套 Git 仓库的变更清单');
+          }
+          final nestedSensitive =
+              nestedChanged.where(isMcpSensitiveGitPath).toList();
+          if (nestedSensitive.isNotEmpty) {
+            final failed = record.copyWith(
+              status: DispatchPendingStatus.failed,
+              error: '嵌套 Git 仓库包含敏感文件，拒绝提交：${nestedSensitive.join(', ')}',
+            );
+            await store.write(failed);
+            return mcpErrorResult(failed.error!);
+          }
+          final snapshot = await (snapshotStore ?? McpSubmissionSnapshotStore())
+              .read(projectId: record.projectId, cardId: record.cardId);
+          if (snapshot == null) return mcpErrorResult('提交范围快照已丢失');
+          record = record.copyWith(
+            status: DispatchPendingStatus.committing,
+            clearError: true,
+          );
+          await store.write(record);
+          final nestedCommit = await commitMcpWorkingTree(
+            repoPath: nested.repoPath,
+            message: snapshot.suggestedCommitMessage,
+            trailers: [
+              'Kanban-Session: ${record.sessionId}',
+              'Kanban-Card: ${record.cardId}',
+            ],
+            runner: gitRunner,
+          );
+          if (!nestedCommit.ok) {
+            final failed = record.copyWith(
+              status: DispatchPendingStatus.failed,
+              error: nestedCommit.error ?? '嵌套 Git 仓库提交失败',
+            );
+            await store.write(failed);
+            return mcpErrorResult(failed.error!);
+          }
+          final parentChanged =
+              await listMcpGitChangedPaths(repo, runner: gitRunner);
+          if (parentChanged == null ||
+              parentChanged.length != 1 ||
+              parentChanged.single != nested.parentRelativePath) {
+            final failed = record.copyWith(
+              status: DispatchPendingStatus.failed,
+              error: '嵌套仓库已提交，但父仓库还有其它改动；已停止以避免混合提交',
+            );
+            await store.write(failed);
+            return mcpErrorResult(failed.error!);
+          }
+          tree = await inspectMcpGitTree(repo, runner: gitRunner);
+        }
         final changed = await listMcpGitChangedPaths(repo, runner: gitRunner);
         if (changed == null) return mcpErrorResult('无法读取 Git 变更清单');
         final sensitive = changed.where(isMcpSensitiveGitPath).toList();

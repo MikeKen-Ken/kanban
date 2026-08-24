@@ -43,6 +43,19 @@ class McpGitCommitOutcome {
   final String? error;
 }
 
+/// 一个安全可自动收尾的嵌套 Git 仓库。
+///
+/// 只接受一个脏 submodule，且父仓库除该 gitlink 外没有其它改动。
+class McpSingleDirtySubmodule {
+  const McpSingleDirtySubmodule({
+    required this.repoPath,
+    required this.parentRelativePath,
+  });
+
+  final String repoPath;
+  final String parentRelativePath;
+}
+
 class McpGitRevertOutcome {
   const McpGitRevertOutcome._({required this.ok, this.error});
 
@@ -356,6 +369,57 @@ Future<List<String>?> listMcpGitChangedPaths(
   );
   if (result.exitCode != 0) return null;
   return parseMcpGitPorcelainZ('${result.stdout}');
+}
+
+/// 在父仓库中找出唯一发生改动的直接 submodule。
+///
+/// `null` 代表没有可安全自动处理的唯一候选；调用方应保持原有单仓库
+/// 收尾或显示人工处理提示，绝不猜测多个嵌套仓库的提交范围。
+Future<McpSingleDirtySubmodule?> findMcpSingleDirtySubmodule(
+  String repoPath, {
+  McpGitRunner? runner,
+}) async {
+  final repo = repoPath.trim();
+  if (repo.isEmpty) return null;
+  final run = runner ?? _defaultGitRunner;
+  final listed = await run(
+    'git',
+    [
+      'config',
+      '--file',
+      '.gitmodules',
+      '--get-regexp',
+      r'^submodule\..*\.path$'
+    ],
+    workingDirectory: repo,
+    environment: mcpGitEnvironment(),
+  );
+  // exit 1 means this checkout has no .gitmodules/path entries.
+  if (listed.exitCode != 0) return null;
+  final candidates = <McpSingleDirtySubmodule>[];
+  for (final line in '${listed.stdout}'.split(RegExp(r'\r?\n'))) {
+    final separator = line.indexOf(RegExp(r'\s'));
+    if (separator < 0) continue;
+    final relativePath = _normalizeGitPath(line.substring(separator).trim());
+    if (relativePath.isEmpty) continue;
+    final childPath = p.normalize(p.join(repo, relativePath));
+    final child = await inspectMcpGitTree(childPath, runner: runner);
+    if (child.kind == McpGitTreeKind.dirty) {
+      candidates.add(McpSingleDirtySubmodule(
+        repoPath: childPath,
+        parentRelativePath: relativePath,
+      ));
+    }
+  }
+  if (candidates.length != 1) return null;
+  final parentPaths = await listMcpGitChangedPaths(repo, runner: runner);
+  final candidate = candidates.single;
+  if (parentPaths == null ||
+      parentPaths.length != 1 ||
+      parentPaths.single != candidate.parentRelativePath) {
+    return null;
+  }
+  return candidate;
 }
 
 /// 解析 `git status --porcelain=v1 -z`。rename/copy 的源路径是独立 NUL 字段，没有 `XY ` 前缀。

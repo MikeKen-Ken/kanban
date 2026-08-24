@@ -62,6 +62,67 @@ void main() {
     );
   });
 
+  test('findMcpSingleDirtySubmodule 只接受唯一且无其它父仓库改动的 submodule', () async {
+    final temp = await Directory.systemTemp.createTemp('kanban_git_submodule_');
+    addTearDown(() async {
+      if (await temp.exists()) await temp.delete(recursive: true);
+    });
+    final child = Directory(p.join(temp.path, 'child'));
+    final parent = Directory(p.join(temp.path, 'parent'));
+    await child.create();
+    await parent.create();
+    await _git(child.path, ['init']);
+    await _git(child.path, ['config', 'user.email', 'test@example.com']);
+    await _git(child.path, ['config', 'user.name', 'Test']);
+    await File(p.join(child.path, 'child.txt')).writeAsString('initial\n');
+    await _git(child.path, ['add', '-A']);
+    await _git(child.path, ['commit', '-m', 'initial']);
+    await _git(parent.path, ['init']);
+    await _git(parent.path, ['config', 'user.email', 'test@example.com']);
+    await _git(parent.path, ['config', 'user.name', 'Test']);
+    await _git(parent.path, [
+      '-c',
+      'protocol.file.allow=always',
+      'submodule',
+      'add',
+      child.path,
+      'modules/child',
+    ]);
+    await _git(parent.path, ['commit', '-am', 'add child']);
+
+    await File(p.join(parent.path, 'modules', 'child', 'child.txt'))
+        .writeAsString('changed\n');
+    final scope = await findMcpSingleDirtySubmodule(parent.path);
+
+    expect(scope, isNotNull);
+    expect(scope!.parentRelativePath, 'modules/child');
+    expect(p.normalize(scope.repoPath),
+        p.normalize(p.join(parent.path, 'modules', 'child')));
+    await File(p.join(parent.path, 'parent.txt'))
+        .writeAsString('also changed\n');
+    expect(await findMcpSingleDirtySubmodule(parent.path), isNull);
+    await File(p.join(parent.path, 'parent.txt')).delete();
+
+    final refreshedScope = await findMcpSingleDirtySubmodule(parent.path);
+    expect(refreshedScope, isNotNull);
+    final childCommit = await commitMcpWorkingTree(
+      repoPath: refreshedScope!.repoPath,
+      message: 'update child',
+      trailers: const ['Kanban-Session: nested-session'],
+    );
+    expect(childCommit.ok, isTrue, reason: childCommit.error);
+    expect(await listMcpGitChangedPaths(parent.path), ['modules/child']);
+    final parentCommit = await commitMcpWorkingTree(
+      repoPath: parent.path,
+      message: 'update submodule pointer',
+      trailers: const ['Kanban-Session: nested-session'],
+    );
+    expect(parentCommit.ok, isTrue, reason: parentCommit.error);
+    expect((await inspectMcpGitTree(refreshedScope.repoPath)).kind,
+        McpGitTreeKind.clean);
+    expect((await inspectMcpGitTree(parent.path)).kind, McpGitTreeKind.clean);
+  });
+
   test('commitMcpWorkingTree 提交后返回 7 位短哈希', () async {
     final temp = await Directory.systemTemp.createTemp('kanban_git_commit_');
     addTearDown(() async {
