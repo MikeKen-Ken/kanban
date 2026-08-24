@@ -94,7 +94,7 @@ async function tryFetchUsagePools(
         return parsed;
       }
     } catch {
-      // 个人套餐通常没有公开用量接口，继续尝试下一个。
+      // \u4E2A\u4EBA\u5957\u9910\u901A\u5E38\u6CA1\u6709\u516C\u5F00\u7528\u91CF\u63A5\u53E3，\u7EE7\u7EED\u5C1D\u8BD5\u4E0B\u4E00\u4E2A。
     }
   }
   return {};
@@ -103,7 +103,7 @@ async function tryFetchUsagePools(
 export async function printCursorUsage(): Promise<void> {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
-    console.error("缺少 CURSOR_API_KEY");
+    console.error("Missing CURSOR_API_KEY");
     process.exitCode = 2;
     return;
   }
@@ -115,7 +115,7 @@ export async function printCursorUsage(): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     const payload: UsagePayload = {
       ok: false,
-      error: `读取 Cursor 账号失败：${message}`,
+      error: `Failed to read the Cursor account: ${message}`,
     };
     process.stdout.write(`${JSON.stringify(payload)}\n`);
     process.exitCode = 2;

@@ -170,10 +170,10 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
         Text('Input / cache / output', style: textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
-          '输入 ${_formatCount(selected.totalInput)} · '
-          '缓存读 ${_formatCount(selected.totalCacheRead)} · '
-          '缓存写 ${_formatCount(selected.totalCacheWrite)} · '
-          '输出 ${_formatCount(selected.totalOutput)}',
+          'Input ${_formatCount(selected.totalInput)} · '
+          'Cache read ${_formatCount(selected.totalCacheRead)} · '
+          'Cache write ${_formatCount(selected.totalCacheWrite)} · '
+          'Output ${_formatCount(selected.totalOutput)}',
           style: textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -187,9 +187,9 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
           Text('Daily details', style: textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
-            '共 ${_formatCount(selected.totalTokens)} token · '
-            '${selected.sessionCount} 次'
-            '${dailyDays == null ? '' : ' · 日均 ${_formatCount(selected.sessionCount == 0 ? 0 : (selected.totalTokens / dailyDays).round())}'}',
+            'Total ${_formatCount(selected.totalTokens)} tokens · '
+            '${selected.sessionCount} session(s)'
+            '${dailyDays == null ? '' : ' · Daily avg ${_formatCount(selected.sessionCount == 0 ? 0 : (selected.totalTokens / dailyDays).round())}'}',
             style: textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -205,9 +205,9 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
             title: const Text('Single-session peak'),
             subtitle: Text(
               '${_formatCount(selected.peakSession!.totalTokens)} '
-              '(入 ${_formatCount(selected.peakSession!.inputTokens)} / '
-              '缓存 ${_formatCount(selected.peakSession!.cacheReadTokens + selected.peakSession!.cacheWriteTokens)} / '
-              '出 ${_formatCount(selected.peakSession!.outputTokens)})',
+              '(In ${_formatCount(selected.peakSession!.inputTokens)} / '
+              'Cache ${_formatCount(selected.peakSession!.cacheReadTokens + selected.peakSession!.cacheWriteTokens)} / '
+              'Out ${_formatCount(selected.peakSession!.outputTokens)})',
             ),
           ),
         ],
@@ -219,7 +219,7 @@ class _TokenStatsBodyState extends State<_TokenStatsBody> {
             subtitle: Text(
               '${_formatCount(selected.lastSession!.totalTokens)} token · '
               '${_formatStamp(selected.lastSession!.at)}'
-              '${selected.lastSession!.steps <= 0 ? '' : '\n${selected.lastSession!.steps} 步 · ${selected.lastSession!.toolCalls} 次工具 · 重复读取 ${selected.lastSession!.repeatedReads} 次'}',
+              '${selected.lastSession!.steps <= 0 ? '' : '\n${selected.lastSession!.steps} step(s) · ${selected.lastSession!.toolCalls} tool call(s) · ${selected.lastSession!.repeatedReads} repeated read(s)'}',
             ),
           ),
       ],

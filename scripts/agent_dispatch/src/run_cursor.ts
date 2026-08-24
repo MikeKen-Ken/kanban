@@ -86,7 +86,7 @@ function expandMultiline(prefix: string, body: string): string[] {
     .replace(/\s+$/, "")
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0);
-  if (lines.length === 0) return [`${prefix}（空）`];
+  if (lines.length === 0) return [`${prefix}(empty)`];
   const result = [`${prefix}${lines[0]}`];
   for (let i = 1; i < lines.length; i++) {
     result.push(`  │ ${lines[i]}`);
@@ -203,13 +203,13 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
   switch (type) {
     case "assistantMessage":
       return {
-        lines: expandMultiline("助手：", extractCursorAssistantStepText(record)),
+        lines: expandMultiline("Assistant: ", extractCursorAssistantStepText(record)),
         source: "ai",
       };
     case "thinkingMessage": {
       const text = pickString(message, "text", "thinking", "content");
       return {
-        lines: text ? expandMultiline("思考：", text) : [],
+        lines: text ? expandMultiline("Thinking: ", text) : [],
         source: "ai",
       };
     }
@@ -221,21 +221,21 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
       const detail = extractToolDetail(message);
       if (!detail) {
         return {
-          lines: [`工具：${toolName}`],
+          lines: [`Tool: ${toolName}`],
           source: isShellTool(toolName) ? "shell" : "mcp",
           toolName,
         };
       }
       if (isShellTool(toolName)) {
         return {
-          lines: expandMultiline("命令：", detail),
+          lines: expandMultiline("Command: ", detail),
           source: "shell",
           toolName,
           detail,
         };
       }
       return {
-        lines: expandMultiline(`工具：${toolName} `, detail),
+        lines: expandMultiline(`Tool: ${toolName} `, detail),
         source: "mcp",
         toolName,
         detail,
@@ -250,7 +250,7 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
       const body = typeof result === "string" ? result : formatJson(result);
       if (!String(body).trim()) return { lines: [], source: "mcp" };
       return {
-        lines: expandMultiline(`工具结果：${toolName} `, body),
+        lines: expandMultiline(`Tool result: ${toolName} `, body),
         source: "mcp",
       };
     }
@@ -259,7 +259,7 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
       const command = extractToolDetail(message) || pickString(message, "command", "text");
       if (!command) return { lines: [], source: "shell" };
       return {
-        lines: expandMultiline("命令：", command),
+        lines: expandMultiline("Command: ", command),
         source: "shell",
       };
     }
@@ -267,7 +267,7 @@ function describeStep(step: { type?: unknown; message?: unknown }): {
       const detail = message ? usefulJson(message, 800) : "";
       if (!detail) return { lines: [], source: "worker" };
       return {
-        lines: [`步骤：${type} ${detail}`],
+        lines: [`Step: ${type} ${detail}`],
         source: "worker",
       };
     }
@@ -292,7 +292,7 @@ async function attachLiveCursorModelCatalog(
 ): Promise<RoundDispatchJob> {
   try {
     const models = await withRetry(
-      "拉取 Cursor 模型目录",
+      "Fetch Cursor model catalog",
       () => Cursor.models.list({ apiKey }),
       { maxAttempts: 2, baseDelayMs: 400 },
     );
@@ -303,11 +303,11 @@ async function attachLiveCursorModelCatalog(
         values: catalogParameterValues(parameter.values),
       })),
     }));
-    logLine(`已用 Cursor.models.list 核对参数（${mapped.length} 个模型）`);
+    logLine(`Checked params with Cursor.models.list (${mapped.length} models)`);
     return withCursorSdkCatalog(job, mapped) as RoundDispatchJob;
   } catch (err) {
     logLine(
-      `拉取 Cursor 模型目录失败，改用工作台缓存：${err instanceof Error ? err.message : String(err)}`,
+      `Failed to fetch the Cursor model catalog; using the workbench cache: ${err instanceof Error ? err.message : String(err)}`,
     );
     return job;
   }
@@ -321,7 +321,7 @@ export async function runCursor(
   if (!apiKey) {
     return {
       ok: false,
-      error: "缺少环境变量 CURSOR_API_KEY（Dashboard → Integrations / API Keys）",
+      error: "Missing CURSOR_API_KEY (Dashboard → Integrations / API Keys)",
     };
   }
 
@@ -329,24 +329,25 @@ export async function runCursor(
   const jobWithCatalog = await attachLiveCursorModelCatalog(job, apiKey);
   const selected = selectCursorSdkModelParams(jobWithCatalog);
   let params = selected.params;
-  logLine(`Cursor 模型=${modelId} params=${JSON.stringify(params ?? [])}`);
+  logLine(`Cursor model=${modelId} params=${JSON.stringify(params ?? [])}`);
   if (selected.dropped.length > 0) {
     logLine(
-      `未传给 Cursor SDK：${selected.dropped.join(", ")}（当前模型目录不支持，或属于看板自造参数）。` +
+      `Not sent to the Cursor SDK: ${selected.dropped.join(", ")} (unsupported by the current model catalog, or a Kanban-only parameter).` +
         (selected.dropped.includes("fast")
-          ? "当前模型没有 fast，开启快速模式不会生效。"
+          ? " This model has no fast; turning on fast mode will not apply."
           : ""),
     );
   }
 
   const agentMcpUrl = job.round.agentEndpointUrl.trim();
   if (!agentMcpUrl) {
-    return { ok: false, error: "本轮 claim 缺少 scoped MCP 端点" };
+    return { ok: false, error: "This claim is missing a scoped MCP endpoint" };
   }
 
   try {
-    // Cursor SDK 的内置 Shell 会从 Worker 进程继承工作目录；在创建 Agent 前
-    // 再次固定到目标仓库，避免 Shell 落到发布包的 agent_worker 目录。
+    // Cursor SDK's built-in Shell inherits the Worker cwd; pin it to the
+    // target repo before Agent.create so Shell does not land in the packaged
+    // agent_worker directory.
     process.chdir(job.cwd);
     const startedAt = Date.now();
     let stepCount = 0;
@@ -366,13 +367,13 @@ export async function runCursor(
     });
     const localOptions: LocalAgentOptions = {
       cwd: job.cwd,
-      // 用户 Rule 已由 Worker 完整注入；同时启用 user 让 Cursor 按 Skill
-      // frontmatter 的 description / 触发条件自行选择用户 Skill，而非把所有
-      // Skill 正文拼进本卡 prompt。MCP 仍由 mcpServers 显式控制。
+      // User Rules are already injected in full by the Worker. Enable `user`
+      // so Cursor can pick user Skills by frontmatter triggers instead of
+      // stuffing every Skill body into this card prompt. MCP stays explicit.
       settingSources: ["project", "user"],
       store: new JsonlLocalAgentStore(storeDir),
       ...(askUserTool ? { customTools: { ask_user: askUserTool } } : {}),
-      // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
+      // Headless Worker has nobody to click approve; Auto-review would block ready_to_submit.
       autoReview: false,
       sandboxOptions: { enabled: job.enableSandbox === true },
     };
@@ -403,7 +404,7 @@ export async function runCursor(
         if (stripped.changed) {
           params = stripped.params;
           logLine(
-            `Cursor 拒绝参数 ${stripped.dropped.join(", ")}，已去掉后重试创建会话。`,
+            `Cursor rejected params ${stripped.dropped.join(", ")}; dropped them and retrying session create.`,
           );
         }
         agent = await Agent.create({
@@ -412,14 +413,14 @@ export async function runCursor(
         });
       }
       logLine(
-        `本地运行：JSONL 存储=${storeDir}；沙箱${job.enableSandbox === true ? "开启" : "关闭"}；` +
-          `合并 MCP（${mcp.names.join(", ") || "无"}）；` +
-          `kanbanMCP 强制为 scoped（${agentMcpUrl}）；` +
-          `禁用工具=${disallowedTools.join(",") || "无"}；` +
-          `settingSources=project,user（用户与项目 Skill 由 Cursor 按各自触发条件选择；` +
-            `用户 Rule 已由 Worker 注入；MCP 仅使用本轮显式合并的服务器）`,
+        `Local run: JSONL store=${storeDir}; sandbox ${job.enableSandbox === true ? "on" : "off"}; ` +
+          `merged MCP (${mcp.names.join(", ") || "none"}); ` +
+          `kanbanMCP forced to scoped (${agentMcpUrl}); ` +
+          `disallowed tools=${disallowedTools.join(",") || "none"}; ` +
+          `settingSources=project,user (user and project Skills are selected by Cursor trigger conditions; ` +
+            `user Rules are already injected by the Worker; MCP uses only the servers merged for this round)`,
       );
-      logLine("本地会话已创建，开始执行…");
+      logLine("Local session created; starting…");
       thinkingStream = new CursorThinkingStream();
       thinkingStream.notePromptSent();
       emitSessionStart(job);
@@ -464,13 +465,13 @@ export async function runCursor(
       const stopAfterTerminal = (reason: string): void => {
         if (endedByTerminal) return;
         endedByTerminal = true;
-        logLine(`收尾工具已成功（${reason}），正在结束 Cursor 会话`);
+        logLine(`Finalization tool succeeded (${reason}); ending the Cursor session`);
         resolveTerminalReached?.();
         void runCancel?.().catch(() => undefined);
       };
       const run = await agent.send({
         text: askUserTool
-          ? `${job.prompt}\n\n## 看板交互\n需要用户确认、补充需求或选择方案时必须调用 ask_user；不要调用 askQuestion，也不要只在助手正文里口头列出选项。有 2–4 个互斥方案时必须传入 choices，看板会在最近运行界面弹出选项菜单并等待回复。`
+          ? `${job.prompt}\n\n## Board interaction\nWhen you need the user to confirm, supply missing requirements, or choose a plan, you MUST call ask_user; do not call askQuestion, and do not only list options in assistant prose. When there are 2–4 mutually exclusive options, you MUST pass choices; the board shows an option menu on the latest-run screen and waits for a reply.`
           : job.prompt,
         images: job.round.images,
       }, {
@@ -514,7 +515,7 @@ export async function runCursor(
               emitAssistant(extractCursorAssistantStepText(step));
             }
           } catch {
-            logLine("收到一步进度");
+            logLine("Received a progress step");
           }
           try {
             const event = shellSpans.observe(step, Date.now());
@@ -523,11 +524,11 @@ export async function runCursor(
             }
             if (job.terminateAfterDispatchTerminal !== false &&
                 isSuccessfulDispatchTerminalStep(step)) {
-              stopAfterTerminal("工具结果");
+              stopAfterTerminal("tool result");
             }
           } catch (err) {
             logLine(
-              `上报 Shell 时间线失败：${err instanceof Error ? err.message : String(err)}`,
+              `Failed to report the Shell timeline: ${err instanceof Error ? err.message : String(err)}`,
             );
           }
         },
@@ -557,7 +558,7 @@ export async function runCursor(
         ]);
         if (winner.kind === "terminal") {
           terminalEndedWithoutWait = true;
-          // 正常收尾不再等待 SDK 的取消完成；最多给它几秒写入最终 usage。
+          // After a normal terminal, do not wait for SDK cancel; give it a few seconds for usage.
           await settleWithin(3000, run.cancel());
           result = {
             id: run.id,
@@ -579,7 +580,7 @@ export async function runCursor(
             if (message.role === "assistant") emitAssistant(message.text);
           }
         } catch {
-          // 会话快照不可用时仍用 result.result 兜底。
+          // If the conversation snapshot is unavailable, fall back to result.result.
         }
       }
       if (typeof result.result === "string") {
@@ -606,18 +607,18 @@ export async function runCursor(
           (cancellationReason ? ` reason=${cancellationReason}` : "") +
           ` steps=${stepCount} tools=${toolCallCount} elapsedMs=${Date.now() - startedAt}`,
       );
-      // 主动收尾时 SDK 结果可能没有 usage，但 run 句柄仍保留累计用量。
+      // Active finalization may omit usage on the SDK result; the run handle still has totals.
       const usage = result.usage ?? run.usage;
       if (usage && toDashboardTokenUsage(usage).totalTokens > 0) {
         logLine(formatSessionTokenLog(usage, metrics));
       }
       if (cancellation?.isSkipRequested) {
-        logLine("Cursor 会话已由用户跳过", "worker");
-        return { ok: false, error: "已跳过" };
+        logLine("Cursor session skipped by the user", "worker");
+        return { ok: false, error: "Skipped" };
       }
       if (cancellation?.isCancelled && !endedByTerminal) {
-        logLine("Cursor 会话已由用户停止", "worker");
-        return { ok: false, error: "已取消" };
+        logLine("Cursor session stopped by the user", "worker");
+        return { ok: false, error: "Cancelled" };
       }
       if (endedByTerminal) {
         const readyAt = shellSpans.lastReadyStartedAtMs();
@@ -633,17 +634,17 @@ export async function runCursor(
           summary:
             typeof result.result === "string"
               ? result.result
-              : "收尾工具已成功，已结束会话",
+              : "Finalization tool succeeded; session ended",
         };
       }
       if (result.status === "cancelled") {
-        logLine("Cursor 会话已由用户停止", "worker");
-        return { ok: false, error: "已取消" };
+        logLine("Cursor session stopped by the user", "worker");
+        return { ok: false, error: "Cancelled" };
       }
       if (result.status === "error") {
         return {
           ok: false,
-          error: `Cursor run 失败：${result.error?.message ?? result.id}`,
+          error: `Cursor run failed: ${result.error?.message ?? result.id}`,
           summary: typeof result.result === "string" ? result.result : undefined,
           retryable: isRetryableError(result.error),
         };
@@ -662,8 +663,8 @@ export async function runCursor(
         typeof result.result === "string"
           ? result.result
           : result.status === "finished"
-            ? "Cursor 会话完成"
-            : `Cursor 状态：${result.status}`;
+            ? "Cursor session finished"
+            : `Cursor status: ${result.status}`;
 
       return { ok: result.status === "finished", summary };
     } finally {
@@ -676,22 +677,22 @@ export async function runCursor(
     }
   } catch (err) {
     if (cancellation?.isSkipRequested) {
-      return { ok: false, error: "已跳过" };
+      return { ok: false, error: "Skipped" };
     }
     if (cancellation?.isCancelled) {
-      return { ok: false, error: "已取消" };
+      return { ok: false, error: "Cancelled" };
     }
     if (err instanceof CursorAgentError) {
       return {
         ok: false,
-        error: `Cursor 启动失败：${err.message}（retryable=${err.isRetryable}）`,
-        // SDK 偶尔会把连接中断标为不可重试，保留本地网络错误兜底。
+        error: `Cursor failed to start: ${err.message} (retryable=${err.isRetryable})`,
+        // The SDK sometimes marks a dropped connection as non-retryable; keep a local network fallback.
         retryable: err.isRetryable || isRetryableError(err),
       };
     }
     return {
       ok: false,
-      error: `Cursor 会话异常：${err instanceof Error ? err.message : String(err)}`,
+      error: `Cursor session error: ${err instanceof Error ? err.message : String(err)}`,
       retryable: isRetryableError(err),
     };
   }

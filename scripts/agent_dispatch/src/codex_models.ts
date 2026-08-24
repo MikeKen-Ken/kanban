@@ -100,7 +100,7 @@ function toCatalogItem(model: CodexModel): CodexModelCatalogItem {
     ? []
     : [{
         id: "model_reasoning_effort",
-        displayName: "推理程度",
+        displayName: "Reasoning effort",
         values: efforts,
       }];
   return {
@@ -115,7 +115,7 @@ function toCatalogItem(model: CodexModel): CodexModelCatalogItem {
     ],
     variants: defaultEffort
       ? [{
-          displayName: `默认（${effortLabel(defaultEffort)}）`,
+          displayName: `Default (${effortLabel(defaultEffort)})`,
           isDefault: true,
           params: [{ id: "model_reasoning_effort", value: defaultEffort }],
         }]
@@ -149,7 +149,7 @@ class AppServerClient {
     child.on("error", (error) => this.rejectAll(error));
     child.on("close", (code) => {
       if (this.pending.size > 0) {
-        this.rejectAll(new Error(`Codex app-server 已退出（${code ?? 1}）`));
+        this.rejectAll(new Error(`Codex app-server exited (${code ?? 1})`));
       }
     });
   }
@@ -159,7 +159,7 @@ class AppServerClient {
     const promise = new Promise<unknown>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`${method} 请求超时`));
+        reject(new Error(`${method} request timed out`));
       }, 15_000);
       this.pending.set(id, {
         resolve: (value) => {
@@ -196,7 +196,7 @@ class AppServerClient {
     if (!pending) return;
     this.pending.delete(response.id);
     if (response.error) {
-      pending.reject(new Error(response.error.message ?? "Codex app-server 请求失败"));
+      pending.reject(new Error(response.error.message ?? "Codex app-server request failed"));
     } else {
       pending.resolve(response.result);
     }

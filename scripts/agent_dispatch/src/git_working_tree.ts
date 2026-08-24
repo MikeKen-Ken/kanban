@@ -22,11 +22,11 @@ function looksLikeNotGit(text: string): boolean {
   return (
     lower.includes("not a git repository") ||
     lower.includes("not a git repo") ||
-    lower.includes("不是 git 仓库")
+    lower.includes("\u4E0D\u662F git \u4ED3\u5E93")
   );
 }
 
-/** 与 Skill 原先的 `git status --short` 一致：脏则不要开会话。 */
+/** \u4E0E Skill \u539F\u5148\u7684 `git status --short` \u4E00\u81F4：\u810F\u5219\u4E0D\u8981\u5F00\u4F1A\u8BDD。 */
 export function inspectGitWorkingTree(cwd: string): GitWorkingTree {
   const root = cwd.trim();
   if (!root) return { kind: "not_git" };

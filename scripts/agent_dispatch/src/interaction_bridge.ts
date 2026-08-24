@@ -26,7 +26,7 @@ export type InteractionEvent = {
   at: string;
 };
 
-/** 测试可替换；默认与 Worker 日志一样用 writeSync，避免和日志互相截断 JSON。 */
+/** \u6D4B\u8BD5\u53EF\u66FF\u6362；\u9ED8\u8BA4\u4E0E Worker \u65E5\u5FD7\u4E00\u6837\u7528 writeSync，\u907F\u514D\u548C\u65E5\u5FD7\u4E92\u76F8\u622A\u65AD JSON。 */
 export const interactionStdio = {
   write(line: string): void {
     writeSync(1, line);
@@ -47,7 +47,7 @@ export function emitInteractionEvent(
 export function sessionStartText(job: RoundDispatchJob): string {
   const items = workItems(job);
   return items.length === 0
-    ? "开始处理本卡。"
+    ? "Starting this card."
     : items.map((item) => `- ${item}`).join("\n");
 }
 
@@ -141,18 +141,18 @@ export function createAskUserTool(
   mkdirSync(interactionDir, { recursive: true });
   return {
     description:
-      "需要用户确认、补充需求或选择方案时调用。有互斥方案时传入 choices，看板会弹出选项菜单；工具会暂停当前卡片，直到用户回复。",
+      "Call this when you need the user to confirm, supply missing requirements, or choose a plan. When options are mutually exclusive, pass choices; the board shows an option menu and pauses the current card until the user replies.",
     inputSchema: {
       type: "object",
       properties: {
         question: {
           type: "string",
-          description: "向用户提出的完整问题，使用简体中文。",
+          description: "The full question to ask the user, in English.",
         },
         choices: {
           type: "array",
           description:
-            "2 到 4 个互斥选项。有明确方案时必须提供，看板会在最近运行界面弹出选项菜单供用户点选；不要只在正文里口头列出选项。",
+            "2 to 4 mutually exclusive options. Provide them when there is a clear plan; the board shows an option menu on the latest-run screen for the user to tap. Do not only list options in assistant prose.",
           items: { type: "string" },
           minItems: 2,
           maxItems: 4,
@@ -164,7 +164,7 @@ export function createAskUserTool(
     execute: async (args) => {
       const question = stringArg(args.question);
       if (!question) {
-        return { content: [{ type: "text", text: "问题不能为空" }], isError: true };
+        return { content: [{ type: "text", text: "Question cannot be empty" }], isError: true };
       }
       const explicit = stringListArg(args.choices);
       const choices =
@@ -181,7 +181,7 @@ export function createAskUserTool(
         ...(choices.length > 0 ? { choices } : {}),
       });
       const answer = await waitForReply(replyPath, cancellation);
-      if (answer && answer !== "用户已终止当前会话。") {
+      if (answer && answer !== "The user ended the current session.") {
         onUserReply?.(answer);
       }
       return answer;
@@ -195,7 +195,7 @@ async function waitForReply(
 ): Promise<string> {
   while (true) {
     if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
-      return "用户已终止当前会话。";
+      return "The user ended the current session.";
     }
     if (existsSync(replyPath)) {
       try {
@@ -205,7 +205,7 @@ async function waitForReply(
         const text = String(decoded.text ?? "").trim();
         if (text) return text;
       } catch {
-        // 写入尚未完成时等待下一轮。
+        // \u5199\u5165\u5C1A\u672A\u5B8C\u6210\u65F6\u7B49\u5F85\u4E0B\u4E00\u8F6E。
       } finally {
         rmSync(replyPath, { force: true });
       }

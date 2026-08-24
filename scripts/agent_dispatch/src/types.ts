@@ -20,27 +20,27 @@ export type DispatchJob = {
   projectId?: string;
   cardLimit: number;
   workerToken: string;
-  /** 为 true 时忽略卡片上的引擎 / 模型 / 参数 / 脏工作区 / 沙箱 / 测试开关，只用工作台默认。 */
+  /** \u4E3A true \u65F6\u5FFD\u7565\u5361\u7247\u4E0A\u7684\u5F15\u64CE / \u6A21\u578B / \u53C2\u6570 / \u810F\u5DE5\u4F5C\u533A / \u6C99\u7BB1 / \u6D4B\u8BD5\u5F00\u5173，\u53EA\u7528\u5DE5\u4F5C\u53F0\u9ED8\u8BA4。 */
   ignoreCardParams?: boolean;
-  /** 为 true 时工作区有未提交改动仍可领取；默认 false。 */
+  /** \u4E3A true \u65F6\u5DE5\u4F5C\u533A\u6709\u672A\u63D0\u4EA4\u6539\u52A8\u4ECD\u53EF\u9886\u53D6；\u9ED8\u8BA4 false。 */
   allowDirtyWorkspace?: boolean;
-  /** 为 true 时开启 Cursor SDK 沙箱；默认 false。 */
+  /** \u4E3A true \u65F6\u5F00\u542F Cursor SDK \u6C99\u7BB1；\u9ED8\u8BA4 false。 */
   enableSandbox?: boolean;
-  /** 为 false 时，本卡不要求执行自动化测试；缺省为 true。 */
+  /** \u4E3A false \u65F6，\u672C\u5361\u4E0D\u8981\u6C42\u6267\u884C\u81EA\u52A8\u5316\u6D4B\u8BD5；\u7F3A\u7701\u4E3A true。 */
   requireTests?: boolean;
-  /** 为 true 时收尾工具成功落盘后主动结束 Agent 会话；默认 true。 */
+  /** \u4E3A true \u65F6\u6536\u5C3E\u5DE5\u5177\u6210\u529F\u843D\u76D8\u540E\u4E3B\u52A8\u7ED3\u675F Agent \u4F1A\u8BDD；\u9ED8\u8BA4 true。 */
   terminateAfterDispatchTerminal?: boolean;
-  /** @deprecated 旧字段，兼容 */
+  /** @deprecated \u65E7\u5B57\u6BB5，\u517C\u5BB9 */
   effort?: string;
-  /** Dart 侧 touch 此文件以请求立即停止 */
+  /** Dart \u4FA7 touch \u6B64\u6587\u4EF6\u4EE5\u8BF7\u6C42\u7ACB\u5373\u505C\u6B62 */
   cancelFile?: string;
-  /** Dart 侧 touch 此文件以在当前 Skill 会话结束后停止批次 */
+  /** Dart \u4FA7 touch \u6B64\u6587\u4EF6\u4EE5\u5728\u5F53\u524D Skill \u4F1A\u8BDD\u7ED3\u675F\u540E\u505C\u6B62\u6279\u6B21 */
   drainFile?: string;
-  /** Dart 侧 touch 此文件以跳过当前卡片并继续下一张 */
+  /** Dart \u4FA7 touch \u6B64\u6587\u4EF6\u4EE5\u8DF3\u8FC7\u5F53\u524D\u5361\u7247\u5E76\u7EE7\u7EED\u4E0B\u4E00\u5F20 */
   skipFile?: string;
-  /** 运行中覆盖默认平台 / 模型 / 参数；Worker 每轮领卡前重读。 */
+  /** \u8FD0\u884C\u4E2D\u8986\u76D6\u9ED8\u8BA4\u5E73\u53F0 / \u6A21\u578B / \u53C2\u6570；Worker \u6BCF\u8F6E\u9886\u5361\u524D\u91CD\u8BFB。 */
   liveFile?: string;
-  /** App 与当前 Agent 问答使用的临时目录。 */
+  /** App \u4E0E\u5F53\u524D Agent \u95EE\u7B54\u4F7F\u7528\u7684\u4E34\u65F6\u76EE\u5F55。 */
   interactionDir?: string;
   outPath: string;
 };
@@ -88,11 +88,11 @@ export type RoundContext = {
   agentEndpointUrl: string;
   images: RoundImage[];
   attachmentPaths: string[];
-  /** 冻结的卡片上下文，用于生成用户可读的会话记录。 */
+  /** \u51BB\u7ED3\u7684\u5361\u7247\u4E0A\u4E0B\u6587，\u7528\u4E8E\u751F\u6210\u7528\u6237\u53EF\u8BFB\u7684\u4F1A\u8BDD\u8BB0\u5F55。 */
   cardContext?: Record<string, unknown>;
-  /** 项目级 MCP 标签 key，用于按需注入用户 MCP；无标签时只挂 scoped 看板 MCP。 */
+  /** \u9879\u76EE\u7EA7 MCP \u6807\u7B7E key，\u7528\u4E8E\u6309\u9700\u6CE8\u5165\u7528\u6237 MCP；\u65E0\u6807\u7B7E\u65F6\u53EA\u6302 scoped \u770B\u677F MCP。 */
   projectMcpTags: string[];
-  /** Worker 把 Shell 起止报到完整 MCP，供 ready_to_submit 拒绝未完成测试。 */
+  /** Worker \u628A Shell \u8D77\u6B62\u62A5\u5230\u5B8C\u6574 MCP，\u4F9B ready_to_submit \u62D2\u7EDD\u672A\u5B8C\u6210\u6D4B\u8BD5。 */
   reportShellSpan?: (span: {
     callId: string;
     command: string;
@@ -103,8 +103,8 @@ export type RoundContext = {
     exitCode?: number;
   }) => Promise<void>;
   /**
-   * 收尾工具已在 MCP 落盘后的会话状态。Worker 用来结束 SDK run，
-   * 避免 ready_to_submit 成功后模型继续搜改。
+   * \u6536\u5C3E\u5DE5\u5177\u5DF2\u5728 MCP \u843D\u76D8\u540E\u7684\u4F1A\u8BDD\u72B6\u6001。Worker \u7528\u6765\u7ED3\u675F SDK run，
+   * \u907F\u514D ready_to_submit \u6210\u529F\u540E\u6A21\u578B\u7EE7\u7EED\u641C\u6539。
    */
   peekDispatchTerminal?: () => Promise<
     "none" | "declared" | "verify" | "blocked"
@@ -120,10 +120,10 @@ export type DispatchResult = {
   ok: boolean;
   summary?: string;
   error?: string;
-  /** 仅表示暂时性网络或服务故障，Worker 可安全地有限次数重试当前卡片。 */
+  /** \u4EC5\u8868\u793A\u6682\u65F6\u6027\u7F51\u7EDC\u6216\u670D\u52A1\u6545\u969C，Worker \u53EF\u5B89\u5168\u5730\u6709\u9650\u6B21\u6570\u91CD\u8BD5\u5F53\u524D\u5361\u7247。 */
   retryable?: boolean;
   processedCards?: number;
-  /** 为 true 时不要把 pending 标成 failed，供清理工作区后恢复。 */
+  /** \u4E3A true \u65F6\u4E0D\u8981\u628A pending \u6807\u6210 failed，\u4F9B\u6E05\u7406\u5DE5\u4F5C\u533A\u540E\u6062\u590D。 */
   preservePending?: boolean;
 };
 
@@ -216,7 +216,7 @@ export function mergeJobWithCardOverrides(
   const catalog = defaults.models?.find((item) => item.id === model);
   const rawParameters = catalog?.parameters ?? [];
   const parameters = ensureContextParameter(rawParameters);
-  // Cursor SDK 只接受 models.list 里的参数；`context` 是看板自己补的，传上去会报不支持。
+  // Cursor SDK \u53EA\u63A5\u53D7 models.list \u91CC\u7684\u53C2\u6570；`context` \u662F\u770B\u677F\u81EA\u5DF1\u8865\u7684，\u4F20\u4E0A\u53BB\u4F1A\u62A5\u4E0D\u652F\u6301。
   const fillFrom = engine === "cursor" ? rawParameters : parameters;
   if (rawParameters.length > 0) {
     const allowed = new Set(
@@ -280,7 +280,7 @@ export function contextCatalogParameter(): {
 } {
   return {
     id: "context",
-    displayName: "上下文",
+    displayName: "Context",
     values: DEFAULT_CONTEXT_VALUES.map((value) => ({
       value,
       displayName: value,
@@ -298,7 +298,7 @@ export function ensureContextParameter<T extends CatalogParameter>(
     ...parameters,
     {
       id: "context",
-      displayName: "上下文",
+      displayName: "Context",
       values: [...DEFAULT_CONTEXT_VALUES],
     } as T,
   ];
@@ -345,7 +345,7 @@ function cursorCatalogParameterIds(job: DispatchJob): string[] {
     .filter((id) => id.length > 0 && !isContextParamId(id));
 }
 
-/** Composer 系列才有 fast；无目录时不要把 fast 传给 Grok 等模型。 */
+/** Composer \u7CFB\u5217\u624D\u6709 fast；\u65E0\u76EE\u5F55\u65F6\u4E0D\u8981\u628A fast \u4F20\u7ED9 Grok \u7B49\u6A21\u578B。 */
 export function cursorModelLikelySupportsFast(modelId: string): boolean {
   return /composer/i.test(modelId.trim());
 }
@@ -373,7 +373,7 @@ function errorLooksLikeUnsupportedParam(text: string): boolean {
   );
 }
 
-/** Agent.create 因参数不支持失败时，丢掉被点名的项；未点名则去掉全部 params 再试。 */
+/** Agent.create \u56E0\u53C2\u6570\u4E0D\u652F\u6301\u5931\u8D25\u65F6，\u4E22\u6389\u88AB\u70B9\u540D\u7684\u9879；\u672A\u70B9\u540D\u5219\u53BB\u6389\u5168\u90E8 params \u518D\u8BD5。 */
 export function nextCursorSdkParamsAfterCreateError(
   params: ModelParam[] | undefined,
   err: unknown,
@@ -397,7 +397,7 @@ export function nextCursorSdkParamsAfterCreateError(
   };
 }
 
-/** Cursor Agent.create 只应收到官方 catalog 参数；丢掉 context 等自造项。 */
+/** Cursor Agent.create \u53EA\u5E94\u6536\u5230\u5B98\u65B9 catalog \u53C2\u6570；\u4E22\u6389 context \u7B49\u81EA\u9020\u9879。 */
 export function selectCursorSdkModelParams(job: DispatchJob): {
   params?: ModelParam[];
   dropped: string[];

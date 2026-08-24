@@ -209,16 +209,23 @@ AgentDispatchProgress applyLiveBoardQueue(
   return progress.copyWith(totalCards: liveTotal);
 }
 
-final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)(?:/(\d+))?');
+final _roundPattern = RegExp(r'Worker (?:card round|单卡轮次) (\d+)(?:/(\d+))?');
 final _confirmedPattern = RegExp(r'Worker 确认第 (\d+) 次');
-final _processedPattern = RegExp(r'已处理 (\d+) 张');
-final _currentTitlePattern = RegExp(r'^当前卡片：(.+)$', multiLine: true);
-final _currentDetailPattern = RegExp(r'^当前任务：([\s\S]+)$', multiLine: true);
-final _afterQueuePattern = RegExp(r'完成后队列：开始「(.+)」');
-final _cardOverridePattern = RegExp(
-  r'本卡覆盖：engine=(\w+) model=([^\s]+)(?: params=(\[.*?\]))?',
+final _processedPattern = RegExp(
+  r'(?:已处理 (\d+) 张|processed (\d+) card\(s\))',
+  caseSensitive: false,
 );
-final _cursorModelPattern = RegExp(r'Cursor 模型=([^\s]+)');
+final _currentTitlePattern =
+    RegExp(r'^(?:当前卡片：|Current card: )(.+)$', multiLine: true);
+final _currentDetailPattern =
+    RegExp(r'^(?:当前任务：|Current task: )([\s\S]+)$', multiLine: true);
+final _afterQueuePattern = RegExp(
+  r'(?:完成后队列：开始[「『](.+)[」』]|Completion queue: starting [“"](.+)[”"])',
+);
+final _cardOverridePattern = RegExp(
+  r'(?:本卡覆盖：|Card override: )engine=(\w+) model=([^\s]+)(?: params=(\[.*?\]))?',
+);
+final _cursorModelPattern = RegExp(r'Cursor (?:模型|model)=([^\s]+)');
 
 /// 从 Worker 日志行更新进度；无法识别的行原样返回。
 AgentDispatchProgress applyWorkerProgressLog(
@@ -292,39 +299,76 @@ int? _absoluteProcessedFromLog(String message) {
   final confirmed = _confirmedPattern.firstMatch(message);
   if (confirmed != null) return int.parse(confirmed.group(1)!);
   final processed = _processedPattern.firstMatch(message);
-  if (processed != null) return int.parse(processed.group(1)!);
+  if (processed != null) return _firstCapturedInt(processed);
   return null;
 }
 
 bool _isCompletedCardLog(String message) {
   return RegExp(r'卡片 \S+ 已验证、提交并送交人工验证').hasMatch(message) ||
       RegExp(r'咨询卡 \S+ 已送交验证').hasMatch(message) ||
-      message.contains('已恢复 pending 会话');
+      message.contains('已恢复 pending 会话') ||
+      RegExp(r'Card \S+ was validated, committed, and submitted for manual verification')
+          .hasMatch(message) ||
+      RegExp(r'Consultation card \S+ was submitted for verification')
+          .hasMatch(message) ||
+      message.contains('Recovered pending session');
 }
 
 String? _phaseFromLog(String message) {
-  if (message.contains('Agent 会话暂时失败') && message.contains('自动重试')) {
+  if ((message.contains('Agent 会话暂时失败') && message.contains('自动重试')) ||
+      (message.contains('Agent session temporarily failed') &&
+          message.contains('retrying'))) {
     return 'Retry';
   }
-  if (message.contains('Worker 正在实施')) return 'Implement';
+  if (message.contains('Worker 正在实施') ||
+      message.contains('Worker is processing the current card')) {
+    return 'Implement';
+  }
   if (message.contains('验证已由 Agent 会话完成') ||
       message.contains('Worker 正在提交') ||
-      message.contains('已验证、提交')) {
+      message.contains('已验证、提交') ||
+      message.contains('Validation was completed in the Agent session') ||
+      message.contains('Worker is finalizing the current card') ||
+      message.contains('was validated, committed')) {
     return 'Submit';
   }
-  if (message.contains('咨询卡') && message.contains('送交验证')) return 'Verify';
-  if (message.contains('Worker 批次完成')) return 'Complete';
+  if ((message.contains('咨询卡') && message.contains('送交验证')) ||
+      (message.contains('Consultation card') &&
+          message.contains('submitted for verification'))) {
+    return 'Verify';
+  }
+  if (message.contains('Worker 批次完成') ||
+      message.contains('Worker batch completed')) {
+    return 'Complete';
+  }
   final afterQueue = _afterQueuePattern.firstMatch(message);
   if (afterQueue != null) {
-    return switch (afterQueue.group(1)) {
-      '上传' => 'Upload',
-      '推送' => 'Push',
-      '休眠' => 'Hibernate',
-      '关机' => 'Shutdown',
-      _ => afterQueue.group(1),
+    final label = _firstCapturedString(afterQueue);
+    return switch (label) {
+      '上传' || 'Upload' => 'Upload',
+      '推送' || 'Push' => 'Push',
+      '休眠' || 'Hibernate' => 'Hibernate',
+      '关机' || 'Shutdown' => 'Shutdown',
+      _ => label,
     };
   }
-  if (message.contains('完成后队列：开始')) return 'Completion queue';
+  if (message.contains('完成后队列：开始') ||
+      message.contains('Completion queue: starting')) {
+    return 'Completion queue';
+  }
+  return null;
+}
+
+int? _firstCapturedInt(RegExpMatch match) {
+  final text = _firstCapturedString(match);
+  return text == null ? null : int.parse(text);
+}
+
+String? _firstCapturedString(RegExpMatch match) {
+  for (var i = 1; i <= match.groupCount; i++) {
+    final value = match.group(i);
+    if (value != null) return value;
+  }
   return null;
 }
 

@@ -13,47 +13,47 @@ function collect() {
 }
 
 describe("cursor_thinking_stream", () => {
-  it("发送任务时先说明空白不等于空闲", () => {
+  it("\u53D1\u9001\u4EFB\u52A1\u65F6\u5148\u8BF4\u660E\u7A7A\u767D\u4E0D\u7B49\u4E8E\u7A7A\u95F2", () => {
     const { lines, stream } = collect();
     stream.notePromptSent();
-    assert.match(lines[0] ?? "", /等待模型思考流/);
+    assert.match(lines[0] ?? "", /waiting for the model thinking stream/);
     assert.equal(stream.consumeStreamedThinking(), false);
   });
 
-  it("按行立刻打出思考增量，并跳过随后的整段步骤", () => {
+  it("\u6309\u884C\u7ACB\u523B\u6253\u51FA\u601D\u8003\u589E\u91CF，\u5E76\u8DF3\u8FC7\u968F\u540E\u7684\u6574\u6BB5\u6B65\u9AA4", () => {
     const { lines, stream } = collect();
-    stream.handleDelta({ type: "thinking-delta", text: "第一行\n第二行\n" });
-    assert.deepEqual(lines, ["思考：第一行", "  │ 第二行"]);
+    stream.handleDelta({ type: "thinking-delta", text: "\u7B2C\u4E00\u884C\n\u7B2C\u4E8C\u884C\n" });
+    assert.deepEqual(lines, ["Thinking: \u7B2C\u4E00\u884C", "  │ \u7B2C\u4E8C\u884C"]);
     stream.handleDelta({ type: "thinking-completed", thinkingDurationMs: 270_000 });
-    assert.equal(lines.at(-1), "思考完成（270 秒）");
-    assert.equal(stream.assembledText(), "第一行\n第二行");
+    assert.equal(lines.at(-1), "Thinking done (270s)");
+    assert.equal(stream.assembledText(), "\u7B2C\u4E00\u884C\n\u7B2C\u4E8C\u884C");
     assert.equal(stream.consumeStreamedThinking(), true);
     assert.equal(stream.consumeStreamedThinking(), false);
   });
 
-  it("快照式增量只追加新增部分", () => {
+  it("\u5FEB\u7167\u5F0F\u589E\u91CF\u53EA\u8FFD\u52A0\u65B0\u589E\u90E8\u5206", () => {
     const { lines, stream } = collect();
-    stream.handleDelta({ type: "thinking-delta", text: "你好" });
-    stream.handleDelta({ type: "thinking-delta", text: "你好世界" });
+    stream.handleDelta({ type: "thinking-delta", text: "\u4F60\u597D" });
+    stream.handleDelta({ type: "thinking-delta", text: "\u4F60\u597D\u4E16\u754C" });
     stream.handleDelta({ type: "thinking-completed", thinkingDurationMs: 1000 });
-    assert.deepEqual(lines, ["思考：你好世界", "思考完成（1 秒）"]);
+    assert.deepEqual(lines, ["Thinking: \u4F60\u597D\u4E16\u754C", "Thinking done (1s)"]);
   });
 
-  it("没有增量时不吞掉 onStep 思考", () => {
+  it("\u6CA1\u6709\u589E\u91CF\u65F6\u4E0D\u541E\u6389 onStep \u601D\u8003", () => {
     const { stream } = collect();
     stream.handleDelta({ type: "thinking-completed", thinkingDurationMs: 0 });
     assert.equal(stream.consumeStreamedThinking(), false);
   });
 
-  it("接受 SDK thinking 消息与嵌套 text", () => {
+  it("\u63A5\u53D7 SDK thinking \u6D88\u606F\u4E0E\u5D4C\u5957 text", () => {
     const { stream } = collect();
-    stream.handleDelta({ type: "thinking", text: "完整思考步骤" });
-    assert.equal(stream.assembledText(), "完整思考步骤");
+    stream.handleDelta({ type: "thinking", text: "\u5B8C\u6574\u601D\u8003\u6B65\u9AA4" });
+    assert.equal(stream.assembledText(), "\u5B8C\u6574\u601D\u8003\u6B65\u9AA4");
     stream.handleDelta({
       type: "thinking-delta",
-      message: { text: "后续一句" },
+      message: { text: "\u540E\u7EED\u4E00\u53E5" },
     });
     stream.handleDelta({ type: "thinking-completed", thinkingDurationMs: 0 });
-    assert.equal(stream.assembledText(), "完整思考步骤后续一句");
+    assert.equal(stream.assembledText(), "\u5B8C\u6574\u601D\u8003\u6B65\u9AA4\u540E\u7EED\u4E00\u53E5");
   });
 });

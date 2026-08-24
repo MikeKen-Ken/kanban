@@ -9,58 +9,61 @@ import {
 } from "./codex_exec_log.ts";
 
 describe("recordsFromCodexEvent", () => {
-  it("把助手回复标成 AI 信息，而不是警告", () => {
+  it("marks assistant replies as AI information rather than warnings", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
-      item: { type: "agent_message", text: "已声明完成，等待 Worker 验证与收尾。" },
+      item: {
+        type: "agent_message",
+        text: "Completion declared; awaiting Worker validation and finalization.",
+      },
     });
     assert.deepEqual(records, [
       {
-        line: "助手：已声明完成，等待 Worker 验证与收尾。",
+        line: "Assistant: Completion declared; awaiting Worker validation and finalization.",
         source: "ai",
         level: "info",
       },
     ]);
   });
 
-  it("Codex 助手 content 块也会打成完整正文", () => {
+  it("Codex \u52A9\u624B content \u5757\u4E5F\u4F1A\u6253\u6210\u5B8C\u6574\u6B63\u6587", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
       item: {
         type: "agent_message",
         content: [
-          { type: "output_text", text: "第一段\n第二段完整结论。" },
+          { type: "output_text", text: "\u7B2C\u4E00\u6BB5\n\u7B2C\u4E8C\u6BB5\u5B8C\u6574\u7ED3\u8BBA。" },
         ],
       },
     });
-    assert.equal(records[0]?.line, "助手：第一段");
-    assert.equal(records[1]?.line, "  │ 第二段完整结论。");
+    assert.equal(records[0]?.line, "Assistant: \u7B2C\u4E00\u6BB5");
+    assert.equal(records[1]?.line, "  │ \u7B2C\u4E8C\u6BB5\u5B8C\u6574\u7ED3\u8BBA。");
   });
 
-  it("把 reasoning 标成思考", () => {
+  it("\u628A reasoning \u6807\u6210\u601D\u8003", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
-      item: { type: "reasoning", text: "先定位玻璃层实现。" },
+      item: { type: "reasoning", text: "\u5148\u5B9A\u4F4D\u73BB\u7483\u5C42\u5B9E\u73B0。" },
     });
     assert.equal(records[0]?.source, "ai");
-    assert.equal(records[0]?.line, "思考：先定位玻璃层实现。");
+    assert.equal(records[0]?.line, "Thinking: \u5148\u5B9A\u4F4D\u73BB\u7483\u5C42\u5B9E\u73B0。");
   });
 
-  it("思考段落之间的空行不打成只有 │ 的续行", () => {
+  it("\u601D\u8003\u6BB5\u843D\u4E4B\u95F4\u7684\u7A7A\u884C\u4E0D\u6253\u6210\u53EA\u6709 │ \u7684\u7EED\u884C", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
       item: {
         type: "reasoning",
-        text: "正在处理重修卡片。\n\n发现下拉框仍显示密钥名。",
+        text: "\u6B63\u5728\u5904\u7406\u91CD\u4FEE\u5361\u7247。\n\n\u53D1\u73B0\u4E0B\u62C9\u6846\u4ECD\u663E\u793A\u5BC6\u94A5\u540D。",
       },
     });
     assert.deepEqual(
       records.map((record) => record.line),
-      ["思考：正在处理重修卡片。", "  │ 发现下拉框仍显示密钥名。"],
+      ["Thinking: \u6B63\u5728\u5904\u7406\u91CD\u4FEE\u5361\u7247。", "  │ \u53D1\u73B0\u4E0B\u62C9\u6846\u4ECD\u663E\u793A\u5BC6\u94A5\u540D。"],
     );
   });
 
-  it("命令开始是命令来源；失败才是错误；输出里的 git warning 仍是警告", () => {
+  it("\u547D\u4EE4\u5F00\u59CB\u662F\u547D\u4EE4\u6765\u6E90；\u5931\u8D25\u624D\u662F\u9519\u8BEF；\u8F93\u51FA\u91CC\u7684 git warning \u4ECD\u662F\u8B66\u544A", () => {
     const started = recordsFromCodexEvent({
       type: "item.started",
       item: {
@@ -70,7 +73,7 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.deepEqual(started, [
-      { line: "命令：git add app/lib/foo.dart", source: "shell", level: "info" },
+      { line: "Command: git add app/lib/foo.dart", source: "shell", level: "info" },
     ]);
 
     const failed = recordsFromCodexEvent({
@@ -90,7 +93,7 @@ describe("recordsFromCodexEvent", () => {
     assert.ok(failed.some((record) => record.level === "error" && record.line.includes("error: failed")));
   });
 
-  it("成功命令不刷完整输出，只抽出诊断行", () => {
+  it("\u6210\u529F\u547D\u4EE4\u4E0D\u5237\u5B8C\u6574\u8F93\u51FA，\u53EA\u62BD\u51FA\u8BCA\u65AD\u884C", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
       item: {
@@ -111,7 +114,7 @@ describe("recordsFromCodexEvent", () => {
     ]);
   });
 
-  it("不把 Dart 命名参数 error: 当成命令诊断", () => {
+  it("\u4E0D\u628A Dart \u547D\u540D\u53C2\u6570 error: \u5F53\u6210\u547D\u4EE4\u8BCA\u65AD", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
       item: {
@@ -120,7 +123,7 @@ describe("recordsFromCodexEvent", () => {
         status: "completed",
         exit_code: 0,
         aggregated_output:
-          "error: e,\nerror: '尚未配置 Cursor API Key，请先在 Agent 调度面板中安全保存',\nerror: failed to add",
+          "error: e,\nerror: '\u5C1A\u672A\u914D\u7F6E Cursor API Key，\u8BF7\u5148\u5728 Agent \u8C03\u5EA6\u9762\u677F\u4E2D\u5B89\u5168\u4FDD\u5B58',\nerror: failed to add",
       },
     });
     assert.deepEqual(
@@ -135,7 +138,7 @@ describe("recordsFromCodexEvent", () => {
     );
   });
 
-  it("exit_code=0 时不把 Codex status=failed 当成命令失败", () => {
+  it("exit_code=0 \u65F6\u4E0D\u628A Codex status=failed \u5F53\u6210\u547D\u4EE4\u5931\u8D25", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
       item: {
@@ -147,12 +150,12 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.equal(
-      records.some((record) => record.line.startsWith("命令失败：")),
+      records.some((record) => record.line.startsWith("Command failed: ")),
       false,
     );
   });
 
-  it("rg 无匹配与搜索语法问题不会被标成任务错误", () => {
+  it("rg \u65E0\u5339\u914D\u4E0E\u641C\u7D22\u8BED\u6CD5\u95EE\u9898\u4E0D\u4F1A\u88AB\u6807\u6210\u4EFB\u52A1\u9519\u8BEF", () => {
     const noMatch = recordsFromCodexEvent({
       type: "item.completed",
       item: {
@@ -164,7 +167,7 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.deepEqual(noMatch, [
       {
-        line: "搜索无匹配：rg --fixed-strings -- title app/src",
+        line: "Search had no matches: rg --fixed-strings -- title app/src",
         source: "shell",
         level: "info",
       },
@@ -181,11 +184,11 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.equal(badSearch[0]?.level, "warning");
-    assert.match(badSearch[0]?.line ?? "", /搜索命令问题/);
+    assert.match(badSearch[0]?.line ?? "", /Search command issue/);
     assert.equal(badSearch.some((record) => record.level === "error"), false);
   });
 
-  it("MCP 调用按工具来源记录，失败才升级为错误", () => {
+  it("MCP \u8C03\u7528\u6309\u5DE5\u5177\u6765\u6E90\u8BB0\u5F55，\u5931\u8D25\u624D\u5347\u7EA7\u4E3A\u9519\u8BEF", () => {
     const started = recordsFromCodexEvent({
       type: "item.started",
       item: {
@@ -197,7 +200,7 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.equal(started[0]?.source, "mcp");
-    assert.match(started[0]?.line ?? "", /^工具：ready_to_submit /);
+    assert.match(started[0]?.line ?? "", /^Tool: ready_to_submit /);
     assert.equal(started[0]?.level, "info");
 
     const failed = recordsFromCodexEvent({
@@ -206,19 +209,19 @@ describe("recordsFromCodexEvent", () => {
         type: "mcp_tool_call",
         tool: "ready_to_submit",
         status: "failed",
-        error: { message: "看板未就绪" },
+        error: { message: "\u770B\u677F\u672A\u5C31\u7EEA" },
       },
     });
     assert.deepEqual(failed, [
       {
-        line: "工具失败：ready_to_submit 看板未就绪",
+        line: "Tool failed: ready_to_submit \u770B\u677F\u672A\u5C31\u7EEA",
         source: "mcp",
         level: "error",
       },
     ]);
   });
 
-  it("apply_patch 完成记录变更路径", () => {
+  it("apply_patch \u5B8C\u6210\u8BB0\u5F55\u53D8\u66F4\u8DEF\u5F84", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
       item: {
@@ -232,14 +235,14 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.deepEqual(records, [
       {
-        line: "工具：apply_patch 更新 app/lib/a.dart；新增 app/lib/b.dart",
+        line: "Tool: apply_patch updated app/lib/a.dart; added app/lib/b.dart",
         source: "mcp",
         level: "info",
       },
     ]);
   });
 
-  it("回合用量写成会话 token 行", () => {
+  it("\u56DE\u5408\u7528\u91CF\u5199\u6210\u4F1A\u8BDD token \u884C", () => {
     const records = recordsFromCodexEvent({
       type: "turn.completed",
       usage: {
@@ -250,11 +253,11 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.equal(records.length, 1);
     assert.equal(records[0]?.source, "worker");
-    assert.match(records[0]?.line ?? "", /^本会话 token：/);
+    assert.match(records[0]?.line ?? "", /^session tokens:/);
     assert.match(records[0]?.line ?? "", /total=/);
   });
 
-  it("顶层 error 默认是失败，重连提示仍是信息", () => {
+  it("\u9876\u5C42 error \u9ED8\u8BA4\u662F\u5931\u8D25，\u91CD\u8FDE\u63D0\u793A\u4ECD\u662F\u4FE1\u606F", () => {
     const fatal = recordsFromCodexEvent({
       type: "error",
       message: "stream error: broken pipe",
@@ -272,7 +275,7 @@ describe("recordsFromCodexEvent", () => {
     ]);
   });
 
-  it("item.error 是非致命警告", () => {
+  it("item.error \u662F\u975E\u81F4\u547D\u8B66\u544A", () => {
     const records = recordsFromCodexEvent({
       type: "item.completed",
       item: { type: "error", message: "command output truncated" },
@@ -288,12 +291,12 @@ describe("recordsFromCodexEvent", () => {
 });
 
 describe("recordsFromCodexJsonLine / stderr", () => {
-  it("JSON 接通后不再把 TTY 会话回放当警告，只保留诊断行", () => {
+  it("JSON \u63A5\u901A\u540E\u4E0D\u518D\u628A TTY \u4F1A\u8BDD\u56DE\u653E\u5F53\u8B66\u544A，\u53EA\u4FDD\u7559\u8BCA\u65AD\u884C", () => {
     const state = createCodexLogState();
     const jsonRecords = recordsFromCodexJsonLine(
       JSON.stringify({
         type: "item.completed",
-        item: { type: "agent_message", text: "完成" },
+        item: { type: "agent_message", text: "\u5B8C\u6210" },
       }),
       state,
     );
@@ -302,7 +305,7 @@ describe("recordsFromCodexJsonLine / stderr", () => {
 
     assert.deepEqual(recordsFromCodexStderrLine("codex", state), []);
     assert.deepEqual(
-      recordsFromCodexStderrLine("我会只处理这张卡片。", state),
+      recordsFromCodexStderrLine("\u6211\u4F1A\u53EA\u5904\u7406\u8FD9\u5F20\u5361\u7247。", state),
       [],
     );
     assert.deepEqual(
@@ -320,28 +323,28 @@ describe("recordsFromCodexJsonLine / stderr", () => {
     );
   });
 
-  it("没有 JSON 时按 TTY 角色分类，并跳过用户提示正文", () => {
+  it("\u6CA1\u6709 JSON \u65F6\u6309 TTY \u89D2\u8272\u5206\u7C7B，\u5E76\u8DF3\u8FC7\u7528\u6237\u63D0\u793A\u6B63\u6587", () => {
     const state = createCodexLogState();
     assert.deepEqual(recordsFromCodexStderrLine("OpenAI Codex v0.147.0", state), [
       { line: "OpenAI Codex v0.147.0", source: "worker", level: "info" },
     ]);
     assert.deepEqual(recordsFromCodexStderrLine("user", state), []);
     assert.deepEqual(
-      recordsFromCodexStderrLine("# Skill 正文", state),
+      recordsFromCodexStderrLine("# Skill \u6B63\u6587", state),
       [],
     );
     assert.deepEqual(
-      recordsFromCodexStderrLine('  "error": "看板未就绪"', state),
+      recordsFromCodexStderrLine('  "error": "\u770B\u677F\u672A\u5C31\u7EEA"', state),
       [],
     );
     assert.deepEqual(recordsFromCodexStderrLine("codex", state), []);
-    assert.deepEqual(recordsFromCodexStderrLine("先定位玻璃层。", state), [
-      { line: "助手：先定位玻璃层。", source: "ai", level: "info" },
+    assert.deepEqual(recordsFromCodexStderrLine("\u5148\u5B9A\u4F4D\u73BB\u7483\u5C42。", state), [
+      { line: "Assistant: \u5148\u5B9A\u4F4D\u73BB\u7483\u5C42。", source: "ai", level: "info" },
     ]);
     assert.deepEqual(recordsFromCodexStderrLine("exec", state), []);
     assert.deepEqual(
       recordsFromCodexStderrLine("git status --short", state),
-      [{ line: "命令：git status --short", source: "shell", level: "info" }],
+      [{ line: "Command: git status --short", source: "shell", level: "info" }],
     );
     assert.deepEqual(
       recordsFromCodexStderrLine(
@@ -358,17 +361,17 @@ describe("recordsFromCodexJsonLine / stderr", () => {
     );
     assert.deepEqual(
       recordsFromCodexStderrLine("mcp: kanbanMCP/ready_to_submit started", state),
-      [{ line: "工具：ready_to_submit 开始", source: "mcp", level: "info" }],
+      [{ line: "Tool: ready_to_submit started", source: "mcp", level: "info" }],
     );
   });
 
-  it("源码里出现 error 字样不会被当成错误", () => {
+  it("\u6E90\u7801\u91CC\u51FA\u73B0 error \u5B57\u6837\u4E0D\u4F1A\u88AB\u5F53\u6210\u9519\u8BEF", () => {
     const state = createCodexLogState();
     recordsFromCodexStderrLine("exec", state);
     recordsFromCodexStderrLine("rg error", state);
     assert.deepEqual(
       recordsFromCodexStderrLine(
-        "app/lib/foo.dart:43:    if (board == null) return mcpErrorResult('看板未就绪');",
+        "app/lib/foo.dart:43:    if (board == null) return mcpErrorResult('\u770B\u677F\u672A\u5C31\u7EEA');",
         state,
       ),
       [],
@@ -377,7 +380,7 @@ describe("recordsFromCodexJsonLine / stderr", () => {
 });
 
 describe("createLineBuffer", () => {
-  it("按行切分并不丢尾块", () => {
+  it("\u6309\u884C\u5207\u5206\u5E76\u4E0D\u4E22\u5C3E\u5757", () => {
     const lines: string[] = [];
     const buffer = createLineBuffer((line) => lines.push(line));
     buffer.push('{"type":"turn.started"}\n{"type":"turn.completed"}');

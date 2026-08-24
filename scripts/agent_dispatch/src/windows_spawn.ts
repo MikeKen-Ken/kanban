@@ -4,7 +4,7 @@ import { delimiter, extname, join } from "node:path";
 
 const WINDOWS_BATCH_EXTS = new Set([".bat", ".cmd"]);
 
-/** 不经过 shell 展开参数；Windows 上的 .bat/.cmd 走 cmd.exe，避免 ENOENT/EINVAL。 */
+/** \u4E0D\u7ECF\u8FC7 shell \u5C55\u5F00\u53C2\u6570；Windows \u4E0A\u7684 .bat/.cmd \u8D70 cmd.exe，\u907F\u514D ENOENT/EINVAL。 */
 export function spawnUnexpanded(
   command: string,
   args: readonly string[],
@@ -47,7 +47,7 @@ export function resolveWindowsExecutable(
   return undefined;
 }
 
-/** 常见 Flutter 安装位置优先于 PATH，避免桌面进程 PATH 里没有 Flutter。 */
+/** \u5E38\u89C1 Flutter \u5B89\u88C5\u4F4D\u7F6E\u4F18\u5148\u4E8E PATH，\u907F\u514D\u684C\u9762\u8FDB\u7A0B PATH \u91CC\u6CA1\u6709 Flutter。 */
 export function flutterSdkBinDirs(env: NodeJS.ProcessEnv = process.env): string[] {
   const dirs: string[] = [];
   const root = (env.FLUTTER_ROOT ?? "").trim();

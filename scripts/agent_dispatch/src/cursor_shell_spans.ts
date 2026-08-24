@@ -46,7 +46,7 @@ function isShellName(name: string): boolean {
   return /^(shell|bash|cmd|powershell|pwsh)$/i.test(name);
 }
 
-/** SDK 的 call_id 经常是 `call_…\nfc_…` 两行；MCP JSON 需要单行 id。 */
+/** SDK \u7684 call_id \u7ECF\u5E38\u662F `call_…\nfc_…` \u4E24\u884C；MCP JSON \u9700\u8981\u5355\u884C id。 */
 export function normalizeDispatchCallId(callId: string | undefined): string {
   return (callId ?? "")
     .trim()
@@ -55,7 +55,7 @@ export function normalizeDispatchCallId(callId: string | undefined): string {
     .join("_");
 }
 
-/** 与 `run_cursor.ts` 的 toolPayload 对齐，覆盖 SDK 多种 step 形态。 */
+/** \u4E0E `run_cursor.ts` \u7684 toolPayload \u5BF9\u9F50，\u8986\u76D6 SDK \u591A\u79CD step \u5F62\u6001。 */
 function toolPayload(step: Record<string, unknown>): Record<string, unknown> | undefined {
   return (
     asRecord(step.message) ??
@@ -153,7 +153,7 @@ export function toShellSpanReportPayload(input: {
     phase !== "start" && phase !== "end" ? "phase" : "",
   ].filter(Boolean);
   if (missing.length > 0) {
-    throw new Error(`上报 Shell 时间线缺少 ${missing.join("、")}`);
+    throw new Error(`Shell timeline report is missing ${missing.join(", ")}`);
   }
   return {
     workerToken,

@@ -10,7 +10,7 @@ import {
 } from "./mcp_client.ts";
 
 describe("mcp_client", () => {
-  it("同时解析 claim JSON 与 ImageContent", () => {
+  it("\u540C\u65F6\u89E3\u6790 claim JSON \u4E0E ImageContent", () => {
     const result = {
       content: [
         { type: "text", text: '{"found":true,"cardId":"card-a"}' },
@@ -26,14 +26,14 @@ describe("mcp_client", () => {
     ]);
   });
 
-  it("MCP 操作超时后拒绝", async () => {
+  it("MCP \u64CD\u4F5C\u8D85\u65F6\u540E\u62D2\u7EDD", async () => {
     await assert.rejects(
-      withTimeout("测试调用", 10, new Promise(() => undefined)),
-      /测试调用 超时/,
+      withTimeout("\u6D4B\u8BD5\u8C03\u7528", 10, new Promise(() => undefined)),
+      /\u6D4B\u8BD5\u8C03\u7528 timed out/,
     );
   });
 
-  it("按工具名选择 claim/finalize 超时", () => {
+  it("\u6309\u5DE5\u5177\u540D\u9009\u62E9 claim/finalize \u8D85\u65F6", () => {
     assert.equal(mcpTimeoutForTool("dispatch_claim_next_card"), MCP_CLAIM_TIMEOUT_MS);
     assert.equal(mcpTimeoutForTool("dispatch_finalize"), MCP_FINALIZE_TIMEOUT_MS);
     assert.equal(mcpTimeoutForTool("peek_next_card"), 30_000);

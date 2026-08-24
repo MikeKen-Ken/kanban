@@ -10,7 +10,7 @@ import {
 } from "./codex_mcp.ts";
 
 describe("codex_mcp", () => {
-  it("无用户配置时只包含精简看板 MCP", () => {
+  it("\u65E0\u7528\u6237\u914D\u7F6E\u65F6\u53EA\u5305\u542B\u7CBE\u7B80\u770B\u677F MCP", () => {
     const text = buildCodexAgentConfigToml("http://127.0.0.1:19000/mcp");
     assert.match(text, /rmcp_client = true/);
     assert.match(text, /\[mcp_servers\.kanbanMCP\]/);
@@ -18,7 +18,7 @@ describe("codex_mcp", () => {
     assert.equal(text.includes("unityMCP"), false);
   });
 
-  it("隔离主目录复制 auth、AGENTS.md、skills；无标签时不合并用户 MCP", () => {
+  it("\u9694\u79BB\u4E3B\u76EE\u5F55\u590D\u5236 auth、AGENTS.md、skills；\u65E0\u6807\u7B7E\u65F6\u4E0D\u5408\u5E76\u7528\u6237 MCP", () => {
     const root = mkdtempSync(join(tmpdir(), "kanban-codex-mcp-"));
     try {
       const userHome = join(root, "user");
@@ -27,11 +27,11 @@ describe("codex_mcp", () => {
       writeFileSync(join(userHome, "auth.json"), '{"ok":true}', "utf8");
       writeFileSync(
         join(userHome, "AGENTS.md"),
-        `# 用户指令
+        `# \u7528\u6237\u6307\u4EE4
 
-动手写代码、改模块边界或设计方案前，MUST 先阅读：
+\u52A8\u624B\u5199\u4EE3\u7801、\u6539\u6A21\u5757\u8FB9\u754C\u6216\u8BBE\u8BA1\u65B9\u6848\u524D，MUST \u5148\u9605\u8BFB：
 
-- [\`docs/Architecture.md\`](docs/Architecture.md) — 系统分层
+- [\`docs/Architecture.md\`](docs/Architecture.md) — \u7CFB\u7EDF\u5206\u5C42
 `,
         "utf8",
       );
@@ -63,9 +63,9 @@ url = "http://127.0.0.1:18765/mcp"
         "utf8",
       );
       assert.equal(auth, '{"ok":true}');
-      assert.match(agents, /本会话覆盖/);
-      assert.match(agents, /# 用户指令/);
-      assert.equal(agents.includes("MUST 先阅读"), false);
+      assert.match(agents, /This-session override/);
+      assert.match(agents, /# \u7528\u6237\u6307\u4EE4/);
+      assert.equal(agents.includes("MUST \u5148\u9605\u8BFB"), false);
       assert.equal(
         readFileSync(join(created.home, "AGENTS.override.md"), "utf8"),
         agents,

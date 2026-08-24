@@ -12,10 +12,12 @@ class AgentDispatchWindowsJob {
   /// `JobObjectExtendedLimitInformation`；KILL_ON_JOB_CLOSE 不能走 Basic。
   static const _jobObjectExtendedLimitInformation = 9;
   static const _jobObjectLimitKillOnJobClose = 0x00002000;
+
   /// 允许 Cursor 本地运行时用 CREATE_BREAKAWAY_FROM_JOB 自建沙箱 Job。
   static const _jobObjectLimitBreakawayOk = 0x00000800;
   static const _processTerminate = 0x0001;
   static const _processSetQuota = 0x0100;
+
   /// x64 上 `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` 为 144 字节。
   static const _extendedLimitInformationSize = 144;
   static const _limitFlagsOffset = 16;
@@ -59,7 +61,7 @@ class AgentDispatchWindowsJob {
           Pointer<Void>.fromAddress(0), Pointer<Utf16>.fromAddress(0));
       if (jobHandle == 0) {
         onWarning?.call(
-          '无法创建 Windows Job Object（错误 ${_getLastError()}），Worker 将使用普通进程清理',
+          'Unable to create Windows Job Object (error ${_getLastError()}); Worker will use normal process cleanup',
         );
         return null;
       }
@@ -74,7 +76,7 @@ class AgentDispatchWindowsJob {
           ) ==
           0) {
         onWarning?.call(
-          '无法配置 Windows Job Object（错误 ${_getLastError()}），Worker 将使用普通进程清理',
+          'Unable to configure Windows Job Object (error ${_getLastError()}); Worker will use normal process cleanup',
         );
         return null;
       }
@@ -87,14 +89,15 @@ class AgentDispatchWindowsJob {
       if (processHandle == 0 ||
           _assignProcessToJobObject(jobHandle, processHandle) == 0) {
         onWarning?.call(
-          '无法将 Worker 加入 Windows Job Object（错误 ${_getLastError()}），Worker 将使用普通进程清理',
+          'Unable to add Worker to Windows Job Object (error ${_getLastError()}); Worker will use normal process cleanup',
         );
         return null;
       }
       attached = true;
       return AgentDispatchWindowsJob._(jobHandle);
     } catch (_) {
-      onWarning?.call('Windows Job Object 初始化失败，Worker 将使用普通进程清理');
+      onWarning?.call(
+          'Windows Job Object initialization failed; Worker will use normal process cleanup');
       return null;
     } finally {
       if (limitInfo != null) calloc.free(limitInfo);

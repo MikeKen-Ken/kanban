@@ -56,7 +56,7 @@ export class KanbanMcpClient implements KanbanMcpConnection {
 
   async connect(endpoint: string): Promise<void> {
     await withTimeout(
-      "连接 MCP",
+      "Connect MCP",
       this.timeoutMs,
       this.client.connect(
         new StreamableHTTPClientTransport(new URL(endpoint)),
@@ -67,7 +67,7 @@ export class KanbanMcpClient implements KanbanMcpConnection {
 
   async listTools(): Promise<string[]> {
     const result = await withTimeout(
-      "列出 MCP 工具",
+      "List MCP tools",
       this.timeoutMs,
       this.client.listTools(),
     );
@@ -80,12 +80,12 @@ export class KanbanMcpClient implements KanbanMcpConnection {
     options?: { timeoutMs?: number },
   ): Promise<CallToolResult> {
     const result = await withTimeout(
-      `调用 ${name}`,
+      `Call ${name}`,
       options?.timeoutMs ?? mcpTimeoutForTool(name),
       this.client.callTool({ name, arguments: args }),
     );
     if (result.isError) {
-      throw new Error(`${name} 失败：${resultText(result)}`);
+      throw new Error(`${name} failed: ${resultText(result)}`);
     }
     return result;
   }
@@ -100,14 +100,14 @@ export class KanbanMcpClient implements KanbanMcpConnection {
     try {
       return JSON.parse(text) as Record<string, unknown>;
     } catch {
-      throw new Error(`${name} 返回了无效 JSON：${text}`);
+      throw new Error(`${name} returned invalid JSON: ${text}`);
     }
   }
 
   async close(): Promise<void> {
     if (!this.connected) return;
     this.connected = false;
-    // Streamable HTTP / SSE 的 close 可能一直等不到服务端结束流。
+    // Streamable HTTP / SSE \u7684 close \u53EF\u80FD\u4E00\u76F4\u7B49\u4E0D\u5230\u670D\u52A1\u7AEF\u7ED3\u675F\u6D41。
     await settleWithin(2000, this.client.close());
   }
 }
@@ -118,12 +118,12 @@ export function parseClaimResult(result: CallToolResult): ParsedClaimResult {
   try {
     const parsed: unknown = JSON.parse(text);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("JSON 顶层不是对象");
+      throw new Error("JSON top-level value is not an object");
     }
     payload = parsed as Record<string, unknown>;
   } catch (error) {
     throw new Error(
-      `dispatch_claim_next_card 返回了无效 JSON：${error instanceof Error ? error.message : String(error)}`,
+      `dispatch_claim_next_card returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
   const images = result.content
@@ -161,7 +161,7 @@ export async function withTimeout<T>(
       work,
       new Promise<T>((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error(`${operation} 超时（${timeoutMs}ms）`)),
+          () => reject(new Error(`${operation} timed out (${timeoutMs}ms)`)),
           timeoutMs,
         );
         timer.unref?.();

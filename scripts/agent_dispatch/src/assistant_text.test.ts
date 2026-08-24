@@ -10,25 +10,25 @@ import {
 } from "./assistant_text.ts";
 
 describe("assistant_text", () => {
-  it("抽出 Cursor 助手步骤的正文，包括 content 块", () => {
+  it("\u62BD\u51FA Cursor \u52A9\u624B\u6B65\u9AA4\u7684\u6B63\u6587，\u5305\u62EC content \u5757", () => {
     assert.equal(
       extractCursorAssistantStepText({
         type: "assistantMessage",
-        message: { text: "短句" },
+        message: { text: "\u77ED\u53E5" },
       }),
-      "短句",
+      "\u77ED\u53E5",
     );
     assert.equal(
       extractCursorAssistantStepText({
         type: "assistantMessage",
         message: {
           content: [
-            { type: "text", text: "第一段\n" },
-            { type: "output_text", text: "完整结论。" },
+            { type: "text", text: "\u7B2C\u4E00\u6BB5\n" },
+            { type: "output_text", text: "\u5B8C\u6574\u7ED3\u8BBA。" },
           ],
         },
       }),
-      "第一段\n完整结论。",
+      "\u7B2C\u4E00\u6BB5\n\u5B8C\u6574\u7ED3\u8BBA。",
     );
     assert.equal(
       extractCursorAssistantStepText({ type: "toolCall", message: { text: "x" } }),
@@ -36,101 +36,101 @@ describe("assistant_text", () => {
     );
   });
 
-  it("抽出 Codex 已完成的助手条目，忽略工具与未完成项", () => {
+  it("\u62BD\u51FA Codex \u5DF2\u5B8C\u6210\u7684\u52A9\u624B\u6761\u76EE，\u5FFD\u7565\u5DE5\u5177\u4E0E\u672A\u5B8C\u6210\u9879", () => {
     assert.equal(
       extractCodexAssistantEventText({
         type: "item.completed",
         item: {
           type: "agent_message",
-          content: [{ type: "output_text", text: "已改完对话落盘。" }],
+          content: [{ type: "output_text", text: "\u5DF2\u6539\u5B8C\u5BF9\u8BDD\u843D\u76D8。" }],
         },
       }),
-      "已改完对话落盘。",
+      "\u5DF2\u6539\u5B8C\u5BF9\u8BDD\u843D\u76D8。",
     );
     assert.equal(
       extractCodexAssistantEventText({
         type: "item.updated",
-        item: { type: "agent_message", text: "流式中" },
+        item: { type: "agent_message", text: "\u6D41\u5F0F\u4E2D" },
       }),
       "",
     );
-    assert.equal(extractAssistantText({ text: "  明文  " }), "明文");
+    assert.equal(extractAssistantText({ text: "  \u660E\u6587  " }), "\u660E\u6587");
     assert.deepEqual(
       extractCodexTranscriptMessage({
         type: "item.completed",
-        item: { type: "user_message", text: "用方案 A" },
+        item: { type: "user_message", text: "\u7528\u65B9\u6848 A" },
       }),
-      { role: "user", text: "用方案 A" },
+      { role: "user", text: "\u7528\u65B9\u6848 A" },
     );
   });
 
-  it("从 Cursor 会话回合抽出思考与全部助手消息", () => {
+  it("\u4ECE Cursor \u4F1A\u8BDD\u56DE\u5408\u62BD\u51FA\u601D\u8003\u4E0E\u5168\u90E8\u52A9\u624B\u6D88\u606F", () => {
     assert.deepEqual(
       extractConversationMessages([
         {
           type: "agentConversationTurn",
           turn: {
-            userMessage: { text: "请继续" },
+            userMessage: { text: "\u8BF7\u7EE7\u7EED" },
             steps: [
-              { type: "thinkingMessage", message: { text: "内部思考" } },
-              { type: "thinking", text: "第二段思考步骤" },
+              { type: "thinkingMessage", message: { text: "\u5185\u90E8\u601D\u8003" } },
+              { type: "thinking", text: "\u7B2C\u4E8C\u6BB5\u601D\u8003\u6B65\u9AA4" },
               {
                 type: "assistantMessage",
-                message: { text: "第一条助手。" },
+                message: { text: "\u7B2C\u4E00\u6761\u52A9\u624B。" },
               },
               { type: "toolCall", message: { type: "read", args: {} } },
               {
                 type: "assistantMessage",
-                message: { text: "第二条助手。" },
+                message: { text: "\u7B2C\u4E8C\u6761\u52A9\u624B。" },
               },
             ],
           },
         },
       ]),
       [
-        { role: "user", text: "请继续" },
-        { role: "thinking", text: "内部思考" },
-        { role: "thinking", text: "第二段思考步骤" },
-        { role: "assistant", text: "第一条助手。" },
-        { role: "assistant", text: "第二条助手。" },
+        { role: "user", text: "\u8BF7\u7EE7\u7EED" },
+        { role: "thinking", text: "\u5185\u90E8\u601D\u8003" },
+        { role: "thinking", text: "\u7B2C\u4E8C\u6BB5\u601D\u8003\u6B65\u9AA4" },
+        { role: "assistant", text: "\u7B2C\u4E00\u6761\u52A9\u624B。" },
+        { role: "assistant", text: "\u7B2C\u4E8C\u6761\u52A9\u624B。" },
       ],
     );
   });
 
-  it("抽出 Codex 已完成的思考条目", () => {
+  it("\u62BD\u51FA Codex \u5DF2\u5B8C\u6210\u7684\u601D\u8003\u6761\u76EE", () => {
     assert.deepEqual(
       extractCodexTranscriptMessage({
         type: "item.completed",
-        item: { type: "reasoning", text: "先核对落盘字段。" },
+        item: { type: "reasoning", text: "\u5148\u6838\u5BF9\u843D\u76D8\u5B57\u6BB5。" },
       }),
-      { role: "thinking", text: "先核对落盘字段。" },
+      { role: "thinking", text: "\u5148\u6838\u5BF9\u843D\u76D8\u5B57\u6BB5。" },
     );
     assert.deepEqual(
       extractCodexTranscriptMessage({
         type: "item.updated",
         item: {
           type: "reasoning",
-          content: [{ type: "reasoning_text", text: "流式思考步骤。" }],
+          content: [{ type: "reasoning_text", text: "\u6D41\u5F0F\u601D\u8003\u6B65\u9AA4。" }],
         },
       }),
-      { role: "thinking", text: "流式思考步骤。" },
+      { role: "thinking", text: "\u6D41\u5F0F\u601D\u8003\u6B65\u9AA4。" },
     );
   });
 
-  it("抽出 Cursor SDK thinking 消息与带 thinkingDurationMs 的步骤", () => {
+  it("\u62BD\u51FA Cursor SDK thinking \u6D88\u606F\u4E0E\u5E26 thinkingDurationMs \u7684\u6B65\u9AA4", () => {
     assert.equal(
       extractCursorThinkingStepText({
         type: "thinking",
-        text: "SDK 思考步骤",
+        text: "SDK \u601D\u8003\u6B65\u9AA4",
       }),
-      "SDK 思考步骤",
+      "SDK \u601D\u8003\u6B65\u9AA4",
     );
     assert.equal(
       extractCursorThinkingStepText({
         type: "unknownStep",
-        message: { thinking: "嵌套思考", thinkingDurationMs: 12 },
+        message: { thinking: "\u5D4C\u5957\u601D\u8003", thinkingDurationMs: 12 },
       }),
-      "嵌套思考",
+      "\u5D4C\u5957\u601D\u8003",
     );
   });
 });

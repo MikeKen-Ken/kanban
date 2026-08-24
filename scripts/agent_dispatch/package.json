@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "本机 Cursor SDK / Codex exec worker，由看板 App 调度",
+  "description": "Local Cursor SDK / Codex exec Worker orchestrated by the Kanban app",
   "scripts": {
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/cli.js",
     "start": "node dist/cli.js",

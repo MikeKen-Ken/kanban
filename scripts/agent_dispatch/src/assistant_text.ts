@@ -1,4 +1,4 @@
-/** 从 Cursor 步骤或 Codex 事件里抽出面向用户的助手正文。 */
+/** \u4ECE Cursor \u6B65\u9AA4\u6216 Codex \u4E8B\u4EF6\u91CC\u62BD\u51FA\u9762\u5411\u7528\u6237\u7684\u52A9\u624B\u6B63\u6587。 */
 export function extractAssistantText(value: unknown): string {
   const chunks: string[] = [];
   collectText(value, chunks, 0);

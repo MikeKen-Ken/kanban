@@ -15,7 +15,7 @@ export type UserRuleBundle = {
 
 const RULE_EXTENSIONS = new Set([".md", ".mdc"]);
 
-/** 完整读取用户 ~/.cursor/rules；只排除非规则文件。 */
+/** \u5B8C\u6574\u8BFB\u53D6\u7528\u6237 ~/.cursor/rules；\u53EA\u6392\u9664\u975E\u89C4\u5219\u6587\u4EF6。 */
 export function readUserCursorRules(
   root = join(homedir(), ".cursor", "rules"),
 ): UserRuleBundle {
@@ -28,7 +28,7 @@ export function readUserCursorRules(
     const content = readFileSync(path, "utf8");
     bytes += Buffer.byteLength(content, "utf8");
     sections.push(
-      [`## 用户 Rule：${relative(root, path).replaceAll("\\", "/")}`, "", content]
+      [`## User rule: ${relative(root, path).replaceAll("\\", "/")}`, "", content]
         .join("\n"),
     );
   }

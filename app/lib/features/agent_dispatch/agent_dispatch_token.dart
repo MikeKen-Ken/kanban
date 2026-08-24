@@ -92,7 +92,7 @@ class AgentDispatchTokenRecord {
   }
 
   static final _pattern = RegExp(
-    r'本会话 token：input=(\d+) output=(\d+)'
+    r'(?:本会话 token：|session tokens: )input=(\d+) output=(\d+)'
     r'(?: cacheRead=(\d+) cacheWrite=(\d+))? total=(\d+)'
     r'(?: steps=(\d+) tools=(\d+) repeatedToolCalls=(\d+) repeatedReads=(\d+))?',
   );

@@ -7,7 +7,7 @@ import {
 } from "./codex_agent_config.ts";
 
 describe("codex_agent_config", () => {
-  it("无用户配置时只写 scoped 看板 MCP", () => {
+  it("\u65E0\u7528\u6237\u914D\u7F6E\u65F6\u53EA\u5199 scoped \u770B\u677F MCP", () => {
     const text = buildCodexAgentConfigToml("http://127.0.0.1:19000/mcp");
     assert.match(text, /rmcp_client = true/);
     assert.match(text, /\[mcp_servers\.kanbanMCP\]/);
@@ -15,7 +15,7 @@ describe("codex_agent_config", () => {
     assert.equal(text.includes("unityMCP"), false);
   });
 
-  it("无项目标签时只保留 scoped 看板 MCP，并去掉完整看板 MCP", () => {
+  it("\u65E0\u9879\u76EE\u6807\u7B7E\u65F6\u53EA\u4FDD\u7559 scoped \u770B\u677F MCP，\u5E76\u53BB\u6389\u5B8C\u6574\u770B\u677F MCP", () => {
     const user = `
 [mcp_servers.hubMCP]
 command = "node"
@@ -44,7 +44,7 @@ command = "npx"
     assert.deepEqual(listCodexMcpServerNames(text), ["kanbanMCP"]);
   });
 
-  it("按项目标签放行对应 MCP，并去掉完整看板 MCP 及其子表", () => {
+  it("\u6309\u9879\u76EE\u6807\u7B7E\u653E\u884C\u5BF9\u5E94 MCP，\u5E76\u53BB\u6389\u5B8C\u6574\u770B\u677F MCP \u53CA\u5176\u5B50\u8868", () => {
     const user = `
 [mcp_servers.hubMCP]
 command = "node"
@@ -83,7 +83,7 @@ command = "npx"
     ]);
   });
 
-  it("strip 只删除看板表，保留根级其它配置", () => {
+  it("strip \u53EA\u5220\u9664\u770B\u677F\u8868，\u4FDD\u7559\u6839\u7EA7\u5176\u5B83\u914D\u7F6E", () => {
     const source = `model = "gpt-5.6"
 [mcp_servers.kanbanMCP]
 url = "http://127.0.0.1:18765/mcp"

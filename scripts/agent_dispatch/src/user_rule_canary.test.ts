@@ -9,20 +9,20 @@ import {
 } from "./user_rule_canary.ts";
 
 describe("wrapWorkerUserRules", () => {
-  it("空规则也包一层，便于计数", () => {
+  it("\u7A7A\u89C4\u5219\u4E5F\u5305\u4E00\u5C42，\u4FBF\u4E8E\u8BA1\u6570", () => {
     const wrapped = wrapWorkerUserRules("  ");
     assert.equal(
       wrapped,
       [
         WORKER_USER_RULES_BEGIN,
-        "未发现用户 ~/.cursor/rules。",
+        "No user ~/.cursor/rules found.",
         WORKER_USER_RULES_END,
       ].join("\n"),
     );
   });
 
-  it("正文只出现在包裹内侧一次", () => {
-    const wrapped = wrapWorkerUserRules(`前言\n${USER_RULE_FILE_CANARY}\n`);
+  it("\u6B63\u6587\u53EA\u51FA\u73B0\u5728\u5305\u88F9\u5185\u4FA7\u4E00\u6B21", () => {
+    const wrapped = wrapWorkerUserRules(`\u524D\u8A00\n${USER_RULE_FILE_CANARY}\n`);
     assert.equal(wrapped.split(WORKER_USER_RULES_BEGIN).length - 1, 1);
     assert.equal(wrapped.split(WORKER_USER_RULES_END).length - 1, 1);
     assert.equal(wrapped.split(USER_RULE_FILE_CANARY).length - 1, 1);

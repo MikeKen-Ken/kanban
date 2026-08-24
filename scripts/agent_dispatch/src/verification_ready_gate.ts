@@ -1,4 +1,4 @@
-/** 与 Dart `dispatch_shell_spans.dart` 同一套判定，避免 SDK 提前 completed 时误放行。 */
+/** \u4E0E Dart `dispatch_shell_spans.dart` \u540C\u4E00\u5957\u5224\u5B9A，\u907F\u514D SDK \u63D0\u524D completed \u65F6\u8BEF\u653E\u884C。 */
 
 export type ShellSpan = {
   callId: string;
@@ -9,7 +9,7 @@ export type ShellSpan = {
   exitCode?: number;
 };
 
-/** 与 Dart `dispatch_shell_spans.dart` 保持一致。 */
+/** \u4E0E Dart `dispatch_shell_spans.dart` \u4FDD\u6301\u4E00\u81F4。 */
 const VERIFICATION_MARKERS = [
   "flutter test",
   "flutter analyze",
@@ -38,7 +38,7 @@ export function isVerificationCommand(command: string): boolean {
   return VERIFICATION_MARKERS.some((marker) => text.includes(marker));
 }
 
-/** 与 Dart `kDispatchImplausibleTestDurationMs` 保持一致。 */
+/** \u4E0E Dart `kDispatchImplausibleTestDurationMs` \u4FDD\u6301\u4E00\u81F4。 */
 export const IMPLAUSIBLE_TEST_DURATION_MS = 2_000;
 
 export function isSlowTestCommand(command: string): boolean {
@@ -46,7 +46,7 @@ export function isSlowTestCommand(command: string): boolean {
   return text.includes("flutter test") || text.includes("dart test");
 }
 
-/** 观察耗时：优先 SDK executionTime，否则 endedAt-startedAt；未知为 -1。 */
+/** \u89C2\u5BDF\u8017\u65F6：\u4F18\u5148 SDK executionTime，\u5426\u5219 endedAt-startedAt；\u672A\u77E5\u4E3A -1。 */
 export function shellObservedDurationMs(span: ShellSpan): number {
   const exec = span.executionTimeMs ?? 0;
   if (exec > 0) return exec;
@@ -54,7 +54,7 @@ export function shellObservedDurationMs(span: ShellSpan): number {
   return span.endedAtMs - span.startedAtMs;
 }
 
-/** 实际结束时间优先 startedAt+executionTime，避免观察滞后把短失败排到成功测试之后。 */
+/** \u5B9E\u9645\u7ED3\u675F\u65F6\u95F4\u4F18\u5148 startedAt+executionTime，\u907F\u514D\u89C2\u5BDF\u6EDE\u540E\u628A\u77ED\u5931\u8D25\u6392\u5230\u6210\u529F\u6D4B\u8BD5\u4E4B\u540E。 */
 export function shellEffectiveEndMs(span: ShellSpan): number {
   const exec = span.executionTimeMs ?? 0;
   if (exec > 0) return span.startedAtMs + exec;
@@ -106,24 +106,23 @@ export function readyBlockedByShells(
   if (!lastVerification) return undefined;
   if (nowMs < lastEndMs) {
     return (
-      `验证命令仍在执行：${clip(lastVerification.command)}。` +
-      "请等待测试完成后再调用 ready_to_submit，不要与 Shell 并行。"
+      `Verification command is still running: ${clip(lastVerification.command)}. ` +
+      "Wait for the test to finish before calling ready_to_submit; do not run it in parallel with Shell."
     );
   }
   const code = lastVerification.exitCode;
   if (code != null && code !== 0) {
     const hint = commandLooksLikeCdAndChain(lastVerification.command)
-      ? "PowerShell 5.1 不支持 &&；请用 working_directory，不要写 cd ... &&。"
-      : "请修复后重跑测试，再调用 ready_to_submit。";
-    return `验证命令失败（exitCode=${code}）：${clip(lastVerification.command)}。${hint}`;
+      ? "PowerShell 5.1 does not support &&; use working_directory instead of cd ... &&."
+      : "Fix the issue and rerun the test before calling ready_to_submit.";
+    return `Verification command failed (exitCode=${code}): ${clip(lastVerification.command)}. ${hint}`;
   }
   if (isImplausiblyShortSuccessfulTest(lastVerification)) {
     const duration = shellObservedDurationMs(lastVerification);
     return (
-      `验证命令耗时过短（${duration}ms），不像真正跑完测试：` +
-      `${clip(lastVerification.command)}。` +
-      "请确认 working_directory 与相对路径一致，" +
-      "并等到 flutter test / dart test 实际结束后再 ready_to_submit。"
+      `Verification command finished implausibly quickly (${duration}ms): ` +
+      `${clip(lastVerification.command)}. ` +
+      "Confirm that working_directory and relative paths match, then wait for flutter test / dart test to actually finish before ready_to_submit."
     );
   }
   return undefined;

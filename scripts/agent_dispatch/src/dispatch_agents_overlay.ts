@@ -1,8 +1,8 @@
-/** 只覆盖「必须再打开 Architecture.md」；ADR / Systems / CONTEXT 仍按用户原文。 */
-export const DISPATCH_ARCHITECTURE_OVERRIDE = `# 本会话覆盖（仅看板 Agent 调度）
+/** Override only "must open Architecture.md again"; ADR / Systems / CONTEXT still follow the user's original text. */
+export const DISPATCH_ARCHITECTURE_OVERRIDE = `# This-session override (kanban Agent dispatch only)
 
-Worker 已注入目标仓库 \`docs/Architecture.md\` 全文。用户规则 / \`AGENTS.md\` 里的「开发前必读 Architecture.md」在本轮视为已满足。
-禁止再搜索、glob、grep 或读取 \`docs/Architecture.md\`。ADR、\`docs/Systems/\`、\`CONTEXT.md\` 仍按原文，需要时再读。
+The Worker has already injected the full target-repository \`docs/Architecture.md\`. The user-rule / \`AGENTS.md\` requirement to read Architecture.md before development is treated as satisfied for this round.
+Do not search, glob, grep, or read \`docs/Architecture.md\` again. ADRs, \`docs/Systems/\`, and \`CONTEXT.md\` still follow the original text and may be read when needed.
 `;
 
 export function applyDispatchArchitectureOverride(source: string): string {
@@ -17,12 +17,20 @@ function rewriteArchitectureFileReads(source: string): string {
     .filter((line) => !isArchitectureFileReadBullet(line))
     .join("\n")
     .replace(
-      /动手写代码[^\n]*MUST 先阅读：/,
-      "动手写代码、改模块边界或设计方案前，`docs/Architecture.md` 已由 Worker 注入，视为已读；禁止再打开该文件。",
+      /\u52A8\u624B\u5199\u4EE3\u7801[^\n]*MUST \u5148\u9605\u8BFB：/,
+      "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again.",
     )
     .replace(
-      /MUST NOT 在未读 `Architecture\.md`（若存在）的情况下/,
-      "MUST NOT 在未遵守已注入 Architecture.md 的情况下",
+      /Before writing code[^\n]*MUST (?:first )?read:/,
+      "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again.",
+    )
+    .replace(
+      /MUST NOT \u5728\u672A\u8BFB `Architecture\.md`（\u82E5\u5B58\u5728）\u7684\u60C5\u51B5\u4E0B/,
+      "MUST NOT without following the injected Architecture.md",
+    )
+    .replace(
+      /MUST NOT (?:add new top-level directories or cross-layer dependencies )?without reading `Architecture\.md`(?: \(if it exists\))?/,
+      "MUST NOT without following the injected Architecture.md",
     );
 }
 

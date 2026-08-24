@@ -8,7 +8,7 @@ import {
 } from "./dispatch_terminal.ts";
 
 describe("dispatch_terminal", () => {
-  it("开始调用 ready_to_submit 不算成功", () => {
+  it("\u5F00\u59CB\u8C03\u7528 ready_to_submit \u4E0D\u7B97\u6210\u529F", () => {
     const start = {
       type: "toolCall",
       message: {
@@ -20,7 +20,7 @@ describe("dispatch_terminal", () => {
     assert.equal(isSuccessfulDispatchTerminalStep(start), false);
   });
 
-  it("MCP 成功结果才结束会话", () => {
+  it("MCP \u6210\u529F\u7ED3\u679C\u624D\u7ED3\u675F\u4F1A\u8BDD", () => {
     assert.equal(
       isSuccessfulDispatchTerminalStep({
         type: "toolCall",
@@ -45,13 +45,13 @@ describe("dispatch_terminal", () => {
     );
   });
 
-  it("pending.declared 优先于卡片列", () => {
+  it("pending.declared \u4F18\u5148\u4E8E\u5361\u7247\u5217", () => {
     assert.equal(
       dispatchTerminalFromSession({ pending: { status: "declared" } }),
       "declared",
     );
     assert.equal(
-      dispatchTerminalFromSession({}, { columnName: "待验证" }),
+      dispatchTerminalFromSession({}, { columnName: "\u5F85\u9A8C\u8BC1" }),
       "verify",
     );
     assert.equal(
@@ -59,12 +59,12 @@ describe("dispatch_terminal", () => {
       "blocked",
     );
     assert.equal(
-      dispatchTerminalFromSession({}, { columnName: "进行中" }),
+      dispatchTerminalFromSession({}, { columnName: "\u8FDB\u884C\u4E2D" }),
       "none",
     );
   });
 
-  it("peek 到 declared 后停止轮询", async () => {
+  it("peek \u5230 declared \u540E\u505C\u6B62\u8F6E\u8BE2", async () => {
     let calls = 0;
     const seen: string[] = [];
     const poll = startPollingDispatchTerminal(

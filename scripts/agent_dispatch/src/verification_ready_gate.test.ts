@@ -15,7 +15,7 @@ import {
 } from "./verification_ready_gate.ts";
 
 describe("verification_ready_gate", () => {
-  it("把 SDK 提前 completed 的 flutter test 当成仍在执行", () => {
+  it("\u628A SDK \u63D0\u524D completed \u7684 flutter test \u5F53\u6210\u4ECD\u5728\u6267\u884C", () => {
     const span = {
       callId: "1",
       command:
@@ -27,11 +27,11 @@ describe("verification_ready_gate", () => {
     };
     assert.equal(shellEffectiveEndMs(span), 1_000 + 13_639);
     const blocked = readyBlockedByShells([span], 1_000 + 1_845);
-    assert.match(blocked ?? "", /仍在执行/);
+    assert.match(blocked ?? "", /still running/);
     assert.equal(readyBlockedByShells([span], 1_000 + 13_639), undefined);
   });
 
-  it("git 与 dart format 不算验证命令", () => {
+  it("git \u4E0E dart format \u4E0D\u7B97\u9A8C\u8BC1\u547D\u4EE4", () => {
     assert.equal(
       readyBlockedByShells(
         [
@@ -48,7 +48,7 @@ describe("verification_ready_gate", () => {
     );
   });
 
-  it("滞后上报的 cd && 解析失败不得覆盖已通过的测试", () => {
+  it("\u6EDE\u540E\u4E0A\u62A5\u7684 cd && \u89E3\u6790\u5931\u8D25\u4E0D\u5F97\u8986\u76D6\u5DF2\u901A\u8FC7\u7684\u6D4B\u8BD5", () => {
     const passed = {
       callId: "pass",
       command: "flutter test test/a_test.dart",
@@ -70,7 +70,7 @@ describe("verification_ready_gate", () => {
     assert.equal(readyBlockedByShells([passed, parseFail], 50_000), undefined);
   });
 
-  it("仅有 cd && 短失败时仍拒绝", () => {
+  it("\u4EC5\u6709 cd && \u77ED\u5931\u8D25\u65F6\u4ECD\u62D2\u7EDD", () => {
     const blocked = readyBlockedByShells(
       [
         {
@@ -87,7 +87,7 @@ describe("verification_ready_gate", () => {
     assert.match(blocked ?? "", /working_directory/);
   });
 
-  it("flutter test 成功但耗时过短时拒绝", () => {
+  it("flutter test \u6210\u529F\u4F46\u8017\u65F6\u8FC7\u77ED\u65F6\u62D2\u7EDD", () => {
     const blocked = readyBlockedByShells(
       [
         {
@@ -102,10 +102,10 @@ describe("verification_ready_gate", () => {
       ],
       1_000,
     );
-    assert.match(blocked ?? "", /耗时过短/);
+    assert.match(blocked ?? "", /implausibly quickly/);
   });
 
-  it("无 executionTime 的秒退 flutter test 也拒绝", () => {
+  it("\u65E0 executionTime \u7684\u79D2\u9000 flutter test \u4E5F\u62D2\u7EDD", () => {
     const span = {
       callId: "fast",
       command: "flutter test test/a_test.dart",
@@ -118,7 +118,7 @@ describe("verification_ready_gate", () => {
     assert.match(blocked ?? "", /working_directory/);
   });
 
-  it("正常耗时的 flutter test 仍放行", () => {
+  it("\u6B63\u5E38\u8017\u65F6\u7684 flutter test \u4ECD\u653E\u884C", () => {
     assert.equal(
       readyBlockedByShells(
         [
@@ -137,7 +137,7 @@ describe("verification_ready_gate", () => {
     );
   });
 
-  it("node --test 与 flutter analyze 算验证命令", () => {
+  it("node --test \u4E0E flutter analyze \u7B97\u9A8C\u8BC1\u547D\u4EE4", () => {
     assert.equal(isVerificationCommand("node --test src/retry.test.ts"), true);
     assert.equal(
       isVerificationCommand("node.exe --test src/retry.test.ts"),
@@ -157,12 +157,12 @@ describe("verification_ready_gate", () => {
       ],
       1_000 + 5_000,
     );
-    assert.match(blocked ?? "", /仍在执行/);
+    assert.match(blocked ?? "", /still running/);
   });
 });
 
 describe("CursorShellSpanEmitter", () => {
-  it("配对 start/end 并记录 ready_to_submit 时间", () => {
+  it("\u914D\u5BF9 start/end \u5E76\u8BB0\u5F55 ready_to_submit \u65F6\u95F4", () => {
     const emitter = new CursorShellSpanEmitter();
     const start = emitter.observe(
       {
@@ -206,11 +206,11 @@ describe("CursorShellSpanEmitter", () => {
     assert.match(
       readyBlockedByShells(emitter.snapshot(), emitter.lastReadyStartedAtMs() ?? 0) ??
         "",
-      /仍在执行/,
+      /still running/,
     );
   });
 
-  it("规范化换行 call_id，并识别 SDK tool 形态", () => {
+  it("\u89C4\u8303\u5316\u6362\u884C call_id，\u5E76\u8BC6\u522B SDK tool \u5F62\u6001", () => {
     assert.equal(normalizeDispatchCallId("call_abc\nfc_xyz"), "call_abc_fc_xyz");
     const emitter = new CursorShellSpanEmitter();
     const start = emitter.observe(
@@ -250,7 +250,7 @@ describe("CursorShellSpanEmitter", () => {
     assert.equal(payload.executionTimeMs, 12_000);
   });
 
-  it("缺 workerToken 时不把空字段打到 MCP", () => {
+  it("\u7F3A workerToken \u65F6\u4E0D\u628A\u7A7A\u5B57\u6BB5\u6253\u5230 MCP", () => {
     assert.throws(
       () =>
         toShellSpanReportPayload({
@@ -267,7 +267,7 @@ describe("CursorShellSpanEmitter", () => {
     );
   });
 
-  it("没有 call_id 时用合成 id，避免空字段上报", () => {
+  it("\u6CA1\u6709 call_id \u65F6\u7528\u5408\u6210 id，\u907F\u514D\u7A7A\u5B57\u6BB5\u4E0A\u62A5", () => {
     const emitter = new CursorShellSpanEmitter();
     const start = emitter.observe(
       {
