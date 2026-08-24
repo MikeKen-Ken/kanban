@@ -58,7 +58,7 @@ export class AgentRunDiagnostics {
 
 export function formatAgentRunDiagnostics(metrics: AgentRunMetrics): string {
   return (
-    `会话诊断：steps=${metrics.steps} tools=${metrics.toolCalls}` +
+    `Session diagnostics: steps=${metrics.steps} tools=${metrics.toolCalls}` +
     ` repeatedToolCalls=${metrics.repeatedToolCalls}` +
     ` repeatedReads=${metrics.repeatedReads}` +
     (metrics.topReads.length > 0 ? ` topReads=${metrics.topReads.join(",")}` : "")

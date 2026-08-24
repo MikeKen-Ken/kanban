@@ -6,7 +6,7 @@ import { Cursor as Cursor3 } from "@cursor/sdk";
 // src/cancellation.ts
 import { existsSync } from "node:fs";
 var WorkerCancelledError = class extends Error {
-  constructor(message = "\u5DF2\u53D6\u6D88") {
+  constructor(message = "Cancelled") {
     super(message);
     this.name = "WorkerCancelledError";
   }
@@ -15,7 +15,7 @@ var WorkerCancellation = class {
   cancelled = false;
   drainAfterCurrent = false;
   skipRequested = false;
-  reason = "\u5DF2\u53D6\u6D88";
+  reason = "Cancelled";
   callbacks = /* @__PURE__ */ new Set();
   cancelFileTimer;
   drainFileTimer;
@@ -25,7 +25,7 @@ var WorkerCancellation = class {
     const check = () => {
       if (this.cancelled) return;
       try {
-        if (existsSync(path)) this.cancel("\u5DF2\u53D6\u6D88");
+        if (existsSync(path)) this.cancel("Cancelled");
       } catch {
       }
     };
@@ -61,7 +61,7 @@ var WorkerCancellation = class {
     if (this.signalInstalled) return;
     this.signalInstalled = true;
     const onSignal = () => {
-      this.cancel("\u5DF2\u53D6\u6D88");
+      this.cancel("Cancelled");
     };
     process.once("SIGTERM", onSignal);
     process.once("SIGINT", onSignal);
@@ -79,7 +79,7 @@ var WorkerCancellation = class {
     if (this.cancelled || this.drainAfterCurrent) return;
     this.drainAfterCurrent = true;
   }
-  /** 跳过当前 Skill 会话并继续批次下一张；不标记整批取消。 */
+  /** Skip the current Skill session and continue the batch; do not mark the whole batch cancelled. */
   requestSkipCurrentSession() {
     if (this.cancelled || this.skipRequested) return;
     this.skipRequested = true;
@@ -94,7 +94,7 @@ var WorkerCancellation = class {
     this.callbacks.add(callback);
     if (this.cancelled) void this.invoke(callback);
   }
-  cancel(reason = "\u5DF2\u53D6\u6D88") {
+  cancel(reason = "Cancelled") {
     if (this.cancelled) return;
     this.cancelled = true;
     this.reason = reason;
@@ -194,7 +194,7 @@ async function tryFetchUsagePools(apiKey) {
 async function printCursorUsage() {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
-    console.error("\u7F3A\u5C11 CURSOR_API_KEY");
+    console.error("Missing CURSOR_API_KEY");
     process.exitCode = 2;
     return;
   }
@@ -205,7 +205,7 @@ async function printCursorUsage() {
     const message = err instanceof Error ? err.message : String(err);
     const payload2 = {
       ok: false,
-      error: `\u8BFB\u53D6 Cursor \u8D26\u53F7\u5931\u8D25\uFF1A${message}`
+      error: `Failed to read the Cursor account: ${message}`
     };
     process.stdout.write(`${JSON.stringify(payload2)}
 `);
@@ -346,7 +346,7 @@ var DEFAULT_CONTEXT_VALUES = ["64k", "272k"];
 function contextCatalogParameter() {
   return {
     id: "context",
-    displayName: "\u4E0A\u4E0B\u6587",
+    displayName: "Context",
     values: DEFAULT_CONTEXT_VALUES.map((value) => ({
       value,
       displayName: value
@@ -361,7 +361,7 @@ function ensureContextParameter(parameters) {
     ...parameters,
     {
       id: "context",
-      displayName: "\u4E0A\u4E0B\u6587",
+      displayName: "Context",
       values: [...DEFAULT_CONTEXT_VALUES]
     }
   ];
@@ -537,7 +537,7 @@ function toCatalogItem(model) {
   const defaultEffort = model.defaultReasoningEffort?.trim();
   const effortParameter = efforts.length === 0 ? [] : [{
     id: "model_reasoning_effort",
-    displayName: "\u63A8\u7406\u7A0B\u5EA6",
+    displayName: "Reasoning effort",
     values: efforts
   }];
   return {
@@ -549,7 +549,7 @@ function toCatalogItem(model) {
       ...effortParameter.some((item) => isContextParamId(item.id)) ? [] : [contextCatalogParameter()]
     ],
     variants: defaultEffort ? [{
-      displayName: `\u9ED8\u8BA4\uFF08${effortLabel(defaultEffort)}\uFF09`,
+      displayName: `Default (${effortLabel(defaultEffort)})`,
       isDefault: true,
       params: [{ id: "model_reasoning_effort", value: defaultEffort }]
     }] : []
@@ -575,7 +575,7 @@ var AppServerClient = class {
     child.on("error", (error) => this.rejectAll(error));
     child.on("close", (code) => {
       if (this.pending.size > 0) {
-        this.rejectAll(new Error(`Codex app-server \u5DF2\u9000\u51FA\uFF08${code ?? 1}\uFF09`));
+        this.rejectAll(new Error(`Codex app-server exited (${code ?? 1})`));
       }
     });
   }
@@ -586,7 +586,7 @@ var AppServerClient = class {
     const promise = new Promise((resolve2, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`${method} \u8BF7\u6C42\u8D85\u65F6`));
+        reject(new Error(`${method} request timed out`));
       }, 15e3);
       this.pending.set(id, {
         resolve: (value) => {
@@ -621,7 +621,7 @@ var AppServerClient = class {
     if (!pending) return;
     this.pending.delete(response.id);
     if (response.error) {
-      pending.reject(new Error(response.error.message ?? "Codex app-server \u8BF7\u6C42\u5931\u8D25"));
+      pending.reject(new Error(response.error.message ?? "Codex app-server request failed"));
     } else {
       pending.resolve(response.result);
     }
@@ -765,7 +765,7 @@ function toDashboardTokenUsage(raw) {
 }
 function formatSessionTokenLog(raw, diagnostics) {
   const usage = toDashboardTokenUsage(raw);
-  return `\u672C\u4F1A\u8BDD token\uFF1Ainput=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}` + (diagnostics ? ` steps=${diagnostics.steps} tools=${diagnostics.toolCalls} repeatedToolCalls=${diagnostics.repeatedToolCalls} repeatedReads=${diagnostics.repeatedReads}` : "");
+  return `session tokens: input=${usage.inputTokens} output=${usage.outputTokens} cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens} total=${usage.totalTokens}` + (diagnostics ? ` steps=${diagnostics.steps} tools=${diagnostics.toolCalls} repeatedToolCalls=${diagnostics.repeatedToolCalls} repeatedReads=${diagnostics.repeatedReads}` : "");
 }
 
 // src/assistant_text.ts
@@ -975,18 +975,18 @@ function recordsFromCodexEventInner(event) {
   switch (type) {
     case "thread.started": {
       const threadId = pickString(event, "thread_id");
-      return threadId ? [{ line: `Codex \u4F1A\u8BDD ${threadId}`, source: "worker" }] : [];
+      return threadId ? [{ line: `Codex session ${threadId}`, source: "worker" }] : [];
     }
     case "turn.started":
       return [];
     case "turn.completed":
       return recordsFromUsage(asRecord3(event.usage));
     case "turn.failed": {
-      const message = pickString(asRecord3(event.error), "message") || pickString(event, "message") || "Codex \u56DE\u5408\u5931\u8D25";
+      const message = pickString(asRecord3(event.error), "message") || pickString(event, "message") || "Codex turn failed";
       return [{ line: message, source: "worker", level: "error" }];
     }
     case "error": {
-      const message = pickString(event, "message") || "Codex \u9519\u8BEF";
+      const message = pickString(event, "message") || "Codex error";
       if (RECONNECT_PATTERN.test(message)) {
         return [{ line: message, source: "worker" }];
       }
@@ -1009,12 +1009,12 @@ function recordsFromCodexItem(eventType, item) {
     case "assistant_message":
       if (eventType !== "item.completed") return [];
       return toRecords(
-        expandMultiline("\u52A9\u624B\uFF1A", extractAssistantText(item) || pickString(item, "text")),
+        expandMultiline("Assistant: ", extractAssistantText(item) || pickString(item, "text")),
         "ai"
       );
     case "reasoning":
       if (eventType !== "item.completed") return [];
-      return toRecords(expandMultiline("\u601D\u8003\uFF1A", pickString(item, "text")), "ai");
+      return toRecords(expandMultiline("Thinking: ", pickString(item, "text")), "ai");
     case "command_execution":
       return recordsFromCommand(
         eventType,
@@ -1028,14 +1028,14 @@ function recordsFromCodexItem(eventType, item) {
       return recordsFromMcp(eventType, item, failed);
     case "web_search":
       if (eventType !== "item.completed") return [];
-      return pickString(item, "query") ? [{ line: `\u5DE5\u5177\uFF1Aweb_search ${pickString(item, "query")}`, source: "mcp" }] : [];
+      return pickString(item, "query") ? [{ line: `Tool: web_search ${pickString(item, "query")}`, source: "mcp" }] : [];
     case "todo_list":
       return recordsFromTodo(item);
     case "error":
       if (eventType !== "item.completed") return [];
       return [
         {
-          line: pickString(item, "message") || "Codex \u975E\u81F4\u547D\u8B66\u544A",
+          line: pickString(item, "message") || "Codex non-fatal warning",
           source: "worker",
           level: "warning"
         }
@@ -1059,7 +1059,7 @@ function commandExecutionOutcome(eventType, item, status) {
 function recordsFromCommand(eventType, item, outcome) {
   const command = pickString(item, "command");
   if (eventType === "item.started") {
-    return command ? toRecords(expandMultiline("\u547D\u4EE4\uFF1A", command), "shell") : [];
+    return command ? toRecords(expandMultiline("Command: ", command), "shell") : [];
   }
   if (eventType !== "item.completed") return [];
   const records = [];
@@ -1067,18 +1067,18 @@ function recordsFromCommand(eventType, item, outcome) {
   const searchIssue = outcome === "search_issue";
   if (command && outcome === "no_match") {
     records.push({
-      line: `\u641C\u7D22\u65E0\u5339\u914D\uFF1A${clip(command, JSON_CLIP)}`,
+      line: `Search had no matches: ${clip(command, JSON_CLIP)}`,
       source: "shell"
     });
   } else if (command && searchIssue) {
     records.push({
-      line: `\u641C\u7D22\u547D\u4EE4\u95EE\u9898\uFF08\u672A\u4E2D\u65AD\u4EFB\u52A1\uFF09\uFF1A${clip(command, JSON_CLIP)}`,
+      line: `Search command issue (task not interrupted): ${clip(command, JSON_CLIP)}`,
       source: "shell",
       level: "warning"
     });
   } else if (command && failed) {
     records.push({
-      line: `\u547D\u4EE4\u5931\u8D25\uFF1A${clip(command, JSON_CLIP)}`,
+      line: `Command failed: ${clip(command, JSON_CLIP)}`,
       source: "shell",
       level: "error"
     });
@@ -1087,7 +1087,7 @@ function recordsFromCommand(eventType, item, outcome) {
   if ((failed || searchIssue) && output.trim()) {
     records.push(
       ...toRecords(
-        expandMultiline("\u547D\u4EE4\u8F93\u51FA\uFF1A", clip(output, OUTPUT_CLIP)),
+        expandMultiline("Command output: ", clip(output, OUTPUT_CLIP)),
         "shell",
         failed ? "error" : "warning"
       )
@@ -1105,13 +1105,13 @@ function recordsFromFileChange(item, failed) {
     const path = pickString(entry, "path");
     if (!path) return "";
     const kind = String(entry.kind ?? "update");
-    const label = kind === "add" ? "\u65B0\u589E" : kind === "delete" ? "\u5220\u9664" : "\u66F4\u65B0";
+    const label = kind === "add" ? "added" : kind === "delete" ? "deleted" : "updated";
     return `${label} ${path}`;
   }).filter(Boolean);
-  const detail = parts.join("\uFF1B") || "apply_patch";
+  const detail = parts.join("; ") || "apply_patch";
   return [
     {
-      line: `\u5DE5\u5177\uFF1Aapply_patch ${detail}`,
+      line: `Tool: apply_patch ${detail}`,
       source: "mcp",
       level: failed ? "error" : "info"
     }
@@ -1121,15 +1121,15 @@ function recordsFromMcp(eventType, item, failed) {
   const tool = pickString(item, "tool") || "tool";
   if (eventType === "item.started") {
     const args = usefulJson(item.arguments);
-    const detail = args ? `${tool} ${args}` : `${tool} \u5F00\u59CB`;
-    return [{ line: `\u5DE5\u5177\uFF1A${detail}`, source: "mcp" }];
+    const detail = args ? `${tool} ${args}` : `${tool} started`;
+    return [{ line: `Tool: ${detail}`, source: "mcp" }];
   }
   if (eventType !== "item.completed") return [];
   if (failed) {
-    const err = pickString(asRecord3(item.error), "message") || pickString(item, "error") || "\u8C03\u7528\u5931\u8D25";
+    const err = pickString(asRecord3(item.error), "message") || pickString(item, "error") || "call failed";
     return [
       {
-        line: `\u5DE5\u5177\u5931\u8D25\uFF1A${tool} ${err}`,
+        line: `Tool failed: ${tool} ${err}`,
         source: "mcp",
         level: "error"
       }
@@ -1137,7 +1137,7 @@ function recordsFromMcp(eventType, item, failed) {
   }
   const result = mcpResultText(item.result);
   if (!result.trim()) return [];
-  return toRecords(expandMultiline(`\u5DE5\u5177\u7ED3\u679C\uFF1A${tool} `, result), "mcp");
+  return toRecords(expandMultiline(`Tool result: ${tool} `, result), "mcp");
 }
 function recordsFromTodo(item) {
   const items = Array.isArray(item.items) ? item.items : [];
@@ -1147,7 +1147,7 @@ function recordsFromTodo(item) {
     return `${entry.completed === true ? "\u2713 " : ""}${text}`;
   }).filter(Boolean);
   if (parts.length === 0) return [];
-  return [{ line: `\u8BA1\u5212\uFF1A${parts.join("\uFF1B")}`, source: "worker" }];
+  return [{ line: `Plan: ${parts.join("; ")}`, source: "worker" }];
 }
 function recordsFromUsage(usage) {
   if (!usage) return [];
@@ -1176,10 +1176,10 @@ function recordsFromCodexTtyLine(line, state) {
     state.ttyAwaitingTokenCount = trimmed === "tokens used";
     if (trimmed.startsWith("mcp:")) return recordsFromTtyMcp(trimmed);
     if (trimmed === "apply patch") {
-      return [{ line: "\u5DE5\u5177\uFF1Aapply_patch", source: "mcp" }];
+      return [{ line: "Tool: apply_patch", source: "mcp" }];
     }
     if (trimmed === "patch: completed") {
-      return [{ line: "\u5DE5\u5177\u7ED3\u679C\uFF1Aapply_patch", source: "mcp" }];
+      return [{ line: "Tool result: apply_patch", source: "mcp" }];
     }
     if (trimmed === "tokens used") return [];
     return [];
@@ -1196,15 +1196,15 @@ function recordsFromCodexTtyLine(line, state) {
   }
   if (state.ttyRole === "user") return [];
   if (state.ttyRole === "codex") {
-    return toRecords(expandMultiline("\u52A9\u624B\uFF1A", line), "ai");
+    return toRecords(expandMultiline("Assistant: ", line), "ai");
   }
   if (state.ttyRole === "exec") {
     if (state.ttyExecAwaitingCommand) {
       state.ttyExecAwaitingCommand = false;
-      return toRecords(expandMultiline("\u547D\u4EE4\uFF1A", trimmed), "shell");
+      return toRecords(expandMultiline("Command: ", trimmed), "shell");
     }
     if (/^failed in /i.test(trimmed) || /^error in /i.test(trimmed)) {
-      return [{ line: `\u547D\u4EE4\u5931\u8D25\uFF1A${trimmed}`, source: "shell", level: "error" }];
+      return [{ line: `Command failed: ${trimmed}`, source: "shell", level: "error" }];
     }
     const diagnostic2 = diagnosticRecord(trimmed, "shell");
     return diagnostic2 ? [diagnostic2] : [];
@@ -1213,7 +1213,7 @@ function recordsFromCodexTtyLine(line, state) {
     if (trimmed.startsWith("diff ") || trimmed.startsWith("index ")) return [];
     if (/^[+-]/.test(trimmed) || trimmed.startsWith("@@")) return [];
     if (/^[A-Za-z]:\\/.test(trimmed) || trimmed.includes("/")) {
-      return [{ line: `\u5DE5\u5177\u7ED3\u679C\uFF1Aapply_patch ${trimmed}`, source: "mcp" }];
+      return [{ line: `Tool result: apply_patch ${trimmed}`, source: "mcp" }];
     }
     return [];
   }
@@ -1232,12 +1232,12 @@ function ttyRoleOf(trimmed) {
 }
 function recordsFromTtyMcp(line) {
   const match = /^mcp:\s*([^/]+)\/(\S+)\s+(started|\(completed\))$/.exec(line);
-  if (!match) return [{ line: `\u5DE5\u5177\uFF1A${line.slice(4).trim()}`, source: "mcp" }];
+  if (!match) return [{ line: `Tool: ${line.slice(4).trim()}`, source: "mcp" }];
   const tool = match[2];
   if (match[3] === "started") {
-    return [{ line: `\u5DE5\u5177\uFF1A${tool} \u5F00\u59CB`, source: "mcp" }];
+    return [{ line: `Tool: ${tool} started`, source: "mcp" }];
   }
-  return [{ line: `\u5DE5\u5177\u7ED3\u679C\uFF1A${tool} \u5B8C\u6210`, source: "mcp" }];
+  return [{ line: `Tool result: ${tool} done`, source: "mcp" }];
 }
 function isBannerLine(line) {
   return line.startsWith("OpenAI Codex") || line === "--------" || /^(workdir|model|provider|approval|sandbox|reasoning effort|reasoning summaries|session id):/i.test(
@@ -1478,10 +1478,10 @@ function collapseBlankLines(source) {
 }
 
 // src/dispatch_agents_overlay.ts
-var DISPATCH_ARCHITECTURE_OVERRIDE = `# \u672C\u4F1A\u8BDD\u8986\u76D6\uFF08\u4EC5\u770B\u677F Agent \u8C03\u5EA6\uFF09
+var DISPATCH_ARCHITECTURE_OVERRIDE = `# This-session override (kanban Agent dispatch only)
 
-Worker \u5DF2\u6CE8\u5165\u76EE\u6807\u4ED3\u5E93 \`docs/Architecture.md\` \u5168\u6587\u3002\u7528\u6237\u89C4\u5219 / \`AGENTS.md\` \u91CC\u7684\u300C\u5F00\u53D1\u524D\u5FC5\u8BFB Architecture.md\u300D\u5728\u672C\u8F6E\u89C6\u4E3A\u5DF2\u6EE1\u8DB3\u3002
-\u7981\u6B62\u518D\u641C\u7D22\u3001glob\u3001grep \u6216\u8BFB\u53D6 \`docs/Architecture.md\`\u3002ADR\u3001\`docs/Systems/\`\u3001\`CONTEXT.md\` \u4ECD\u6309\u539F\u6587\uFF0C\u9700\u8981\u65F6\u518D\u8BFB\u3002
+The Worker has already injected the full target-repository \`docs/Architecture.md\`. The user-rule / \`AGENTS.md\` requirement to read Architecture.md before development is treated as satisfied for this round.
+Do not search, glob, grep, or read \`docs/Architecture.md\` again. ADRs, \`docs/Systems/\`, and \`CONTEXT.md\` still follow the original text and may be read when needed.
 `;
 function applyDispatchArchitectureOverride(source) {
   const body = rewriteArchitectureFileReads(source.replaceAll("\r\n", "\n").trim());
@@ -1493,10 +1493,16 @@ function rewriteArchitectureFileReads(source) {
   if (!source) return "";
   return source.split("\n").filter((line) => !isArchitectureFileReadBullet(line)).join("\n").replace(
     /动手写代码[^\n]*MUST 先阅读：/,
-    "\u52A8\u624B\u5199\u4EE3\u7801\u3001\u6539\u6A21\u5757\u8FB9\u754C\u6216\u8BBE\u8BA1\u65B9\u6848\u524D\uFF0C`docs/Architecture.md` \u5DF2\u7531 Worker \u6CE8\u5165\uFF0C\u89C6\u4E3A\u5DF2\u8BFB\uFF1B\u7981\u6B62\u518D\u6253\u5F00\u8BE5\u6587\u4EF6\u3002"
+    "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again."
+  ).replace(
+    /Before writing code[^\n]*MUST (?:first )?read:/,
+    "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again."
   ).replace(
     /MUST NOT 在未读 `Architecture\.md`（若存在）的情况下/,
-    "MUST NOT \u5728\u672A\u9075\u5B88\u5DF2\u6CE8\u5165 Architecture.md \u7684\u60C5\u51B5\u4E0B"
+    "MUST NOT without following the injected Architecture.md"
+  ).replace(
+    /MUST NOT (?:add new top-level directories or cross-layer dependencies )?without reading `Architecture\.md`(?: \(if it exists\))?/,
+    "MUST NOT without following the injected Architecture.md"
   );
 }
 function isArchitectureFileReadBullet(line) {
@@ -1677,7 +1683,7 @@ function emitInteractionEvent(event) {
 }
 function sessionStartText(job) {
   const items = workItems(job);
-  return items.length === 0 ? "\u5F00\u59CB\u5904\u7406\u672C\u5361\u3002" : items.map((item) => `- ${item}`).join("\n");
+  return items.length === 0 ? "Starting this card." : items.map((item) => `- ${item}`).join("\n");
 }
 function conversationSnapshotFileName(cardId) {
   return `conversation-snapshot-${cardId.replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
@@ -1742,17 +1748,17 @@ function createAskUserTool(job, cancellation, onUserReply) {
   if (!interactionDir) return void 0;
   mkdirSync2(interactionDir, { recursive: true });
   return {
-    description: "\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u8C03\u7528\u3002\u6709\u4E92\u65A5\u65B9\u6848\u65F6\u4F20\u5165 choices\uFF0C\u770B\u677F\u4F1A\u5F39\u51FA\u9009\u9879\u83DC\u5355\uFF1B\u5DE5\u5177\u4F1A\u6682\u505C\u5F53\u524D\u5361\u7247\uFF0C\u76F4\u5230\u7528\u6237\u56DE\u590D\u3002",
+    description: "Call this when you need the user to confirm, supply missing requirements, or choose a plan. When options are mutually exclusive, pass choices; the board shows an option menu and pauses the current card until the user replies.",
     inputSchema: {
       type: "object",
       properties: {
         question: {
           type: "string",
-          description: "\u5411\u7528\u6237\u63D0\u51FA\u7684\u5B8C\u6574\u95EE\u9898\uFF0C\u4F7F\u7528\u7B80\u4F53\u4E2D\u6587\u3002"
+          description: "The full question to ask the user, in English."
         },
         choices: {
           type: "array",
-          description: "2 \u5230 4 \u4E2A\u4E92\u65A5\u9009\u9879\u3002\u6709\u660E\u786E\u65B9\u6848\u65F6\u5FC5\u987B\u63D0\u4F9B\uFF0C\u770B\u677F\u4F1A\u5728\u6700\u8FD1\u8FD0\u884C\u754C\u9762\u5F39\u51FA\u9009\u9879\u83DC\u5355\u4F9B\u7528\u6237\u70B9\u9009\uFF1B\u4E0D\u8981\u53EA\u5728\u6B63\u6587\u91CC\u53E3\u5934\u5217\u51FA\u9009\u9879\u3002",
+          description: "2 to 4 mutually exclusive options. Provide them when there is a clear plan; the board shows an option menu on the latest-run screen for the user to tap. Do not only list options in assistant prose.",
           items: { type: "string" },
           minItems: 2,
           maxItems: 4
@@ -1764,7 +1770,7 @@ function createAskUserTool(job, cancellation, onUserReply) {
     execute: async (args) => {
       const question = stringArg(args.question);
       if (!question) {
-        return { content: [{ type: "text", text: "\u95EE\u9898\u4E0D\u80FD\u4E3A\u7A7A" }], isError: true };
+        return { content: [{ type: "text", text: "Question cannot be empty" }], isError: true };
       }
       const explicit = stringListArg(args.choices);
       const choices = explicit.length > 0 ? explicit : inferChoicesFromQuestion(question);
@@ -1780,7 +1786,7 @@ function createAskUserTool(job, cancellation, onUserReply) {
         ...choices.length > 0 ? { choices } : {}
       });
       const answer = await waitForReply(replyPath, cancellation);
-      if (answer && answer !== "\u7528\u6237\u5DF2\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD\u3002") {
+      if (answer && answer !== "The user ended the current session.") {
         onUserReply?.(answer);
       }
       return answer;
@@ -1790,7 +1796,7 @@ function createAskUserTool(job, cancellation, onUserReply) {
 async function waitForReply(replyPath, cancellation) {
   while (true) {
     if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
-      return "\u7528\u6237\u5DF2\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD\u3002";
+      return "The user ended the current session.";
     }
     if (existsSync3(replyPath)) {
       try {
@@ -1846,13 +1852,22 @@ function workItems(job) {
 
 // src/conversation_transcript.ts
 var INJECTED_PROMPT_MARKERS = [
-  "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
+  "# Worker-injected context for this round",
+  "# Skill body",
+  "# This invocation",
   "KANBAN_WORKER_USER_RULES_BEGIN",
+  "Kanban MCP completion tools"
+];
+var LEGACY_INJECTED_PROMPT_MARKERS = [
+  "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
   "# Skill \u6B63\u6587",
+  "# \u672C\u6B21\u8C03\u7528",
   "\u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177"
 ];
 function isInjectedWorkerPrompt(text) {
-  return INJECTED_PROMPT_MARKERS.some((marker) => text.includes(marker));
+  return INJECTED_PROMPT_MARKERS.concat(LEGACY_INJECTED_PROMPT_MARKERS).some(
+    (marker) => text.includes(marker)
+  );
 }
 function buildConversationTranscript(options) {
   const out = [];
@@ -2279,7 +2294,7 @@ var KanbanMcpClient = class {
   }
   async connect(endpoint) {
     await withTimeout(
-      "\u8FDE\u63A5 MCP",
+      "Connect MCP",
       this.timeoutMs,
       this.client.connect(
         new StreamableHTTPClientTransport(new URL(endpoint))
@@ -2289,7 +2304,7 @@ var KanbanMcpClient = class {
   }
   async listTools() {
     const result = await withTimeout(
-      "\u5217\u51FA MCP \u5DE5\u5177",
+      "List MCP tools",
       this.timeoutMs,
       this.client.listTools()
     );
@@ -2297,12 +2312,12 @@ var KanbanMcpClient = class {
   }
   async callRaw(name, args, options) {
     const result = await withTimeout(
-      `\u8C03\u7528 ${name}`,
+      `Call ${name}`,
       options?.timeoutMs ?? mcpTimeoutForTool(name),
       this.client.callTool({ name, arguments: args })
     );
     if (result.isError) {
-      throw new Error(`${name} \u5931\u8D25\uFF1A${resultText(result)}`);
+      throw new Error(`${name} failed: ${resultText(result)}`);
     }
     return result;
   }
@@ -2312,7 +2327,7 @@ var KanbanMcpClient = class {
     try {
       return JSON.parse(text);
     } catch {
-      throw new Error(`${name} \u8FD4\u56DE\u4E86\u65E0\u6548 JSON\uFF1A${text}`);
+      throw new Error(`${name} returned invalid JSON: ${text}`);
     }
   }
   async close() {
@@ -2327,12 +2342,12 @@ function parseClaimResult(result) {
   try {
     const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("JSON \u9876\u5C42\u4E0D\u662F\u5BF9\u8C61");
+      throw new Error("JSON top-level value is not an object");
     }
     payload = parsed;
   } catch (error) {
     throw new Error(
-      `dispatch_claim_next_card \u8FD4\u56DE\u4E86\u65E0\u6548 JSON\uFF1A${error instanceof Error ? error.message : String(error)}`
+      `dispatch_claim_next_card returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`
     );
   }
   const images = result.content.filter(
@@ -2352,7 +2367,7 @@ async function withTimeout(operation, timeoutMs, work) {
       work,
       new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error(`${operation} \u8D85\u65F6\uFF08${timeoutMs}ms\uFF09`)),
+          () => reject(new Error(`${operation} timed out (${timeoutMs}ms)`)),
           timeoutMs
         );
         timer.unref?.();
@@ -2446,7 +2461,7 @@ function toShellSpanReportPayload(input) {
     phase !== "start" && phase !== "end" ? "phase" : ""
   ].filter(Boolean);
   if (missing.length > 0) {
-    throw new Error(`\u4E0A\u62A5 Shell \u65F6\u95F4\u7EBF\u7F3A\u5C11 ${missing.join("\u3001")}`);
+    throw new Error(`Shell timeline report is missing ${missing.join(", ")}`);
   }
   return {
     workerToken,
@@ -2662,10 +2677,10 @@ function parseCursorSdkScanLog(line) {
 function formatCursorSdkScanNote(scan) {
   if (scan.kind === "skills") {
     const count2 = formatCount(scan.skillCount ?? scan.ruleCount);
-    return `SDK \u626B\u63CF Skill\uFF1A${count2}\uFF08\u542B\u672C\u673A ~/.cursor/skills-cursor \u5185\u7F6E\uFF09\uFF0C\u8FD9\u662F\u53EF\u4F9B Cursor \u6309\u89E6\u53D1\u6761\u4EF6\u9009\u62E9\u7684 Skill\uFF1B\u4E0D\u4F1A\u5C06\u5168\u90E8 Skill \u6B63\u6587\u540C\u65F6\u6CE8\u5165`;
+    return `SDK scanned Skills: ${count2} (including local ~/.cursor/skills-cursor builtins). These are Skills Cursor may select by trigger; it does not inject every Skill body at once.`;
   }
   const count = formatCount(scan.ruleCount);
-  return `SDK \u626B\u63CF Rule\uFF1A${count}\uFF0C\u8FD9\u662F\u8FC7\u6EE4\u524D\u7684\u626B\u63CF\u6570\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u5199\u5165 prompt\uFF1BSDK \u540C\u65F6\u52A0\u8F7D\u9879\u76EE\u4E0E\u7528\u6237\u8BBE\u7F6E\u5C42`;
+  return `SDK scanned Rules: ${count} (count before filtering). User Rules are already written into the prompt by the Worker; the SDK also loads project and user setting layers.`;
 }
 function createCursorSdkScanLogBuffer(onNote) {
   let pending = "";
@@ -2706,7 +2721,7 @@ function readMetaCount(text, key) {
   return Number.parseInt(match[1] ?? "", 10);
 }
 function formatCount(value) {
-  return value == null || !Number.isFinite(value) ? "\u82E5\u5E72" : `${value} \u4E2A`;
+  return value == null || !Number.isFinite(value) ? "several" : `${value}`;
 }
 function wrapWriteStream(stream, buffer) {
   const original = stream.write.bind(stream);
@@ -2748,7 +2763,7 @@ var CursorThinkingStream = class {
   }
   notePromptSent() {
     this.write(
-      "\u5DF2\u53D1\u9001\u4EFB\u52A1\uFF0C\u6B63\u5728\u7B49\u5F85\u6A21\u578B\u601D\u8003\u6D41\u3002\u5B8C\u6574\u601D\u8003\u6B65\u9AA4\u8981\u7B49\u8FD9\u6BB5\u601D\u8003\u7ED3\u675F\u540E\u624D\u5230\u8FBE\uFF0C\u4E2D\u95F4\u7A7A\u767D\u4E0D\u4EE3\u8868\u7A7A\u95F2\u3002",
+      "Task sent; waiting for the model thinking stream. Full thinking steps arrive after this block completes; a blank gap in between does not mean idle.",
       "worker"
     );
   }
@@ -2773,7 +2788,7 @@ var CursorThinkingStream = class {
       this.blockComplete = true;
       const ms = record.thinkingDurationMs;
       if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0) {
-        this.write(`\u601D\u8003\u5B8C\u6210\uFF08${Math.round(ms / 1e3)} \u79D2\uFF09`, "ai");
+        this.write(`Thinking done (${Math.round(ms / 1e3)}s)`, "ai");
       }
     }
   }
@@ -2857,7 +2872,7 @@ var CursorThinkingStream = class {
     this.streamed = true;
     for (const line of lines) {
       if (!this.startedBlock) {
-        this.write(`\u601D\u8003\uFF1A${line}`, "ai");
+        this.write(`Thinking: ${line}`, "ai");
         this.startedBlock = true;
       } else {
         this.write(`  \u2502 ${line}`, "ai");
@@ -2904,7 +2919,7 @@ var AgentRunDiagnostics = class {
   }
 };
 function formatAgentRunDiagnostics(metrics) {
-  return `\u4F1A\u8BDD\u8BCA\u65AD\uFF1Asteps=${metrics.steps} tools=${metrics.toolCalls} repeatedToolCalls=${metrics.repeatedToolCalls} repeatedReads=${metrics.repeatedReads}` + (metrics.topReads.length > 0 ? ` topReads=${metrics.topReads.join(",")}` : "");
+  return `Session diagnostics: steps=${metrics.steps} tools=${metrics.toolCalls} repeatedToolCalls=${metrics.repeatedToolCalls} repeatedReads=${metrics.repeatedReads}` + (metrics.topReads.length > 0 ? ` topReads=${metrics.topReads.join(",")}` : "");
 }
 function readPath(detail) {
   try {
@@ -3000,16 +3015,16 @@ function readyBlockedByShells(spans, nowMs) {
   }
   if (!lastVerification) return void 0;
   if (nowMs < lastEndMs) {
-    return `\u9A8C\u8BC1\u547D\u4EE4\u4ECD\u5728\u6267\u884C\uFF1A${clip2(lastVerification.command)}\u3002\u8BF7\u7B49\u5F85\u6D4B\u8BD5\u5B8C\u6210\u540E\u518D\u8C03\u7528 ready_to_submit\uFF0C\u4E0D\u8981\u4E0E Shell \u5E76\u884C\u3002`;
+    return `Verification command is still running: ${clip2(lastVerification.command)}. Wait for the test to finish before calling ready_to_submit; do not run it in parallel with Shell.`;
   }
   const code = lastVerification.exitCode;
   if (code != null && code !== 0) {
-    const hint = commandLooksLikeCdAndChain(lastVerification.command) ? "PowerShell 5.1 \u4E0D\u652F\u6301 &&\uFF1B\u8BF7\u7528 working_directory\uFF0C\u4E0D\u8981\u5199 cd ... &&\u3002" : "\u8BF7\u4FEE\u590D\u540E\u91CD\u8DD1\u6D4B\u8BD5\uFF0C\u518D\u8C03\u7528 ready_to_submit\u3002";
-    return `\u9A8C\u8BC1\u547D\u4EE4\u5931\u8D25\uFF08exitCode=${code}\uFF09\uFF1A${clip2(lastVerification.command)}\u3002${hint}`;
+    const hint = commandLooksLikeCdAndChain(lastVerification.command) ? "PowerShell 5.1 does not support &&; use working_directory instead of cd ... &&." : "Fix the issue and rerun the test before calling ready_to_submit.";
+    return `Verification command failed (exitCode=${code}): ${clip2(lastVerification.command)}. ${hint}`;
   }
   if (isImplausiblyShortSuccessfulTest(lastVerification)) {
     const duration = shellObservedDurationMs(lastVerification);
-    return `\u9A8C\u8BC1\u547D\u4EE4\u8017\u65F6\u8FC7\u77ED\uFF08${duration}ms\uFF09\uFF0C\u4E0D\u50CF\u771F\u6B63\u8DD1\u5B8C\u6D4B\u8BD5\uFF1A${clip2(lastVerification.command)}\u3002\u8BF7\u786E\u8BA4 working_directory \u4E0E\u76F8\u5BF9\u8DEF\u5F84\u4E00\u81F4\uFF0C\u5E76\u7B49\u5230 flutter test / dart test \u5B9E\u9645\u7ED3\u675F\u540E\u518D ready_to_submit\u3002`;
+    return `Verification command finished implausibly quickly (${duration}ms): ${clip2(lastVerification.command)}. Confirm that working_directory and relative paths match, then wait for flutter test / dart test to actually finish before ready_to_submit.`;
   }
   return void 0;
 }
@@ -3039,7 +3054,7 @@ function formatJson(value, max = 4e3) {
 }
 function expandMultiline2(prefix, body) {
   const lines = body.replace(/\s+$/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length === 0) return [`${prefix}\uFF08\u7A7A\uFF09`];
+  if (lines.length === 0) return [`${prefix}(empty)`];
   const result = [`${prefix}${lines[0]}`];
   for (let i = 1; i < lines.length; i++) {
     result.push(`  \u2502 ${lines[i]}`);
@@ -3126,13 +3141,13 @@ function describeStep(step) {
   switch (type) {
     case "assistantMessage":
       return {
-        lines: expandMultiline2("\u52A9\u624B\uFF1A", extractCursorAssistantStepText(record)),
+        lines: expandMultiline2("Assistant: ", extractCursorAssistantStepText(record)),
         source: "ai"
       };
     case "thinkingMessage": {
       const text = pickString4(message, "text", "thinking", "content");
       return {
-        lines: text ? expandMultiline2("\u601D\u8003\uFF1A", text) : [],
+        lines: text ? expandMultiline2("Thinking: ", text) : [],
         source: "ai"
       };
     }
@@ -3141,21 +3156,21 @@ function describeStep(step) {
       const detail = extractToolDetail(message);
       if (!detail) {
         return {
-          lines: [`\u5DE5\u5177\uFF1A${toolName}`],
+          lines: [`Tool: ${toolName}`],
           source: isShellTool(toolName) ? "shell" : "mcp",
           toolName
         };
       }
       if (isShellTool(toolName)) {
         return {
-          lines: expandMultiline2("\u547D\u4EE4\uFF1A", detail),
+          lines: expandMultiline2("Command: ", detail),
           source: "shell",
           toolName,
           detail
         };
       }
       return {
-        lines: expandMultiline2(`\u5DE5\u5177\uFF1A${toolName} `, detail),
+        lines: expandMultiline2(`Tool: ${toolName} `, detail),
         source: "mcp",
         toolName,
         detail
@@ -3170,7 +3185,7 @@ function describeStep(step) {
       const body = typeof result === "string" ? result : formatJson(result);
       if (!String(body).trim()) return { lines: [], source: "mcp" };
       return {
-        lines: expandMultiline2(`\u5DE5\u5177\u7ED3\u679C\uFF1A${toolName} `, body),
+        lines: expandMultiline2(`Tool result: ${toolName} `, body),
         source: "mcp"
       };
     }
@@ -3179,7 +3194,7 @@ function describeStep(step) {
       const command = extractToolDetail(message) || pickString4(message, "command", "text");
       if (!command) return { lines: [], source: "shell" };
       return {
-        lines: expandMultiline2("\u547D\u4EE4\uFF1A", command),
+        lines: expandMultiline2("Command: ", command),
         source: "shell"
       };
     }
@@ -3187,7 +3202,7 @@ function describeStep(step) {
       const detail = message ? usefulJson2(message, 800) : "";
       if (!detail) return { lines: [], source: "worker" };
       return {
-        lines: [`\u6B65\u9AA4\uFF1A${type} ${detail}`],
+        lines: [`Step: ${type} ${detail}`],
         source: "worker"
       };
     }
@@ -3207,7 +3222,7 @@ function catalogParameterValues(raw) {
 async function attachLiveCursorModelCatalog(job, apiKey) {
   try {
     const models = await withRetry(
-      "\u62C9\u53D6 Cursor \u6A21\u578B\u76EE\u5F55",
+      "Fetch Cursor model catalog",
       () => Cursor2.models.list({ apiKey }),
       { maxAttempts: 2, baseDelayMs: 400 }
     );
@@ -3218,11 +3233,11 @@ async function attachLiveCursorModelCatalog(job, apiKey) {
         values: catalogParameterValues(parameter.values)
       }))
     }));
-    logLine(`\u5DF2\u7528 Cursor.models.list \u6838\u5BF9\u53C2\u6570\uFF08${mapped.length} \u4E2A\u6A21\u578B\uFF09`);
+    logLine(`Checked params with Cursor.models.list (${mapped.length} models)`);
     return withCursorSdkCatalog(job, mapped);
   } catch (err) {
     logLine(
-      `\u62C9\u53D6 Cursor \u6A21\u578B\u76EE\u5F55\u5931\u8D25\uFF0C\u6539\u7528\u5DE5\u4F5C\u53F0\u7F13\u5B58\uFF1A${err instanceof Error ? err.message : String(err)}`
+      `Failed to fetch the Cursor model catalog; using the workbench cache: ${err instanceof Error ? err.message : String(err)}`
     );
     return job;
   }
@@ -3232,22 +3247,22 @@ async function runCursor(job, cancellation) {
   if (!apiKey) {
     return {
       ok: false,
-      error: "\u7F3A\u5C11\u73AF\u5883\u53D8\u91CF CURSOR_API_KEY\uFF08Dashboard \u2192 Integrations / API Keys\uFF09"
+      error: "Missing CURSOR_API_KEY (Dashboard \u2192 Integrations / API Keys)"
     };
   }
   const modelId = job.model?.trim() || "composer-2.5";
   const jobWithCatalog = await attachLiveCursorModelCatalog(job, apiKey);
   const selected = selectCursorSdkModelParams(jobWithCatalog);
   let params = selected.params;
-  logLine(`Cursor \u6A21\u578B=${modelId} params=${JSON.stringify(params ?? [])}`);
+  logLine(`Cursor model=${modelId} params=${JSON.stringify(params ?? [])}`);
   if (selected.dropped.length > 0) {
     logLine(
-      `\u672A\u4F20\u7ED9 Cursor SDK\uFF1A${selected.dropped.join(", ")}\uFF08\u5F53\u524D\u6A21\u578B\u76EE\u5F55\u4E0D\u652F\u6301\uFF0C\u6216\u5C5E\u4E8E\u770B\u677F\u81EA\u9020\u53C2\u6570\uFF09\u3002` + (selected.dropped.includes("fast") ? "\u5F53\u524D\u6A21\u578B\u6CA1\u6709 fast\uFF0C\u5F00\u542F\u5FEB\u901F\u6A21\u5F0F\u4E0D\u4F1A\u751F\u6548\u3002" : "")
+      `Not sent to the Cursor SDK: ${selected.dropped.join(", ")} (unsupported by the current model catalog, or a Kanban-only parameter).` + (selected.dropped.includes("fast") ? " This model has no fast; turning on fast mode will not apply." : "")
     );
   }
   const agentMcpUrl = job.round.agentEndpointUrl.trim();
   if (!agentMcpUrl) {
-    return { ok: false, error: "\u672C\u8F6E claim \u7F3A\u5C11 scoped MCP \u7AEF\u70B9" };
+    return { ok: false, error: "This claim is missing a scoped MCP endpoint" };
   }
   try {
     process.chdir(job.cwd);
@@ -3269,13 +3284,13 @@ async function runCursor(job, cancellation) {
     });
     const localOptions = {
       cwd: job.cwd,
-      // 用户 Rule 已由 Worker 完整注入；同时启用 user 让 Cursor 按 Skill
-      // frontmatter 的 description / 触发条件自行选择用户 Skill，而非把所有
-      // Skill 正文拼进本卡 prompt。MCP 仍由 mcpServers 显式控制。
+      // User Rules are already injected in full by the Worker. Enable `user`
+      // so Cursor can pick user Skills by frontmatter triggers instead of
+      // stuffing every Skill body into this card prompt. MCP stays explicit.
       settingSources: ["project", "user"],
       store: new JsonlLocalAgentStore(storeDir),
       ...askUserTool ? { customTools: { ask_user: askUserTool } } : {},
-      // 无头 Worker 无人点批准；Auto-review 会拦 ready_to_submit 导致整卡失败。
+      // Headless Worker has nobody to click approve; Auto-review would block ready_to_submit.
       autoReview: false,
       sandboxOptions: { enabled: job.enableSandbox === true }
     };
@@ -3306,7 +3321,7 @@ async function runCursor(job, cancellation) {
         if (stripped.changed) {
           params = stripped.params;
           logLine(
-            `Cursor \u62D2\u7EDD\u53C2\u6570 ${stripped.dropped.join(", ")}\uFF0C\u5DF2\u53BB\u6389\u540E\u91CD\u8BD5\u521B\u5EFA\u4F1A\u8BDD\u3002`
+            `Cursor rejected params ${stripped.dropped.join(", ")}; dropped them and retrying session create.`
           );
         }
         agent = await Agent.create({
@@ -3315,9 +3330,9 @@ async function runCursor(job, cancellation) {
         });
       }
       logLine(
-        `\u672C\u5730\u8FD0\u884C\uFF1AJSONL \u5B58\u50A8=${storeDir}\uFF1B\u6C99\u7BB1${job.enableSandbox === true ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF1B\u5408\u5E76 MCP\uFF08${mcp.names.join(", ") || "\u65E0"}\uFF09\uFF1BkanbanMCP \u5F3A\u5236\u4E3A scoped\uFF08${agentMcpUrl}\uFF09\uFF1B\u7981\u7528\u5DE5\u5177=${disallowedTools.join(",") || "\u65E0"}\uFF1BsettingSources=project,user\uFF08\u7528\u6237\u4E0E\u9879\u76EE Skill \u7531 Cursor \u6309\u5404\u81EA\u89E6\u53D1\u6761\u4EF6\u9009\u62E9\uFF1B\u7528\u6237 Rule \u5DF2\u7531 Worker \u6CE8\u5165\uFF1BMCP \u4EC5\u4F7F\u7528\u672C\u8F6E\u663E\u5F0F\u5408\u5E76\u7684\u670D\u52A1\u5668\uFF09`
+        `Local run: JSONL store=${storeDir}; sandbox ${job.enableSandbox === true ? "on" : "off"}; merged MCP (${mcp.names.join(", ") || "none"}); kanbanMCP forced to scoped (${agentMcpUrl}); disallowed tools=${disallowedTools.join(",") || "none"}; settingSources=project,user (user and project Skills are selected by Cursor trigger conditions; user Rules are already injected by the Worker; MCP uses only the servers merged for this round)`
       );
-      logLine("\u672C\u5730\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u5F00\u59CB\u6267\u884C\u2026");
+      logLine("Local session created; starting\u2026");
       thinkingStream = new CursorThinkingStream();
       thinkingStream.notePromptSent();
       emitSessionStart(job);
@@ -3359,15 +3374,15 @@ async function runCursor(job, cancellation) {
       const stopAfterTerminal = (reason) => {
         if (endedByTerminal) return;
         endedByTerminal = true;
-        logLine(`\u6536\u5C3E\u5DE5\u5177\u5DF2\u6210\u529F\uFF08${reason}\uFF09\uFF0C\u6B63\u5728\u7ED3\u675F Cursor \u4F1A\u8BDD`);
+        logLine(`Finalization tool succeeded (${reason}); ending the Cursor session`);
         resolveTerminalReached?.();
         void runCancel?.().catch(() => void 0);
       };
       const run = await agent.send({
         text: askUserTool ? `${job.prompt}
 
-## \u770B\u677F\u4EA4\u4E92
-\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u5FC5\u987B\u8C03\u7528 ask_user\uFF1B\u4E0D\u8981\u8C03\u7528 askQuestion\uFF0C\u4E5F\u4E0D\u8981\u53EA\u5728\u52A9\u624B\u6B63\u6587\u91CC\u53E3\u5934\u5217\u51FA\u9009\u9879\u3002\u6709 2\u20134 \u4E2A\u4E92\u65A5\u65B9\u6848\u65F6\u5FC5\u987B\u4F20\u5165 choices\uFF0C\u770B\u677F\u4F1A\u5728\u6700\u8FD1\u8FD0\u884C\u754C\u9762\u5F39\u51FA\u9009\u9879\u83DC\u5355\u5E76\u7B49\u5F85\u56DE\u590D\u3002` : job.prompt,
+## Board interaction
+When you need the user to confirm, supply missing requirements, or choose a plan, you MUST call ask_user; do not call askQuestion, and do not only list options in assistant prose. When there are 2\u20134 mutually exclusive options, you MUST pass choices; the board shows an option menu on the latest-run screen and waits for a reply.` : job.prompt,
         images: job.round.images
       }, {
         mcpServers: mcp.servers,
@@ -3403,7 +3418,7 @@ async function runCursor(job, cancellation) {
               emitAssistant(extractCursorAssistantStepText(step));
             }
           } catch {
-            logLine("\u6536\u5230\u4E00\u6B65\u8FDB\u5EA6");
+            logLine("Received a progress step");
           }
           try {
             const event = shellSpans.observe(step, Date.now());
@@ -3411,11 +3426,11 @@ async function runCursor(job, cancellation) {
               await job.round.reportShellSpan?.(event);
             }
             if (job.terminateAfterDispatchTerminal !== false && isSuccessfulDispatchTerminalStep(step)) {
-              stopAfterTerminal("\u5DE5\u5177\u7ED3\u679C");
+              stopAfterTerminal("tool result");
             }
           } catch (err) {
             logLine(
-              `\u4E0A\u62A5 Shell \u65F6\u95F4\u7EBF\u5931\u8D25\uFF1A${err instanceof Error ? err.message : String(err)}`
+              `Failed to report the Shell timeline: ${err instanceof Error ? err.message : String(err)}`
             );
           }
         }
@@ -3485,12 +3500,12 @@ async function runCursor(job, cancellation) {
         logLine(formatSessionTokenLog(usage, metrics));
       }
       if (cancellation?.isSkipRequested) {
-        logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u8DF3\u8FC7", "worker");
-        return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+        logLine("Cursor session skipped by the user", "worker");
+        return { ok: false, error: "Skipped" };
       }
       if (cancellation?.isCancelled && !endedByTerminal) {
-        logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u505C\u6B62", "worker");
-        return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+        logLine("Cursor session stopped by the user", "worker");
+        return { ok: false, error: "Cancelled" };
       }
       if (endedByTerminal) {
         const readyAt2 = shellSpans.lastReadyStartedAtMs();
@@ -3503,17 +3518,17 @@ async function runCursor(job, cancellation) {
         }
         return {
           ok: true,
-          summary: typeof result.result === "string" ? result.result : "\u6536\u5C3E\u5DE5\u5177\u5DF2\u6210\u529F\uFF0C\u5DF2\u7ED3\u675F\u4F1A\u8BDD"
+          summary: typeof result.result === "string" ? result.result : "Finalization tool succeeded; session ended"
         };
       }
       if (result.status === "cancelled") {
-        logLine("Cursor \u4F1A\u8BDD\u5DF2\u7531\u7528\u6237\u505C\u6B62", "worker");
-        return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+        logLine("Cursor session stopped by the user", "worker");
+        return { ok: false, error: "Cancelled" };
       }
       if (result.status === "error") {
         return {
           ok: false,
-          error: `Cursor run \u5931\u8D25\uFF1A${result.error?.message ?? result.id}`,
+          error: `Cursor run failed: ${result.error?.message ?? result.id}`,
           summary: typeof result.result === "string" ? result.result : void 0,
           retryable: isRetryableError(result.error)
         };
@@ -3526,7 +3541,7 @@ async function runCursor(job, cancellation) {
           return { ok: false, error: blocked };
         }
       }
-      const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor \u4F1A\u8BDD\u5B8C\u6210" : `Cursor \u72B6\u6001\uFF1A${result.status}`;
+      const summary = typeof result.result === "string" ? result.result : result.status === "finished" ? "Cursor session finished" : `Cursor status: ${result.status}`;
       return { ok: result.status === "finished", summary };
     } finally {
       stopScanLog();
@@ -3537,22 +3552,22 @@ async function runCursor(job, cancellation) {
     }
   } catch (err) {
     if (cancellation?.isSkipRequested) {
-      return { ok: false, error: "\u5DF2\u8DF3\u8FC7" };
+      return { ok: false, error: "Skipped" };
     }
     if (cancellation?.isCancelled) {
-      return { ok: false, error: "\u5DF2\u53D6\u6D88" };
+      return { ok: false, error: "Cancelled" };
     }
     if (err instanceof CursorAgentError) {
       return {
         ok: false,
-        error: `Cursor \u542F\u52A8\u5931\u8D25\uFF1A${err.message}\uFF08retryable=${err.isRetryable}\uFF09`,
-        // SDK 偶尔会把连接中断标为不可重试，保留本地网络错误兜底。
+        error: `Cursor failed to start: ${err.message} (retryable=${err.isRetryable})`,
+        // The SDK sometimes marks a dropped connection as non-retryable; keep a local network fallback.
         retryable: err.isRetryable || isRetryableError(err)
       };
     }
     return {
       ok: false,
-      error: `Cursor \u4F1A\u8BDD\u5F02\u5E38\uFF1A${err instanceof Error ? err.message : String(err)}`,
+      error: `Cursor session error: ${err instanceof Error ? err.message : String(err)}`,
       retryable: isRetryableError(err)
     };
   }
@@ -3566,7 +3581,7 @@ async function runAgentWithRetry(runAgent, job, cancellation, wait = sleep) {
     cancellation?.throwIfCancelled();
     try {
       const result = await runAgent(job, cancellation);
-      if (result.ok || cancellation?.isCancelled || cancellation?.isSkipRequested || result.error === "Cancelled" || result.error === "Skipped" || !isRetryableAgentResult(result) || attempt >= MAX_AGENT_ATTEMPTS) {
+      if (result.ok || cancellation?.isCancelled || cancellation?.isSkipRequested || result.error === "Cancelled" || result.error === "Skipped" || result.error === "\u5DF2\u53D6\u6D88" || result.error === "\u5DF2\u8DF3\u8FC7" || !isRetryableAgentResult(result) || attempt >= MAX_AGENT_ATTEMPTS) {
         return result;
       }
       await waitBeforeRetry(attempt, result.error ?? "Agent session failed", wait);
@@ -3615,16 +3630,16 @@ var DISPATCH_SCOPED_TOOL_NAMES = [
   "submit_consultation"
 ];
 function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
-  const id = cardId.trim() || "<\u6CE8\u5165\u7684 cardId>";
+  const id = cardId.trim() || "<injected cardId>";
   return [
-    "## \u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177\uFF08\u5DF2\u6CE8\u5165 schema\uFF09",
+    "## Kanban MCP completion tools (schema already injected)",
     "",
-    "scoped `kanbanMCP` \u53EA\u6CE8\u518C\u4E0B\u9762\u4E09\u4E2A\u5DE5\u5177\u3002\u7981\u6B62 `GetMcpTools`\u3001`tools/list` \u6216\u62C9\u53D6\u5176\u5B83\u770B\u677F\u5DE5\u5177\u76EE\u5F55\u3002",
-    "Cursor\uFF1A\u76F4\u63A5 `CallMcpTool`\uFF1BCodex\uFF1A\u76F4\u63A5\u8C03\u7528\u540C\u540D MCP \u5DE5\u5177\u3002`cardId` \u5FC5\u987B\u662F\u6CE8\u5165\u503C\u3002",
-    requireTests ? "\u7981\u6B62\u628A ready_to_submit \u4E0E Shell\uFF08\u5C24\u5176\u662F\u6D4B\u8BD5\uFF09\u653E\u5728\u540C\u4E00\u6279\u5E76\u884C\u5DE5\u5177\u91CC\u3002\u5FC5\u987B\u7B49\u6D4B\u8BD5\u547D\u4EE4\u8FD4\u56DE exitCode=0 \u4E4B\u540E\uFF0C\u518D\u5355\u72EC\u8C03\u7528 ready_to_submit\u3002" : "\u672C\u5361\u5DF2\u914D\u7F6E\u4E3A\u65E0\u9700\u6D4B\u8BD5\uFF1A\u4E0D\u8981\u6267\u884C\u81EA\u52A8\u5316\u6D4B\u8BD5\uFF1B\u5B8C\u6210\u5B9E\u73B0\u540E\u5728 ready_to_submit \u4F20 manualVerificationReason=\u672C\u5361\u5DF2\u914D\u7F6E\u65E0\u9700\u6D4B\u8BD5\u3002",
-    "ready_to_submit / submit_consultation / block_card \u4E00\u65E6\u8FD4\u56DE\u6210\u529F\uFF0C\u7ACB\u5373\u505C\u6B62\u4E00\u5207\u5DE5\u5177\uFF1BWorker \u4F1A\u7ED3\u675F\u672C\u4F1A\u8BDD\u3002\u7981\u6B62\u518D\u6B21\u641C\u7D22\u3001\u4FEE\u6539\u6216\u91CD\u505A\u4EFB\u52A1\u3002",
-    "\u5361\u7247\u7C7B\u578B\u53EA\u770B\u6CE8\u5165 JSON \u7684 cardKind / labels\uFF1AcardKind=consultation \u6216 labels \u542B consultation \u624D\u662F\u54A8\u8BE2\u5361\uFF1B\u5426\u5219\u4E00\u5F8B\u662F\u5B9E\u65BD\u5361\u3002\u7981\u6B62\u6839\u636E\u6807\u9898\u6216\u5907\u6CE8\u50CF\u4E0D\u50CF\u95EE\u9898\u6765\u6539\u5224\u3002",
-    "Shell \u7684 working_directory \u5FC5\u987B\u4E0E\u547D\u4EE4\u91CC\u7684\u76F8\u5BF9\u8DEF\u5F84\u4E00\u81F4\uFF1Acwd \u5DF2\u662F app \u65F6\u4E0D\u8981\u518D\u5199 app/lib\u3002flutter test / dart test \u79D2\u9000\u4E0D\u5F97\u89C6\u4E3A\u901A\u8FC7\u3002",
+    "scoped `kanbanMCP` registers only the three tools below. Do not call `GetMcpTools`, `tools/list`, or fetch any other kanban tool catalog.",
+    "Cursor: call `CallMcpTool` directly; Codex: call the same-named MCP tool directly. `cardId` must be the injected value.",
+    requireTests ? "Do not put ready_to_submit in the same parallel tool batch as Shell (especially tests). Wait until the test command returns exitCode=0, then call ready_to_submit in a separate turn." : "This card is configured not to require tests: do not run automated tests; after implementation, pass manualVerificationReason=This card has no test switch enabled to ready_to_submit.",
+    "As soon as ready_to_submit / submit_consultation / block_card returns success, stop all tools; the Worker will end this session. Do not search, edit, or redo the task again.",
+    "Card type is decided only by injected JSON cardKind / labels: it is a consultation card only when cardKind=consultation or labels contain consultation; otherwise it is always an implementation card. Do not reclassify from whether the title or notes look like a question.",
+    "The Shell working_directory must match relative paths in the command: when cwd is already app, do not write app/lib. A flutter test / dart test that exits immediately must not count as passing.",
     "",
     "```json",
     JSON.stringify(
@@ -3639,10 +3654,10 @@ function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
             ],
             properties: {
               cardId: id,
-              completedChecklistIds: "\u672C\u8F6E\u5B8C\u6210\u7684 checklist id\uFF1B\u65E0\u5219 []",
-              completedFeedbackIds: "\u672C\u8F6E\u5B8C\u6210\u7684 feedback id\uFF1B\u65E0\u5219 []",
-              manualVerificationReason: "\u65E0\u6CD5\u81EA\u52A8\u9A8C\u8BC1\u65F6\u624D\u4F20",
-              gitRevertCommit: "\u4EC5\u5F53 workItems \u660E\u786E\u8981\u6C42 revert \u65F6\u4F20 7\u201364 \u4F4D\u54C8\u5E0C"
+              completedChecklistIds: "checklist ids completed this round; [] if none",
+              completedFeedbackIds: "feedback ids completed this round; [] if none",
+              manualVerificationReason: "pass only when automatic verification is impossible",
+              gitRevertCommit: "pass a 7\u201364 character hash only when workItems explicitly require revert"
             },
             example: {
               cardId: id,
@@ -3654,13 +3669,13 @@ function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
             required: ["cardId", "responseMarkdown"],
             example: {
               cardId: id,
-              responseMarkdown: "\u54A8\u8BE2\u7B54\u590D Markdown"
+              responseMarkdown: "consultation response Markdown"
             }
           },
           block_card: {
             required: ["cardId"],
-            properties: { reason: "\u963B\u585E\u539F\u56E0" },
-            example: { cardId: id, reason: "\u65E0\u6CD5\u5B8C\u6210\u7684\u539F\u56E0" }
+            properties: { reason: "block reason" },
+            example: { cardId: id, reason: "why completion is impossible" }
           }
         }
       },
@@ -3675,24 +3690,24 @@ function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
 var WORKER_USER_RULES_BEGIN = "KANBAN_WORKER_USER_RULES_BEGIN";
 var WORKER_USER_RULES_END = "KANBAN_WORKER_USER_RULES_END";
 function wrapWorkerUserRules(text) {
-  const body = text.trim() || "\u672A\u53D1\u73B0\u7528\u6237 ~/.cursor/rules\u3002";
+  const body = text.trim() || "No user ~/.cursor/rules found.";
   return [WORKER_USER_RULES_BEGIN, body, WORKER_USER_RULES_END].join("\n");
 }
 
 // src/worker_glob_policy.ts
-var DISPATCH_SEARCH_POLICY = `## \u641C\u7D22\u8303\u56F4\uFF08Worker\uFF09
+var DISPATCH_SEARCH_POLICY = `## Search scope (Worker)
 
-\u5B9A\u4F4D\u4EE3\u7801\u65F6 MUST \u7528 grep \u6216\u5E26\u6587\u4EF6\u540D/\u76EE\u5F55\u9650\u5B9A\u7684 glob\uFF0C\u5E76\u6307\u5B9A\u5B50\u76EE\u5F55\u3002
-MUST NOT \u5BF9\u4ED3\u5E93\u6839\u505A\u65E0\u754C glob\uFF08\`**\`\u3001\`**/*\`\u3001\`**/*.*\`\uFF09\u3002
-MUST NOT \u628A\u65E0\u754C glob \u4E0E grep \u5E76\u884C\uFF1Bgrep \u5DF2\u8FD4\u56DE\u5019\u9009\u6587\u4EF6\u65F6\u76F4\u63A5\u8BFB\u90A3\u4E9B\u8DEF\u5F84\u3002
-MUST NOT \u628A glob \u76EE\u6807\u6307\u5230 \`.git\`\u3001\`.svn\` \u6216 \`build\`\u3002
-\u754C\u9762\u6216\u529F\u80FD\u5165\u53E3\u5FC5\u987B\u4ECE\u5F53\u524D\u9009\u5B9A\u4ED3\u5E93\u7684\u76EE\u5F55\u7ED3\u6784\u3001\u9879\u76EE\u89C4\u5219\u548C\u5361\u7247\u4E2D\u7ED9\u51FA\u7684\u5177\u4F53\u7EBF\u7D22\u5B9A\u4F4D\uFF1B\u4E0D\u8981\u5047\u5B9A\u6846\u67B6\u3001\u6E90\u7801\u6839\u76EE\u5F55\u6216\u4EFB\u4F55\u4EA7\u54C1\u4E13\u5C5E\u8DEF\u5F84\u3002\u5361\u7247\u672A\u7ED9\u51FA\u8DEF\u5F84\u65F6\uFF0C\u5148\u6709\u9650\u5730\u67E5\u770B\u4ED3\u5E93\u4E00\u7EA7\u76EE\u5F55\u548C\u9879\u76EE\u8BF4\u660E\uFF0C\u518D\u5728\u5019\u9009\u5B50\u76EE\u5F55\u5185\u5B9A\u5411\u641C\u7D22\u3002\u641C\u7D22\u591A\u4E2A\u76EE\u5F55\u524D\u5FC5\u987B\u5148\u786E\u8BA4\u6BCF\u4E2A\u76EE\u5F55\u5B58\u5728\uFF1B\u4E0D\u8981\u628A\u4E0D\u5B58\u5728\u7684\u5019\u9009\u76EE\u5F55\u4F20\u7ED9 \`rg\`\u3002\u67E5\u627E\u542B\u5F15\u53F7\u3001\u62EC\u53F7\u6216\u5176\u5B83\u6807\u70B9\u7684\u5B57\u9762\u91CF\u65F6\u4F18\u5148\u4F7F\u7528 \`rg --fixed-strings -- <text> <confirmed-path>\`\uFF0C\u53EA\u6709\u786E\u5B9E\u9700\u8981\u6A21\u5F0F\u5339\u914D\u65F6\u624D\u5199\u6B63\u5219\u3002
+When locating code, MUST use grep or a glob limited by filename/directory, and MUST specify a subdirectory.
+MUST NOT unbounded-glob the repository root (\`**\`, \`**/*\`, \`**/*.*\`).
+MUST NOT run an unbounded glob in parallel with grep; when grep already returned candidate files, read those paths directly.
+MUST NOT point a glob target at \`.git\`, \`.svn\`, or \`build\`.
+Locate UI or feature entry points from the currently selected repository's directory layout, project rules, and concrete clues on the card; do not assume a framework, source root, or any product-specific path. When the card does not give a path, first inspect the repository's top-level directories and project notes in a limited way, then search inside candidate subdirectories. Before searching multiple directories, MUST confirm each directory exists; do not pass a non-existent candidate path to \`rg\`. When looking up a literal that contains quotes, parentheses, or other punctuation, prefer \`rg --fixed-strings -- <text> <confirmed-path>\`; write a regex only when pattern matching is actually required.
 `;
 
 // src/session_context.ts
 function readBatchArchitecture(cwd) {
   const path = join7(cwd, "docs", "Architecture.md");
-  if (!existsSync6(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
+  if (!existsSync6(path)) return "This repository does not provide docs/Architecture.md.";
   return readFileSync5(path, "utf8");
 }
 function createSessionContext(options) {
@@ -3730,15 +3745,15 @@ function createSessionContext(options) {
   const prompt = [
     options.basePrompt.trim(),
     "",
-    "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
+    "# Worker-injected context for this round",
     "",
-    "\u672C\u8F6E\u5361\u7247\u5DF2\u9886\u53D6\u3002\u4EE5\u4E0B\u4E0A\u4E0B\u6587\u662F\u552F\u4E00\u4EFB\u52A1\u8303\u56F4\uFF1B\u4E0D\u8981\u518D\u6B21\u8BFB\u53D6 Skill \u6216\u9886\u53D6\u5176\u4ED6\u5361\u7247\u3002",
+    "This round's card is already claimed. The context below is the only task scope; do not read the Skill again or claim another card.",
     "",
-    "\u5361\u7247\u7C7B\u578B\u53EA\u7531 JSON \u7684 `cardKind` \u4E0E `labels` \u51B3\u5B9A\uFF1A`consultation` \u4E3A\u54A8\u8BE2\u5361\uFF0C\u5426\u5219\u4E3A\u5B9E\u65BD\u5361\u3002\u672A\u6253\u54A8\u8BE2\u6807\u7B7E\u65F6\uFF0C\u5373\u4F7F\u6807\u9898\u50CF\u63D0\u95EE\u3001\u6CA1\u6709\u6E05\u5355\uFF0C\u4E5F\u5FC5\u987B\u5F53\u5B9E\u65BD\u5361\u505A\u5B8C\u5E76 `ready_to_submit`\u3002\u4E0D\u8981\u81EA\u884C\u6539\u5224\u3002",
+    "Card type is decided only by JSON `cardKind` and `labels`: `consultation` is a consultation card, otherwise it is an implementation card. Without a consultation label, even if the title looks like a question and there is no checklist, finish it as an implementation card and call `ready_to_submit`. Do not reclassify it yourself.",
     "",
     DISPATCH_SEARCH_POLICY.trim(),
     "",
-    "## \u5361\u7247\u4E0A\u4E0B\u6587\uFF08JSON\uFF09",
+    "## Card context (JSON)",
     "",
     "```json",
     JSON.stringify(payload, null, 2),
@@ -3749,22 +3764,22 @@ function createSessionContext(options) {
       options.requireTests !== false
     ),
     "",
-    "## \u4E34\u65F6\u9644\u4EF6\u7EDD\u5BF9\u8DEF\u5F84",
+    "## Temporary attachment absolute paths",
     "",
-    ...attachmentPaths.length === 0 ? ["- \u65E0\u6587\u4EF6\u9644\u4EF6"] : attachmentPaths.map((path) => `- \u6587\u4EF6\uFF1A${path}`),
-    ...imagePaths.length === 0 ? ["- \u65E0\u56FE\u7247\u4E34\u65F6\u8DEF\u5F84"] : imagePaths.map((path) => `- \u56FE\u7247\uFF1A${path}`),
+    ...attachmentPaths.length === 0 ? ["- No file attachments"] : attachmentPaths.map((path) => `- File: ${path}`),
+    ...imagePaths.length === 0 ? ["- No temporary image paths"] : imagePaths.map((path) => `- Image: ${path}`),
     "",
-    "\u8FD9\u4E9B\u8DEF\u5F84\u4F4D\u4E8E\u7CFB\u7EDF\u4E34\u65F6\u4F1A\u8BDD\u76EE\u5F55\uFF0C\u53EA\u5728\u672C\u8F6E\u6709\u6548\uFF1B\u4E0D\u8981\u590D\u5236\u5230\u4ED3\u5E93\u3002",
+    "These paths are in the system temporary session directory and are valid only for this round; do not copy them into the repository.",
     "",
-    "## \u5B8C\u6574\u7528\u6237 Rule",
+    "## Full user Rules",
     "",
     wrapWorkerUserRules(options.userRules ?? ""),
     "",
-    "## \u5DF2\u7F13\u5B58\u7684 docs/Architecture.md",
+    "## Cached docs/Architecture.md",
     "",
     options.architecture.trim(),
     "",
-    "\u4EE5\u4E0A\u6B63\u6587\u5DF2\u6EE1\u8DB3\u7528\u6237\u89C4\u5219 / AGENTS.md \u4E2D\u7684\u300C\u5F00\u53D1\u524D\u5FC5\u8BFB Architecture.md\u300D\u3002\u7981\u6B62\u518D\u6253\u5F00\u8BE5\u6587\u4EF6\u3002ADR\u3001docs/Systems\u3001CONTEXT.md \u9700\u8981\u65F6\u4ECD\u53EF\u8BFB\u3002"
+    "The text above already satisfies the user-rule / AGENTS.md requirement to read Architecture.md before development. Do not open that file again. ADRs, docs/Systems, and CONTEXT.md may still be read when needed."
   ].join("\n");
   return {
     prompt,
@@ -3789,7 +3804,7 @@ function safeFileName(value, fallback) {
 }
 function uniquePath(root, fileName) {
   const path = join7(root, fileName);
-  if (!isAbsolute(path)) throw new Error("\u4E34\u65F6\u9644\u4EF6\u8DEF\u5F84\u4E0D\u662F\u7EDD\u5BF9\u8DEF\u5F84");
+  if (!isAbsolute(path)) throw new Error("Temporary attachment path is not absolute");
   return path;
 }
 function extensionForMime(mimeType) {
@@ -3824,7 +3839,7 @@ function readUserCursorRules(root = join8(homedir4(), ".cursor", "rules")) {
     const content = readFileSync6(path, "utf8");
     bytes += Buffer.byteLength(content, "utf8");
     sections.push(
-      [`## \u7528\u6237 Rule\uFF1A${relative(root, path).replaceAll("\\", "/")}`, "", content].join("\n")
+      [`## User rule: ${relative(root, path).replaceAll("\\", "/")}`, "", content].join("\n")
     );
   }
   return {
@@ -4325,9 +4340,9 @@ function logModelOverride(original, round, cardId) {
 function formatListModelsError(err) {
   if (err && typeof err === "object" && "message" in err) {
     const message = String(err.message).trim();
-    if (message) return `Cursor.models.list \u5931\u8D25\uFF1A${message}`;
+    if (message) return `Cursor.models.list failed: ${message}`;
   }
-  return `Cursor.models.list \u5931\u8D25\uFF1A${String(err)}`;
+  return `Cursor.models.list failed: ${String(err)}`;
 }
 function writeResult(outPath, result) {
   writeFileSync5(outPath, JSON.stringify(result, null, 2), "utf8");
@@ -4355,26 +4370,26 @@ async function listModels(engine) {
       process.stdout.write(`${JSON.stringify({ models: models2 })}
 `);
     } catch (err) {
-      console.error(`Codex model/list \u5931\u8D25\uFF1A${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Codex model/list failed: ${err instanceof Error ? err.message : String(err)}`);
       process.exitCode = 2;
     }
     return;
   }
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
-    console.error("\u7F3A\u5C11 CURSOR_API_KEY");
+    console.error("Missing CURSOR_API_KEY");
     process.exitCode = 2;
     return;
   }
   let models;
   try {
     models = await withRetry(
-      "\u62C9\u53D6\u6A21\u578B\u5217\u8868",
+      "Fetch model list",
       () => Cursor3.models.list({ apiKey }),
       {
         onRetry: ({ operation, attempt, maxAttempts, delayMs }) => {
           console.error(
-            `${operation} \u5931\u8D25\uFF08\u7B2C ${attempt}/${maxAttempts} \u6B21\uFF09\uFF0C${delayMs}ms \u540E\u91CD\u8BD5\u2026`
+            `${operation} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms\u2026`
           );
         }
       }
@@ -4410,30 +4425,30 @@ async function listModels(engine) {
 async function runJob(jobPath) {
   const job = JSON.parse(readFileSync8(jobPath, "utf8"));
   if (!job.outPath) {
-    throw new Error("job.outPath \u5FC5\u586B");
+    throw new Error("job.outPath is required");
   }
   if (!job.cwd?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "cwd \u4E0D\u80FD\u4E3A\u7A7A" });
+    writeResult(job.outPath, { ok: false, error: "cwd cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!job.prompt?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "prompt \u4E0D\u80FD\u4E3A\u7A7A" });
+    writeResult(job.outPath, { ok: false, error: "prompt cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!job.mcpEndpoint?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "mcpEndpoint \u4E0D\u80FD\u4E3A\u7A7A" });
+    writeResult(job.outPath, { ok: false, error: "mcpEndpoint cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!job.workerToken?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "workerToken \u4E0D\u80FD\u4E3A\u7A7A" });
+    writeResult(job.outPath, { ok: false, error: "workerToken cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!Number.isFinite(job.cardLimit) || job.cardLimit < 1) {
-    writeResult(job.outPath, { ok: false, error: "cardLimit \u5FC5\u987B\u5927\u4E8E 0" });
+    writeResult(job.outPath, { ok: false, error: "cardLimit must be greater than 0" });
     process.exitCode = 2;
     return;
   }
@@ -4481,7 +4496,7 @@ async function main() {
   const idx = argv.indexOf("--job");
   if (idx < 0 || !argv[idx + 1]) {
     throw new Error(
-      "\u7528\u6CD5: node cli.js --job <job.json> | --list-models | --usage"
+      "Usage: node cli.js --job <job.json> | --list-models | --usage"
     );
   }
   await runJob(resolve(argv[idx + 1]));

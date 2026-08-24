@@ -35,14 +35,14 @@ export function formatCursorSdkScanNote(scan: CursorSdkScanLog): string {
   if (scan.kind === "skills") {
     const count = formatCount(scan.skillCount ?? scan.ruleCount);
     return (
-      `SDK 扫描 Skill：${count}（含本机 ~/.cursor/skills-cursor 内置），` +
-      "这是可供 Cursor 按触发条件选择的 Skill；不会将全部 Skill 正文同时注入"
+      `SDK scanned Skills: ${count} (including local ~/.cursor/skills-cursor builtins). ` +
+      "These are Skills Cursor may select by trigger; it does not inject every Skill body at once."
     );
   }
   const count = formatCount(scan.ruleCount);
   return (
-    `SDK 扫描 Rule：${count}，这是过滤前的扫描数；` +
-    "用户 Rule 已由 Worker 写入 prompt；SDK 同时加载项目与用户设置层"
+    `SDK scanned Rules: ${count} (count before filtering). ` +
+    "User Rules are already written into the prompt by the Worker; the SDK also loads project and user setting layers."
   );
 }
 
@@ -105,7 +105,7 @@ function readMetaCount(text: string, key: string): number | undefined {
 }
 
 function formatCount(value: number | undefined): string {
-  return value == null || !Number.isFinite(value) ? "若干" : `${value} 个`;
+  return value == null || !Number.isFinite(value) ? "several" : `${value}`;
 }
 
 function normalizeFsPath(value: string): string {

@@ -76,7 +76,7 @@ export function formatSessionTokenLog(
 ): string {
   const usage = toDashboardTokenUsage(raw);
   return (
-    `本会话 token：input=${usage.inputTokens} output=${usage.outputTokens}` +
+    `session tokens: input=${usage.inputTokens} output=${usage.outputTokens}` +
     ` cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens}` +
     ` total=${usage.totalTokens}` +
     (diagnostics

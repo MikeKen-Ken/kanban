@@ -93,6 +93,17 @@ void main() {
     expect(progress.phaseLabel, 'Complete');
   });
 
+  test('English batch completion logs update the processed count', () {
+    var progress = const AgentDispatchProgress(running: true, totalCards: 4);
+    progress = applyWorkerProgressLog(
+      progress,
+      'Worker batch completed: Batch limit reached; processed 3 card(s)',
+    );
+
+    expect(progress.processedCards, 3);
+    expect(progress.phaseLabel, 'Complete');
+  });
+
   test('已处理张数参与实时分母，完成后不会把 4/10 收成 4/7', () {
     const progress = AgentDispatchProgress(
       running: true,
@@ -340,5 +351,38 @@ void main() {
       progress.cardElapsedSeconds(now: started.add(const Duration(minutes: 5))),
       3 * 60,
     );
+  });
+
+  test('English Worker logs update round, title, and completion phase', () {
+    var progress = const AgentDispatchProgress(
+      running: true,
+      totalCards: 2,
+      cardLimitMax: true,
+    );
+    progress = applyWorkerProgressLog(
+      progress,
+      '──────── Worker card round 1/2 ────────',
+    );
+    expect(progress.currentRound, 1);
+    progress =
+        applyWorkerProgressLog(progress, 'Current card: Translate scripts');
+    expect(progress.currentTitle, 'Translate scripts');
+    progress = applyWorkerProgressLog(
+      progress,
+      'Worker is processing the current card',
+    );
+    expect(progress.phaseLabel, 'Implement');
+    progress = applyWorkerProgressLog(
+      progress,
+      'Card abc was validated, committed, and submitted for manual verification',
+    );
+    expect(progress.processedCards, 1);
+    expect(progress.phaseLabel, 'Submit');
+    progress = applyWorkerProgressLog(
+      progress,
+      'Card override: engine=cursor model=composer-2.5 params=[] cardId=abc',
+    );
+    expect(progress.engine, 'cursor');
+    expect(progress.model, 'composer-2.5');
   });
 }

@@ -16,6 +16,6 @@ export const ALWAYS_APPLY_USER_RULE_CANARY =
   "KANBAN_DISPATCH_ALWAYS_APPLY_CANARY_E91C";
 
 export function wrapWorkerUserRules(text: string): string {
-  const body = text.trim() || "未发现用户 ~/.cursor/rules。";
+  const body = text.trim() || "No user ~/.cursor/rules found.";
   return [WORKER_USER_RULES_BEGIN, body, WORKER_USER_RULES_END].join("\n");
 }

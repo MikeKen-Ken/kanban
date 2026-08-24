@@ -32,7 +32,7 @@ export class CursorThinkingStream {
 
   notePromptSent(): void {
     this.write(
-      "已发送任务，正在等待模型思考流。完整思考步骤要等这段思考结束后才到达，中间空白不代表空闲。",
+      "Task sent; waiting for the model thinking stream. Full thinking steps arrive after this block completes; a blank gap in between does not mean idle.",
       "worker",
     );
   }
@@ -67,7 +67,7 @@ export class CursorThinkingStream {
       this.blockComplete = true;
       const ms = record.thinkingDurationMs;
       if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0) {
-        this.write(`思考完成（${Math.round(ms / 1000)} 秒）`, "ai");
+        this.write(`Thinking done (${Math.round(ms / 1000)}s)`, "ai");
       }
     }
   }
@@ -162,7 +162,7 @@ export class CursorThinkingStream {
     this.streamed = true;
     for (const line of lines) {
       if (!this.startedBlock) {
-        this.write(`思考：${line}`, "ai");
+        this.write(`Thinking: ${line}`, "ai");
         this.startedBlock = true;
       } else {
         this.write(`  │ ${line}`, "ai");

@@ -19,7 +19,7 @@ describe("worker_glob_policy", () => {
     });
     assert.equal(result.allow, false);
     if (!result.allow) {
-      assert.match(result.reason, /无界 glob/);
+      assert.match(result.reason, /unbounded-glob/);
     }
   });
 
@@ -73,9 +73,9 @@ describe("worker_glob_policy", () => {
     assert.equal(isUnboundedGlobPattern("**/*attachment*"), false);
     assert.equal(isGlobToolName("Glob"), true);
     assert.equal(isGlobToolName("Read"), false);
-    assert.match(DISPATCH_SEARCH_POLICY, /当前选定仓库/);
-    assert.match(DISPATCH_SEARCH_POLICY, /项目规则/);
-    assert.match(DISPATCH_SEARCH_POLICY, /确认每个目录存在/);
+    assert.match(DISPATCH_SEARCH_POLICY, /currently selected repository/);
+    assert.match(DISPATCH_SEARCH_POLICY, /project rules/);
+    assert.match(DISPATCH_SEARCH_POLICY, /confirm each directory exists/);
     assert.match(DISPATCH_SEARCH_POLICY, /rg --fixed-strings/);
     assert.equal(DISPATCH_SEARCH_POLICY.includes("features/kanban"), false);
     assert.equal(DISPATCH_SEARCH_POLICY.includes("agent_dispatch/"), false);

@@ -3,6 +3,23 @@ import { describe, it } from "node:test";
 import { buildConversationTranscript } from "./conversation_transcript.ts";
 
 describe("conversation_transcript", () => {
+  it("strips English Worker-injected prompt blobs", () => {
+    const messages = buildConversationTranscript({
+      sessionUser: "- title",
+      fromTurns: [
+        {
+          role: "user",
+          text: "# Skill body\nfull prompt",
+        },
+        { role: "assistant", text: "Locate the write path first." },
+      ],
+    });
+    assert.deepEqual(messages, [
+      { role: "user", text: "- title" },
+      { role: "assistant", text: "Locate the write path first." },
+    ]);
+  });
+
   it("保留会话用户消息，并写入每一条助手正文", () => {
     const messages = buildConversationTranscript({
       sessionUser: "- 标题\n- 描述",

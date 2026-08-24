@@ -52,7 +52,7 @@ describe("verification_runner", () => {
     assert.equal(filled[1]?.passed, false);
     assert.equal(filled[1]?.exitCode, -1);
     assert.equal(filled[1]?.cwd, "src");
-    assert.equal(filled[1]?.output, "因前序验证失败未执行");
+    assert.equal(filled[1]?.output, "Skipped because a previous validation failed");
   });
 
   it("超时命令会被终止并标记 124", async () => {
@@ -82,7 +82,7 @@ describe("verification_runner", () => {
 
     assert.equal(result.passed, false);
     assert.equal(result.exitCode, -1);
-    assert.match(result.output, /逃出仓库/);
+    assert.match(result.output, /escaped the repository/);
   });
 
   it("args 不经过 shell 展开", async () => {
@@ -111,9 +111,9 @@ describe("verification_runner", () => {
 
     assert.equal(result.passed, false);
     assert.equal(result.exitCode, -1);
-    assert.match(result.output, /未找到可执行文件 kanban-definitely-missing-binary/);
+    assert.match(result.output, /Executable kanban-definitely-missing-binary was not found/);
     assert.match(result.output, /ENOENT/);
-    assert.match(result.output, /看板进程的 PATH/);
+    assert.match(result.output, /Kanban process PATH/);
   });
 
   it("timeout 会钳制 Worker 上限", () => {
@@ -133,7 +133,7 @@ describe("verification_runner", () => {
         timedOut: false,
         passed: false,
       }),
-      "验证命令失败（exitCode=-1）：flutter test targeted.dart；spawn flutter ENOENT",
+      "Verification command failed (exitCode=-1): flutter test targeted.dart; spawn flutter ENOENT",
     );
   });
 
@@ -151,7 +151,7 @@ describe("verification_runner", () => {
         timedOut: false,
         passed: false,
       }),
-      "验证命令失败（exitCode=1）：flutter analyze；44 issues found. (ran in 72.7s)",
+      "Verification command failed (exitCode=1): flutter analyze; 44 issues found. (ran in 72.7s)",
     );
   });
 });

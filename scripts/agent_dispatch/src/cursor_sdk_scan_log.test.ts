@@ -19,7 +19,7 @@ describe("parseCursorSdkScanLog", () => {
     });
     assert.match(
       formatCursorSdkScanNote(scan!),
-      /SDK 扫描 Skill：24 个.*触发条件选择.*不会将全部 Skill 正文同时注入/,
+      /SDK scanned Skills: 24.*select by trigger.*does not inject every Skill body/,
     );
   });
 
@@ -30,7 +30,7 @@ describe("parseCursorSdkScanLog", () => {
     assert.deepEqual(scan, { kind: "rules", ruleCount: 13 });
     assert.match(
       formatCursorSdkScanNote(scan!),
-      /SDK 扫描 Rule：13 个.*用户 Rule 已由 Worker 写入 prompt/,
+      /SDK scanned Rules: 13.*User Rules are already written into the prompt/,
     );
   });
 
@@ -78,6 +78,6 @@ describe("createCursorSdkScanLogBuffer", () => {
     assert.deepEqual(notes, []);
     buffer.push("meta={skillCount: 24}\n");
     assert.equal(notes.length, 1);
-    assert.match(notes[0] ?? "", /SDK 扫描 Skill：24 个/);
+    assert.match(notes[0] ?? "", /SDK scanned Skills: 24/);
   });
 });

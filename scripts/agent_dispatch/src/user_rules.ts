@@ -28,7 +28,7 @@ export function readUserCursorRules(
     const content = readFileSync(path, "utf8");
     bytes += Buffer.byteLength(content, "utf8");
     sections.push(
-      [`## 用户 Rule：${relative(root, path).replaceAll("\\", "/")}`, "", content]
+      [`## User rule: ${relative(root, path).replaceAll("\\", "/")}`, "", content]
         .join("\n"),
     );
   }

@@ -153,7 +153,7 @@ export function toShellSpanReportPayload(input: {
     phase !== "start" && phase !== "end" ? "phase" : "",
   ].filter(Boolean);
   if (missing.length > 0) {
-    throw new Error(`上报 Shell 时间线缺少 ${missing.join("、")}`);
+    throw new Error(`Shell timeline report is missing ${missing.join(", ")}`);
   }
   return {
     workerToken,

@@ -27,7 +27,7 @@ describe("verification_ready_gate", () => {
     };
     assert.equal(shellEffectiveEndMs(span), 1_000 + 13_639);
     const blocked = readyBlockedByShells([span], 1_000 + 1_845);
-    assert.match(blocked ?? "", /仍在执行/);
+    assert.match(blocked ?? "", /still running/);
     assert.equal(readyBlockedByShells([span], 1_000 + 13_639), undefined);
   });
 
@@ -102,7 +102,7 @@ describe("verification_ready_gate", () => {
       ],
       1_000,
     );
-    assert.match(blocked ?? "", /耗时过短/);
+    assert.match(blocked ?? "", /implausibly quickly/);
   });
 
   it("无 executionTime 的秒退 flutter test 也拒绝", () => {
@@ -157,7 +157,7 @@ describe("verification_ready_gate", () => {
       ],
       1_000 + 5_000,
     );
-    assert.match(blocked ?? "", /仍在执行/);
+    assert.match(blocked ?? "", /still running/);
   });
 });
 
@@ -206,7 +206,7 @@ describe("CursorShellSpanEmitter", () => {
     assert.match(
       readyBlockedByShells(emitter.snapshot(), emitter.lastReadyStartedAtMs() ?? 0) ??
         "",
-      /仍在执行/,
+      /still running/,
     );
   });
 

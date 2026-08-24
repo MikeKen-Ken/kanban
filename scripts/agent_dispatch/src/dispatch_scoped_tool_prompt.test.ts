@@ -16,20 +16,20 @@ describe("dispatch_scoped_tool_prompt", () => {
 
   it("注入 cardId 并禁止再发现 schema", () => {
     const text = formatScopedKanbanToolPrompt("card-z");
-    assert.match(text, /禁止 `GetMcpTools`/);
+    assert.match(text, /Do not call `GetMcpTools`/);
     assert.match(text, /card-z/);
     assert.match(text, /ready_to_submit/);
     assert.match(text, /CallMcpTool/);
-    assert.match(text, /不要与 Shell 并行|禁止把 ready_to_submit 与 Shell/);
-    assert.match(text, /立即停止一切工具/);
+    assert.match(text, /Do not put ready_to_submit in the same parallel tool batch as Shell/);
+    assert.match(text, /stop all tools/);
     assert.match(text, /cardKind=consultation/);
-    assert.match(text, /working_directory 必须与命令里的相对路径一致/);
+    assert.match(text, /working_directory must match relative paths in the command/);
   });
 
   it("本卡关闭测试时注入跳过自动化测试与声明原因", () => {
     const text = formatScopedKanbanToolPrompt("card-z", false);
-    assert.match(text, /本卡已配置为无需测试/);
-    assert.match(text, /manualVerificationReason=本卡已配置无需测试/);
-    assert.doesNotMatch(text, /必须等测试命令返回 exitCode=0/);
+    assert.match(text, /configured not to require tests/);
+    assert.match(text, /manualVerificationReason=This card has no test switch enabled/);
+    assert.doesNotMatch(text, /Wait until the test command returns exitCode=0/);
   });
 });

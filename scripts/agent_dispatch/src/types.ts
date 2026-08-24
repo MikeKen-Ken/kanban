@@ -280,7 +280,7 @@ export function contextCatalogParameter(): {
 } {
   return {
     id: "context",
-    displayName: "上下文",
+    displayName: "Context",
     values: DEFAULT_CONTEXT_VALUES.map((value) => ({
       value,
       displayName: value,
@@ -298,7 +298,7 @@ export function ensureContextParameter<T extends CatalogParameter>(
     ...parameters,
     {
       id: "context",
-      displayName: "上下文",
+      displayName: "Context",
       values: [...DEFAULT_CONTEXT_VALUES],
     } as T,
   ];

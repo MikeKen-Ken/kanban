@@ -63,7 +63,7 @@ url = "http://127.0.0.1:18765/mcp"
         "utf8",
       );
       assert.equal(auth, '{"ok":true}');
-      assert.match(agents, /本会话覆盖/);
+      assert.match(agents, /This-session override/);
       assert.match(agents, /# 用户指令/);
       assert.equal(agents.includes("MUST 先阅读"), false);
       assert.equal(
