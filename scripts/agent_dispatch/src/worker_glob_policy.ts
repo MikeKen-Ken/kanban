@@ -7,7 +7,7 @@ export const DISPATCH_SEARCH_POLICY = `## 搜索范围（Worker）
 MUST NOT 对仓库根做无界 glob（\`**\`、\`**/*\`、\`**/*.*\`）。
 MUST NOT 把无界 glob 与 grep 并行；grep 已返回候选文件时直接读那些路径。
 MUST NOT 把 glob 目标指到 \`.git\`、\`.svn\` 或 \`build\`。
-卡片里的界面入口按产品表面落到功能目录：看板卡片详情（含文件附件三个点菜单）在 \`app/lib/features/kanban/\`；Agent 调度窗口本身才在 \`agent_dispatch/\`。不要把「工作台」默认理解成必须先搜调度目录。
+界面或功能入口必须从当前选定仓库的目录结构、项目规则和卡片中给出的具体线索定位；不要假定框架、源码根目录或任何产品专属路径。卡片未给出路径时，先有限地查看仓库一级目录和项目说明，再在候选子目录内定向搜索。
 `;
 
 const UNBOUNDED_PATTERNS = new Set(["**", "**/*", "**/*.*", "**/**"]);

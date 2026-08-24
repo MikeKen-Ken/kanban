@@ -68,12 +68,15 @@ describe("worker_glob_policy", () => {
     );
   });
 
-  it("识别无界模式与 glob 工具名", () => {
+  it("识别无界模式与 glob 工具名，并保持搜索提示跨仓库通用", () => {
     assert.equal(isUnboundedGlobPattern("**/*"), true);
     assert.equal(isUnboundedGlobPattern("**/*attachment*"), false);
     assert.equal(isGlobToolName("Glob"), true);
     assert.equal(isGlobToolName("Read"), false);
-    assert.match(DISPATCH_SEARCH_POLICY, /features\/kanban/);
+    assert.match(DISPATCH_SEARCH_POLICY, /当前选定仓库/);
+    assert.match(DISPATCH_SEARCH_POLICY, /项目规则/);
+    assert.equal(DISPATCH_SEARCH_POLICY.includes("features/kanban"), false);
+    assert.equal(DISPATCH_SEARCH_POLICY.includes("agent_dispatch/"), false);
   });
 
   it("从 hook JSON 抽出 glob 参数", () => {

@@ -61,7 +61,9 @@ describe("session_context", () => {
       assert.match(context.prompt, /开发前必读 Architecture\.md/);
       assert.match(context.prompt, /MUST NOT 对仓库根做无界 glob/);
       assert.match(context.prompt, /\.svn/);
-      assert.match(context.prompt, /features\/kanban/);
+      assert.match(context.prompt, /当前选定仓库的目录结构/);
+      assert.equal(context.prompt.includes('features/kanban'), false);
+      assert.equal(context.prompt.includes('agent_dispatch/'), false);
       assert.match(context.prompt, /cardKind/);
       assert.match(context.prompt, /一律为实施卡|否则为实施卡/);
       assert.equal(
