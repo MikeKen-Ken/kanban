@@ -1019,7 +1019,7 @@ function recordsFromCodexItem(eventType, item) {
       return recordsFromCommand(
         eventType,
         item,
-        commandExecutionFailed(eventType, item, status)
+        commandExecutionOutcome(eventType, item, status)
       );
     case "file_change":
       if (eventType !== "item.completed") return [];
@@ -1044,22 +1044,39 @@ function recordsFromCodexItem(eventType, item) {
       return [];
   }
 }
-function commandExecutionFailed(eventType, item, status) {
-  if (eventType === "item.failed") return true;
+function commandExecutionOutcome(eventType, item, status) {
+  if (eventType === "item.failed") return "failed";
   const exitCode = item.exit_code;
   if (typeof exitCode === "number" && Number.isFinite(exitCode)) {
-    return exitCode !== 0;
+    if (exitCode === 0) return "success";
+    if (isRipgrepCommand(pickString(item, "command"))) {
+      return exitCode === 1 ? "no_match" : "search_issue";
+    }
+    return "failed";
   }
-  return status === "failed";
+  return status === "failed" ? "failed" : "success";
 }
-function recordsFromCommand(eventType, item, failed) {
+function recordsFromCommand(eventType, item, outcome) {
   const command = pickString(item, "command");
   if (eventType === "item.started") {
     return command ? toRecords(expandMultiline("\u547D\u4EE4\uFF1A", command), "shell") : [];
   }
   if (eventType !== "item.completed") return [];
   const records = [];
-  if (command && failed) {
+  const failed = outcome === "failed";
+  const searchIssue = outcome === "search_issue";
+  if (command && outcome === "no_match") {
+    records.push({
+      line: `\u641C\u7D22\u65E0\u5339\u914D\uFF1A${clip(command, JSON_CLIP)}`,
+      source: "shell"
+    });
+  } else if (command && searchIssue) {
+    records.push({
+      line: `\u641C\u7D22\u547D\u4EE4\u95EE\u9898\uFF08\u672A\u4E2D\u65AD\u4EFB\u52A1\uFF09\uFF1A${clip(command, JSON_CLIP)}`,
+      source: "shell",
+      level: "warning"
+    });
+  } else if (command && failed) {
     records.push({
       line: `\u547D\u4EE4\u5931\u8D25\uFF1A${clip(command, JSON_CLIP)}`,
       source: "shell",
@@ -1067,13 +1084,20 @@ function recordsFromCommand(eventType, item, failed) {
     });
   }
   const output = pickString(item, "aggregated_output");
-  if (failed && output.trim()) {
+  if ((failed || searchIssue) && output.trim()) {
     records.push(
-      ...toRecords(expandMultiline("\u547D\u4EE4\u8F93\u51FA\uFF1A", clip(output, OUTPUT_CLIP)), "shell", "error")
+      ...toRecords(
+        expandMultiline("\u547D\u4EE4\u8F93\u51FA\uFF1A", clip(output, OUTPUT_CLIP)),
+        "shell",
+        failed ? "error" : "warning"
+      )
     );
   }
   records.push(...diagnosticRecordsFromOutput(output, "shell"));
   return records;
+}
+function isRipgrepCommand(command) {
+  return /(?:^|[\s;&|"'])rg(?:\.exe)?(?:\s|$)/i.test(command);
 }
 function recordsFromFileChange(item, failed) {
   const changes = Array.isArray(item.changes) ? item.changes : [];
@@ -3662,7 +3686,7 @@ var DISPATCH_SEARCH_POLICY = `## \u641C\u7D22\u8303\u56F4\uFF08Worker\uFF09
 MUST NOT \u5BF9\u4ED3\u5E93\u6839\u505A\u65E0\u754C glob\uFF08\`**\`\u3001\`**/*\`\u3001\`**/*.*\`\uFF09\u3002
 MUST NOT \u628A\u65E0\u754C glob \u4E0E grep \u5E76\u884C\uFF1Bgrep \u5DF2\u8FD4\u56DE\u5019\u9009\u6587\u4EF6\u65F6\u76F4\u63A5\u8BFB\u90A3\u4E9B\u8DEF\u5F84\u3002
 MUST NOT \u628A glob \u76EE\u6807\u6307\u5230 \`.git\`\u3001\`.svn\` \u6216 \`build\`\u3002
-\u754C\u9762\u6216\u529F\u80FD\u5165\u53E3\u5FC5\u987B\u4ECE\u5F53\u524D\u9009\u5B9A\u4ED3\u5E93\u7684\u76EE\u5F55\u7ED3\u6784\u3001\u9879\u76EE\u89C4\u5219\u548C\u5361\u7247\u4E2D\u7ED9\u51FA\u7684\u5177\u4F53\u7EBF\u7D22\u5B9A\u4F4D\uFF1B\u4E0D\u8981\u5047\u5B9A\u6846\u67B6\u3001\u6E90\u7801\u6839\u76EE\u5F55\u6216\u4EFB\u4F55\u4EA7\u54C1\u4E13\u5C5E\u8DEF\u5F84\u3002\u5361\u7247\u672A\u7ED9\u51FA\u8DEF\u5F84\u65F6\uFF0C\u5148\u6709\u9650\u5730\u67E5\u770B\u4ED3\u5E93\u4E00\u7EA7\u76EE\u5F55\u548C\u9879\u76EE\u8BF4\u660E\uFF0C\u518D\u5728\u5019\u9009\u5B50\u76EE\u5F55\u5185\u5B9A\u5411\u641C\u7D22\u3002
+\u754C\u9762\u6216\u529F\u80FD\u5165\u53E3\u5FC5\u987B\u4ECE\u5F53\u524D\u9009\u5B9A\u4ED3\u5E93\u7684\u76EE\u5F55\u7ED3\u6784\u3001\u9879\u76EE\u89C4\u5219\u548C\u5361\u7247\u4E2D\u7ED9\u51FA\u7684\u5177\u4F53\u7EBF\u7D22\u5B9A\u4F4D\uFF1B\u4E0D\u8981\u5047\u5B9A\u6846\u67B6\u3001\u6E90\u7801\u6839\u76EE\u5F55\u6216\u4EFB\u4F55\u4EA7\u54C1\u4E13\u5C5E\u8DEF\u5F84\u3002\u5361\u7247\u672A\u7ED9\u51FA\u8DEF\u5F84\u65F6\uFF0C\u5148\u6709\u9650\u5730\u67E5\u770B\u4ED3\u5E93\u4E00\u7EA7\u76EE\u5F55\u548C\u9879\u76EE\u8BF4\u660E\uFF0C\u518D\u5728\u5019\u9009\u5B50\u76EE\u5F55\u5185\u5B9A\u5411\u641C\u7D22\u3002\u641C\u7D22\u591A\u4E2A\u76EE\u5F55\u524D\u5FC5\u987B\u5148\u786E\u8BA4\u6BCF\u4E2A\u76EE\u5F55\u5B58\u5728\uFF1B\u4E0D\u8981\u628A\u4E0D\u5B58\u5728\u7684\u5019\u9009\u76EE\u5F55\u4F20\u7ED9 \`rg\`\u3002\u67E5\u627E\u542B\u5F15\u53F7\u3001\u62EC\u53F7\u6216\u5176\u5B83\u6807\u70B9\u7684\u5B57\u9762\u91CF\u65F6\u4F18\u5148\u4F7F\u7528 \`rg --fixed-strings -- <text> <confirmed-path>\`\uFF0C\u53EA\u6709\u786E\u5B9E\u9700\u8981\u6A21\u5F0F\u5339\u914D\u65F6\u624D\u5199\u6B63\u5219\u3002
 `;
 
 // src/session_context.ts

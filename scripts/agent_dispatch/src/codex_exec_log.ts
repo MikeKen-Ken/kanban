@@ -148,7 +148,7 @@ function recordsFromCodexItem(
       return recordsFromCommand(
         eventType,
         item,
-        commandExecutionFailed(eventType, item, status),
+        commandExecutionOutcome(eventType, item, status),
       );
     case "file_change":
       if (eventType !== "item.completed") return [];
@@ -176,23 +176,30 @@ function recordsFromCodexItem(
   }
 }
 
-function commandExecutionFailed(
+type CommandExecutionOutcome = "success" | "no_match" | "search_issue" | "failed";
+
+function commandExecutionOutcome(
   eventType: string,
   item: Record<string, unknown>,
   status: string,
-): boolean {
-  if (eventType === "item.failed") return true;
+): CommandExecutionOutcome {
+  if (eventType === "item.failed") return "failed";
   const exitCode = item.exit_code;
   if (typeof exitCode === "number" && Number.isFinite(exitCode)) {
-    return exitCode !== 0;
+    if (exitCode === 0) return "success";
+    if (isRipgrepCommand(pickString(item, "command"))) {
+      // rg uses 1 for a normal no-match result and 2 for a bad path/regex.
+      return exitCode === 1 ? "no_match" : "search_issue";
+    }
+    return "failed";
   }
-  return status === "failed";
+  return status === "failed" ? "failed" : "success";
 }
 
 function recordsFromCommand(
   eventType: string,
   item: Record<string, unknown>,
-  failed: boolean,
+  outcome: CommandExecutionOutcome,
 ): WorkerLogRecord[] {
   const command = pickString(item, "command");
   if (eventType === "item.started") {
@@ -200,7 +207,20 @@ function recordsFromCommand(
   }
   if (eventType !== "item.completed") return [];
   const records: WorkerLogRecord[] = [];
-  if (command && failed) {
+  const failed = outcome === "failed";
+  const searchIssue = outcome === "search_issue";
+  if (command && outcome === "no_match") {
+    records.push({
+      line: `搜索无匹配：${clip(command, JSON_CLIP)}`,
+      source: "shell",
+    });
+  } else if (command && searchIssue) {
+    records.push({
+      line: `搜索命令问题（未中断任务）：${clip(command, JSON_CLIP)}`,
+      source: "shell",
+      level: "warning",
+    });
+  } else if (command && failed) {
     records.push({
       line: `命令失败：${clip(command, JSON_CLIP)}`,
       source: "shell",
@@ -208,13 +228,21 @@ function recordsFromCommand(
     });
   }
   const output = pickString(item, "aggregated_output");
-  if (failed && output.trim()) {
+  if ((failed || searchIssue) && output.trim()) {
     records.push(
-      ...toRecords(expandMultiline("命令输出：", clip(output, OUTPUT_CLIP)), "shell", "error"),
+      ...toRecords(
+        expandMultiline("命令输出：", clip(output, OUTPUT_CLIP)),
+        "shell",
+        failed ? "error" : "warning",
+      ),
     );
   }
   records.push(...diagnosticRecordsFromOutput(output, "shell"));
   return records;
+}
+
+function isRipgrepCommand(command: string): boolean {
+  return /(?:^|[\s;&|"'])rg(?:\.exe)?(?:\s|$)/i.test(command);
 }
 
 function recordsFromFileChange(

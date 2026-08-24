@@ -152,6 +152,39 @@ describe("recordsFromCodexEvent", () => {
     );
   });
 
+  it("rg 无匹配与搜索语法问题不会被标成任务错误", () => {
+    const noMatch = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command: "rg --fixed-strings -- title app/src",
+        status: "failed",
+        exit_code: 1,
+      },
+    });
+    assert.deepEqual(noMatch, [
+      {
+        line: "搜索无匹配：rg --fixed-strings -- title app/src",
+        source: "shell",
+        level: "info",
+      },
+    ]);
+
+    const badSearch = recordsFromCodexEvent({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command: "rg \"(unclosed\" app/src",
+        status: "failed",
+        exit_code: 2,
+        aggregated_output: "rg: regex parse error: unclosed group",
+      },
+    });
+    assert.equal(badSearch[0]?.level, "warning");
+    assert.match(badSearch[0]?.line ?? "", /搜索命令问题/);
+    assert.equal(badSearch.some((record) => record.level === "error"), false);
+  });
+
   it("MCP 调用按工具来源记录，失败才升级为错误", () => {
     const started = recordsFromCodexEvent({
       type: "item.started",
