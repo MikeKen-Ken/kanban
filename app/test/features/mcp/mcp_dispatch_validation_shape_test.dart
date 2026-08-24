@@ -27,11 +27,11 @@ void main() {
   test('拒绝 Worker 上报命令结果', () {
     expect(
       dispatchValidationShapeError(isManual: false, results: [_result()]),
-      '验证已改由 Agent 会话内完成，Worker 不应上报命令结果',
+      'Verification now runs in the Agent session; the Worker must not report command results',
     );
     expect(
       dispatchValidationShapeError(isManual: true, results: [_result()]),
-      '人工验证声明不应附带命令结果',
+      'A manual verification declaration must not include command results',
     );
   });
 }

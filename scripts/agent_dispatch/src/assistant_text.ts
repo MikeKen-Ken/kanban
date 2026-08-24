@@ -1,4 +1,4 @@
-/** 从 Cursor 步骤或 Codex 事件里抽出面向用户的助手正文。 */
+/** Extract user-facing assistant text from Cursor steps or Codex events. */
 export function extractAssistantText(value: unknown): string {
   const chunks: string[] = [];
   collectText(value, chunks, 0);

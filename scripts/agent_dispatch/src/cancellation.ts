@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 
 export class WorkerCancelledError extends Error {
-  constructor(message = "已取消") {
+  constructor(message = "Cancelled") {
     super(message);
     this.name = "WorkerCancelledError";
   }
@@ -9,12 +9,12 @@ export class WorkerCancelledError extends Error {
 
 type CancelCallback = () => void | Promise<void>;
 
-/** Worker 批次取消：SIGTERM/SIGINT、cancelFile 轮询与活动会话回调。 */
+/** Batch cancel: SIGTERM/SIGINT, cancel-file polling, and active-session callbacks. */
 export class WorkerCancellation {
   private cancelled = false;
   private drainAfterCurrent = false;
   private skipRequested = false;
-  private reason = "已取消";
+  private reason = "Cancelled";
   private readonly callbacks = new Set<CancelCallback>();
   private cancelFileTimer: NodeJS.Timeout | undefined;
   private drainFileTimer: NodeJS.Timeout | undefined;
@@ -25,7 +25,7 @@ export class WorkerCancellation {
     const check = (): void => {
       if (this.cancelled) return;
       try {
-        if (existsSync(path)) this.cancel("已取消");
+        if (existsSync(path)) this.cancel("Cancelled");
       } catch {
         // ignore
       }
@@ -67,7 +67,7 @@ export class WorkerCancellation {
     if (this.signalInstalled) return;
     this.signalInstalled = true;
     const onSignal = (): void => {
-      this.cancel("已取消");
+      this.cancel("Cancelled");
     };
     process.once("SIGTERM", onSignal);
     process.once("SIGINT", onSignal);
@@ -90,7 +90,7 @@ export class WorkerCancellation {
     this.drainAfterCurrent = true;
   }
 
-  /** 跳过当前 Skill 会话并继续批次下一张；不标记整批取消。 */
+  /** Skip the current Skill session and continue the batch; do not mark the whole batch cancelled. */
   requestSkipCurrentSession(): void {
     if (this.cancelled || this.skipRequested) return;
     this.skipRequested = true;
@@ -108,7 +108,7 @@ export class WorkerCancellation {
     if (this.cancelled) void this.invoke(callback);
   }
 
-  cancel(reason = "已取消"): void {
+  cancel(reason = "Cancelled"): void {
     if (this.cancelled) return;
     this.cancelled = true;
     this.reason = reason;

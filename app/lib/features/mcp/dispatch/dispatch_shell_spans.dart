@@ -148,22 +148,22 @@ String? dispatchReadyBlockedByShells(
   }
   if (lastVerification == null) return null;
   if (nowMs < lastEndMs) {
-    return '验证命令仍在执行：${_clip(lastVerification.command)}。'
-        '请等待测试完成后再调用 ready_to_submit，不要与 Shell 并行。';
+    return 'The verification command is still running: ${_clip(lastVerification.command)}. '
+        'Wait for the test to finish before calling ready_to_submit; do not run it in parallel with the Shell command.';
   }
   final code = lastVerification.exitCode;
   if (code != null && code != 0) {
     final hint = commandLooksLikeCdAndChain(lastVerification.command)
-        ? 'PowerShell 5.1 不支持 &&；请用 working_directory，不要写 cd ... &&。'
-        : '请修复后重跑测试，再调用 ready_to_submit。';
-    return '验证命令失败（exitCode=$code）：${_clip(lastVerification.command)}。$hint';
+        ? 'PowerShell 5.1 does not support &&. Use working_directory instead of cd ... &&.'
+        : 'Fix the issue, rerun the test, and then call ready_to_submit.';
+    return 'The verification command failed (exitCode=$code): ${_clip(lastVerification.command)}. $hint';
   }
   if (isImplausiblyShortSuccessfulTest(lastVerification)) {
     final duration = dispatchShellObservedDurationMs(lastVerification);
-    return '验证命令耗时过短（${duration}ms），不像真正跑完测试：'
-        '${_clip(lastVerification.command)}。'
-        '请确认 working_directory 与相对路径一致，'
-        '并等到 flutter test / dart test 实际结束后再 ready_to_submit。';
+    return 'The verification command finished implausibly quickly (${duration}ms): '
+        '${_clip(lastVerification.command)}. Confirm that working_directory matches '
+        'the relative paths, and wait for flutter test / dart test to finish before '
+        'calling ready_to_submit.';
   }
   return null;
 }

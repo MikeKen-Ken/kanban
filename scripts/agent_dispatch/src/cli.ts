@@ -15,9 +15,9 @@ import { type DispatchJob, type DispatchResult } from "./types.ts";
 function formatListModelsError(err: unknown): string {
   if (err && typeof err === "object" && "message" in err) {
     const message = String((err as { message?: unknown }).message).trim();
-    if (message) return `Cursor.models.list 失败：${message}`;
+    if (message) return `Cursor.models.list failed: ${message}`;
   }
-  return `Cursor.models.list 失败：${String(err)}`;
+  return `Cursor.models.list failed: ${String(err)}`;
 }
 
 function writeResult(outPath: string, result: DispatchResult): void {
@@ -56,26 +56,26 @@ async function listModels(engine: "cursor" | "codex"): Promise<void> {
       const models = await listCodexModels(resolveCodexCommand());
       process.stdout.write(`${JSON.stringify({ models })}\n`);
     } catch (err) {
-      console.error(`Codex model/list 失败：${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Codex model/list failed: ${err instanceof Error ? err.message : String(err)}`);
       process.exitCode = 2;
     }
     return;
   }
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
-    console.error("缺少 CURSOR_API_KEY");
+    console.error("Missing CURSOR_API_KEY");
     process.exitCode = 2;
     return;
   }
   let models;
   try {
     models = await withRetry(
-      "拉取模型列表",
+      "Fetch model list",
       () => Cursor.models.list({ apiKey }),
       {
         onRetry: ({ operation, attempt, maxAttempts, delayMs }) => {
           console.error(
-            `${operation} 失败（第 ${attempt}/${maxAttempts} 次），${delayMs}ms 后重试…`,
+            `${operation} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms…`,
           );
         },
       },
@@ -112,30 +112,30 @@ async function listModels(engine: "cursor" | "codex"): Promise<void> {
 async function runJob(jobPath: string): Promise<void> {
   const job = JSON.parse(readFileSync(jobPath, "utf8")) as DispatchJob;
   if (!job.outPath) {
-    throw new Error("job.outPath 必填");
+    throw new Error("job.outPath is required");
   }
   if (!job.cwd?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "cwd 不能为空" });
+    writeResult(job.outPath, { ok: false, error: "cwd cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!job.prompt?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "prompt 不能为空" });
+    writeResult(job.outPath, { ok: false, error: "prompt cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!job.mcpEndpoint?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "mcpEndpoint 不能为空" });
+    writeResult(job.outPath, { ok: false, error: "mcpEndpoint cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!job.workerToken?.trim()) {
-    writeResult(job.outPath, { ok: false, error: "workerToken 不能为空" });
+    writeResult(job.outPath, { ok: false, error: "workerToken cannot be empty" });
     process.exitCode = 2;
     return;
   }
   if (!Number.isFinite(job.cardLimit) || job.cardLimit < 1) {
-    writeResult(job.outPath, { ok: false, error: "cardLimit 必须大于 0" });
+    writeResult(job.outPath, { ok: false, error: "cardLimit must be greater than 0" });
     process.exitCode = 2;
     return;
   }
@@ -169,7 +169,7 @@ async function runJob(jobPath: string): Promise<void> {
   writeResult(job.outPath, result);
   const code = result.ok ? 0 : 2;
   process.exitCode = code;
-  // Cursor 本地运行时 / MCP SSE 可能留下未关闭句柄，仅设 exitCode 不会退出。
+  // Cursor \u672C\u5730\u8FD0\u884C\u65F6 / MCP SSE \u53EF\u80FD\u7559\u4E0B\u672A\u5173\u95ED\u53E5\u67C4，\u4EC5\u8BBE exitCode \u4E0D\u4F1A\u9000\u51FA。
   process.exit(code);
 }
 
@@ -189,7 +189,7 @@ async function main(): Promise<void> {
   const idx = argv.indexOf("--job");
   if (idx < 0 || !argv[idx + 1]) {
     throw new Error(
-      "用法: node cli.js --job <job.json> | --list-models | --usage",
+      "Usage: node cli.js --job <job.json> | --list-models | --usage",
     );
   }
   await runJob(resolve(argv[idx + 1]!));

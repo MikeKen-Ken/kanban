@@ -119,7 +119,7 @@ class McpDispatchCardGate {
       if (!slot.sessionOpen) continue;
       if (slot.pickedCardId == id) return null;
     }
-    return '只能对本轮 Worker claim 领取的卡片调用该工具';
+    return 'This tool can be called only for the card claimed in the current Worker round';
   }
 
   /// scoped 端点必须同时匹配 token 与 cardId。
@@ -128,8 +128,12 @@ class McpDispatchCardGate {
     required String cardId,
   }) {
     final slot = _slotsByToken[workerToken];
-    if (slot == null || !slot.sessionOpen) return '调度会话不存在或已关闭';
-    if (slot.pickedCardId != cardId.trim()) return '该工具只能操作本会话绑定的卡片';
+    if (slot == null || !slot.sessionOpen) {
+      return 'The dispatch session does not exist or is closed';
+    }
+    if (slot.pickedCardId != cardId.trim()) {
+      return 'This tool can operate only on the card bound to this session';
+    }
     return null;
   }
 
@@ -137,7 +141,7 @@ class McpDispatchCardGate {
   String? rejectFullMcpMutation(String cardId, {required String operation}) {
     final slot = _slotForPickedCard(cardId);
     if (slot == null) return null;
-    return '卡片正由 Agent 调度锁定，完整 MCP 不得调用 $operation；请使用本会话 scoped 工具';
+    return 'The card is locked by Agent Dispatch. The full MCP cannot call $operation; use the scoped tool for this session.';
   }
 
   String? projectIdForToken(String workerToken) =>

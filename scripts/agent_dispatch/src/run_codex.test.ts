@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { buildCodexExecArgs } from "./run_codex.ts";
 
 describe("buildCodexExecArgs", () => {
-  it("开启沙箱时使用 --approve-for-me 作为无人值守等价，不再叠加 --sandbox", () => {
+  it("\u5F00\u542F\u6C99\u7BB1\u65F6\u4F7F\u7528 --approve-for-me \u4F5C\u4E3A\u65E0\u4EBA\u503C\u5B88\u7B49\u4EF7，\u4E0D\u518D\u53E0\u52A0 --sandbox", () => {
     const args = buildCodexExecArgs({
       cwd: "C:\\repo",
       lastMessageFile: "last.txt",
@@ -40,7 +40,7 @@ describe("buildCodexExecArgs", () => {
     assert.deepEqual(args, expected);
   });
 
-  it("关闭沙箱时绕过 Codex 的自动审批沙箱", () => {
+  it("\u5173\u95ED\u6C99\u7BB1\u65F6\u7ED5\u8FC7 Codex \u7684\u81EA\u52A8\u5BA1\u6279\u6C99\u7BB1", () => {
     const args = buildCodexExecArgs({
       cwd: "C:\\repo",
       lastMessageFile: "last.txt",
@@ -51,7 +51,7 @@ describe("buildCodexExecArgs", () => {
     assert.equal(args.includes("--dangerously-bypass-approvals-and-sandbox"), true);
   });
 
-  it("无模型时不追加 -m", () => {
+  it("\u65E0\u6A21\u578B\u65F6\u4E0D\u8FFD\u52A0 -m", () => {
     const args = buildCodexExecArgs({
       cwd: "/tmp/repo",
       lastMessageFile: "last.txt",

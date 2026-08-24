@@ -1,5 +1,6 @@
 import {
   formatVerificationFailure,
+  isSkippedVerificationOutput,
   summarizeCommand,
   type VerificationCommand,
   type VerificationResult,
@@ -26,7 +27,7 @@ export function logVerificationResults(results: VerificationResult[]): void {
   for (let index = 0; index < results.length; index += 1) {
     const result = results[index]!;
     const ordinal = `${index + 1}/${results.length}`;
-    if (result.output.trim() === "因前序验证失败未执行") {
+    if (isSkippedVerificationOutput(result.output)) {
       workerLog(
         `Validation skipped ${ordinal}: ${result.commandSummary} (not run because a previous validation failed)`,
         "worker",

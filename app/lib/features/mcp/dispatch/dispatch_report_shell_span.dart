@@ -21,23 +21,25 @@ Future<CallToolResult> dispatchReportShellSpan({
   final id = normalizeDispatchCallId(callId);
   final cmd = command.trim();
   final step = phase.trim().toLowerCase();
-  if (token.isEmpty) return mcpErrorResult('workerToken 不能为空');
-  if (id.isEmpty) return mcpErrorResult('callId 不能为空');
+  if (token.isEmpty) return mcpErrorResult('workerToken cannot be empty');
+  if (id.isEmpty) return mcpErrorResult('callId cannot be empty');
   if (step != 'start' && step != 'end') {
-    return mcpErrorResult('phase 必须是 start 或 end');
+    return mcpErrorResult('phase must be start or end');
   }
   final dispatchGate = gate ?? McpDispatchCardGate.instance;
   final status = dispatchGate.sessionStatus(token);
   if (status == null || !status.sessionOpen) {
-    return mcpErrorResult('Worker token 无效或会话未开启');
+    return mcpErrorResult(
+        'The Worker token is invalid or the session is not open');
   }
   final boundSession = status.sessionId;
   if (boundSession == null || boundSession.isEmpty) {
-    return mcpErrorResult('调度会话缺少 sessionId');
+    return mcpErrorResult('The dispatch session is missing sessionId');
   }
   final requested = sessionId?.trim();
   if (requested != null && requested.isNotEmpty && requested != boundSession) {
-    return mcpErrorResult('sessionId 与当前 Worker 会话不一致');
+    return mcpErrorResult(
+        'sessionId does not match the current Worker session');
   }
   (store ?? DispatchShellSpanStore.instance).report(
     sessionId: boundSession,

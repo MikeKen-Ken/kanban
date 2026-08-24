@@ -6,7 +6,8 @@ import '../mcp_dispatch_card_gate.dart';
 import '../mcp_tool_results.dart';
 import 'dispatch_pending_store.dart';
 
-/// 记录本轮失败；[block] 为 true 时把已 claim 的卡片移入阻塞中。
+/// Record a failed round. When [block] is true, move the claimed card to the
+/// blocked column.
 Future<CallToolResult> dispatchFailOrBlock(
   BoardController controller, {
   required String workerToken,
@@ -24,7 +25,7 @@ Future<CallToolResult> dispatchFailOrBlock(
     if (status?.sessionId != sessionId ||
         status?.cardId == null ||
         status?.projectId == null) {
-      return mcpErrorResult('未找到该 Worker 的 pending 会话');
+      return mcpErrorResult('No pending session was found for this Worker');
     }
     record = DispatchPendingRecord(
       sessionId: sessionId,
@@ -46,7 +47,7 @@ Future<CallToolResult> dispatchFailOrBlock(
     projectId: record.projectId,
     repoPath: record.repoPath,
   )) {
-    return mcpErrorResult('未找到该 Worker 的 pending 会话');
+    return mcpErrorResult('No pending session was found for this Worker');
   }
   if (block) {
     final blocked = await mcpBlockCard(

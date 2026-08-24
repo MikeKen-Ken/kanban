@@ -509,8 +509,8 @@ function assertSessionMatches(
 function cardState(card: Record<string, unknown>): "verify" | "blocked" | "active" {
   const columnId = String(card.columnId ?? "");
   const columnName = String(card.columnName ?? "");
-  if (columnId === "verify" || columnName === "Verify" || columnName === "待验证") return "verify";
-  if (columnId === "blocked" || columnName === "Blocked" || columnName === "阻塞中") return "blocked";
+  if (columnId === "verify" || columnName === "Verify" || columnName === "\u5F85\u9A8C\u8BC1") return "verify";
+  if (columnId === "blocked" || columnName === "Blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
   return "active";
 }
 

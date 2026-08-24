@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { buildCodexProcessEnv } from "./codex_windows_env.ts";
 
 describe("codex_windows_env", () => {
-  it("在 Windows 上将 ComSpec 固定到系统 cmd.exe", () => {
+  it("\u5728 Windows \u4E0A\u5C06 ComSpec \u56FA\u5B9A\u5230\u7CFB\u7EDF cmd.exe", () => {
     if (process.platform !== "win32") return;
     const env = buildCodexProcessEnv({
       ComSpec: String.raw`C:\Users\me\AppData\Local\Microsoft\WindowsApps\pwsh.exe`,
@@ -16,7 +16,7 @@ describe("codex_windows_env", () => {
     assert.equal(env.CODEX_HOME, "preserved");
   });
 
-  it("在非 Windows 平台只复制环境变量", () => {
+  it("\u5728\u975E Windows \u5E73\u53F0\u53EA\u590D\u5236\u73AF\u5883\u53D8\u91CF", () => {
     if (process.platform === "win32") return;
     const env = buildCodexProcessEnv({ PATH: "preserved" });
     assert.deepEqual(env, { PATH: "preserved" });

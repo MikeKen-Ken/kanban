@@ -1,16 +1,17 @@
 import 'dispatch_pending_store.dart';
 
-/// 校验 Worker 上报的验证结果。
+/// Validate the verification result reported by the Worker.
 ///
-/// 测试已下放给 Agent 会话；Worker 只记账，结果必须为空。
+/// Tests run in the Agent session; the Worker only records the result, so the
+/// command-result list must be empty.
 String? dispatchValidationShapeError({
   required bool isManual,
   required List<DispatchValidationResult> results,
 }) {
   if (results.isNotEmpty) {
     return isManual
-        ? '人工验证声明不应附带命令结果'
-        : '验证已改由 Agent 会话内完成，Worker 不应上报命令结果';
+        ? 'A manual verification declaration must not include command results'
+        : 'Verification now runs in the Agent session; the Worker must not report command results';
   }
   return null;
 }

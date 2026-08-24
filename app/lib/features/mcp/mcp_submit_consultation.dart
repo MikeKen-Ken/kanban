@@ -24,7 +24,9 @@ Future<CallToolResult> mcpSubmitConsultation(
   String? projectId,
 }) async {
   final response = responseMarkdown.trim();
-  if (response.isEmpty) return mcpErrorResult('responseMarkdown 不能为空');
+  if (response.isEmpty) {
+    return mcpErrorResult('responseMarkdown cannot be empty');
+  }
 
   final located = await resolveMcpProjectIdForCard(
     controller,
@@ -38,10 +40,10 @@ Future<CallToolResult> mcpSubmitConsultation(
     final columnId = controller.findColumnIdForCard(cardId) ?? located.columnId;
     final card = controller.findCardById(cardId);
     if (columnId == null || card == null) {
-      return mcpErrorResult('未找到卡片：$cardId');
+      return mcpErrorResult('Card not found: $cardId');
     }
     if (!card.labels.contains('consultation')) {
-      return mcpErrorResult('卡片不含 consultation 标签');
+      return mcpErrorResult('The card does not have the consultation label');
     }
 
     final originalDescription = card.description;

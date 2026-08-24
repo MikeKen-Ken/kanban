@@ -26,16 +26,16 @@ Future<CallToolResult> dispatchFinalize(
         projectId: record.projectId,
         repoPath: record.repoPath,
       )) {
-    return mcpErrorResult('未找到该 Worker 的 pending 会话');
+    return mcpErrorResult('No pending session was found for this Worker');
   }
   if (record.status == DispatchPendingStatus.finalized) {
     return _finalizedResult(record);
   }
   if (record.status == DispatchPendingStatus.failed) {
-    return mcpErrorResult(record.error ?? 'pending 会话已失败');
+    return mcpErrorResult(record.error ?? 'The pending session has failed');
   }
   if (record.status == DispatchPendingStatus.declared) {
-    return mcpErrorResult('尚未记录验证结果');
+    return mcpErrorResult('No verification result has been recorded');
   }
 
   await refreshMcpGitAuthorIdentity();
@@ -66,7 +66,7 @@ Future<CallToolResult> dispatchFinalize(
       if (baseline != null && head != baseline) {
         final failed = record.copyWith(
           status: DispatchPendingStatus.failed,
-          error: '检测到 Agent 自行移动 HEAD：baseline=$baseline，HEAD=$head',
+          error: 'The Agent moved HEAD: baseline=$baseline, HEAD=$head',
         );
         await store.write(failed);
         return mcpErrorResult(failed.error!);
@@ -78,7 +78,8 @@ Future<CallToolResult> dispatchFinalize(
         if (tree.kind != McpGitTreeKind.clean) {
           final failed = record.copyWith(
             status: DispatchPendingStatus.failed,
-            error: '受控 Git revert 要求领取后的工作区保持干净',
+            error:
+                'A controlled Git revert requires a clean workspace after claim',
           );
           await store.write(failed);
           return mcpErrorResult(failed.error!);
@@ -91,7 +92,7 @@ Future<CallToolResult> dispatchFinalize(
         if (!reverted.ok) {
           final failed = record.copyWith(
             status: DispatchPendingStatus.failed,
-            error: reverted.error ?? 'git revert 失败',
+            error: reverted.error ?? 'git revert failed',
           );
           await store.write(failed);
           return mcpErrorResult(failed.error!);
@@ -107,21 +108,25 @@ Future<CallToolResult> dispatchFinalize(
           final nestedChanged =
               await listMcpGitChangedPaths(nested.repoPath, runner: gitRunner);
           if (nestedChanged == null) {
-            return mcpErrorResult('无法读取嵌套 Git 仓库的变更清单');
+            return mcpErrorResult(
+                'Unable to read changes in the nested Git repository');
           }
           final nestedSensitive =
               nestedChanged.where(isMcpSensitiveGitPath).toList();
           if (nestedSensitive.isNotEmpty) {
             final failed = record.copyWith(
               status: DispatchPendingStatus.failed,
-              error: '嵌套 Git 仓库包含敏感文件，拒绝提交：${nestedSensitive.join(', ')}',
+              error:
+                  'The nested Git repository contains sensitive files; commit refused: ${nestedSensitive.join(', ')}',
             );
             await store.write(failed);
             return mcpErrorResult(failed.error!);
           }
           final snapshot = await (snapshotStore ?? McpSubmissionSnapshotStore())
               .read(projectId: record.projectId, cardId: record.cardId);
-          if (snapshot == null) return mcpErrorResult('提交范围快照已丢失');
+          if (snapshot == null) {
+            return mcpErrorResult('The submission-scope snapshot is missing');
+          }
           record = record.copyWith(
             status: DispatchPendingStatus.committing,
             clearError: true,
@@ -139,7 +144,8 @@ Future<CallToolResult> dispatchFinalize(
           if (!nestedCommit.ok) {
             final failed = record.copyWith(
               status: DispatchPendingStatus.failed,
-              error: nestedCommit.error ?? '嵌套 Git 仓库提交失败',
+              error: nestedCommit.error ??
+                  'Failed to commit the nested Git repository',
             );
             await store.write(failed);
             return mcpErrorResult(failed.error!);
@@ -151,7 +157,8 @@ Future<CallToolResult> dispatchFinalize(
               parentChanged.single != nested.parentRelativePath) {
             final failed = record.copyWith(
               status: DispatchPendingStatus.failed,
-              error: '嵌套仓库已提交，但父仓库还有其它改动；已停止以避免混合提交',
+              error:
+                  'The nested repository was committed, but the parent repository has other changes. Stopped to avoid a mixed commit.',
             );
             await store.write(failed);
             return mcpErrorResult(failed.error!);
@@ -159,7 +166,9 @@ Future<CallToolResult> dispatchFinalize(
           tree = await inspectMcpGitTree(repo, runner: gitRunner);
         }
         final changed = await listMcpGitChangedPaths(repo, runner: gitRunner);
-        if (changed == null) return mcpErrorResult('无法读取 Git 变更清单');
+        if (changed == null) {
+          return mcpErrorResult('Unable to read the Git change list');
+        }
         final sensitive = changed.where(isMcpSensitiveGitPath).toList();
         if (sensitive.isNotEmpty) {
           if (revertCommit != null) {
@@ -167,7 +176,8 @@ Future<CallToolResult> dispatchFinalize(
           }
           final failed = record.copyWith(
             status: DispatchPendingStatus.failed,
-            error: '检测到敏感文件，拒绝提交：${sensitive.join(', ')}',
+            error:
+                'Sensitive files detected; commit refused: ${sensitive.join(', ')}',
           );
           await store.write(failed);
           return mcpErrorResult(failed.error!);
@@ -177,7 +187,9 @@ Future<CallToolResult> dispatchFinalize(
           projectId: record.projectId,
           cardId: record.cardId,
         );
-        if (snapshot == null) return mcpErrorResult('提交范围快照已丢失');
+        if (snapshot == null) {
+          return mcpErrorResult('The submission-scope snapshot is missing');
+        }
         record = record.copyWith(
           status: DispatchPendingStatus.committing,
           clearError: true,
@@ -197,7 +209,7 @@ Future<CallToolResult> dispatchFinalize(
         if (!committed.ok) {
           final failed = record.copyWith(
             status: DispatchPendingStatus.failed,
-            error: committed.error ?? 'Git 提交失败',
+            error: committed.error ?? 'Git commit failed',
           );
           await store.write(failed);
           return mcpErrorResult(failed.error!);
@@ -227,7 +239,8 @@ Future<CallToolResult> dispatchFinalize(
     if (record.status == DispatchPendingStatus.committed) {
       final afterCommit = await inspectMcpGitTree(repo, runner: gitRunner);
       if (afterCommit.kind == McpGitTreeKind.dirty) {
-        const error = 'Git 提交后工作区不干净，拒绝更新看板。请清理工作区后重新运行批次以恢复送验。';
+        const error =
+            'The workspace is dirty after the Git commit, so the board was not updated. Clean the workspace and rerun the batch to resume submission.';
         record = record.copyWith(error: error);
         await store.write(record);
         return mcpJsonResult({
@@ -251,7 +264,8 @@ Future<CallToolResult> dispatchFinalize(
   }
 
   if (record.status != DispatchPendingStatus.committed) {
-    return mcpErrorResult('pending 状态无法 finalize：${record.status.name}');
+    return mcpErrorResult(
+        'Pending status cannot be finalized: ${record.status.name}');
   }
   final submitted = await mcpSubmitCardForVerify(
     controller,
@@ -310,7 +324,9 @@ Map<String, String> _validationActivityDetails(
     'totalDurationMs': '$totalDurationMs',
     if (manual != null) 'manualReason': _truncateActivityValue(manual),
     'resultSummary': _truncateActivityValue(
-      manual == null ? '会话内验证' : '人工验证：待人工验收',
+      manual == null
+          ? 'Verified in session'
+          : 'Manual verification: acceptance pending',
     ),
   };
 }

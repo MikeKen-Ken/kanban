@@ -6,7 +6,7 @@ export type AgentRunMetrics = {
   topReads: string[];
 };
 
-/** 只统计模型步骤；不读取工具结果正文，避免诊断本身放大上下文。 */
+/** \u53EA\u7EDF\u8BA1\u6A21\u578B\u6B65\u9AA4；\u4E0D\u8BFB\u53D6\u5DE5\u5177\u7ED3\u679C\u6B63\u6587，\u907F\u514D\u8BCA\u65AD\u672C\u8EAB\u653E\u5927\u4E0A\u4E0B\u6587。 */
 export class AgentRunDiagnostics {
   private steps = 0;
   private toolCalls = 0;
@@ -58,7 +58,7 @@ export class AgentRunDiagnostics {
 
 export function formatAgentRunDiagnostics(metrics: AgentRunMetrics): string {
   return (
-    `会话诊断：steps=${metrics.steps} tools=${metrics.toolCalls}` +
+    `Session diagnostics: steps=${metrics.steps} tools=${metrics.toolCalls}` +
     ` repeatedToolCalls=${metrics.repeatedToolCalls}` +
     ` repeatedReads=${metrics.repeatedReads}` +
     (metrics.topReads.length > 0 ? ` topReads=${metrics.topReads.join(",")}` : "")
@@ -73,7 +73,7 @@ function readPath(detail: string): string | undefined {
       return value.trim().replaceAll("\\", "/").toLowerCase();
     }
   } catch {
-    // 旧版工具可能直接把路径作为参数。
+    // \u65E7\u7248\u5DE5\u5177\u53EF\u80FD\u76F4\u63A5\u628A\u8DEF\u5F84\u4F5C\u4E3A\u53C2\u6570。
   }
   const raw = detail.trim();
   return raw && !raw.startsWith("{") ? raw.replaceAll("\\", "/").toLowerCase() : undefined;

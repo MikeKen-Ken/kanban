@@ -137,7 +137,7 @@ Future<AgentDispatchHubBatchStartResult> startAgentDispatchFromHub({
 
   await service.hydrateLog();
   service.appendLog(
-    '\n—— ${DateTime.now().toLocal().toString().substring(0, 19)} 新运行 ——',
+    '\n—— ${DateTime.now().toLocal().toString().substring(0, 19)} New run ——',
   );
   service.appendLog('Engine: ${options.engine.label}');
   service.appendLog('Started from overview');

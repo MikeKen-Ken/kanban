@@ -703,14 +703,14 @@ class AgentDispatchService {
           );
           if (error != null) {
             _emitLog(
-              '保存卡片对话失败：$error',
+              'Failed to save card conversation: $error',
               level: AgentDispatchLogLevel.warning,
             );
           }
         });
       } catch (error) {
         _emitLog(
-          '保存卡片对话异常：$error',
+          'Unexpected error while saving card conversation: $error',
           level: AgentDispatchLogLevel.warning,
         );
       }

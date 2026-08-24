@@ -67,10 +67,10 @@ void main() {
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
     expect(payload['found'], isTrue);
     expect(payload['cardId'], cardId);
-    expect(payload['sourceColumn'], '待办');
+    expect(payload['sourceColumn'], 'To Do');
     expect(payload['fromColumnId'], 'todo');
     expect(payload['columnId'], 'doing');
-    expect(payload['columnTitle'], '进行中');
+    expect(payload['columnTitle'], 'In Progress');
     expect(payload['movedToDoing'], isTrue);
     expect(payload['workMode'], 'normal');
     expect(payload['workItems'], [
@@ -247,7 +247,7 @@ void main() {
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
     expect(payload['found'], isTrue);
     expect(payload['cardId'], reworkCardId);
-    expect(payload['sourceColumn'], '待返工');
+    expect(payload['sourceColumn'], 'Rework');
     expect(payload['workMode'], 'normal');
     expect(payload['movedToDoing'], isTrue);
     expect(payload['columnId'], 'doing');
@@ -276,7 +276,7 @@ void main() {
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
     expect(payload['found'], isTrue);
     expect(payload['cardId'], cardId);
-    expect(payload['sourceColumn'], '待返工');
+    expect(payload['sourceColumn'], 'Rework');
     expect(payload['workMode'], 'rework');
     expect(payload['commitRef'], 'abc1234');
     expect(payload['movedToDoing'], isTrue);
@@ -303,14 +303,14 @@ void main() {
     final peekPayload = jsonDecode(_textOf(peek)) as Map<String, dynamic>;
     expect(peekPayload['found'], isTrue);
     expect(peekPayload['cardId'], cardId);
-    expect(peekPayload['sourceColumn'], '进行中');
+    expect(peekPayload['sourceColumn'], 'In Progress');
 
     final pick = await mcpPickNextCard(controller);
     expect(pick.isError, isNot(true));
     final pickPayload = jsonDecode(_textOf(pick)) as Map<String, dynamic>;
     expect(pickPayload['found'], isTrue);
     expect(pickPayload['cardId'], cardId);
-    expect(pickPayload['sourceColumn'], '进行中');
+    expect(pickPayload['sourceColumn'], 'In Progress');
     expect(pickPayload['fromColumnId'], 'doing');
     expect(pickPayload['columnId'], 'doing');
     expect(pickPayload['movedToDoing'], isFalse);
@@ -355,10 +355,10 @@ void main() {
     expect(result.isError, isNot(true));
     final payload = jsonDecode(_textOf(result)) as Map<String, dynamic>;
     expect(payload['ok'], isTrue);
-    expect(payload['description'], '原有备注\n\n阻塞原因：依赖接口尚未就绪');
+    expect(payload['description'], '原有备注\n\nBlock reason: 依赖接口尚未就绪');
 
     final card = controller.findCardById(cardId)!;
-    expect(card.description, '原有备注\n\n阻塞原因：依赖接口尚未就绪');
+    expect(card.description, '原有备注\n\nBlock reason: 依赖接口尚未就绪');
     final blocked = findBlockedColumn(controller.board!.columns)!;
     expect(blocked.cards.any((c) => c.id == cardId), isTrue);
   });

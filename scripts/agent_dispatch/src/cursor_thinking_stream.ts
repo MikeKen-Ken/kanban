@@ -12,7 +12,7 @@ function defaultSchedule(fn: () => void, ms: number): { cancel: () => void } {
   return { cancel: () => clearTimeout(timer) };
 }
 
-/** 把 Cursor SDK 的思考增量刷进 Worker 日志，避免整段思考结束后才第一次出现。 */
+/** \u628A Cursor SDK \u7684\u601D\u8003\u589E\u91CF\u5237\u8FDB Worker \u65E5\u5FD7，\u907F\u514D\u6574\u6BB5\u601D\u8003\u7ED3\u675F\u540E\u624D\u7B2C\u4E00\u6B21\u51FA\u73B0。 */
 export class CursorThinkingStream {
   private readonly write: (line: string, source?: WorkerLogSource) => void;
   private readonly intervalMs: number;
@@ -32,7 +32,7 @@ export class CursorThinkingStream {
 
   notePromptSent(): void {
     this.write(
-      "已发送任务，正在等待模型思考流。完整思考步骤要等这段思考结束后才到达，中间空白不代表空闲。",
+      "Task sent; waiting for the model thinking stream. Full thinking steps arrive after this block completes; a blank gap in between does not mean idle.",
       "worker",
     );
   }
@@ -67,17 +67,17 @@ export class CursorThinkingStream {
       this.blockComplete = true;
       const ms = record.thinkingDurationMs;
       if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0) {
-        this.write(`思考完成（${Math.round(ms / 1000)} 秒）`, "ai");
+        this.write(`Thinking done (${Math.round(ms / 1000)}s)`, "ai");
       }
     }
   }
 
-  /** 当前已组装的思考正文，供写入同步对话；不消费日志去重状态。 */
+  /** \u5F53\u524D\u5DF2\u7EC4\u88C5\u7684\u601D\u8003\u6B63\u6587，\u4F9B\u5199\u5165\u540C\u6B65\u5BF9\u8BDD；\u4E0D\u6D88\u8D39\u65E5\u5FD7\u53BB\u91CD\u72B6\u6001。 */
   assembledText(): string {
     return `${this.assembled}${this.pending}`.trim();
   }
 
-  /** 若思考已通过增量打出，则跳过 onStep 的整段重复 dump。 */
+  /** \u82E5\u601D\u8003\u5DF2\u901A\u8FC7\u589E\u91CF\u6253\u51FA，\u5219\u8DF3\u8FC7 onStep \u7684\u6574\u6BB5\u91CD\u590D dump。 */
   consumeStreamedThinking(): boolean {
     if (!this.streamed) return false;
     this.streamed = false;
@@ -162,7 +162,7 @@ export class CursorThinkingStream {
     this.streamed = true;
     for (const line of lines) {
       if (!this.startedBlock) {
-        this.write(`思考：${line}`, "ai");
+        this.write(`Thinking: ${line}`, "ai");
         this.startedBlock = true;
       } else {
         this.write(`  │ ${line}`, "ai");

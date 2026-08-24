@@ -1,4 +1,4 @@
-/** 项目 MCP 标签 → 用户/项目 mcp.json 中的服务器名（大小写按配置原文保留）。 */
+/** \u9879\u76EE MCP \u6807\u7B7E → \u7528\u6237/\u9879\u76EE mcp.json \u4E2D\u7684\u670D\u52A1\u5668\u540D（\u5927\u5C0F\u5199\u6309\u914D\u7F6E\u539F\u6587\u4FDD\u7559）。 */
 export const MCP_LABEL_SERVERS: Record<string, readonly string[]> = {
   aseprite: ["aseprite"],
   "chrome-devtools": ["chrome-devtools"],

@@ -16,20 +16,20 @@ import {
 } from "./user_rule_canary.ts";
 
 describe("session_context", () => {
-  it("附件只写系统临时目录且 prompt 不含 base64", () => {
+  it("\u9644\u4EF6\u53EA\u5199\u7CFB\u7EDF\u4E34\u65F6\u76EE\u5F55\u4E14 prompt \u4E0D\u542B base64", () => {
     const root = mkdtempSync(join(tmpdir(), "kanban-context-test-"));
-    const base64 = Buffer.from("附件内容").toString("base64");
+    const base64 = Buffer.from("\u9644\u4EF6\u5185\u5BB9").toString("base64");
     const context = createSessionContext({
-      basePrompt: "执行任务",
-      architecture: "# 架构",
-      userRules: "# 所有用户规则\n\n必须使用简体中文。",
+      basePrompt: "Do the task",
+      architecture: "# Architecture",
+      userRules: "# All user rules\n\nAlways respond in English.",
       tempRoot: root,
       claim: {
         payload: {
           cardId: "card-a",
-          workItems: [{ id: "item-a", text: "完成 A" }],
+          workItems: [{ id: "item-a", text: "\u5B8C\u6210 A" }],
           fileAttachments: [{
-            fileName: "说明.txt",
+            fileName: "\u8BF4\u660E.txt",
             included: true,
             contentBase64: base64,
           }],
@@ -46,29 +46,29 @@ describe("session_context", () => {
       assert.ok(context.attachmentPaths.every(isAbsolute));
       assert.ok(context.attachmentPaths.every(existsSync));
       assert.equal(context.prompt.includes(base64), false);
-      assert.match(context.prompt, /完成 A/);
-      assert.match(context.prompt, /已缓存的 docs\/Architecture\.md/);
-      assert.match(context.prompt, /完整用户 Rule/);
+      assert.match(context.prompt, /\u5B8C\u6210 A/);
+      assert.match(context.prompt, /Cached docs\/Architecture\.md/);
+      assert.match(context.prompt, /Full user Rules/);
       assert.equal(
         context.prompt.split(WORKER_USER_RULES_BEGIN).length - 1,
         1,
       );
       assert.equal(context.prompt.split(WORKER_USER_RULES_END).length - 1, 1);
-      assert.match(context.prompt, /必须使用简体中文/);
-      assert.match(context.prompt, /看板 MCP 收尾工具/);
+      assert.match(context.prompt, /Always respond in English/);
+      assert.match(context.prompt, /Kanban MCP completion tools/);
       assert.match(context.prompt, /GetMcpTools/);
       assert.match(context.prompt, /card-a/);
-      assert.match(context.prompt, /开发前必读 Architecture\.md/);
-      assert.match(context.prompt, /MUST NOT 对仓库根做无界 glob/);
+      assert.match(context.prompt, /read Architecture.md before development/);
+      assert.match(context.prompt, /MUST NOT unbounded-glob the repository root/);
       assert.match(context.prompt, /\.svn/);
-      assert.match(context.prompt, /当前选定仓库的目录结构/);
+      assert.match(context.prompt, /currently selected repository's directory layout/);
       assert.equal(context.prompt.includes('features/kanban'), false);
       assert.equal(context.prompt.includes('agent_dispatch/'), false);
       assert.match(context.prompt, /cardKind/);
-      assert.match(context.prompt, /一律为实施卡|否则为实施卡/);
+      assert.match(context.prompt, /always an implementation card|otherwise it is an implementation card/);
       assert.equal(
         readFileSync(context.attachmentPaths[0]!, "utf8"),
-        "附件内容",
+        "\u9644\u4EF6\u5185\u5BB9",
       );
     } finally {
       context.cleanup();

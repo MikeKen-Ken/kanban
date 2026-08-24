@@ -85,7 +85,7 @@ function resultLooksSuccess(result: Record<string, unknown>): boolean {
   return value.ok === true;
 }
 
-/** MCP 收尾工具已返回成功（不是开始调用）。 */
+/** MCP \u6536\u5C3E\u5DE5\u5177\u5DF2\u8FD4\u56DE\u6210\u529F（\u4E0D\u662F\u5F00\u59CB\u8C03\u7528）。 */
 export function isSuccessfulDispatchTerminalStep(step: unknown): boolean {
   if (!dispatchTerminalToolName(step)) return false;
   const record = asRecord(step);
@@ -105,8 +105,8 @@ export function dispatchTerminalFromSession(
   if (!record) return "none";
   const columnId = String(record.columnId ?? "");
   const columnName = String(record.columnName ?? "");
-  if (columnId === "verify" || columnName === "待验证") return "verify";
-  if (columnId === "blocked" || columnName === "阻塞中") return "blocked";
+  if (columnId === "verify" || columnName === "\u5F85\u9A8C\u8BC1") return "verify";
+  if (columnId === "blocked" || columnName === "\u963B\u585E\u4E2D") return "blocked";
   return "none";
 }
 
@@ -126,7 +126,7 @@ export function startPollingDispatchTerminal(
           return;
         }
       } catch {
-        // 轮询失败不中断会话；下一拍再试。
+        // \u8F6E\u8BE2\u5931\u8D25\u4E0D\u4E2D\u65AD\u4F1A\u8BDD；\u4E0B\u4E00\u62CD\u518D\u8BD5。
       }
       await sleep(intervalMs);
     }

@@ -4,6 +4,17 @@ import 'package:kanban/features/agent_dispatch/agent_dispatch_token_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('parses English session token logs', () {
+    final record = AgentDispatchTokenRecord.tryParse(
+      'session tokens: input=12 output=34 total=46',
+      at: DateTime(2026, 8, 14, 9),
+    );
+    expect(record, isNotNull);
+    expect(record!.inputTokens, 12);
+    expect(record.outputTokens, 34);
+    expect(record.totalTokens, 46);
+  });
+
   test('从会话日志解析 token 用量', () {
     final record = AgentDispatchTokenRecord.tryParse(
       '本会话 token：input=12 output=34 total=46',

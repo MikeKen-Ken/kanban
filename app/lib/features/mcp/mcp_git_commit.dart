@@ -233,10 +233,10 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
   final repo = repoPath.trim();
   final text = message.trim();
   if (repo.isEmpty) {
-    return McpGitCommitOutcome.failure('缺少仓库路径');
+    return McpGitCommitOutcome.failure('Repository path is required');
   }
   if (text.isEmpty) {
-    return McpGitCommitOutcome.failure('提交信息不能为空');
+    return McpGitCommitOutcome.failure('Commit message cannot be empty');
   }
   final run = runner ?? _defaultGitRunner;
   final gitDir = await run(
@@ -247,7 +247,7 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
   );
   if (gitDir.exitCode != 0) {
     return McpGitCommitOutcome.failure(
-      '无法解析 Git 目录：${_combinedOutput(gitDir)}',
+      'Unable to resolve the Git directory: ${_combinedOutput(gitDir)}',
     );
   }
   var gitDirPath = '${gitDir.stdout}'.trim();
@@ -269,7 +269,8 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
       environment: mcpGitEnvironment(),
     );
     if (add.exitCode != 0) {
-      return McpGitCommitOutcome.failure('git add 失败：${_combinedOutput(add)}');
+      return McpGitCommitOutcome.failure(
+          'git add failed: ${_combinedOutput(add)}');
     }
     final commit = await run(
       'git',
@@ -286,7 +287,7 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
     );
     if (commit.exitCode != 0) {
       return McpGitCommitOutcome.failure(
-        'git commit 失败：${_combinedOutput(commit)}',
+        'git commit failed: ${_combinedOutput(commit)}',
       );
     }
     final hash = await run(
@@ -298,7 +299,7 @@ Future<McpGitCommitOutcome> commitMcpWorkingTree({
     final commitRef = '${hash.stdout}'.trim();
     if (hash.exitCode != 0 || commitRef.isEmpty) {
       return McpGitCommitOutcome.failure(
-        '无法读取提交号：${_combinedOutput(hash)}',
+        'Unable to read the commit hash: ${_combinedOutput(hash)}',
       );
     }
     return McpGitCommitOutcome.success(abbreviateGitCommitRef(commitRef));
@@ -318,7 +319,8 @@ Future<McpGitRevertOutcome> revertMcpCommitWithoutCommit({
   final repo = repoPath.trim();
   final target = commitRef.trim();
   if (repo.isEmpty || !RegExp(r'^[0-9a-fA-F]{7,64}$').hasMatch(target)) {
-    return McpGitRevertOutcome.failure('撤销目标必须是有效的 Git 提交哈希');
+    return McpGitRevertOutcome.failure(
+        'The revert target must be a valid Git commit hash');
   }
   final run = runner ?? _defaultGitRunner;
   final result = await run(
@@ -336,10 +338,10 @@ Future<McpGitRevertOutcome> revertMcpCommitWithoutCommit({
     environment: mcpGitEnvironment(),
   );
   final abortHint = aborted.exitCode == 0
-      ? '；已恢复撤销前状态'
-      : '；自动恢复失败，请人工检查 Git 状态：${_combinedOutput(aborted)}';
+      ? '; the pre-revert state was restored'
+      : '; automatic recovery failed, inspect the Git state manually: ${_combinedOutput(aborted)}';
   return McpGitRevertOutcome.failure(
-    'git revert 失败：${_combinedOutput(result)}$abortHint',
+    'git revert failed: ${_combinedOutput(result)}$abortHint',
   );
 }
 

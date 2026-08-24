@@ -91,7 +91,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
   }
 
   void _syncLogFromService() {
-    final text = _service.logText;
+    final text = AgentDispatchLogEntry.displayText(_service.logText);
     _logController.value = TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
@@ -711,7 +711,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (result.ok) {
       _appendLog(result.summary ?? 'Complete',
           level: AgentDispatchLogLevel.success);
-    } else if (result.error == '已取消') {
+    } else if (result.error == '已取消' || result.error == 'Cancelled') {
       _appendLog('Run stopped', level: AgentDispatchLogLevel.warning);
     }
   }

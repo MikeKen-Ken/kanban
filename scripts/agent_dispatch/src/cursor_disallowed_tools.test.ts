@@ -7,7 +7,7 @@ import {
 } from "./cursor_disallowed_tools.ts";
 
 describe("cursor_disallowed_tools", () => {
-  it("禁用 GetMcpTools 与无头 askQuestion，不禁 task", () => {
+  it("\u7981\u7528 GetMcpTools \u4E0E\u65E0\u5934 askQuestion，\u4E0D\u7981 task", () => {
     assert.deepEqual(CURSOR_WORKER_DISALLOWED_TOOLS, [
       "GetMcpTools",
       "askQuestion",
@@ -15,7 +15,7 @@ describe("cursor_disallowed_tools", () => {
     assert.equal(CURSOR_WORKER_DISALLOWED_TOOLS.includes("task"), false);
   });
 
-  it("未知 GetMcpTools 名称时回退为不禁用", () => {
+  it("\u672A\u77E5 GetMcpTools \u540D\u79F0\u65F6\u56DE\u9000\u4E3A\u4E0D\u7981\u7528", () => {
     assert.deepEqual(
       fallbackDisallowedTools(new Error("Unknown tool name: GetMcpTools")),
       CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK,

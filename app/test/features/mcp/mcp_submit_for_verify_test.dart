@@ -183,7 +183,10 @@ void main() {
       completedFeedbackIds: ['fb1'],
     );
     expect(result.isError, isTrue);
-    expect(_textOf(result), contains('请先完成所有验证反馈'));
+    expect(
+      _textOf(result),
+      contains('Complete all verification feedback'),
+    );
 
     final board = controller.board!;
     final refreshedReworkColumn = board.columns

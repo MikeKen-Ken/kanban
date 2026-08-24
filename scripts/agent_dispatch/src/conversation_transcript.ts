@@ -1,14 +1,29 @@
 import type { ConversationTranscriptMessage } from "./assistant_text.ts";
 
+/** Current English headings written into the Worker prompt. */
 const INJECTED_PROMPT_MARKERS = [
-  "# Worker 注入的本轮上下文",
+  "# Worker-injected context for this round",
+  "# Skill body",
+  "# This invocation",
   "KANBAN_WORKER_USER_RULES_BEGIN",
-  "# Skill 正文",
-  "看板 MCP 收尾工具",
+  "Kanban MCP completion tools",
+];
+
+/**
+ * Chinese headings from prompts written before the English translation.
+ * Used only to strip historical user turns; never injected as prompt copy.
+ */
+const LEGACY_INJECTED_PROMPT_MARKERS = [
+  "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
+  "# Skill \u6B63\u6587",
+  "# \u672C\u6B21\u8C03\u7528",
+  "\u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177",
 ];
 
 export function isInjectedWorkerPrompt(text: string): boolean {
-  return INJECTED_PROMPT_MARKERS.some((marker) => text.includes(marker));
+  return INJECTED_PROMPT_MARKERS.concat(LEGACY_INJECTED_PROMPT_MARKERS).some(
+    (marker) => text.includes(marker),
+  );
 }
 
 export function buildConversationTranscript(options: {

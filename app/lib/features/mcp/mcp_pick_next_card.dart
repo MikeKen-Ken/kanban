@@ -1,7 +1,6 @@
 import 'package:mcp_dart/mcp_dart.dart';
 
 import '../../controllers/board_controller.dart';
-import '../../models/kanban_models.dart';
 import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import 'mcp_arg_parsers.dart';
@@ -17,7 +16,7 @@ Future<CallToolResult> mcpPeekNextCard(
 }) {
   return runMcpForProject(controller, projectId, (resolvedProjectId) async {
     final board = controller.board;
-    if (board == null) return mcpErrorResult('看板未就绪');
+    if (board == null) return mcpErrorResult('The board is not ready');
     final next = pickNextWorkCard(board);
     return mcpJsonResult({
       'found': next != null,
@@ -46,7 +45,7 @@ Future<CallToolResult> mcpPickNextCard(
   final requested = mcpTrimmedString(projectId);
   if (requested == null && McpDispatchCardGate.instance.openSessionCount > 1) {
     return Future.value(mcpErrorResult(
-      '多个 Agent 调度批次并行时，pick_next_card 必须传入 projectId',
+      'projectId is required when multiple Agent Dispatch batches run in parallel',
     ));
   }
   final boundProjectId =
@@ -63,15 +62,15 @@ Future<CallToolResult> mcpPickNextCard(
         break;
       case McpDispatchPickPermission.dispatchLocked:
         return mcpErrorResult(
-          '该项目正由 Agent 调度锁定，完整 MCP 不得调用 pick_next_card',
+          'This project is locked by Agent Dispatch; the full MCP cannot call pick_next_card',
         );
       case McpDispatchPickPermission.sessionNotOpen:
         return mcpErrorResult(
-          'Agent 调度批次尚未开启本轮 claim，禁止领取卡片',
+          'The Agent Dispatch batch has not opened the current claim round',
         );
       case McpDispatchPickPermission.alreadyClaimed:
         return mcpErrorResult(
-          '本轮 Worker claim 已领取卡片；请完成当前卡片并结束会话',
+          'The Worker already claimed a card in this round; finish the current card and end the session',
         );
     }
     final board = controller.board;
@@ -80,7 +79,7 @@ Future<CallToolResult> mcpPickNextCard(
         resolvedProjectId,
         workerToken: dispatchWorkerToken,
       );
-      return mcpErrorResult('看板未就绪');
+      return mcpErrorResult('The board is not ready');
     }
 
     final picked = pickNextWorkCard(board);
@@ -92,7 +91,7 @@ Future<CallToolResult> mcpPickNextCard(
       return mcpJsonResult({
         'found': false,
         'projectId': resolvedProjectId,
-        'reason': '待办、待返工与进行中均无未完成卡片',
+        'reason': 'No unfinished cards remain in To Do, Rework, or In Progress',
       });
     }
 
@@ -104,7 +103,7 @@ Future<CallToolResult> mcpPickNextCard(
         workerToken: dispatchWorkerToken,
       );
       return mcpErrorResult(
-        '下一张卡片已漂移：expectedCardId=$expected，actualCardId=${card.id}',
+        'The next card changed: expectedCardId=$expected, actualCardId=${card.id}',
       );
     }
     final fromColumnId = picked.column.id;
@@ -114,7 +113,7 @@ Future<CallToolResult> mcpPickNextCard(
         resolvedProjectId,
         workerToken: dispatchWorkerToken,
       );
-      return mcpErrorResult('未找到「进行中」列');
+      return mcpErrorResult('The In Progress column was not found');
     }
 
     var columnId = fromColumnId;

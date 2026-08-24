@@ -551,7 +551,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     return (
       ok: false,
       message:
-          '${existingHealth.error}\n发布版 Worker 必须随应用整体更新，请前往「设置 → 检查更新」下载并安装完整更新。',
+          '${existingHealth.error}\nThe release Worker must be updated with the app. Go to Settings → Check for updates to download and install the complete update.',
     );
   }
 
@@ -567,7 +567,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     return (
       ok: false,
       message:
-          '${existingHealth.error}\n该 Worker 不包含源码，无法原地重建；请更新应用或重新下载完整 ZIP。',
+          '${existingHealth.error}\nThis Worker does not include source code and cannot be rebuilt in place. Update the app or download the complete ZIP again.',
     );
   }
 

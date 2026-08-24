@@ -3,7 +3,8 @@ import { isRetryableError, sleep } from "./retry.ts";
 import type { DispatchResult, RoundDispatchJob } from "./types.ts";
 import { workerLog } from "./worker_log.ts";
 
-// 给短时断网留出 15 秒恢复窗口（1s + 2s + 4s + 8s），同时保持有限重试。
+// Allow a 15-second recovery window for brief outages (1s + 2s + 4s + 8s)
+// while keeping the retry count bounded.
 const MAX_AGENT_ATTEMPTS = 5;
 const BASE_RETRY_DELAY_MS = 1000;
 
@@ -27,6 +28,8 @@ export async function runAgentWithRetry(
         cancellation?.isSkipRequested ||
         result.error === "Cancelled" ||
         result.error === "Skipped" ||
+        result.error === "\u5DF2\u53D6\u6D88" ||
+        result.error === "\u5DF2\u8DF3\u8FC7" ||
         !isRetryableAgentResult(result) ||
         attempt >= MAX_AGENT_ATTEMPTS
       ) {

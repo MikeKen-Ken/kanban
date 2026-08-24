@@ -12,18 +12,18 @@ import {
 const cwd = join("C:", "repo", "kanban");
 
 describe("worker_glob_policy", () => {
-  it("把仓库根 **/* 判为拒绝", () => {
+  it("\u628A\u4ED3\u5E93\u6839 **/* \u5224\u4E3A\u62D2\u7EDD", () => {
     const result = evaluateGlobToolCall({
       pattern: "**/*",
       cwd,
     });
     assert.equal(result.allow, false);
     if (!result.allow) {
-      assert.match(result.reason, /无界 glob/);
+      assert.match(result.reason, /unbounded-glob/);
     }
   });
 
-  it("允许子目录或带文件名片段的 glob", () => {
+  it("\u5141\u8BB8\u5B50\u76EE\u5F55\u6216\u5E26\u6587\u4EF6\u540D\u7247\u6BB5\u7684 glob", () => {
     assert.equal(
       evaluateGlobToolCall({
         pattern: "*",
@@ -41,7 +41,7 @@ describe("worker_glob_policy", () => {
     );
   });
 
-  it("拒绝 .git、.svn 与 build 目标", () => {
+  it("\u62D2\u7EDD .git、.svn \u4E0E build \u76EE\u6807", () => {
     assert.equal(
       evaluateGlobToolCall({
         pattern: "**/*",
@@ -68,20 +68,20 @@ describe("worker_glob_policy", () => {
     );
   });
 
-  it("识别无界模式与 glob 工具名，并保持搜索提示跨仓库通用", () => {
+  it("\u8BC6\u522B\u65E0\u754C\u6A21\u5F0F\u4E0E glob \u5DE5\u5177\u540D，\u5E76\u4FDD\u6301\u641C\u7D22\u63D0\u793A\u8DE8\u4ED3\u5E93\u901A\u7528", () => {
     assert.equal(isUnboundedGlobPattern("**/*"), true);
     assert.equal(isUnboundedGlobPattern("**/*attachment*"), false);
     assert.equal(isGlobToolName("Glob"), true);
     assert.equal(isGlobToolName("Read"), false);
-    assert.match(DISPATCH_SEARCH_POLICY, /当前选定仓库/);
-    assert.match(DISPATCH_SEARCH_POLICY, /项目规则/);
-    assert.match(DISPATCH_SEARCH_POLICY, /确认每个目录存在/);
+    assert.match(DISPATCH_SEARCH_POLICY, /currently selected repository/);
+    assert.match(DISPATCH_SEARCH_POLICY, /project rules/);
+    assert.match(DISPATCH_SEARCH_POLICY, /confirm each directory exists/);
     assert.match(DISPATCH_SEARCH_POLICY, /rg --fixed-strings/);
     assert.equal(DISPATCH_SEARCH_POLICY.includes("features/kanban"), false);
     assert.equal(DISPATCH_SEARCH_POLICY.includes("agent_dispatch/"), false);
   });
 
-  it("从 hook JSON 抽出 glob 参数", () => {
+  it("\u4ECE hook JSON \u62BD\u51FA glob \u53C2\u6570", () => {
     const args = globArgsFromUnknown({
       tool_name: "Glob",
       tool_input: {

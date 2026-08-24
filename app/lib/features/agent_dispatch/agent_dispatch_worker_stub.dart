@@ -72,8 +72,8 @@ Future<AgentWorkerHealth> inspectAgentDispatchWorker(
 }) async =>
     const AgentWorkerHealth(
       ok: false,
-      source: '不支持',
-      workerRoot: '未知',
+      source: 'Unsupported',
+      workerRoot: 'Unknown',
       error: 'Local Agent Dispatch is not supported on this platform',
     );
 
@@ -108,4 +108,4 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     (ok: false, message: 'The current platform is not supported');
 
 String describeWorkerExitWithoutOutput(int code) =>
-    'worker 退出码 $code，且无 out.json';
+    'Worker exited with code $code and did not write out.json';

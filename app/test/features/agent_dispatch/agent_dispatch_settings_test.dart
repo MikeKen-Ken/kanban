@@ -101,12 +101,12 @@ void main() {
       skillMarkdown: '# 看板：做最新一条\n\n## 流程\n',
       projectId: 'proj-1',
     );
-    expect(text, contains('Skill 正文'));
+    expect(text, contains('Skill body'));
     expect(text, contains('projectId:proj-1'));
-    expect(text, contains('禁止搜索'));
-    expect(text, contains('完整用户 Rule'));
+    expect(text, contains('Do not search'));
+    expect(text, contains('full user Rules'));
     expect(text, contains('Architecture'));
-    expect(text, contains('终态协议以 Skill 正文为准'));
+    expect(text, contains('completion protocol follow the Skill body'));
     expect(text, isNot(contains('commit_and_submit_card')));
     expect(text, isNot(contains('name:')));
     expect(text, isNot(contains('dispatchSessionId')));

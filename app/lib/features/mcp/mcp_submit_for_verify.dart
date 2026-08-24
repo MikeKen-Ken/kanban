@@ -42,7 +42,8 @@ Future<CallToolResult> mcpSubmitCardForVerify(
     var fromColumnId =
         controller.findColumnIdForCard(cardId) ?? located.columnId;
     if (fromColumnId == null) {
-      return mcpErrorResult('未找到卡片所在列：$cardId');
+      return mcpErrorResult(
+          'Could not find the column containing card $cardId');
     }
 
     final modeCount = [
@@ -52,14 +53,14 @@ Future<CallToolResult> mcpSubmitCardForVerify(
     ].where((flag) => flag).length;
     if (modeCount > 1) {
       return mcpErrorResult(
-        'verificationFeedback、completedFeedbackIds、'
-        'completeAllIncompleteFeedback 只能选其一',
+        'Only one of verificationFeedback, completedFeedbackIds, or '
+        'completeAllIncompleteFeedback may be used',
       );
     }
 
     final card = controller.findCardById(cardId);
     if (card == null) {
-      return mcpErrorResult('未找到卡片：$cardId');
+      return mcpErrorResult('Card not found: $cardId');
     }
 
     // 优先使用取卡时冻结的范围，避免提前勾选后遗漏本轮已实施子任务。
@@ -71,7 +72,7 @@ Future<CallToolResult> mcpSubmitCardForVerify(
 
     if (completedChecklistIds != null && completeAllIncompleteChecklist) {
       return mcpErrorResult(
-        'completedChecklistIds 与 completeAllIncompleteChecklist 只能选其一',
+        'completedChecklistIds and completeAllIncompleteChecklist are mutually exclusive',
       );
     }
 
@@ -83,7 +84,8 @@ Future<CallToolResult> mcpSubmitCardForVerify(
         for (final item in card.checklist) item.id,
       });
       if (unknown.isNotEmpty) {
-        return mcpErrorResult('子任务 id 不存在：${unknown.join(', ')}');
+        return mcpErrorResult(
+            'Checklist item id not found: ${unknown.join(', ')}');
       }
       completedChecklistCount =
           card.checklist.where((item) => idSet.contains(item.id)).length;
@@ -109,14 +111,16 @@ Future<CallToolResult> mcpSubmitCardForVerify(
     if (completedFeedbackIds != null) {
       if (completedFeedbackIds.isNotEmpty &&
           card.verificationFeedback.isEmpty) {
-        return mcpErrorResult('卡片没有验证反馈可勾选');
+        return mcpErrorResult(
+            'The card has no verification feedback to complete');
       }
       final idSet = completedFeedbackIds.toSet();
       final unknown = idSet.difference({
         for (final item in card.verificationFeedback) item.id,
       });
       if (unknown.isNotEmpty) {
-        return mcpErrorResult('验证反馈 id 不存在：${unknown.join(', ')}');
+        return mcpErrorResult(
+            'Verification feedback id not found: ${unknown.join(', ')}');
       }
       feedbackToApply = [
         for (final item in card.verificationFeedback)
@@ -131,7 +135,8 @@ Future<CallToolResult> mcpSubmitCardForVerify(
             isReworkWorkMode(card))) {
       feedbackToApply = markAllIncompleteFeedbackDone(card);
       if (feedbackToApply == null && completeAllIncompleteFeedback == true) {
-        return mcpErrorResult('没有未完成的验证反馈可勾选');
+        return mcpErrorResult(
+            'There is no incomplete verification feedback to complete');
       }
     }
 
@@ -147,11 +152,11 @@ Future<CallToolResult> mcpSubmitCardForVerify(
     }
 
     final board = controller.board;
-    if (board == null) return mcpErrorResult('看板未就绪');
+    if (board == null) return mcpErrorResult('The board is not ready');
 
     final verifyColumn = findVerifyColumn(board.columns);
     if (verifyColumn == null) {
-      return mcpErrorResult('未找到「待验证」列');
+      return mcpErrorResult('The Verify column was not found');
     }
 
     final wasAlreadyInVerifyColumn = fromColumnId == verifyColumn.id;
@@ -197,7 +202,8 @@ Future<CallToolResult> mcpSubmitCardForVerify(
         'afterGitCommit': {
           'tool': 'set_card_commit_ref',
           'cardId': cardId,
-          'hint': 'git commit 后调用，commitRef 传 git rev-parse --short=7 HEAD',
+          'hint':
+              'Call this after git commit and pass git rev-parse --short=7 HEAD as commitRef',
         },
     });
   });

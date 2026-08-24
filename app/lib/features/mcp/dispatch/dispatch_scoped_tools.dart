@@ -23,17 +23,21 @@ void registerDispatchScopedAgentTools(
 }) {
   server.registerTool(
     'ready_to_submit',
-    description: '声明本卡已完成并持久化待收尾数据；不提交 Git、不勾选、不移列。',
+    description:
+        'Declare this card complete and persist pending finalization data. This does not commit Git changes, check items, or move the card.',
     inputSchema: JsonSchema.object(
       properties: {
-        'cardId': JsonSchema.string(description: '本会话绑定的卡片 id'),
+        'cardId':
+            JsonSchema.string(description: 'Card id bound to this session'),
         'completedChecklistIds': JsonSchema.array(
           items: JsonSchema.string(),
-          description: '本轮明确完成的 checklist id；无则传空数组',
+          description:
+              'Checklist ids explicitly completed in this round; pass an empty array when there are none',
         ),
         'completedFeedbackIds': JsonSchema.array(
           items: JsonSchema.string(),
-          description: '本轮明确完成的 feedback id；无则传空数组',
+          description:
+              'Feedback ids explicitly completed in this round; pass an empty array when there are none',
         ),
         'verificationCommands': JsonSchema.array(
           items: JsonSchema.object(
@@ -41,23 +45,26 @@ void registerDispatchScopedAgentTools(
               'executable': JsonSchema.string(),
               'args': JsonSchema.array(items: JsonSchema.string()),
               'cwd': JsonSchema.string(
-                description: '仓库内相对工作目录；默认 .',
+                description:
+                    'Repository-relative working directory; defaults to .',
               ),
               'timeoutMs': JsonSchema.number(
-                description: '可选超时毫秒数',
+                description: 'Optional timeout in milliseconds',
               ),
               'expectedExitCode': JsonSchema.number(),
             },
             required: ['executable', 'args'],
           ),
-          description: '已废弃：测试由 Agent 会话内执行，不要传此字段',
+          description:
+              'Deprecated: tests run in the Agent session; do not pass this field',
         ),
         'manualVerificationReason': JsonSchema.string(
-          description: '无法自动验证时的人工验证原因；会话内已跑测试则可省略',
+          description:
+              'Reason for manual verification when automated verification is unavailable; omit when tests ran in the session',
         ),
         'gitRevertCommit': JsonSchema.string(
           description:
-              '仅当本卡明确要求撤销指定提交时传其 7–64 位哈希；由 Worker 执行，不要自行运行 git revert',
+              'Pass a 7-64 character commit hash only when this card explicitly requires reverting that commit. The Worker performs the revert; do not run git revert yourself.',
         ),
       },
       required: [
@@ -73,18 +80,21 @@ void registerDispatchScopedAgentTools(
     ),
     callback: (args, extra) async {
       final requestedCardId = mcpTrimmedString(args['cardId']);
-      if (requestedCardId == null) return mcpErrorResult('cardId 不能为空');
+      if (requestedCardId == null) {
+        return mcpErrorResult('cardId cannot be empty');
+      }
       if (requestedCardId != cardId) {
-        return mcpErrorResult('该端点只允许操作绑定卡片：$cardId');
+        return mcpErrorResult(
+            'This endpoint can operate only on its bound card: $cardId');
       }
       final checklistIds = parseMcpIdList(args['completedChecklistIds']);
       final feedbackIds = parseMcpIdList(args['completedFeedbackIds']);
       if (checklistIds == null || feedbackIds == null) {
-        return mcpErrorResult('完成项 id 必须是字符串数组');
+        return mcpErrorResult('Completed item ids must be string arrays');
       }
       final commands = _parseVerificationCommands(args['verificationCommands']);
       if (commands == null) {
-        return mcpErrorResult('verificationCommands 格式无效');
+        return mcpErrorResult('verificationCommands has an invalid format');
       }
       return dispatchReadyToSubmit(
         controller,
@@ -102,7 +112,8 @@ void registerDispatchScopedAgentTools(
 
   server.registerTool(
     'submit_consultation',
-    description: '提交本会话咨询卡答复并直接移入「待验证」。',
+    description:
+        'Submit the consultation response for this session and move the card directly to Verify.',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(),
@@ -119,10 +130,11 @@ void registerDispatchScopedAgentTools(
       final requestedCardId = mcpTrimmedString(args['cardId']);
       final response = mcpTrimmedString(args['responseMarkdown']);
       if (requestedCardId == null || response == null) {
-        return mcpErrorResult('cardId 与 responseMarkdown 不能为空');
+        return mcpErrorResult('cardId and responseMarkdown cannot be empty');
       }
       if (requestedCardId != cardId) {
-        return mcpErrorResult('该端点只允许操作绑定卡片：$cardId');
+        return mcpErrorResult(
+            'This endpoint can operate only on its bound card: $cardId');
       }
       final rejected = _authorize(workerToken, requestedCardId);
       if (rejected != null) return rejected;
@@ -137,7 +149,7 @@ void registerDispatchScopedAgentTools(
 
   server.registerTool(
     'block_card',
-    description: '将本会话绑定卡片移入「阻塞中」。',
+    description: 'Move the card bound to this session to Blocked.',
     inputSchema: JsonSchema.object(
       properties: {
         'cardId': JsonSchema.string(),
@@ -152,9 +164,12 @@ void registerDispatchScopedAgentTools(
     ),
     callback: (args, extra) async {
       final requestedCardId = mcpTrimmedString(args['cardId']);
-      if (requestedCardId == null) return mcpErrorResult('cardId 不能为空');
+      if (requestedCardId == null) {
+        return mcpErrorResult('cardId cannot be empty');
+      }
       if (requestedCardId != cardId) {
-        return mcpErrorResult('该端点只允许操作绑定卡片：$cardId');
+        return mcpErrorResult(
+            'This endpoint can operate only on its bound card: $cardId');
       }
       final rejected = _authorize(workerToken, requestedCardId);
       if (rejected != null) return rejected;

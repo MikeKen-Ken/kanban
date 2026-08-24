@@ -248,7 +248,7 @@ void main() {
     expect(commandsRejected.isError, isTrue);
     expect(
       commandsRejected.content.whereType<TextContent>().first.text,
-      contains('验证已下放给 Agent'),
+      contains('Verification runs in the Agent session'),
     );
 
     final ready = await dispatchReadyToSubmit(
@@ -365,7 +365,7 @@ void main() {
     expect(result.isError, isTrue);
     expect(
       result.content.whereType<TextContent>().first.text,
-      contains('敏感文件'),
+      contains('Sensitive files'),
     );
     expect(
       (await store.read(sessionId))?.status,
@@ -416,10 +416,10 @@ void main() {
     expect(payload['preservePending'], isTrue);
     expect(payload['status'], 'committed');
     expect(payload['commitRef'], 'abc1234');
-    expect(payload['error'], contains('工作区不干净'));
+    expect(payload['error'], contains('workspace is dirty'));
     final persisted = await store.read(sessionId);
     expect(persisted?.status, DispatchPendingStatus.committed);
-    expect(persisted?.error, contains('工作区不干净'));
+    expect(persisted?.error, contains('workspace is dirty'));
     expect(
       findVerifyColumn(controller.board!.columns)
           ?.cards
@@ -466,7 +466,7 @@ void main() {
     expect(result.isError, isTrue);
     expect(
       result.content.whereType<TextContent>().first.text,
-      contains('自行移动 HEAD'),
+      contains('moved HEAD'),
     );
   });
 

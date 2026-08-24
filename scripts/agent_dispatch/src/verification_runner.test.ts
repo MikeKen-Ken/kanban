@@ -10,7 +10,7 @@ import {
 } from "./verification_runner.ts";
 
 describe("verification_runner", () => {
-  it("在仓库内相对 cwd 执行并记录耗时", async () => {
+  it("\u5728\u4ED3\u5E93\u5185\u76F8\u5BF9 cwd \u6267\u884C\u5E76\u8BB0\u5F55\u8017\u65F6", async () => {
     const result = await runVerificationCommand(
       {
         executable: process.execPath,
@@ -27,7 +27,7 @@ describe("verification_runner", () => {
     assert.ok(result.durationMs >= 0);
   });
 
-  it("遇到首个失败后停止后续命令", async () => {
+  it("\u9047\u5230\u9996\u4E2A\u5931\u8D25\u540E\u505C\u6B62\u540E\u7EED\u547D\u4EE4", async () => {
     const results = await runVerificationCommands(
       [
         { executable: process.execPath, args: ["-e", "process.exit(7)"] },
@@ -52,10 +52,10 @@ describe("verification_runner", () => {
     assert.equal(filled[1]?.passed, false);
     assert.equal(filled[1]?.exitCode, -1);
     assert.equal(filled[1]?.cwd, "src");
-    assert.equal(filled[1]?.output, "因前序验证失败未执行");
+    assert.equal(filled[1]?.output, "Skipped because a previous validation failed");
   });
 
-  it("超时命令会被终止并标记 124", async () => {
+  it("\u8D85\u65F6\u547D\u4EE4\u4F1A\u88AB\u7EC8\u6B62\u5E76\u6807\u8BB0 124", async () => {
     const result = await runVerificationCommand(
       {
         executable: process.execPath,
@@ -70,7 +70,7 @@ describe("verification_runner", () => {
     assert.equal(result.passed, false);
   });
 
-  it("拒绝 cwd 逃出仓库", async () => {
+  it("\u62D2\u7EDD cwd \u9003\u51FA\u4ED3\u5E93", async () => {
     const result = await runVerificationCommand(
       {
         executable: process.execPath,
@@ -82,10 +82,10 @@ describe("verification_runner", () => {
 
     assert.equal(result.passed, false);
     assert.equal(result.exitCode, -1);
-    assert.match(result.output, /逃出仓库/);
+    assert.match(result.output, /escaped the repository/);
   });
 
-  it("args 不经过 shell 展开", async () => {
+  it("args \u4E0D\u7ECF\u8FC7 shell \u5C55\u5F00", async () => {
     const literal = "$HOME && echo injected";
     const result = await runVerificationCommand(
       {
@@ -99,7 +99,7 @@ describe("verification_runner", () => {
     assert.equal(result.output, literal);
   });
 
-  it("找不到可执行文件时说明 Worker PATH 可能不含 Flutter", async () => {
+  it("\u627E\u4E0D\u5230\u53EF\u6267\u884C\u6587\u4EF6\u65F6\u8BF4\u660E Worker PATH \u53EF\u80FD\u4E0D\u542B Flutter", async () => {
     const result = await runVerificationCommand(
       {
         executable: "kanban-definitely-missing-binary",
@@ -111,16 +111,16 @@ describe("verification_runner", () => {
 
     assert.equal(result.passed, false);
     assert.equal(result.exitCode, -1);
-    assert.match(result.output, /未找到可执行文件 kanban-definitely-missing-binary/);
+    assert.match(result.output, /Executable kanban-definitely-missing-binary was not found/);
     assert.match(result.output, /ENOENT/);
-    assert.match(result.output, /看板进程的 PATH/);
+    assert.match(result.output, /Kanban process PATH/);
   });
 
-  it("timeout 会钳制 Worker 上限", () => {
+  it("timeout \u4F1A\u94B3\u5236 Worker \u4E0A\u9650", () => {
     assert.equal(clampTimeout(Number.MAX_SAFE_INTEGER), MAX_VERIFICATION_TIMEOUT_MS);
   });
 
-  it("失败原因附带输出首行，便于定位 spawn ENOENT", () => {
+  it("\u5931\u8D25\u539F\u56E0\u9644\u5E26\u8F93\u51FA\u9996\u884C，\u4FBF\u4E8E\u5B9A\u4F4D spawn ENOENT", () => {
     assert.equal(
       formatVerificationFailure({
         commandSummary: "flutter test targeted.dart",
@@ -133,11 +133,11 @@ describe("verification_runner", () => {
         timedOut: false,
         passed: false,
       }),
-      "验证命令失败（exitCode=-1）：flutter test targeted.dart；spawn flutter ENOENT",
+      "Verification command failed (exitCode=-1): flutter test targeted.dart; spawn flutter ENOENT",
     );
   });
 
-  it("跳过 stdout/stderr 标签，优先使用 issues found 摘要", () => {
+  it("\u8DF3\u8FC7 stdout/stderr \u6807\u7B7E，\u4F18\u5148\u4F7F\u7528 issues found \u6458\u8981", () => {
     assert.equal(
       formatVerificationFailure({
         commandSummary: "flutter analyze",
@@ -151,7 +151,7 @@ describe("verification_runner", () => {
         timedOut: false,
         passed: false,
       }),
-      "验证命令失败（exitCode=1）：flutter analyze；44 issues found. (ran in 72.7s)",
+      "Verification command failed (exitCode=1): flutter analyze; 44 issues found. (ran in 72.7s)",
     );
   });
 });

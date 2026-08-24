@@ -82,7 +82,8 @@ class AgentDispatchCardMetrics {
 
       final retry = _retryPattern.firstMatch(message);
       if (retry != null) {
-        final attempt = int.tryParse(retry.group(1) ?? '') ?? 0;
+        final attempt =
+            int.tryParse(retry.group(1) ?? retry.group(2) ?? '') ?? 0;
         if (attempt > retryCount) retryCount = attempt;
       }
     }
@@ -177,14 +178,17 @@ class AgentDispatchCardMetrics {
 
   static final _timestampPattern = RegExp(r'^\[(\d{2}:\d{2}:\d{2})\]');
   static final _cardOverridePattern =
-      RegExp(r'本卡覆盖：engine=(\w+) model=([^\s]+)');
-  static final _cursorModelPattern = RegExp(r'Cursor 模型=([^\s]+)');
+      RegExp(r'(?:本卡覆盖：|Card override: )engine=(\w+) model=([^\s]+)');
+  static final _cursorModelPattern =
+      RegExp(r'Cursor (?:模型|model)=([^\s]+)');
   static final _cursorRunPattern = RegExp(
     r'Cursor run id=(\S+) status=\S+ steps=(\d+) tools=(\d+) elapsedMs=(\d+)',
   );
   static final _codexElapsedPattern =
       RegExp(r'Codex exec (?:exitCode=\d+|skipped|cancelled) elapsedMs=(\d+)');
-  static final _retryPattern = RegExp(r'Agent 会话暂时失败（第 (\d+)/\d+ 次）');
+  static final _retryPattern = RegExp(
+    r'(?:Agent 会话暂时失败（第 (\d+)/\d+ 次）|Agent session temporarily failed \(attempt (\d+)/)',
+  );
 }
 
 String formatAgentDispatchElapsed(int seconds) {

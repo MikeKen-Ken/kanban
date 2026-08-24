@@ -14,7 +14,8 @@ typedef DispatchScopedEndpointStarter = Future<String> Function({
   required String cardId,
 });
 
-/// Worker 私有原子领卡：项目只能来自 token 绑定，不接受模型传入的项目。
+/// Atomically claim a card for the Worker. The project comes only from the
+/// token binding and is never accepted from the model.
 Future<CallToolResult> dispatchClaimNextCard(
   BoardController controller, {
   required String workerToken,
@@ -27,12 +28,12 @@ Future<CallToolResult> dispatchClaimNextCard(
   final dispatchGate = gate ?? McpDispatchCardGate.instance;
   final projectId = dispatchGate.projectIdForToken(token);
   if (token.isEmpty || projectId == null) {
-    return mcpErrorResult('Worker token 无效');
+    return mcpErrorResult('Invalid Worker token');
   }
 
   final sessionId = const Uuid().v4();
   if (!dispatchGate.beginAgentSession(token, sessionId: sessionId)) {
-    return mcpErrorResult('无法开启领卡会话');
+    return mcpErrorResult('Unable to start the card-claim session');
   }
   final repoPath = dispatchGate.repoPathForToken(token);
   if (repoPath != null && repoPath.isNotEmpty) {
@@ -56,7 +57,7 @@ Future<CallToolResult> dispatchClaimNextCard(
   final payload = _jsonPayload(claimed);
   if (payload == null) {
     dispatchGate.closeAgentSession(token);
-    return mcpErrorResult('领卡结果格式无效');
+    return mcpErrorResult('The card-claim result has an invalid format');
   }
   if (payload['found'] != true) {
     dispatchGate.closeAgentSession(token);
@@ -65,7 +66,7 @@ Future<CallToolResult> dispatchClaimNextCard(
   final cardId = payload['cardId'] as String?;
   if (cardId == null || cardId.isEmpty) {
     dispatchGate.closeAgentSession(token);
-    return mcpErrorResult('领卡结果缺少 cardId');
+    return mcpErrorResult('The card-claim result is missing cardId');
   }
 
   String? endpoint;
@@ -83,7 +84,7 @@ Future<CallToolResult> dispatchClaimNextCard(
         payload: payload,
       );
       dispatchGate.closeAgentSession(token);
-      return mcpErrorResult('创建 scoped Agent MCP 失败：$error');
+      return mcpErrorResult('Failed to create the scoped Agent MCP: $error');
     }
   }
 
@@ -132,7 +133,8 @@ Future<void> _rollbackClaimMove(
       );
     });
   } on Object {
-    // 回滚失败由原始 endpoint 错误统一终止本轮，避免覆盖根因。
+    // The original endpoint error terminates the round if rollback also fails,
+    // preserving the root cause.
   }
 }
 

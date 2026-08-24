@@ -56,7 +56,7 @@ void main() {
       expect(dispatchShellEffectiveEndMs(span), 1000 + 13639);
       expect(
         dispatchReadyBlockedByShells([span], nowMs: 1000 + 1845),
-        contains('仍在执行'),
+        contains('still running'),
       );
       expect(
         dispatchReadyBlockedByShells([span], nowMs: 1000 + 13639),
@@ -75,7 +75,7 @@ void main() {
       );
       expect(
         dispatchReadyBlockedByShells([span], nowMs: 1000 + 5000),
-        contains('仍在执行'),
+        contains('still running'),
       );
     });
 
@@ -174,7 +174,7 @@ void main() {
       );
       expect(
         dispatchReadyBlockedByShells([span], nowMs: 1000),
-        contains('耗时过短'),
+        contains('implausibly quickly'),
       );
     });
 
@@ -347,7 +347,7 @@ void main() {
       expect(ready.isError, isTrue);
       expect(
         ready.content.whereType<TextContent>().first.text,
-        contains('仍在执行'),
+        contains('still running'),
       );
 
       clock[0] = 1000 + 13639;

@@ -1,6 +1,6 @@
 import { workerLog } from "./worker_log.ts";
 
-/** SDK 1.0.28 在过滤前打出的 Rule / Skill 扫描日志。 */
+/** SDK 1.0.28 \u5728\u8FC7\u6EE4\u524D\u6253\u51FA\u7684 Rule / Skill \u626B\u63CF\u65E5\u5FD7。 */
 export type CursorSdkScanLog = {
   kind: "skills" | "rules";
   ruleCount?: number;
@@ -8,10 +8,10 @@ export type CursorSdkScanLog = {
 };
 
 /**
- * SDK 本地运行会先扫描用户主目录（含内置 `skills-cursor`），再按
- * `settingSources` 的 allowedRoots 过滤。Worker 启用 `project,user`：
- * SDK 会保留用户和仓库中的 Skill，并按其 frontmatter 触发条件选择；
- * 用户 Rule 仍会由 Worker 注入完整文本。
+ * SDK \u672C\u5730\u8FD0\u884C\u4F1A\u5148\u626B\u63CF\u7528\u6237\u4E3B\u76EE\u5F55（\u542B\u5185\u7F6E `skills-cursor`），\u518D\u6309
+ * `settingSources` \u7684 allowedRoots \u8FC7\u6EE4。Worker \u542F\u7528 `project,user`：
+ * SDK \u4F1A\u4FDD\u7559\u7528\u6237\u548C\u4ED3\u5E93\u4E2D\u7684 Skill，\u5E76\u6309\u5176 frontmatter \u89E6\u53D1\u6761\u4EF6\u9009\u62E9；
+ * \u7528\u6237 Rule \u4ECD\u4F1A\u7531 Worker \u6CE8\u5165\u5B8C\u6574\u6587\u672C。
  */
 export function parseCursorSdkScanLog(line: string): CursorSdkScanLog | undefined {
   const text = line.trim();
@@ -35,18 +35,18 @@ export function formatCursorSdkScanNote(scan: CursorSdkScanLog): string {
   if (scan.kind === "skills") {
     const count = formatCount(scan.skillCount ?? scan.ruleCount);
     return (
-      `SDK 扫描 Skill：${count}（含本机 ~/.cursor/skills-cursor 内置），` +
-      "这是可供 Cursor 按触发条件选择的 Skill；不会将全部 Skill 正文同时注入"
+      `SDK scanned Skills: ${count} (including local ~/.cursor/skills-cursor builtins). ` +
+      "These are Skills Cursor may select by trigger; it does not inject every Skill body at once."
     );
   }
   const count = formatCount(scan.ruleCount);
   return (
-    `SDK 扫描 Rule：${count}，这是过滤前的扫描数；` +
-    "用户 Rule 已由 Worker 写入 prompt；SDK 同时加载项目与用户设置层"
+    `SDK scanned Rules: ${count} (count before filtering). ` +
+    "User Rules are already written into the prompt by the Worker; the SDK also loads project and user setting layers."
   );
 }
 
-/** 与 SDK 1.0.28 `allowedRoots` 前缀匹配一致：反斜杠当成 `/`。 */
+/** \u4E0E SDK 1.0.28 `allowedRoots` \u524D\u7F00\u5339\u914D\u4E00\u81F4：\u53CD\u659C\u6760\u5F53\u6210 `/`。 */
 export function isAllowedByProjectSettingSource(
   fullPath: string,
   projectRoots: readonly string[],
@@ -84,7 +84,7 @@ export function createCursorSdkScanLogBuffer(
   };
 }
 
-/** 截获 SDK 打到 stdout/stderr 的扫描日志，补一行「扫描 ≠ 注入」。 */
+/** \u622A\u83B7 SDK \u6253\u5230 stdout/stderr \u7684\u626B\u63CF\u65E5\u5FD7，\u8865\u4E00\u884C「\u626B\u63CF ≠ \u6CE8\u5165」。 */
 export function installCursorSdkScanLogTap(
   log: (line: string) => void = (line) => workerLog(line),
 ): () => void {
@@ -105,7 +105,7 @@ function readMetaCount(text: string, key: string): number | undefined {
 }
 
 function formatCount(value: number | undefined): string {
-  return value == null || !Number.isFinite(value) ? "若干" : `${value} 个`;
+  return value == null || !Number.isFinite(value) ? "several" : `${value}`;
 }
 
 function normalizeFsPath(value: string): string {

@@ -12,12 +12,12 @@ import {
 import type { RoundDispatchJob } from "./types.ts";
 
 describe("interaction_bridge", () => {
-  it("ask_user 发出问题并等待对应回复文件", async () => {
+  it("ask_user \u53D1\u51FA\u95EE\u9898\u5E76\u7B49\u5F85\u5BF9\u5E94\u56DE\u590D\u6587\u4EF6", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kanban-interaction-"));
     const job = {
       engine: "cursor",
       cwd: process.cwd(),
-      prompt: "执行任务",
+      prompt: "\u6267\u884C\u4EFB\u52A1",
       mcpEndpoint: "http://full/mcp",
       cardLimit: 1,
       workerToken: "token",
@@ -40,7 +40,7 @@ describe("interaction_bridge", () => {
     try {
       const tool = createAskUserTool(job);
       assert.ok(tool);
-      const pending = tool.execute({ question: "请选择方案" }, {});
+      const pending = tool.execute({ question: "\u8BF7\u9009\u62E9\u65B9\u6848" }, {});
       await new Promise((resolve) => setTimeout(resolve, 20));
       const line = output.find((item) =>
         item.startsWith(INTERACTION_EVENT_PREFIX)
@@ -48,23 +48,23 @@ describe("interaction_bridge", () => {
       assert.ok(line);
       const event = JSON.parse(line.slice(INTERACTION_EVENT_PREFIX.length));
       assert.equal(event.cardId, "card-a");
-      assert.equal(event.text, "请选择方案");
+      assert.equal(event.text, "\u8BF7\u9009\u62E9\u65B9\u6848");
       writeFileSync(
         join(dir, `${event.requestId}.reply.json`),
-        JSON.stringify({ text: "方案 A" }),
+        JSON.stringify({ text: "\u65B9\u6848 A" }),
       );
-      assert.equal(await pending, "方案 A");
+      assert.equal(await pending, "\u65B9\u6848 A");
     } finally {
       interactionStdio.write = originalWrite;
     }
   });
 
-  it("问题正文中的编号列表会写入提问事件", async () => {
+  it("\u95EE\u9898\u6B63\u6587\u4E2D\u7684\u7F16\u53F7\u5217\u8868\u4F1A\u5199\u5165\u63D0\u95EE\u4E8B\u4EF6", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kanban-interaction-"));
     const job = {
       engine: "cursor",
       cwd: process.cwd(),
-      prompt: "执行任务",
+      prompt: "\u6267\u884C\u4EFB\u52A1",
       mcpEndpoint: "http://full/mcp",
       cardLimit: 1,
       workerToken: "token",
@@ -90,7 +90,7 @@ describe("interaction_bridge", () => {
       const pending = tool.execute(
         {
           question:
-            "请选择方案\n1. 本机已是最新\n2. 强制使用 pwsh\n3. 仅执行 winget upgrade",
+            "\u8BF7\u9009\u62E9\u65B9\u6848\n1. \u672C\u673A\u5DF2\u662F\u6700\u65B0\n2. \u5F3A\u5236\u4F7F\u7528 pwsh\n3. \u4EC5\u6267\u884C winget upgrade",
         },
         {},
       );
@@ -101,26 +101,26 @@ describe("interaction_bridge", () => {
       assert.ok(line);
       const event = JSON.parse(line.slice(INTERACTION_EVENT_PREFIX.length));
       assert.deepEqual(event.choices, [
-        "本机已是最新",
-        "强制使用 pwsh",
-        "仅执行 winget upgrade",
+        "\u672C\u673A\u5DF2\u662F\u6700\u65B0",
+        "\u5F3A\u5236\u4F7F\u7528 pwsh",
+        "\u4EC5\u6267\u884C winget upgrade",
       ]);
       writeFileSync(
         join(dir, `${event.requestId}.reply.json`),
-        JSON.stringify({ text: "本机已是最新" }),
+        JSON.stringify({ text: "\u672C\u673A\u5DF2\u662F\u6700\u65B0" }),
       );
-      assert.equal(await pending, "本机已是最新");
+      assert.equal(await pending, "\u672C\u673A\u5DF2\u662F\u6700\u65B0");
     } finally {
       interactionStdio.write = originalWrite;
     }
   });
 
-  it("ask_user 会把互斥选项写入提问事件", async () => {
+  it("ask_user \u4F1A\u628A\u4E92\u65A5\u9009\u9879\u5199\u5165\u63D0\u95EE\u4E8B\u4EF6", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kanban-interaction-"));
     const job = {
       engine: "cursor",
       cwd: process.cwd(),
-      prompt: "执行任务",
+      prompt: "\u6267\u884C\u4EFB\u52A1",
       mcpEndpoint: "http://full/mcp",
       cardLimit: 1,
       workerToken: "token",
@@ -145,8 +145,8 @@ describe("interaction_bridge", () => {
       assert.ok(tool);
       const pending = tool.execute(
         {
-          question: "请选择方案",
-          choices: ["方案 A", "方案 B", "方案 C"],
+          question: "\u8BF7\u9009\u62E9\u65B9\u6848",
+          choices: ["\u65B9\u6848 A", "\u65B9\u6848 B", "\u65B9\u6848 C"],
         },
         {},
       );
@@ -156,23 +156,23 @@ describe("interaction_bridge", () => {
       );
       assert.ok(line);
       const event = JSON.parse(line.slice(INTERACTION_EVENT_PREFIX.length));
-      assert.deepEqual(event.choices, ["方案 A", "方案 B", "方案 C"]);
+      assert.deepEqual(event.choices, ["\u65B9\u6848 A", "\u65B9\u6848 B", "\u65B9\u6848 C"]);
       writeFileSync(
         join(dir, `${event.requestId}.reply.json`),
-        JSON.stringify({ text: "方案 B" }),
+        JSON.stringify({ text: "\u65B9\u6848 B" }),
       );
-      assert.equal(await pending, "方案 B");
+      assert.equal(await pending, "\u65B9\u6848 B");
     } finally {
       interactionStdio.write = originalWrite;
     }
   });
 
-  it("会话结束时把完整用户与助手消息写入快照文件", () => {
+  it("\u4F1A\u8BDD\u7ED3\u675F\u65F6\u628A\u5B8C\u6574\u7528\u6237\u4E0E\u52A9\u624B\u6D88\u606F\u5199\u5165\u5FEB\u7167\u6587\u4EF6", () => {
     const dir = mkdtempSync(join(tmpdir(), "kanban-interaction-"));
     const job = {
       engine: "cursor",
       cwd: process.cwd(),
-      prompt: "执行任务",
+      prompt: "\u6267\u884C\u4EFB\u52A1",
       mcpEndpoint: "http://full/mcp",
       cardLimit: 1,
       workerToken: "token",
@@ -194,9 +194,9 @@ describe("interaction_bridge", () => {
     };
     try {
       emitConversationSnapshot(job, [
-        { role: "user", text: "- 标题" },
-        { role: "assistant", text: "第一条助手。" },
-        { role: "assistant", text: "第二条助手。" },
+        { role: "user", text: "- \u6807\u9898" },
+        { role: "assistant", text: "\u7B2C\u4E00\u6761\u52A9\u624B。" },
+        { role: "assistant", text: "\u7B2C\u4E8C\u6761\u52A9\u624B。" },
       ]);
       const line = output.find((item) =>
         item.startsWith(INTERACTION_EVENT_PREFIX)

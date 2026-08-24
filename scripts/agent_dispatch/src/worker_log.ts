@@ -10,7 +10,7 @@ export type WorkerLogRecord = {
   level?: WorkerLogLevel;
 };
 
-/** 管道 stdout 下立刻刷出一行，避免 Worker 进度被块缓冲吞掉。 */
+/** \u7BA1\u9053 stdout \u4E0B\u7ACB\u523B\u5237\u51FA\u4E00\u884C，\u907F\u514D Worker \u8FDB\u5EA6\u88AB\u5757\u7F13\u51B2\u541E\u6389。 */
 export function workerLog(
   line: string,
   source: WorkerLogSource = "worker",

@@ -6,7 +6,7 @@ import {
 } from "./cursor_mcp_servers.ts";
 
 describe("cursor_mcp_servers", () => {
-  it("无项目标签时只注入 scoped 看板 MCP", () => {
+  it("\u65E0\u9879\u76EE\u6807\u7B7E\u65F6\u53EA\u6CE8\u5165 scoped \u770B\u677F MCP", () => {
     const servers = mergeCursorMcpServers({
       userJson: JSON.stringify({
         mcpServers: {
@@ -36,7 +36,7 @@ describe("cursor_mcp_servers", () => {
     assert.equal(kanban.type, "http");
   });
 
-  it("按项目标签放行对应 MCP，并强制覆盖 kanbanMCP 为 scoped", () => {
+  it("\u6309\u9879\u76EE\u6807\u7B7E\u653E\u884C\u5BF9\u5E94 MCP，\u5E76\u5F3A\u5236\u8986\u76D6 kanbanMCP \u4E3A scoped", () => {
     const servers = mergeCursorMcpServers({
       userJson: JSON.stringify({
         mcpServers: {
@@ -72,7 +72,7 @@ describe("cursor_mcp_servers", () => {
     assert.equal(tavily.env?.TAVILY_API_KEY, "from-env");
   });
 
-  it("用户 JSON 损坏时仍注入 scoped 看板 MCP", () => {
+  it("\u7528\u6237 JSON \u635F\u574F\u65F6\u4ECD\u6CE8\u5165 scoped \u770B\u677F MCP", () => {
     const servers = mergeCursorMcpServers({
       userJson: "{not json",
       scopedKanbanUrl: "http://127.0.0.1:1/mcp",
@@ -82,7 +82,7 @@ describe("cursor_mcp_servers", () => {
     assert.equal(servers.kanbanMCP.url, "http://127.0.0.1:1/mcp");
   });
 
-  it("只展开已存在的环境变量模板", () => {
+  it("\u53EA\u5C55\u5F00\u5DF2\u5B58\u5728\u7684\u73AF\u5883\u53D8\u91CF\u6A21\u677F", () => {
     const env = { HOME: "/tmp/home" };
     assert.equal(expandEnvTemplates("${env:HOME}/x", env), "/tmp/home/x");
     assert.equal(expandEnvTemplates("${env:MISSING}/x", env), "${env:MISSING}/x");

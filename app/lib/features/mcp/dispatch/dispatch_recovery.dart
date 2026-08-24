@@ -14,7 +14,8 @@ const _recoverableStatuses = {
   DispatchPendingStatus.committed,
 };
 
-/// 只列出与新 Worker 当前 project/repo 绑定一致的可恢复事务。
+/// List only recoverable transactions that match the new Worker's current
+/// project/repository binding.
 Future<CallToolResult> dispatchListPending({
   required String workerToken,
   DispatchPendingStore? pendingStore,
@@ -22,7 +23,7 @@ Future<CallToolResult> dispatchListPending({
 }) async {
   final binding =
       _bindingFor(workerToken, gate ?? McpDispatchCardGate.instance);
-  if (binding == null) return mcpErrorResult('Worker token 无效');
+  if (binding == null) return mcpErrorResult('Invalid Worker token');
   final records = await (pendingStore ?? DispatchPendingStore()).list();
   return mcpJsonResult({
     'ok': true,
@@ -35,7 +36,7 @@ Future<CallToolResult> dispatchListPending({
   });
 }
 
-/// 使用当前完整 MCP 的新 token 重新授权单个 pending 会话。
+/// Reauthorize one pending session with a new token from the current full MCP.
 Future<CallToolResult> dispatchRecover({
   required String workerToken,
   required String sessionId,
@@ -44,15 +45,17 @@ Future<CallToolResult> dispatchRecover({
 }) async {
   final binding =
       _bindingFor(workerToken, gate ?? McpDispatchCardGate.instance);
-  if (binding == null) return mcpErrorResult('Worker token 无效');
+  if (binding == null) return mcpErrorResult('Invalid Worker token');
   final store = pendingStore ?? DispatchPendingStore();
   final record = await store.read(sessionId);
   if (record == null ||
       !_recoverableStatuses.contains(record.status) ||
       !_matchesBinding(record, binding)) {
-    return mcpErrorResult('pending 会话与当前 project/repo 不匹配');
+    return mcpErrorResult(
+        'The pending session does not match the current project/repository');
   }
-  // 权限只存在于活跃 gate；pending JSON 不再保存或轮换明文 token。
+  // Authorization exists only in the active gate. Pending JSON neither stores
+  // nor rotates the plaintext token.
   return mcpJsonResult(record.toJson());
 }
 

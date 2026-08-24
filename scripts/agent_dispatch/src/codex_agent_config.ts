@@ -7,7 +7,7 @@ export function isKanbanMcpTable(name: string): boolean {
   return table === KANBAN_TABLE || table.startsWith(`${KANBAN_TABLE}.`);
 }
 
-/** 去掉用户 config 里完整看板 MCP 及其子表，避免连上常驻工具目录。 */
+/** \u53BB\u6389\u7528\u6237 config \u91CC\u5B8C\u6574\u770B\u677F MCP \u53CA\u5176\u5B50\u8868，\u907F\u514D\u8FDE\u4E0A\u5E38\u9A7B\u5DE5\u5177\u76EE\u5F55。 */
 export function stripKanbanMcpTables(source: string): string {
   const matches = [...source.matchAll(/^\[([^\]]+)\]/gm)];
   if (matches.length === 0) return source;

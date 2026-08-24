@@ -71,9 +71,9 @@ export function resolveCodexCommand(): {
 }
 
 /**
- * Codex 0.147 已移除 `exec --full-auto`。
- * `--approve-for-me` 会走 workspace-write 沙箱并自动审批，不能再叠加 `--sandbox`。
- * `--json` 把会话事件打到 stdout，避免把 TTY 回放误当成 stderr 警告。
+ * Codex 0.147 \u5DF2\u79FB\u9664 `exec --full-auto`。
+ * `--approve-for-me` \u4F1A\u8D70 workspace-write \u6C99\u7BB1\u5E76\u81EA\u52A8\u5BA1\u6279，\u4E0D\u80FD\u518D\u53E0\u52A0 `--sandbox`。
+ * `--json` \u628A\u4F1A\u8BDD\u4E8B\u4EF6\u6253\u5230 stdout，\u907F\u514D\u628A TTY \u56DE\u653E\u8BEF\u5F53\u6210 stderr \u8B66\u544A。
  */
 export function buildCodexExecArgs(options: {
   cwd: string;
@@ -100,7 +100,7 @@ export function buildCodexExecArgs(options: {
     ...(options.extraConfigArgs ?? []),
   );
   if (process.platform === "win32" && options.enableSandbox === true) {
-    // MSIX 版 pwsh 无法被 elevated sandbox 的受限令牌启动（CreateProcessAsUserW）。
+    // MSIX \u7248 pwsh \u65E0\u6CD5\u88AB elevated sandbox \u7684\u53D7\u9650\u4EE4\u724C\u542F\u52A8（CreateProcessAsUserW）。
     args.push("-c", 'windows.sandbox="unelevated"');
   }
   if (options.model?.trim()) {
@@ -189,7 +189,7 @@ export async function runCodex(
             child.kill("SIGTERM");
           }
         } catch {
-          // 子进程可能已在取消边界退出。
+          // \u5B50\u8FDB\u7A0B\u53EF\u80FD\u5DF2\u5728\u53D6\u6D88\u8FB9\u754C\u9000\u51FA。
         }
       };
       cancellation?.onCancel(killChild);
@@ -217,7 +217,7 @@ export async function runCodex(
           if (message?.role === "thinking") emitThinking(message.text);
           emitAssistant(extractCodexAssistantEventText(parsed));
         } catch {
-          // 非 JSON 行只记日志。
+          // \u975E JSON \u884C\u53EA\u8BB0\u65E5\u5FD7。
         }
       });
       const stderrLines = createLineBuffer((line) => {
@@ -313,7 +313,7 @@ export async function runCodex(
     try {
       rmSync(temp, { recursive: true, force: true });
     } catch {
-      // 临时目录可能已由进程清理。
+      // \u4E34\u65F6\u76EE\u5F55\u53EF\u80FD\u5DF2\u7531\u8FDB\u7A0B\u6E05\u7406。
     }
   }
 }

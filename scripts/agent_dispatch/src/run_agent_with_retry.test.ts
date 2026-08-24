@@ -6,7 +6,7 @@ import type { RoundDispatchJob } from "./types.ts";
 const job: RoundDispatchJob = {
   engine: "cursor",
   cwd: process.cwd(),
-  prompt: "处理当前卡片",
+  prompt: "\u5904\u7406\u5F53\u524D\u5361\u7247",
   mcpEndpoint: "http://full/mcp",
   cardLimit: 1,
   workerToken: "worker-token",
@@ -22,7 +22,7 @@ const job: RoundDispatchJob = {
 };
 
 describe("run_agent_with_retry", () => {
-  it("暂时故障后自动重试当前卡片直至成功", async () => {
+  it("retries the current card after temporary failures until it succeeds", async () => {
     let attempts = 0;
     const delays: number[] = [];
 
@@ -30,8 +30,8 @@ describe("run_agent_with_retry", () => {
       async () => {
         attempts += 1;
         return attempts < 3
-          ? { ok: false, error: "Cursor 服务暂时不可用", retryable: true }
-          : { ok: true, summary: "完成" };
+          ? { ok: false, error: "Cursor \u670D\u52A1\u6682\u65F6\u4E0D\u53EF\u7528", retryable: true }
+          : { ok: true, summary: "\u5B8C\u6210" };
       },
       job,
       undefined,
@@ -45,7 +45,7 @@ describe("run_agent_with_retry", () => {
     assert.deepEqual(delays, [1000, 2000]);
   });
 
-  it("五次暂时故障后中断并保留最后错误", async () => {
+  it("stops after five temporary failures and preserves the last error", async () => {
     let attempts = 0;
 
     const result = await runAgentWithRetry(
@@ -63,7 +63,7 @@ describe("run_agent_with_retry", () => {
     assert.equal(attempts, 5);
   });
 
-  it("较长网络波动后仍能在当前卡片内恢复", async () => {
+  it("recovers the current card after a longer network interruption", async () => {
     let attempts = 0;
     const delays: number[] = [];
 
@@ -72,7 +72,7 @@ describe("run_agent_with_retry", () => {
         attempts += 1;
         return attempts < 5
           ? { ok: false, error: "connection lost", retryable: true }
-          : { ok: true, summary: "恢复并完成" };
+          : { ok: true, summary: "\u6062\u590D\u5E76\u5B8C\u6210" };
       },
       job,
       undefined,
@@ -86,13 +86,13 @@ describe("run_agent_with_retry", () => {
     assert.deepEqual(delays, [1000, 2000, 4000, 8000]);
   });
 
-  it("不可重试错误立即返回", async () => {
+  it("returns immediately for a non-retryable error", async () => {
     let attempts = 0;
 
     const result = await runAgentWithRetry(
       async () => {
         attempts += 1;
-        return { ok: false, error: "缺少 API Key", retryable: false };
+        return { ok: false, error: "\u7F3A\u5C11 API Key", retryable: false };
       },
       job,
       undefined,

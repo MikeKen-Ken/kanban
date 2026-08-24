@@ -12,7 +12,7 @@ import type { DispatchJob, RoundDispatchJob } from "./types.ts";
 const job: DispatchJob = {
   engine: "cursor",
   cwd: process.cwd(),
-  prompt: "基础指令",
+  prompt: "\u57FA\u7840\u6307\u4EE4",
   mcpEndpoint: "http://full/mcp",
   projectId: "project-a",
   cardLimit: 1,
@@ -75,7 +75,7 @@ class FakeMcp implements KanbanMcpConnection {
 
 function makeContext(): SessionContext {
   return {
-    prompt: "本轮 prompt",
+    prompt: "\u672C\u8F6E prompt",
     images: [{ data: "aW1hZ2U=", mimeType: "image/png" }],
     attachmentPaths: ["C:\\temp\\image.png"],
     tempDir: "C:\\temp",
@@ -121,7 +121,7 @@ function createHappyDependencies(options?: {
           agentEndpointUrl: "http://scoped/mcp",
           agentModelParamValues: { reasoning_effort: "high" },
           ...options?.peekFields,
-          workItems: [{ id: "work-a", text: "完成 A" }],
+          workItems: [{ id: "work-a", text: "\u5B8C\u6210 A" }],
         };
       case "dispatch_agent_session_status":
         return {
@@ -182,7 +182,7 @@ function createHappyDependencies(options?: {
     connectMcp: async (endpoint) =>
       endpoint.includes("scoped") ? scoped : full,
     inspectGit: () => ({ kind: "clean" }),
-    readArchitecture: () => "# 架构",
+    readArchitecture: () => "# \u67B6\u6784",
     createContext: () => makeContext(),
     runAgent: async (round) => {
       assert.equal(round.round.cardId, "card-a");
@@ -199,7 +199,7 @@ function createHappyDependencies(options?: {
       );
       return options?.runAgent
         ? options.runAgent(round)
-        : { ok: true, summary: "完成" };
+        : { ok: true, summary: "\u5B8C\u6210" };
     },
   };
   return { dependencies, full, scoped };
@@ -219,7 +219,7 @@ describe("run_batch", () => {
     assert.equal(result.processedCards, 1);
   });
 
-  it("批次开始先用新 token 恢复 committed 收尾", async () => {
+  it("\u6279\u6B21\u5F00\u59CB\u5148\u7528\u65B0 token \u6062\u590D committed \u6536\u5C3E", async () => {
     const full = new FakeMcp((name) => {
       switch (name) {
         case "dispatch_list_pending":
@@ -251,7 +251,7 @@ describe("run_batch", () => {
     const dependencies: RunBatchDependencies = {
       connectMcp: async () => full,
       inspectGit: () => ({ kind: "clean" }),
-      readArchitecture: () => "# 架构",
+      readArchitecture: () => "# \u67B6\u6784",
       createContext: () => makeContext(),
       runAgent: async () => ({ ok: true }),
     };
@@ -268,7 +268,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("队列为空时不写空的单卡轮次日志", async () => {
+  it("\u961F\u5217\u4E3A\u7A7A\u65F6\u4E0D\u5199\u7A7A\u7684\u5355\u5361\u8F6E\u6B21\u65E5\u5FD7", async () => {
     const full = new FakeMcp((name) => {
       switch (name) {
         case "dispatch_list_pending":
@@ -282,7 +282,7 @@ describe("run_batch", () => {
     const dependencies: RunBatchDependencies = {
       connectMcp: async () => full,
       inspectGit: () => ({ kind: "clean" }),
-      readArchitecture: () => "# 架构",
+      readArchitecture: () => "# \u67B6\u6784",
       createContext: () => makeContext(),
       runAgent: async () => ({ ok: true }),
     };
@@ -301,10 +301,10 @@ describe("run_batch", () => {
       process.stdout.write = originalWrite;
     }
 
-    assert.equal(chunks.join("").includes("Worker 单卡轮次"), false);
+    assert.equal(chunks.join("").includes("Worker \u5355\u5361\u8F6E\u6B21"), false);
   });
 
-  it("claim、门禁、会话验证记账、finalize 形成完整单卡流程", async () => {
+  it("claim、\u95E8\u7981、\u4F1A\u8BDD\u9A8C\u8BC1\u8BB0\u8D26、finalize \u5F62\u6210\u5B8C\u6574\u5355\u5361\u6D41\u7A0B", async () => {
     const { dependencies, full, scoped } = createHappyDependencies({
       peekFields: { projectMcpTags: ["unity"] },
     });
@@ -323,9 +323,9 @@ describe("run_batch", () => {
     assert.equal(scoped.closed, true);
   });
 
-  it("收尾记账失败不误报为脏工作区停止", async () => {
+  it("\u6536\u5C3E\u8BB0\u8D26\u5931\u8D25\u4E0D\u8BEF\u62A5\u4E3A\u810F\u5DE5\u4F5C\u533A\u505C\u6B62", async () => {
     const { dependencies, full } = createHappyDependencies({
-      recordError: "dispatch_record_validation_results 失败：验证结果数量与声明命令不一致",
+      recordError: "dispatch_record_validation_results \u5931\u8D25：\u9A8C\u8BC1\u7ED3\u679C\u6570\u91CF\u4E0E\u58F0\u660E\u547D\u4EE4\u4E0D\u4E00\u81F4",
     });
     dependencies.inspectGit = () => {
       const claimed = full.calls.some(
@@ -340,10 +340,10 @@ describe("run_batch", () => {
 
     assert.equal(result.ok, false);
     assert.match(result.error ?? "", /Worker finalization failed/);
-    assert.doesNotMatch(result.error ?? "", /工作区不干净，停止批次/);
+    assert.doesNotMatch(result.error ?? "", /\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0，\u505C\u6B62\u6279\u6B21/);
   });
 
-  it("禁止使用卡片参数时沿用工作台默认", async () => {
+  it("\u7981\u6B62\u4F7F\u7528\u5361\u7247\u53C2\u6570\u65F6\u6CBF\u7528\u5DE5\u4F5C\u53F0\u9ED8\u8BA4", async () => {
     const { dependencies } = createHappyDependencies({
       expectedReasoning: "medium",
     });
@@ -361,7 +361,7 @@ describe("run_batch", () => {
     assert.equal(result.ok, true);
   });
 
-  it("默认脏工作区在领取前停止批次", async () => {
+  it("\u9ED8\u8BA4\u810F\u5DE5\u4F5C\u533A\u5728\u9886\u53D6\u524D\u505C\u6B62\u6279\u6B21", async () => {
     const { dependencies, full } = createHappyDependencies();
     dependencies.inspectGit = () => ({ kind: "dirty", output: " M src/file.ts" });
 
@@ -375,7 +375,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("工作台允许脏工作区时可以领取", async () => {
+  it("\u5DE5\u4F5C\u53F0\u5141\u8BB8\u810F\u5DE5\u4F5C\u533A\u65F6\u53EF\u4EE5\u9886\u53D6", async () => {
     const { dependencies, full } = createHappyDependencies();
     dependencies.inspectGit = () => ({ kind: "dirty", output: " M src/file.ts" });
 
@@ -391,7 +391,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("卡片允许脏工作区时可以领取", async () => {
+  it("\u5361\u7247\u5141\u8BB8\u810F\u5DE5\u4F5C\u533A\u65F6\u53EF\u4EE5\u9886\u53D6", async () => {
     const { dependencies, full } = createHappyDependencies({
       peekFields: { agentAllowDirtyWorkspace: true },
     });
@@ -405,7 +405,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("禁止卡片参数时忽略卡片脏工作区开关", async () => {
+  it("\u7981\u6B62\u5361\u7247\u53C2\u6570\u65F6\u5FFD\u7565\u5361\u7247\u810F\u5DE5\u4F5C\u533A\u5F00\u5173", async () => {
     const { dependencies, full } = createHappyDependencies({
       peekFields: { agentAllowDirtyWorkspace: true },
     });
@@ -425,7 +425,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("scoped 工具不精确匹配时拒绝启动 Agent", async () => {
+  it("scoped \u5DE5\u5177\u4E0D\u7CBE\u786E\u5339\u914D\u65F6\u62D2\u7EDD\u542F\u52A8 Agent", async () => {
     let agentStarted = false;
     const { dependencies, full, scoped } = createHappyDependencies({
       scopedTools: ["ready_to_submit", "block_card"],
@@ -445,7 +445,7 @@ describe("run_batch", () => {
     );
   });
 
-  it("skip 调用私有工具且脏工作区停止批次", async () => {
+  it("skip \u8C03\u7528\u79C1\u6709\u5DE5\u5177\u4E14\u810F\u5DE5\u4F5C\u533A\u505C\u6B62\u6279\u6B21", async () => {
     const { dependencies, full } = createHappyDependencies({
       runAgent: async () => ({ ok: false, error: "Skipped" }),
     });
@@ -466,9 +466,9 @@ describe("run_batch", () => {
     );
   });
 
-  it("人工验证原因也不复跑命令并直接 finalize", async () => {
+  it("\u4EBA\u5DE5\u9A8C\u8BC1\u539F\u56E0\u4E5F\u4E0D\u590D\u8DD1\u547D\u4EE4\u5E76\u76F4\u63A5 finalize", async () => {
     const { dependencies, full } = createHappyDependencies({
-      manualReason: "需要人工检查视觉结果",
+      manualReason: "\u9700\u8981\u4EBA\u5DE5\u68C0\u67E5\u89C6\u89C9\u7ED3\u679C",
     });
 
     const result = await runBatch(job, undefined, dependencies);
@@ -477,7 +477,7 @@ describe("run_batch", () => {
     assert.ok(full.calls.some((item) => item.name === "dispatch_finalize"));
   });
 
-  it("finalize 要求保留 pending 时不 fail 会话", async () => {
+  it("finalize \u8981\u6C42\u4FDD\u7559 pending \u65F6\u4E0D fail \u4F1A\u8BDD", async () => {
     const { dependencies, full } = createHappyDependencies({
       finalizeResult: {
         ok: false,
@@ -485,7 +485,7 @@ describe("run_batch", () => {
         cardId: "card-a",
         status: "committed",
         commitRef: "abc1234",
-        error: "Git 提交后工作区不干净，拒绝更新看板",
+        error: "Git \u63D0\u4EA4\u540E\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0，\u62D2\u7EDD\u66F4\u65B0\u770B\u677F",
         preservePending: true,
       },
     });
@@ -494,7 +494,7 @@ describe("run_batch", () => {
 
     assert.equal(result.ok, false);
     assert.equal(result.preservePending, true);
-    assert.match(result.error ?? "", /工作区不干净/);
+    assert.match(result.error ?? "", /\u5DE5\u4F5C\u533A\u4E0D\u5E72\u51C0/);
     assert.equal(
       full.calls.some((item) => item.name === "dispatch_fail_agent_session"),
       false,
@@ -502,17 +502,17 @@ describe("run_batch", () => {
     assert.ok(full.calls.some((item) => item.name === "dispatch_finalize"));
   });
 
-  it("peek 与 claim 卡片漂移时停止批次", async () => {
+  it("peek \u4E0E claim \u5361\u7247\u6F02\u79FB\u65F6\u505C\u6B62\u6279\u6B21", async () => {
     const { dependencies } = createHappyDependencies({
-      claimError: "下一张卡片已漂移：expectedCardId=card-a，actualCardId=card-b",
+      claimError: "\u4E0B\u4E00\u5F20\u5361\u7247\u5DF2\u6F02\u79FB：expectedCardId=card-a，actualCardId=card-b",
     });
 
     const result = await runBatch(job, undefined, dependencies);
     assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /卡片已漂移/);
+    assert.match(result.error ?? "", /\u5361\u7247\u5DF2\u6F02\u79FB/);
   });
 
-  it("领卡前读取 liveFile，下一张使用更新后的默认模型", async () => {
+  it("\u9886\u5361\u524D\u8BFB\u53D6 liveFile，\u4E0B\u4E00\u5F20\u4F7F\u7528\u66F4\u65B0\u540E\u7684\u9ED8\u8BA4\u6A21\u578B", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kanban-live-"));
     const liveFile = join(dir, "live.json");
     writeFileSync(
@@ -526,7 +526,7 @@ describe("run_batch", () => {
       expectedReasoning: "low",
       runAgent: async (round) => {
         assert.equal(round.model, "composer-2.5");
-        return { ok: true, summary: "完成" };
+        return { ok: true, summary: "\u5B8C\u6210" };
       },
     });
 

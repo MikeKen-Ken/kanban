@@ -1,127 +1,127 @@
-# 系统架构
+# System Architecture
 
-## 产品边界
+## Product boundary
 
-本项目是面向个人使用的 Windows 与 Android 跨平台看板。核心能力是多项目、列式任务流、本地优先存储和 WebDAV 多设备同步。
+This project is a personal Windows and Android cross-platform kanban board. Core capabilities are multiple projects, column-based task flow, local-first storage, and WebDAV multi-device sync.
 
-明确不包含账号、团队成员、实时协作与 CRDT。其他平台只需避免破坏既有条件编译，不作为当前功能验收目标。
+It explicitly does not include accounts, team members, realtime collaboration, or CRDT. Other platforms only need to avoid breaking existing conditional compilation; they are not current acceptance targets.
 
-## 分层
+## Layers
 
 ```text
-界面层 screens/widgets/features/*/ui
+UI layer screens/widgets/features/*/ui
   ↓
-功能层 features/*（查询、命令、调度、导入导出）
+Feature layer features/* (queries, commands, dispatch, import/export)
   ↓
-应用编排 controllers/BoardController
+App orchestration controllers/BoardController
   ↓
-仓储与同步 storage/ + webdav_sync/ + features/sync_conflict/
+Storage and sync storage/ + webdav_sync/ + features/sync_conflict/
   ↓
-本地 JSON / SharedPreferences / WebDAV
+Local JSON / SharedPreferences / WebDAV
 ```
 
-- 界面层只负责展示状态和转发用户意图，不持有流程权威状态。
-- 功能模块对外暴露少量模型、服务或页面入口；内部实现保持在自身目录。
-- `BoardController` 负责跨模块编排，不承载可独立测试的筛选、日期、重复、统计或解析算法。
-- 两个以上功能共同使用的纯工具放入 `app/lib/common/`。
-- 存储和同步层不得依赖具体界面。
+- The UI layer only displays state and forwards user intent; it does not hold authoritative process state.
+- Feature modules expose a small number of models, services, or page entry points; internal implementation stays in their own directories.
+- `BoardController` orchestrates across modules and does not host independently testable filtering, date, recurrence, statistics, or parsing algorithms.
+- Pure utilities used by two or more features belong in `app/lib/common/`.
+- The storage and sync layers must not depend on specific UI.
 
-## 数据所有权
+## Data ownership
 
-### 同步的用户内容
+### Synced user content
 
-- 项目清单、看板、列、卡片、项目设置与回收站
-- 看板背景图（工作区级 `SharedContent.wallpapers` 元数据 + 根级 `wallpapers/` 文件；项目设置仅保存引用与轮播策略）
-- 图片附件
-- 自定义标签
-- 保存视图
-- 卡片模板
-- 活动历史
-- WIP 配置
-- 提醒时间与重复规则
-- 卡片外链、依赖与关联
-- 卡片 Agent 覆盖（引擎、模型、参数、是否允许脏工作区、是否需要自动化测试）
-- 卡片 Agent Markdown 对话记录（卡片字段为权威文本，并维护 `Agent 对话.md` 文件附件镜像）
-- 泳道分组与自动化规则
+- Project list, boards, columns, cards, project settings, and trash
+- Board wallpapers (workspace-level `SharedContent.wallpapers` metadata + root `wallpapers/` files; project settings only store references and carousel policy)
+- Image attachments
+- Custom labels
+- Saved views
+- Card templates
+- Activity history
+- WIP configuration
+- Reminder times and recurrence rules
+- Card external links, dependencies, and relations
+- Card Agent overrides (engine, model, parameters, whether a dirty working tree is allowed, whether automated tests are required)
+- Card Agent Markdown conversation records (the card field is the authoritative text, with an `Agent 对话.md` file-attachment mirror)
+- Swimlane grouping and automation rules
 
-同步内容使用可选 JSON 字段或独立文件扩展。旧客户端必须能够忽略未知字段，新客户端读取缺失字段时必须使用安全默认值。
+Synced content uses optional JSON fields or separate file extensions. Old clients must ignore unknown fields; new clients must use safe defaults when fields are missing.
 
-### 仅本机数据
+### Device-local data
 
-- WebDAV 凭据
-- 当前项目
-- 明暗模式、拖拽延迟、引导状态等界面偏好
-- Windows 内嵌 MCP 开关与端口
-- Agent 调度偏好（引擎、仓库路径、模型、思考程度、是否允许使用卡片参数、是否允许脏工作区等）
-- Agent 调度 pending 收尾事务与提交范围快照（仅本机 SharedPreferences，不进入工作区 JSON / WebDAV）
-- MCP 代理运行上下文（按项目与卡片保存的 sub-agent / Git 恢复信息）
-- 撤销栈
-- 系统通知调度记录
+- WebDAV credentials
+- Current project
+- UI preferences such as light/dark mode, drag delay, and onboarding state
+- Windows embedded MCP switch and port
+- Agent dispatch preferences (engine, repo path, model, thinking level, whether card parameters may be used, whether a dirty working tree is allowed, and similar)
+- Agent dispatch pending finalization transactions and commit-scope snapshots (device-local SharedPreferences only; not in workspace JSON / WebDAV)
+- MCP agent run context (sub-agent / Git recovery stored per project and card)
+- Undo stack
+- System notification scheduling records
 - SyncBase
 
-## 主要数据流
+## Main data flows
 
-### 本地修改
-
-```text
-用户操作
-  → 功能命令
-  → BoardController 编排
-  → 本地立即持久化
-  → 更新界面
-  → 不自动上传；仅用户选择上传 / 下载 / 合并
-```
-
-### 远端同步
+### Local edits
 
 ```text
-上传：全量推送本机工作区，覆盖云端（需二次确认）
-下载：全量拉取云端工作区，覆盖本机（需二次确认）
-合并：拉取远端 → local/base/remote 三路合并 → 写入冲突标记 → 本地落盘 → 有差异时再写回远端
+User action
+  → feature command
+  → BoardController orchestration
+  → immediate local persist
+  → UI update
+  → no automatic upload; upload / download / merge only when the user chooses
 ```
 
-## 功能目录
+### Remote sync
 
-新增功能放在 `app/lib/features/<feature>/`：
+```text
+Upload: push the full local workspace, overwriting the cloud (requires second confirmation)
+Download: pull the full cloud workspace, overwriting local (requires second confirmation)
+Merge: pull remote → local/base/remote three-way merge → write conflict marks → persist locally → if there are differences, write back to remote
+```
 
-- `views/`：今日、日历、全局查询、组合筛选和保存视图
-- `quick_capture/`：快速录入与自然语言解析
-- `undo/`：可撤销命令与本机撤销栈
-- `templates/`：卡片模板与复制
-- `reminders/`：提醒、重复规则和平台调度
-- `agent_dispatch/`：桌面端本机批量调度 Cursor SDK / Codex exec；Windows 发布包内置 Worker，API Key 使用系统安全存储（仅本机）。本地会话加载用户与项目规则 / Skill / Hooks。默认只注入本卡 scoped `kanbanMCP`；Hub / Aseprite / Chrome DevTools / Tavily / Unity / Cocos / Node REPL 等附加 MCP 由当前项目的 `ProjectSettings.agentMcpTags` 决定，按项目主题合并用户对应 MCP，不再使用卡片标签开关。Worker 向会话注入 scoped 收尾工具 schema，并禁用 `GetMcpTools`，避免模型再拉取 MCP 目录。工作台本机开关「收尾后主动结束会话」默认开启：`ready_to_submit` / `submit_consultation` / `block_card` 在 MCP 落盘成功后，Worker 会取消 Cursor SDK run 或结束 Codex 进程，避免模型继续搜改；关闭时会等待 Agent 自然结束，以获取更多会话日志。卡片可单独关闭「需要测试」；缺省仍需要自动化测试，关闭时 Skill 会跳过自动化测试并在完成声明中记录原因。卡片是否咨询只看 `consultation` 标签（注入 `cardKind`）；未打标签即为实施卡。Worker prompt 拒绝仓库根无界 glob（`**/*` 等），并禁止以 `.git` / `.svn` / `build` 为 glob 目标；定位应定向 grep，不得与无界 glob 并行空等。`ready_to_submit` 根据 Worker 上报的 Shell 时间线拒绝未结束、失败、或 `flutter test` / `dart test` 成功但耗时过短（不像真正跑完）的验证。无界 glob 的硬拦截放在本机用户 Cursor Hook（`%USERPROFILE%\.cursor\hooks`），不进本仓库。Cursor 运行中通过 `ask_user` 暂停并等待卡片对话回复；对话以卡片 Markdown 同步，历史追问通过待返工新 claim 恢复上下文。`kanban-complete-tasks` 仅供 Worker 注入（不改磁盘原文，prompt 只剥 YAML frontmatter）。Codex 隔离 home 会改写用户 `AGENTS.md` 副本，使「先读 Architecture.md」视为已由注入满足。
-- `mcp/`：Windows 内嵌 MCP 与 Cursor/Codex 一键配置（仅本机）
-- `statistics/`：只读统计
-- `wip/`：列上限策略
-- `activity/`：活动事件、持久化与合并
-- `import_export/`：完整备份、校验与导入
-- `labels/`：共享自定义标签管理
-- `onboarding/`：首次引导
-- `app_update/`：从 GitHub Release 检查/下载更新（Android APK 安装；Windows zip 同目录覆盖重启）
-- `automations/`：项目内自动化规则（触发 → 动作）
-- `kanban/`：列/卡片展示、泳道分组、详情编辑
+## Feature directories
 
-跨功能日期判断、标识符和结果类型放在 `app/lib/common/`。
+New features go in `app/lib/features/<feature>/`:
 
-## 同步扩展约束
+- `views/`: today, calendar, global query, combined filters, and saved views
+- `quick_capture/`: quick capture and natural-language parsing
+- `undo/`: undoable commands and the device-local undo stack
+- `templates/`: card templates and copy
+- `reminders/`: reminders, recurrence rules, and platform scheduling
+- `agent_dispatch/`: desktop local batch dispatch of Cursor SDK / Codex exec; Windows release builds ship a Worker; API keys use OS secure storage (device-local only). Local sessions load user and project rules / Skills / Hooks. By default only this card's scoped `kanbanMCP` is injected; extra MCPs such as Hub / Aseprite / Chrome DevTools / Tavily / Unity / Cocos / Node REPL come from the current project's `ProjectSettings.agentMcpTags`, merging the matching user MCP by project theme rather than card-label switches. The Worker injects scoped completion-tool schemas into the session and disables `GetMcpTools` so the model does not fetch the MCP catalog again. The workbench local switch "end the session after completion" is on by default: after `ready_to_submit` / `submit_consultation` / `block_card` persist successfully on MCP, the Worker cancels the Cursor SDK run or stops the Codex process so the model does not keep searching and editing; when off, it waits for the Agent to finish naturally for more session logs. A card may turn off "require tests"; the default still requires automated tests, and when off the Skill skips automated tests and records the reason in the completion declaration. Whether a card is a consultation is determined only by the `consultation` label (injected `cardKind`); unlabeled cards are implementation cards. The Worker prompt rejects unbounded globs at the repo root (`**/*` and similar) and forbids glob targets of `.git` / `.svn` / `build`; location should use targeted grep and must not race unbounded globs. `ready_to_submit` uses the Worker-reported Shell timeline to reject verification that is still running, that failed, or where `flutter test` / `dart test` succeeded but finished too quickly to have really run. Hard blocking of unbounded globs lives in the local user Cursor Hook (`%USERPROFILE%\.cursor\hooks`), not in this repository. During a Cursor run, `ask_user` pauses and waits for a card-conversation reply; conversation syncs as card Markdown, and later follow-ups restore context via a new rework claim. `kanban-complete-tasks` is Worker-injected only (disk Skill text is not rewritten; the prompt only strips YAML frontmatter). Codex isolated home rewrites a copy of the user's `AGENTS.md` so "read Architecture.md first" is treated as already satisfied by injection.
+- `mcp/`: Windows embedded MCP and one-click Cursor/Codex setup (device-local only)
+- `statistics/`: read-only statistics
+- `wip/`: column WIP-limit policy
+- `activity/`: activity events, persistence, and merge
+- `import_export/`: full backup, validation, and import
+- `labels/`: shared custom label management
+- `onboarding/`: first-run onboarding
+- `app_update/`: check/download updates from GitHub Releases (Android APK install; Windows zip overwrite-in-place and restart)
+- `automations/`: in-project automation rules (trigger → action)
+- `kanban/`: column/card display, swimlane grouping, detail editing
 
-新增或修改同步字段时必须同时检查：
+Cross-feature date checks, identifiers, and result types live in `app/lib/common/`.
 
-1. `toJson` / `fromJson` 与默认值
-2. 内容相等判断
-3. 三路字段合并
-4. SyncBase 快照
-5. WebDAV 上传与下载清单
-6. 冲突数量与解决界面
-7. 旧数据与旧端兼容测试
+## Sync extension constraints
 
-追加型活动历史按事件 ID 并集合并。重复任务生成下一期时使用稳定系列标识和周期键，确保多设备幂等。
+When adding or changing synced fields, also check:
 
-## 验证
+1. `toJson` / `fromJson` and defaults
+2. Content equality
+3. Three-way field merge
+4. SyncBase snapshot
+5. WebDAV upload and download manifests
+6. Conflict counts and the resolve UI
+7. Compatibility tests for old data and old clients
 
-- 纯算法使用单元测试。
-- 存储和同步使用模型、合并与集成测试。
-- Windows 快捷键、右键菜单和通知需要平台验证。
-- Android 通知权限、TalkBack、窄屏布局与长按拖拽需要平台验证。
-- 人类开发阶段与 CI：至少运行 `flutter analyze` 和相关测试；最终运行全部测试与 Windows/Android 构建。
-- `agentRequireTests` 缺省或为 true 的卡片，Agent 在会话内跑与本卡改动直接相关的定向测试，通过后才能声明完成；为 false 时不要求自动化测试，但仍应执行必要的格式化、类型检查或用户明确的验收，并在声明中记录「本卡已配置无需测试」。不要把测试命令交给 Worker 代跑，也不要把上一条的全量 `flutter analyze` / 全量测试当作默认收尾。卡住、超时不得当成通过；未做的 UI 验证须标明未执行。`ready_to_submit` 时若已执行测试命令仍按其 `executionTime` 未结束（含 SDK 提前 completed），或最后一次有效测试失败，必须拒绝。结束时间以 `startedAt + executionTime` 为准；PowerShell 无法执行的 `cd ... &&` 短失败不得覆盖已通过的验证。
+Append-only activity history merges by event-id union. Recurring tasks use a stable series id and period key when generating the next occurrence so multi-device generation is idempotent.
+
+## Verification
+
+- Pure algorithms use unit tests.
+- Storage and sync use model, merge, and integration tests.
+- Windows shortcuts, context menus, and notifications need platform verification.
+- Android notification permission, TalkBack, narrow layouts, and long-press drag need platform verification.
+- During human development and CI: at least run `flutter analyze` and related tests; finally run the full test suite and Windows/Android builds.
+- For cards where `agentRequireTests` is missing or true, the Agent must run targeted tests directly related to this card's changes in-session and only declare completion after they pass; when false, automated tests are not required, but necessary formatting, type checking, or user-requested acceptance should still run, and the declaration must record "This card has no test switch enabled". Do not hand test commands to the Worker to re-run, and do not treat the previous bullet's full `flutter analyze` / full suite as default completion. Hang or timeout must not count as pass; skipped UI verification must be marked as not executed. At `ready_to_submit`, if a test command was started but has not finished according to its `executionTime` (including the SDK emitting completed early), or the last valid test failed, the call must be rejected. End time is `startedAt + executionTime`; a short `cd ... &&` failure that PowerShell cannot execute must not overwrite already-passed verification.

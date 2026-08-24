@@ -16,7 +16,7 @@ import {
 const job: DispatchJob = {
   engine: "cursor",
   cwd: process.cwd(),
-  prompt: "基础指令",
+  prompt: "\u57FA\u7840\u6307\u4EE4",
   mcpEndpoint: "http://full/mcp",
   cardLimit: 1,
   workerToken: "worker-secret",
@@ -24,7 +24,7 @@ const job: DispatchJob = {
 };
 
 describe("mergeJobWithCardOverrides", () => {
-  it("解析 k/m 与纯数字 token 预算", () => {
+  it("\u89E3\u6790 k/m \u4E0E\u7EAF\u6570\u5B57 token \u9884\u7B97", () => {
     assert.equal(parseTokenBudget("272k"), 272_000);
     assert.equal(parseTokenBudget("64k"), 64_000);
     assert.equal(parseTokenBudget("272000"), 272_000);
@@ -32,7 +32,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.equal(parseTokenBudget("max"), undefined);
   });
 
-  it("未禁止时卡片参数覆盖工作台", () => {
+  it("\u672A\u7981\u6B62\u65F6\u5361\u7247\u53C2\u6570\u8986\u76D6\u5DE5\u4F5C\u53F0", () => {
     const merged = mergeJobWithCardOverrides(
       {
         ...job,
@@ -55,21 +55,21 @@ describe("mergeJobWithCardOverrides", () => {
     );
   });
 
-  it("卡片允许脏工作区时覆盖工作台默认", () => {
+  it("\u5361\u7247\u5141\u8BB8\u810F\u5DE5\u4F5C\u533A\u65F6\u8986\u76D6\u5DE5\u4F5C\u53F0\u9ED8\u8BA4", () => {
     const merged = mergeJobWithCardOverrides(job, {
       agentAllowDirtyWorkspace: true,
     });
     assert.equal(merged.allowDirtyWorkspace, true);
   });
 
-  it("卡片开沙箱时覆盖工作台默认", () => {
+  it("\u5361\u7247\u5F00\u6C99\u7BB1\u65F6\u8986\u76D6\u5DE5\u4F5C\u53F0\u9ED8\u8BA4", () => {
     const merged = mergeJobWithCardOverrides(job, {
       agentEnableSandbox: true,
     });
     assert.equal(merged.enableSandbox, true);
   });
 
-  it("禁止使用卡片参数时忽略卡片脏工作区开关", () => {
+  it("\u7981\u6B62\u4F7F\u7528\u5361\u7247\u53C2\u6570\u65F6\u5FFD\u7565\u5361\u7247\u810F\u5DE5\u4F5C\u533A\u5F00\u5173", () => {
     const merged = mergeJobWithCardOverrides(
       { ...job, ignoreCardParams: true },
       { agentAllowDirtyWorkspace: true },
@@ -77,7 +77,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.equal(merged.allowDirtyWorkspace, undefined);
   });
 
-  it("禁止使用卡片参数时忽略卡片沙箱开关", () => {
+  it("\u7981\u6B62\u4F7F\u7528\u5361\u7247\u53C2\u6570\u65F6\u5FFD\u7565\u5361\u7247\u6C99\u7BB1\u5F00\u5173", () => {
     const merged = mergeJobWithCardOverrides(
       { ...job, ignoreCardParams: true },
       { agentEnableSandbox: true },
@@ -85,7 +85,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.equal(merged.enableSandbox, undefined);
   });
 
-  it("禁止使用卡片参数时只用工作台默认", () => {
+  it("\u7981\u6B62\u4F7F\u7528\u5361\u7247\u53C2\u6570\u65F6\u53EA\u7528\u5DE5\u4F5C\u53F0\u9ED8\u8BA4", () => {
     const merged = mergeJobWithCardOverrides(
       {
         ...job,
@@ -114,7 +114,7 @@ describe("mergeJobWithCardOverrides", () => {
     );
   });
 
-  it("卡片未指定时沿用工作台默认参数", () => {
+  it("\u5361\u7247\u672A\u6307\u5B9A\u65F6\u6CBF\u7528\u5DE5\u4F5C\u53F0\u9ED8\u8BA4\u53C2\u6570", () => {
     const merged = mergeJobWithCardOverrides(
       {
         ...job,
@@ -135,7 +135,7 @@ describe("mergeJobWithCardOverrides", () => {
     );
   });
 
-  it("Cursor catalog 只有 fast 时丢掉自造 context 和思考参数", () => {
+  it("Cursor catalog \u53EA\u6709 fast \u65F6\u4E22\u6389\u81EA\u9020 context \u548C\u601D\u8003\u53C2\u6570", () => {
     const merged = mergeJobWithCardOverrides(
       {
         ...job,
@@ -167,7 +167,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.deepEqual(merged.modelParams, [{ id: "fast", value: "true" }]);
   });
 
-  it("Cursor 无 catalog 时不要凭空补 reasoning_effort", () => {
+  it("Cursor \u65E0 catalog \u65F6\u4E0D\u8981\u51ED\u7A7A\u8865 reasoning_effort", () => {
     const merged = mergeJobWithCardOverrides(job, {
       agentModelId: "composer-2.5",
       agentModelParamValues: { fast: "true" },
@@ -175,7 +175,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.deepEqual(merged.modelParams, [{ id: "fast", value: "true" }]);
   });
 
-  it("selectCursorSdkModelParams 丢掉 context，并按目录过滤 fast", () => {
+  it("selectCursorSdkModelParams \u4E22\u6389 context，\u5E76\u6309\u76EE\u5F55\u8FC7\u6EE4 fast", () => {
     const selected = selectCursorSdkModelParams({
       ...job,
       model: "composer-2.5",
@@ -199,7 +199,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.deepEqual(selected.dropped.sort(), ["context", "reasoning_effort"]);
   });
 
-  it("无目录时 Grok 不要把 fast 传给 SDK，Composer 仍可传", () => {
+  it("\u65E0\u76EE\u5F55\u65F6 Grok \u4E0D\u8981\u628A fast \u4F20\u7ED9 SDK，Composer \u4ECD\u53EF\u4F20", () => {
     const grok = selectCursorSdkModelParams({
       ...job,
       model: "grok-4.6",
@@ -224,7 +224,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.deepEqual(composer.params, [{ id: "fast", value: "true" }]);
   });
 
-  it("withCursorSdkCatalog 后按实时目录丢掉 Grok 的 fast", () => {
+  it("withCursorSdkCatalog \u540E\u6309\u5B9E\u65F6\u76EE\u5F55\u4E22\u6389 Grok \u7684 fast", () => {
     const selected = selectCursorSdkModelParams(
       withCursorSdkCatalog(
         {
@@ -246,7 +246,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.ok(selected.dropped.includes("fast"));
   });
 
-  it("Agent.create 报 fast 不支持时丢掉该参数再试", () => {
+  it("Agent.create \u62A5 fast \u4E0D\u652F\u6301\u65F6\u4E22\u6389\u8BE5\u53C2\u6570\u518D\u8BD5", () => {
     const next = nextCursorSdkParamsAfterCreateError(
       [
         { id: "fast", value: "true" },
@@ -259,7 +259,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.deepEqual(next.dropped, ["fast"]);
   });
 
-  it("当前模型目录没有 fast 时不要传给 SDK", () => {
+  it("\u5F53\u524D\u6A21\u578B\u76EE\u5F55\u6CA1\u6709 fast \u65F6\u4E0D\u8981\u4F20\u7ED9 SDK", () => {
     const selected = selectCursorSdkModelParams({
       ...job,
       model: "grok-4.6",
@@ -287,7 +287,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.ok(selected.dropped.includes("fast"));
   });
 
-  it("resolveModelParams 保留所选上下文", () => {
+  it("resolveModelParams \u4FDD\u7559\u6240\u9009\u4E0A\u4E0B\u6587", () => {
     const params = resolveModelParams({
       ...job,
       modelParams: [{ id: "context", value: "272k" }],
@@ -295,7 +295,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.equal(params?.find((item) => item.id === "context")?.value, "272k");
   });
 
-  it("缺上下文参数时补上 64k/272k", () => {
+  it("\u7F3A\u4E0A\u4E0B\u6587\u53C2\u6570\u65F6\u8865\u4E0A 64k/272k", () => {
     const parameters = ensureContextParameter([
       { id: "reasoning_effort", values: ["low", "medium", "high"] },
     ]);
@@ -303,7 +303,7 @@ describe("mergeJobWithCardOverrides", () => {
     assert.deepEqual(parameters.at(-1)?.values, ["64k", "272k"]);
   });
 
-  it("Codex 把上下文写成 model_context_window", () => {
+  it("Codex \u628A\u4E0A\u4E0B\u6587\u5199\u6210 model_context_window", () => {
     assert.deepEqual(
       effortToCodexConfigArgs({
         ...job,
@@ -323,7 +323,7 @@ describe("mergeJobWithCardOverrides", () => {
 });
 
 describe("applyLiveJobOverlay", () => {
-  it("用运行中写入的默认平台和模型覆盖启动快照", () => {
+  it("\u7528\u8FD0\u884C\u4E2D\u5199\u5165\u7684\u9ED8\u8BA4\u5E73\u53F0\u548C\u6A21\u578B\u8986\u76D6\u542F\u52A8\u5FEB\u7167", () => {
     const live = applyLiveJobOverlay(job, {
       engine: "codex",
       model: "gpt-5",
@@ -338,14 +338,14 @@ describe("applyLiveJobOverlay", () => {
     assert.equal(live.cardLimit, job.cardLimit);
   });
 
-  it("卡片关闭测试时覆盖默认需要测试", () => {
+  it("\u5361\u7247\u5173\u95ED\u6D4B\u8BD5\u65F6\u8986\u76D6\u9ED8\u8BA4\u9700\u8981\u6D4B\u8BD5", () => {
     const merged = mergeJobWithCardOverrides(job, {
       agentRequireTests: false,
     });
     assert.equal(merged.requireTests, false);
   });
 
-  it("卡片开启测试时覆盖工作台默认", () => {
+  it("\u5361\u7247\u5F00\u542F\u6D4B\u8BD5\u65F6\u8986\u76D6\u5DE5\u4F5C\u53F0\u9ED8\u8BA4", () => {
     const merged = mergeJobWithCardOverrides(
       { ...job, requireTests: false },
       { agentRequireTests: true },
@@ -353,7 +353,7 @@ describe("applyLiveJobOverlay", () => {
     assert.equal(merged.requireTests, true);
   });
 
-  it("禁止卡片参数时仍要求测试", () => {
+  it("\u7981\u6B62\u5361\u7247\u53C2\u6570\u65F6\u4ECD\u8981\u6C42\u6D4B\u8BD5", () => {
     const merged = mergeJobWithCardOverrides(
       { ...job, ignoreCardParams: true },
       { agentRequireTests: false },
@@ -361,7 +361,7 @@ describe("applyLiveJobOverlay", () => {
     assert.notEqual(merged.requireTests, false);
   });
 
-  it("保留运行中关闭收尾主动结束会话的设置", () => {
+  it("\u4FDD\u7559\u8FD0\u884C\u4E2D\u5173\u95ED\u6536\u5C3E\u4E3B\u52A8\u7ED3\u675F\u4F1A\u8BDD\u7684\u8BBE\u7F6E", () => {
     const live = applyLiveJobOverlay(job, {
       terminateAfterDispatchTerminal: false,
     });

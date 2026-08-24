@@ -120,8 +120,9 @@ class DispatchValidationResult {
   factory DispatchValidationResult.fromJson(Map<String, dynamic> json) {
     final legacyCommand = json['command'] as String?;
     return DispatchValidationResult(
-      commandSummary:
-          json['commandSummary'] as String? ?? legacyCommand ?? '旧验证命令',
+      commandSummary: json['commandSummary'] as String? ??
+          legacyCommand ??
+          'Legacy verification command',
       executable: json['executable'] as String? ?? '',
       args: (json['args'] as List? ?? const [])
           .whereType<String>()

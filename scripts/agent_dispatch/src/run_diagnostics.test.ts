@@ -6,7 +6,7 @@ import {
 } from "./run_diagnostics.ts";
 
 describe("run_diagnostics", () => {
-  it("统计重复工具与重复文件读取", () => {
+  it("\u7EDF\u8BA1\u91CD\u590D\u5DE5\u5177\u4E0E\u91CD\u590D\u6587\u4EF6\u8BFB\u53D6", () => {
     const diagnostics = new AgentRunDiagnostics();
     diagnostics.recordStep({
       type: "toolCall",

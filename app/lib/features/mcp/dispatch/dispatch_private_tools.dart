@@ -25,7 +25,8 @@ void registerDispatchPrivateTools(
 }) {
   server.registerTool(
     'dispatch_claim_next_card',
-    description: 'Worker 私有工具：按 workerToken 绑定项目原子领取下一张卡。',
+    description:
+        'Worker-private tool: atomically claim the next card for the project bound to workerToken.',
     inputSchema: JsonSchema.object(
       properties: {
         'workerToken': JsonSchema.string(),
@@ -40,7 +41,7 @@ void registerDispatchPrivateTools(
     ),
     callback: (args, extra) async {
       final token = mcpTrimmedString(args['workerToken']);
-      if (token == null) return mcpErrorResult('workerToken 不能为空');
+      if (token == null) return mcpErrorResult('workerToken cannot be empty');
       if (closeScopedEndpoint != null) await closeScopedEndpoint(token);
       return dispatchClaimNextCard(
         controller,
@@ -53,7 +54,8 @@ void registerDispatchPrivateTools(
 
   server.registerTool(
     'dispatch_list_pending',
-    description: 'Worker 私有工具：列出当前 project/repo 可恢复的 pending 会话。',
+    description:
+        'Worker-private tool: list pending sessions recoverable for the current project/repository.',
     inputSchema: JsonSchema.object(
       properties: {'workerToken': JsonSchema.string()},
       required: ['workerToken'],
@@ -63,7 +65,7 @@ void registerDispatchPrivateTools(
     callback: (args, extra) {
       final token = mcpTrimmedString(args['workerToken']);
       if (token == null) {
-        return Future.value(mcpErrorResult('workerToken 不能为空'));
+        return Future.value(mcpErrorResult('workerToken cannot be empty'));
       }
       return dispatchListPending(workerToken: token);
     },
@@ -71,7 +73,8 @@ void registerDispatchPrivateTools(
 
   server.registerTool(
     'dispatch_recover',
-    description: 'Worker 私有工具：按 sessionId 为当前 project/repo 重新授权 pending。',
+    description:
+        'Worker-private tool: reauthorize a pending session by sessionId for the current project/repository.',
     inputSchema: JsonSchema.object(
       properties: {
         'workerToken': JsonSchema.string(),
@@ -89,7 +92,7 @@ void registerDispatchPrivateTools(
       final sessionId = mcpTrimmedString(args['sessionId']);
       if (token == null || sessionId == null) {
         return Future.value(
-          mcpErrorResult('workerToken 与 sessionId 不能为空'),
+          mcpErrorResult('workerToken and sessionId cannot be empty'),
         );
       }
       return dispatchRecover(workerToken: token, sessionId: sessionId);
@@ -98,7 +101,7 @@ void registerDispatchPrivateTools(
 
   server.registerTool(
     'dispatch_agent_session_status',
-    description: 'Worker 私有工具：读取 claim 与 pending 状态。',
+    description: 'Worker-private tool: read claim and pending status.',
     inputSchema: JsonSchema.object(
       properties: {'workerToken': JsonSchema.string()},
       required: ['workerToken'],
@@ -110,7 +113,7 @@ void registerDispatchPrivateTools(
       final status = token == null
           ? null
           : McpDispatchCardGate.instance.sessionStatus(token);
-      if (status == null) return mcpErrorResult('Worker token 无效');
+      if (status == null) return mcpErrorResult('Invalid Worker token');
       final sessionId = status.sessionId;
       final pending = sessionId == null
           ? null
@@ -125,7 +128,7 @@ void registerDispatchPrivateTools(
   server.registerTool(
     'dispatch_record_validation_results',
     description:
-        'Worker 私有工具：记录验证结果。全部通过则标记 validated；失败（含 fail-fast 前缀）则标记 failed。',
+        'Worker-private tool: record verification results. Mark the session validated when all pass, or failed when any result fails.',
     inputSchema: JsonSchema.object(
       properties: {
         'workerToken': JsonSchema.string(),
@@ -165,17 +168,20 @@ void registerDispatchPrivateTools(
       final token = mcpTrimmedString(args['workerToken']);
       final sessionId = mcpTrimmedString(args['sessionId']);
       if (token == null || sessionId == null) {
-        return mcpErrorResult('workerToken 与 sessionId 不能为空');
+        return mcpErrorResult('workerToken and sessionId cannot be empty');
       }
       final results = _parseValidationResults(args['results']);
-      if (results == null) return mcpErrorResult('results 格式无效');
+      if (results == null) {
+        return mcpErrorResult('results has an invalid format');
+      }
       return _recordValidation(controller, token, sessionId, results);
     },
   );
 
   server.registerTool(
     'dispatch_finalize',
-    description: 'Worker 私有工具：幂等提交 Git 并将卡片移入待验证。',
+    description:
+        'Worker-private tool: idempotently commit Git changes and move the card to Verify.',
     inputSchema: JsonSchema.object(
       properties: {
         'workerToken': JsonSchema.string(),
@@ -192,7 +198,7 @@ void registerDispatchPrivateTools(
       final token = mcpTrimmedString(args['workerToken']);
       final sessionId = mcpTrimmedString(args['sessionId']);
       if (token == null || sessionId == null) {
-        return mcpErrorResult('workerToken 与 sessionId 不能为空');
+        return mcpErrorResult('workerToken and sessionId cannot be empty');
       }
       return dispatchFinalize(
         controller,
@@ -209,7 +215,8 @@ void registerDispatchPrivateTools(
   ]) {
     server.registerTool(
       toolName,
-      description: 'Worker 私有工具：记录失败并按需将本轮卡片移入阻塞中。',
+      description:
+          'Worker-private tool: record a failure and optionally move this round\'s card to Blocked.',
       inputSchema: JsonSchema.object(
         properties: {
           'workerToken': JsonSchema.string(),
@@ -227,13 +234,14 @@ void registerDispatchPrivateTools(
         final token = mcpTrimmedString(args['workerToken']);
         final sessionId = mcpTrimmedString(args['sessionId']);
         if (token == null || sessionId == null) {
-          return mcpErrorResult('workerToken 与 sessionId 不能为空');
+          return mcpErrorResult('workerToken and sessionId cannot be empty');
         }
         return dispatchFailOrBlock(
           controller,
           workerToken: token,
           sessionId: sessionId,
-          reason: mcpTrimmedString(args['reason']) ?? 'Worker 结束本轮会话',
+          reason:
+              mcpTrimmedString(args['reason']) ?? 'Worker ended this session',
           block: toolName != 'dispatch_fail_agent_session',
         );
       },
@@ -242,14 +250,15 @@ void registerDispatchPrivateTools(
 
   server.registerTool(
     'dispatch_report_shell_span',
-    description: 'Worker 私有工具：上报会话内 Shell 起止，供 ready_to_submit 拒绝未完成的测试。',
+    description:
+        'Worker-private tool: report Shell start/end events so ready_to_submit can reject unfinished tests.',
     inputSchema: JsonSchema.object(
       properties: {
         'workerToken': JsonSchema.string(),
         'sessionId': JsonSchema.string(),
         'callId': JsonSchema.string(),
         'command': JsonSchema.string(),
-        'phase': JsonSchema.string(description: 'start 或 end'),
+        'phase': JsonSchema.string(description: 'start or end'),
         'startedAtMs': JsonSchema.number(),
         'endedAtMs': JsonSchema.number(),
         'executionTimeMs': JsonSchema.number(),
@@ -278,8 +287,8 @@ void registerDispatchPrivateTools(
         final keys = args.keys.join(',');
         return Future.value(
           mcpErrorResult(
-            '${missing.join('、')} 不能为空'
-            '${keys.isEmpty ? '' : '（收到字段：$keys）'}',
+            '${missing.join(', ')} cannot be empty'
+            '${keys.isEmpty ? '' : ' (received fields: $keys)'}',
           ),
         );
       }
@@ -303,7 +312,8 @@ void registerDispatchPrivateTools(
 
   server.registerTool(
     'dispatch_close_agent_session',
-    description: 'Worker 私有工具：关闭本轮临时 MCP 端点。',
+    description:
+        'Worker-private tool: close this round\'s temporary MCP endpoint.',
     inputSchema: JsonSchema.object(
       properties: {'workerToken': JsonSchema.string()},
       required: ['workerToken'],
@@ -315,7 +325,7 @@ void registerDispatchPrivateTools(
     ),
     callback: (args, extra) async {
       final token = mcpTrimmedString(args['workerToken']);
-      if (token == null) return mcpErrorResult('workerToken 不能为空');
+      if (token == null) return mcpErrorResult('workerToken cannot be empty');
       final sessionId = McpDispatchCardGate.instance.sessionIdForToken(token);
       if (closeScopedEndpoint != null) await closeScopedEndpoint(token);
       McpDispatchCardGate.instance.closeAgentSession(token);
@@ -377,13 +387,15 @@ Future<CallToolResult> _recordValidation(
         projectId: record.projectId,
         repoPath: record.repoPath,
       )) {
-    return mcpErrorResult('未找到该 Worker 的 pending 会话');
+    return mcpErrorResult('No pending session was found for this Worker');
   }
   if (record.status == DispatchPendingStatus.validated) {
     return mcpJsonResult(record.toJson());
   }
   if (record.status != DispatchPendingStatus.declared) {
-    return mcpErrorResult('当前状态不能记录验证结果：${record.status.name}');
+    return mcpErrorResult(
+      'Verification results cannot be recorded in status ${record.status.name}',
+    );
   }
   final shapeError = dispatchValidationShapeError(
     isManual: record.manualVerificationReason != null,
@@ -407,8 +419,8 @@ Future<CallToolResult> _recordValidation(
     error: failed == null
         ? null
         : failed.timedOut
-            ? '验证命令超时：${failed.commandSummary}'
-            : '验证命令失败（exitCode=${failed.exitCode}）：'
+            ? 'Verification command timed out: ${failed.commandSummary}'
+            : 'Verification command failed (exitCode=${failed.exitCode}): '
                 '${failed.commandSummary}',
     clearError: failed == null,
   );
@@ -434,10 +446,12 @@ Future<CallToolResult> _recordValidation(
         'manualReason': _truncate(record.manualVerificationReason!),
       'resultSummary': _truncate(
         failed == null
-            ? (record.manualVerificationReason == null ? '会话内验证' : '人工验证')
+            ? (record.manualVerificationReason == null
+                ? 'Verified in session'
+                : 'Manual verification')
             : failed.timedOut
-                ? '验证超时：${failed.commandSummary}'
-                : '验证失败：${failed.commandSummary}，exitCode=${failed.exitCode}',
+                ? 'Verification timed out: ${failed.commandSummary}'
+                : 'Verification failed: ${failed.commandSummary}, exitCode=${failed.exitCode}',
       ),
     },
   );

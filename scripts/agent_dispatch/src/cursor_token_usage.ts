@@ -1,4 +1,4 @@
-/** Cursor SDK 上报的会话用量。`inputTokens` 有时已含缓存命中。 */
+/** Cursor SDK \u4E0A\u62A5\u7684\u4F1A\u8BDD\u7528\u91CF。`inputTokens` \u6709\u65F6\u5DF2\u542B\u7F13\u5B58\u547D\u4E2D。 */
 export type CursorTokenUsage = {
   inputTokens: number;
   outputTokens: number;
@@ -7,7 +7,7 @@ export type CursorTokenUsage = {
   totalTokens?: number;
 };
 
-/** 与 Cursor Dashboard 分项一致、不重复累计的用量。 */
+/** \u4E0E Cursor Dashboard \u5206\u9879\u4E00\u81F4、\u4E0D\u91CD\u590D\u7D2F\u8BA1\u7684\u7528\u91CF。 */
 export type DashboardTokenUsage = {
   inputTokens: number;
   outputTokens: number;
@@ -29,9 +29,9 @@ function asCount(value: unknown): number {
 }
 
 /**
- * 把 SDK `TokenUsage` 收成 Dashboard 口径：
- * Input 为未缓存 prompt；Total = Input + Cache Read + Cache Write + Output。
- * SDK 若把缓存算进 input 又加进 total，这里会拆开，避免合并时翻倍。
+ * \u628A SDK `TokenUsage` \u6536\u6210 Dashboard \u53E3\u5F84：
+ * Input \u4E3A\u672A\u7F13\u5B58 prompt；Total = Input + Cache Read + Cache Write + Output。
+ * SDK \u82E5\u628A\u7F13\u5B58\u7B97\u8FDB input \u53C8\u52A0\u8FDB total，\u8FD9\u91CC\u4F1A\u62C6\u5F00，\u907F\u514D\u5408\u5E76\u65F6\u7FFB\u500D。
  */
 export function toDashboardTokenUsage(
   raw: CursorTokenUsage,
@@ -76,7 +76,7 @@ export function formatSessionTokenLog(
 ): string {
   const usage = toDashboardTokenUsage(raw);
   return (
-    `本会话 token：input=${usage.inputTokens} output=${usage.outputTokens}` +
+    `session tokens: input=${usage.inputTokens} output=${usage.outputTokens}` +
     ` cacheRead=${usage.cacheReadTokens} cacheWrite=${usage.cacheWriteTokens}` +
     ` total=${usage.totalTokens}` +
     (diagnostics

@@ -8,7 +8,7 @@ import 'mcp_tool_results.dart';
 /// 将阻塞原因追加到备注末尾。
 String appendBlockReasonToDescription(String? description, String reason) {
   final trimmedReason = reason.trim();
-  final blockNote = '阻塞原因：$trimmedReason';
+  final blockNote = 'Block reason: $trimmedReason';
   final existing = description?.trimRight() ?? '';
   if (existing.isEmpty) return blockNote;
   return '$existing\n\n$blockNote';
@@ -32,26 +32,28 @@ Future<CallToolResult> mcpBlockCard(
   if (located.error != null) return located.error!;
   final targetProjectId = located.projectId!;
 
-  return runMcpForProject(controller, targetProjectId, (resolvedProjectId) async {
+  return runMcpForProject(controller, targetProjectId,
+      (resolvedProjectId) async {
     final fromColumnId =
         controller.findColumnIdForCard(cardId) ?? located.columnId;
     if (fromColumnId == null) {
-      return mcpErrorResult('未找到卡片所在列：$cardId');
+      return mcpErrorResult(
+          'Could not find the column containing card $cardId');
     }
 
     final board = controller.board;
-    if (board == null) return mcpErrorResult('看板未就绪');
+    if (board == null) return mcpErrorResult('The board is not ready');
 
     final blockedColumn = findBlockedColumn(board.columns);
     if (blockedColumn == null) {
-      return mcpErrorResult('未找到「阻塞中」列');
+      return mcpErrorResult('The Blocked column was not found');
     }
 
     final trimmedReason = reason?.trim();
     String? descriptionAfterReason;
     if (trimmedReason != null && trimmedReason.isNotEmpty) {
       final card = controller.findCardById(cardId);
-      if (card == null) return mcpErrorResult('未找到卡片：$cardId');
+      if (card == null) return mcpErrorResult('Card not found: $cardId');
       descriptionAfterReason =
           appendBlockReasonToDescription(card.description, trimmedReason);
       final updateError = await controller.updateCardFull(

@@ -92,7 +92,7 @@ void main() {
     final live = controller.findCardById(cardId)!;
     expect(
       live.verificationFeedback.map((item) => item.text).toList(),
-      contains('Agent 追问：请默认关闭窗口'),
+      contains('Agent follow-up: 请默认关闭窗口'),
     );
     expect(parentSynced, isTrue);
     expect(live.agentConversationMarkdown, contains('请默认关闭窗口'));
@@ -179,7 +179,7 @@ void main() {
     final live = controller.findCardById(cardId)!;
     expect(
       live.verificationFeedback.map((item) => item.text).toList(),
-      contains('Agent 追问：点空白也要提交'),
+      contains('Agent follow-up: 点空白也要提交'),
     );
     expect(parentSynced, isTrue);
     expect(live.agentConversationMarkdown, contains('点空白也要提交'));
