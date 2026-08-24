@@ -27,6 +27,8 @@ export async function runAgentWithRetry(
         cancellation?.isSkipRequested ||
         result.error === "Cancelled" ||
         result.error === "Skipped" ||
+        result.error === "已取消" ||
+        result.error === "已跳过" ||
         !isRetryableAgentResult(result) ||
         attempt >= MAX_AGENT_ATTEMPTS
       ) {

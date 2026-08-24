@@ -1,7 +1,14 @@
 import 'dart:convert';
 
 const agentInteractionEventPrefix = '@@KANBAN_INTERACTION@@';
-const agentFollowUpFeedbackPrefix = 'Agent 追问：';
+const agentFollowUpFeedbackPrefix = 'Agent follow-up: ';
+const agentFollowUpFeedbackPrefixLegacy = 'Agent 追问：';
+const _sessionHeading = '## Session';
+const _userHeading = '### User';
+const _thinkingHeading = '### Thinking';
+const _assistantHeading = '### Assistant';
+const _legacyThinkingHeading = '### 思考';
+const _legacyAssistantHeading = '### 助手';
 final _conversationSnapshotFilePattern = RegExp(
   r'^conversation-snapshot-[a-zA-Z0-9._-]+\.json$',
 );
@@ -122,7 +129,10 @@ String appendAgentConversationEvent(
     return appendAgentConversationUserReply(current, event.text);
   }
   if (event.type == AgentInteractionEventType.thinking) {
-    final coalesced = _coalesceLastSection(current, event.text, '### 思考');
+    final coalesced = _coalesceLastSection(current, event.text, const [
+      _thinkingHeading,
+      _legacyThinkingHeading,
+    ]);
     if (coalesced != null) return coalesced;
   }
   if (event.type == AgentInteractionEventType.assistant ||
@@ -130,7 +140,10 @@ String appendAgentConversationEvent(
     final body = event.type == AgentInteractionEventType.question
         ? agentInteractionQuestionBody(event)
         : event.text;
-    final coalesced = _coalesceLastSection(current, body, '### 助手');
+    final coalesced = _coalesceLastSection(current, body, const [
+      _assistantHeading,
+      _legacyAssistantHeading,
+    ]);
     if (coalesced != null) return coalesced;
   }
   final buffer = StringBuffer((current ?? '').trimRight());
@@ -138,20 +151,20 @@ String appendAgentConversationEvent(
   switch (event.type) {
     case AgentInteractionEventType.session:
       buffer
-        ..writeln('## 会话 ${_formatLocalTime(event.at)}')
+        ..writeln('$_sessionHeading ${_formatLocalTime(event.at)}')
         ..writeln()
-        ..writeln('### 用户')
+        ..writeln(_userHeading)
         ..write(event.text);
       break;
     case AgentInteractionEventType.thinking:
       buffer
-        ..writeln('### 思考')
+        ..writeln(_thinkingHeading)
         ..write(event.text);
       break;
     case AgentInteractionEventType.assistant:
     case AgentInteractionEventType.question:
       buffer
-        ..writeln('### 助手')
+        ..writeln(_assistantHeading)
         ..write(agentInteractionQuestionBody(event));
       break;
     case AgentInteractionEventType.user:
@@ -167,15 +180,22 @@ String appendAgentConversationUserReply(String? current, String text) {
   final buffer = StringBuffer((current ?? '').trimRight());
   if (buffer.isNotEmpty) buffer.write('\n\n');
   buffer
-    ..writeln('### 用户')
+    ..writeln(_userHeading)
     ..write(normalized);
   return '${buffer.toString().trimRight()}\n';
 }
 
-/// 从验证反馈文案取出 Agent 追问正文；非追问项返回 `null`。
+/// Body of an Agent follow-up feedback item; returns `null` when it is not one.
 String? agentFollowUpFeedbackBody(String feedbackText) {
-  if (!feedbackText.startsWith(agentFollowUpFeedbackPrefix)) return null;
-  return feedbackText.substring(agentFollowUpFeedbackPrefix.length);
+  for (final prefix in [
+    agentFollowUpFeedbackPrefix,
+    agentFollowUpFeedbackPrefixLegacy,
+  ]) {
+    if (feedbackText.startsWith(prefix)) {
+      return feedbackText.substring(prefix.length);
+    }
+  }
+  return null;
 }
 
 /// 删除最后一段与追问正文完全匹配的用户消息，和追加追问保持 LIFO 对称。
@@ -225,7 +245,10 @@ _UserSectionHit? _findLastMatchingUserSection(String? current, String text) {
   final markdown = current ?? '';
   if (normalized.isEmpty || markdown.trim().isEmpty) return null;
 
-  final sections = RegExp(r'^### 用户\s*$', multiLine: true).allMatches(markdown);
+  final sections = RegExp(
+    r'^### (?:User|用户)\s*$',
+    multiLine: true,
+  ).allMatches(markdown);
   for (final section in sections.toList().reversed) {
     final nextSection = RegExp(
       r'^### \S',
@@ -259,7 +282,10 @@ _UserSectionHit? _findLastMatchingUserSection(String? current, String text) {
   return null;
 }
 
-final _sessionHeaderLinePattern = RegExp(r'^## 会话[^\n]*', multiLine: true);
+final _sessionHeaderLinePattern = RegExp(
+  r'^## (?:Session|会话)[^\n]*',
+  multiLine: true,
+);
 
 String replaceAgentConversationSession(
   String? current,
@@ -271,7 +297,7 @@ String replaceAgentConversationSession(
   if (existing.isEmpty) {
     return _renderSession(
       messages,
-      headerLine: '## 会话 ${_formatLocalTime(at ?? DateTime.now())}',
+      headerLine: '$_sessionHeading ${_formatLocalTime(at ?? DateTime.now())}',
     );
   }
   final match = _sessionHeaderLinePattern.allMatches(existing).lastOrNull;
@@ -280,7 +306,7 @@ String replaceAgentConversationSession(
       existing,
       _renderSession(
         messages,
-        headerLine: '## 会话 ${_formatLocalTime(at ?? DateTime.now())}',
+        headerLine: '$_sessionHeading ${_formatLocalTime(at ?? DateTime.now())}',
       ),
     );
   }
@@ -292,7 +318,7 @@ String replaceAgentConversationSession(
       existing,
       _renderSession(
         messages,
-        headerLine: '## 会话 ${_formatLocalTime(at ?? DateTime.now())}',
+        headerLine: '$_sessionHeading ${_formatLocalTime(at ?? DateTime.now())}',
       ),
     );
   }
@@ -311,9 +337,9 @@ String _renderSession(
     buffer
       ..writeln()
       ..writeln(switch (message.role) {
-        'user' => '### 用户',
-        'thinking' => '### 思考',
-        _ => '### 助手',
+        'user' => _userHeading,
+        'thinking' => _thinkingHeading,
+        _ => _assistantHeading,
       })
       ..write(message.text.trim());
   }
@@ -343,9 +369,13 @@ bool _sameConversationSession(
 }
 
 String? _firstUserSectionText(String markdown) {
-  const marker = '### 用户';
-  final start = markdown.indexOf(marker);
-  if (start < 0) return null;
+  final match = RegExp(
+    r'^### (?:User|用户)\s*$',
+    multiLine: true,
+  ).firstMatch(markdown);
+  if (match == null) return null;
+  final start = match.start;
+  final marker = match.group(0)!;
   var body = markdown.substring(start + marker.length);
   final next = body.indexOf('\n### ');
   if (next >= 0) body = body.substring(0, next);
@@ -396,11 +426,19 @@ String agentInteractionQuestionBody(AgentInteractionEvent event) {
 String? _coalesceLastSection(
   String? current,
   String nextText,
-  String marker,
+  List<String> markers,
 ) {
   final existing = (current ?? '').trimRight();
   if (existing.isEmpty) return null;
-  final index = existing.lastIndexOf(marker);
+  var index = -1;
+  var marker = '';
+  for (final candidate in markers) {
+    final found = existing.lastIndexOf(candidate);
+    if (found > index) {
+      index = found;
+      marker = candidate;
+    }
+  }
   if (index < 0) return null;
   final after = existing.substring(index + marker.length);
   if (RegExp(r'\n### ').hasMatch(after)) return null;

@@ -1,13 +1,13 @@
 import { isAbsolute, relative, resolve } from "node:path";
 
-/** Worker 注入：定位用定向 grep / 窄 glob，禁止仓库根无界列举。 */
-export const DISPATCH_SEARCH_POLICY = `## 搜索范围（Worker）
+/** Worker injection: locate with targeted grep / narrow glob; do not enumerate the repo root unboundedly. */
+export const DISPATCH_SEARCH_POLICY = `## Search scope (Worker)
 
-定位代码时 MUST 用 grep 或带文件名/目录限定的 glob，并指定子目录。
-MUST NOT 对仓库根做无界 glob（\`**\`、\`**/*\`、\`**/*.*\`）。
-MUST NOT 把无界 glob 与 grep 并行；grep 已返回候选文件时直接读那些路径。
-MUST NOT 把 glob 目标指到 \`.git\`、\`.svn\` 或 \`build\`。
-界面或功能入口必须从当前选定仓库的目录结构、项目规则和卡片中给出的具体线索定位；不要假定框架、源码根目录或任何产品专属路径。卡片未给出路径时，先有限地查看仓库一级目录和项目说明，再在候选子目录内定向搜索。搜索多个目录前必须先确认每个目录存在；不要把不存在的候选目录传给 \`rg\`。查找含引号、括号或其它标点的字面量时优先使用 \`rg --fixed-strings -- <text> <confirmed-path>\`，只有确实需要模式匹配时才写正则。
+When locating code, MUST use grep or a glob limited by filename/directory, and MUST specify a subdirectory.
+MUST NOT unbounded-glob the repository root (\`**\`, \`**/*\`, \`**/*.*\`).
+MUST NOT run an unbounded glob in parallel with grep; when grep already returned candidate files, read those paths directly.
+MUST NOT point a glob target at \`.git\`, \`.svn\`, or \`build\`.
+Locate UI or feature entry points from the currently selected repository's directory layout, project rules, and concrete clues on the card; do not assume a framework, source root, or any product-specific path. When the card does not give a path, first inspect the repository's top-level directories and project notes in a limited way, then search inside candidate subdirectories. Before searching multiple directories, MUST confirm each directory exists; do not pass a non-existent candidate path to \`rg\`. When looking up a literal that contains quotes, parentheses, or other punctuation, prefer \`rg --fixed-strings -- <text> <confirmed-path>\`; write a regex only when pattern matching is actually required.
 `;
 
 const UNBOUNDED_PATTERNS = new Set(["**", "**/*", "**/*.*", "**/**"]);
@@ -53,14 +53,14 @@ export function evaluateGlobToolCall(input: {
   if (isExcludedGlobTarget(cwd, target)) {
     return {
       allow: false,
-      reason: `禁止对 .git / .svn / build 或仓库外目录做 glob（目标=${target}）。改用子目录或 VCS 命令。`,
+      reason: `Do not glob .git / .svn / build or paths outside the repository (target=${target}). Use a subdirectory or a VCS command instead.`,
     };
   }
   if (isUnboundedGlobPattern(input.pattern) && isRepoRootTarget(cwd, target)) {
     return {
       allow: false,
       reason:
-        "禁止对仓库根做无界 glob（** / **/*）。请用 grep，或指定子目录 / 带文件名片段的 glob。不要与 grep 并行再扫整仓。",
+        "Do not unbounded-glob the repository root (** / **/*). Use grep, or a glob that names a subdirectory / filename fragment. Do not scan the whole repo in parallel with grep.",
     };
   }
   return { allow: true };

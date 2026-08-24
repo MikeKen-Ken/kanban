@@ -140,12 +140,19 @@ class AgentDispatchLogEntry {
   /// 没有具体内容的进度行不展示，避免刷屏。
   static bool isLowValue(String line) {
     final message = messageOf(line);
-    if (message == '思考中…' || message == '思考中') return true;
+    if (message == '思考中…' ||
+        message == '思考中' ||
+        message == 'Thinking…' ||
+        message == 'Thinking') {
+      return true;
+    }
     if (RegExp(r'^│\s*$').hasMatch(message)) return true;
-    if (RegExp(r'^工具：\S+$').hasMatch(message)) return true;
-    if (RegExp(r'^工具结果：\S+$').hasMatch(message)) return true;
-    if (RegExp(r'^命令：（空）$').hasMatch(message)) return true;
-    if (RegExp(r'^步骤：\S+$').hasMatch(message)) return true;
+    if (RegExp(r'^(?:工具：|Tool: )\S+$').hasMatch(message)) return true;
+    if (RegExp(r'^(?:工具结果：|Tool result: )\S+$').hasMatch(message)) {
+      return true;
+    }
+    if (message == '命令：（空）' || message == 'Command: (empty)') return true;
+    if (RegExp(r'^(?:步骤：|Step: )\S+$').hasMatch(message)) return true;
     return false;
   }
 
@@ -187,11 +194,18 @@ class AgentDispatchLogEntry {
   static AgentDispatchLogSource _inferLegacySource(String message) {
     if (message.startsWith('助手：') ||
         message.startsWith('思考：') ||
-        message.startsWith('思考中')) {
+        message.startsWith('思考中') ||
+        message.startsWith('Assistant:') ||
+        message.startsWith('Thinking:') ||
+        message.startsWith('Thinking')) {
       return AgentDispatchLogSource.ai;
     }
-    if (message.startsWith('工具：')) return AgentDispatchLogSource.mcp;
-    if (message.startsWith('命令：')) return AgentDispatchLogSource.shell;
+    if (message.startsWith('工具：') || message.startsWith('Tool:')) {
+      return AgentDispatchLogSource.mcp;
+    }
+    if (message.startsWith('命令：') || message.startsWith('Command:')) {
+      return AgentDispatchLogSource.shell;
+    }
     if (message.startsWith('Worker ') || message.contains('Worker ')) {
       return AgentDispatchLogSource.worker;
     }
@@ -245,14 +259,14 @@ class AgentDispatchLogHighlight {
   AgentDispatchLogHighlight._();
 
   static final RegExp _emphasisPattern = RegExp(
-    r'本会话 token|'
+    r'本会话 token|session tokens|'
     r'\b(?:input|output|cacheRead|cacheWrite|total)=\d+|'
     r'\b(?:steps|tools|elapsedMs)=\d+|'
     r'\b(?:repeatedToolCalls|repeatedReads)=\d+|'
     r'会话诊断|用户 Rule 注入|SDK 扫描|'
     r'批次 id：\S+|'
     r'Cursor run id=\S+|'
-    r'已处理 \d+ 张|'
+    r'已处理 \d+ 张|processed \d+ card\(s\)|'
     r'耗时 \d+ 秒',
   );
 
@@ -310,8 +324,9 @@ class AgentDispatchLogTask {
 class AgentDispatchLogTasks {
   AgentDispatchLogTasks._();
 
-  static final _roundPattern = RegExp(r'Worker 单卡轮次 (\d+)(?:/(\d+))?');
-  static final _titlePattern = RegExp(r'^当前卡片：(.+)$');
+  static final _roundPattern =
+      RegExp(r'Worker (?:card round|单卡轮次) (\d+)(?:/(\d+))?');
+  static final _titlePattern = RegExp(r'^(?:当前卡片：|Current card: )(.+)$');
 
   static List<AgentDispatchLogTask> parse(List<String> lines) {
     final tasks = <AgentDispatchLogTask>[];

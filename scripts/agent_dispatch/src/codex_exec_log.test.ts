@@ -16,7 +16,7 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.deepEqual(records, [
       {
-        line: "助手：已声明完成，等待 Worker 验证与收尾。",
+        line: "Assistant: 已声明完成，等待 Worker 验证与收尾。",
         source: "ai",
         level: "info",
       },
@@ -33,7 +33,7 @@ describe("recordsFromCodexEvent", () => {
         ],
       },
     });
-    assert.equal(records[0]?.line, "助手：第一段");
+    assert.equal(records[0]?.line, "Assistant: 第一段");
     assert.equal(records[1]?.line, "  │ 第二段完整结论。");
   });
 
@@ -43,7 +43,7 @@ describe("recordsFromCodexEvent", () => {
       item: { type: "reasoning", text: "先定位玻璃层实现。" },
     });
     assert.equal(records[0]?.source, "ai");
-    assert.equal(records[0]?.line, "思考：先定位玻璃层实现。");
+    assert.equal(records[0]?.line, "Thinking: 先定位玻璃层实现。");
   });
 
   it("思考段落之间的空行不打成只有 │ 的续行", () => {
@@ -56,7 +56,7 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.deepEqual(
       records.map((record) => record.line),
-      ["思考：正在处理重修卡片。", "  │ 发现下拉框仍显示密钥名。"],
+      ["Thinking: 正在处理重修卡片。", "  │ 发现下拉框仍显示密钥名。"],
     );
   });
 
@@ -70,7 +70,7 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.deepEqual(started, [
-      { line: "命令：git add app/lib/foo.dart", source: "shell", level: "info" },
+      { line: "Command: git add app/lib/foo.dart", source: "shell", level: "info" },
     ]);
 
     const failed = recordsFromCodexEvent({
@@ -147,7 +147,7 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.equal(
-      records.some((record) => record.line.startsWith("命令失败：")),
+      records.some((record) => record.line.startsWith("Command failed: ")),
       false,
     );
   });
@@ -164,7 +164,7 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.deepEqual(noMatch, [
       {
-        line: "搜索无匹配：rg --fixed-strings -- title app/src",
+        line: "Search had no matches: rg --fixed-strings -- title app/src",
         source: "shell",
         level: "info",
       },
@@ -181,7 +181,7 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.equal(badSearch[0]?.level, "warning");
-    assert.match(badSearch[0]?.line ?? "", /搜索命令问题/);
+    assert.match(badSearch[0]?.line ?? "", /Search command issue/);
     assert.equal(badSearch.some((record) => record.level === "error"), false);
   });
 
@@ -197,7 +197,7 @@ describe("recordsFromCodexEvent", () => {
       },
     });
     assert.equal(started[0]?.source, "mcp");
-    assert.match(started[0]?.line ?? "", /^工具：ready_to_submit /);
+    assert.match(started[0]?.line ?? "", /^Tool: ready_to_submit /);
     assert.equal(started[0]?.level, "info");
 
     const failed = recordsFromCodexEvent({
@@ -211,7 +211,7 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.deepEqual(failed, [
       {
-        line: "工具失败：ready_to_submit 看板未就绪",
+        line: "Tool failed: ready_to_submit 看板未就绪",
         source: "mcp",
         level: "error",
       },
@@ -232,7 +232,7 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.deepEqual(records, [
       {
-        line: "工具：apply_patch 更新 app/lib/a.dart；新增 app/lib/b.dart",
+        line: "Tool: apply_patch updated app/lib/a.dart; added app/lib/b.dart",
         source: "mcp",
         level: "info",
       },
@@ -250,7 +250,7 @@ describe("recordsFromCodexEvent", () => {
     });
     assert.equal(records.length, 1);
     assert.equal(records[0]?.source, "worker");
-    assert.match(records[0]?.line ?? "", /^本会话 token：/);
+    assert.match(records[0]?.line ?? "", /^session tokens:/);
     assert.match(records[0]?.line ?? "", /total=/);
   });
 
@@ -336,12 +336,12 @@ describe("recordsFromCodexJsonLine / stderr", () => {
     );
     assert.deepEqual(recordsFromCodexStderrLine("codex", state), []);
     assert.deepEqual(recordsFromCodexStderrLine("先定位玻璃层。", state), [
-      { line: "助手：先定位玻璃层。", source: "ai", level: "info" },
+      { line: "Assistant: 先定位玻璃层。", source: "ai", level: "info" },
     ]);
     assert.deepEqual(recordsFromCodexStderrLine("exec", state), []);
     assert.deepEqual(
       recordsFromCodexStderrLine("git status --short", state),
-      [{ line: "命令：git status --short", source: "shell", level: "info" }],
+      [{ line: "Command: git status --short", source: "shell", level: "info" }],
     );
     assert.deepEqual(
       recordsFromCodexStderrLine(
@@ -358,7 +358,7 @@ describe("recordsFromCodexJsonLine / stderr", () => {
     );
     assert.deepEqual(
       recordsFromCodexStderrLine("mcp: kanbanMCP/ready_to_submit started", state),
-      [{ line: "工具：ready_to_submit 开始", source: "mcp", level: "info" }],
+      [{ line: "Tool: ready_to_submit started", source: "mcp", level: "info" }],
     );
   });
 

@@ -15,11 +15,11 @@ void main() {
     expect(event!.awaitsReply, isTrue);
     expect(event.requestId, 'request-a');
     final markdown = appendAgentConversationEvent(null, event);
-    expect(markdown, contains('### 助手'));
+    expect(markdown, contains('### Assistant'));
     expect(markdown, contains('请选择方案'));
     expect(
       appendAgentConversationUserReply(markdown, '使用方案 A'),
-      contains('### 用户\n使用方案 A'),
+      contains('### User\n使用方案 A'),
     );
   });
 
@@ -144,11 +144,11 @@ void main() {
       ),
       snapshot,
     );
-    expect(markdown, contains('### 用户\n- 标题'));
-    expect(markdown, contains('### 助手\n第一条完整助手。'));
-    expect(markdown, contains('### 助手\n第二条完整助手。'));
+    expect(markdown, contains('### User\n- 标题'));
+    expect(markdown, contains('### Assistant\n第一条完整助手。'));
+    expect(markdown, contains('### Assistant\n第二条完整助手。'));
     expect(markdown, isNot(contains('短句')));
-    expect('### 助手'.allMatches(markdown).length, 2);
+    expect('### Assistant'.allMatches(markdown).length, 2);
   });
 
   test('思考事件会写入独立段落且可流式合并', () {
@@ -174,9 +174,9 @@ void main() {
       ),
       assistant,
     );
-    expect(markdown, contains('### 思考\n先定位。再补思考。'));
-    expect(markdown, contains('### 助手\n完整答复'));
-    expect('### 思考'.allMatches(markdown).length, 1);
+    expect(markdown, contains('### Thinking\n先定位。再补思考。'));
+    expect(markdown, contains('### Assistant\n完整答复'));
+    expect('### Thinking'.allMatches(markdown).length, 1);
   });
 
   test('两段独立思考步骤会分成两个段落', () {
@@ -202,10 +202,10 @@ void main() {
       ),
       second,
     );
-    expect(markdown, contains('### 思考\n先改 ADR。'));
-    expect(markdown, contains('### 助手\n中间结论'));
-    expect(markdown, contains('### 思考\n再补思考步骤。'));
-    expect('### 思考'.allMatches(markdown).length, 2);
+    expect(markdown, contains('### Thinking\n先改 ADR。'));
+    expect(markdown, contains('### Assistant\n中间结论'));
+    expect(markdown, contains('### Thinking\n再补思考步骤。'));
+    expect('### Thinking'.allMatches(markdown).length, 2);
   });
 
   test('快照可还原思考角色', () {
@@ -214,8 +214,8 @@ void main() {
       AgentConversationMessage(role: 'thinking', text: '内部思考过程'),
       AgentConversationMessage(role: 'assistant', text: '面向用户的结论'),
     ], at: DateTime.utc(2026, 8, 20, 8));
-    expect(markdown, contains('### 思考\n内部思考过程'));
-    expect(markdown, contains('### 助手\n面向用户的结论'));
+    expect(markdown, contains('### Thinking\n内部思考过程'));
+    expect(markdown, contains('### Assistant\n面向用户的结论'));
   });
 
   test('二次追问快照追加新会话，不覆盖第一次记录', () {
@@ -237,7 +237,8 @@ void main() {
     expect(markdown, contains('第一次完整答复。'));
     expect(markdown, contains('请再确认窗口默认关闭'));
     expect(markdown, contains('第二次答复。'));
-    expect('## 会话'.allMatches(markdown).length, 2);
+    expect('## 会话'.allMatches(markdown).length, 1);
+    expect('## Session'.allMatches(markdown).length, 1);
   });
 
   test('无会话标题时快照也追加而不是整文件覆盖', () {
@@ -266,7 +267,7 @@ void main() {
       second,
     );
     expect(markdown, contains('先改保存。再补上完整助手消息。'));
-    expect('### 助手'.allMatches(markdown).length, 1);
+    expect('### Assistant'.allMatches(markdown).length, 1);
   });
 
   test('卡片对话字段可序列化并兼容旧数据缺省', () {

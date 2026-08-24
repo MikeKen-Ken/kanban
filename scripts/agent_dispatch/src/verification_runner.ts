@@ -135,7 +135,17 @@ export async function runVerificationCommands(
   return results;
 }
 
-const SKIPPED_OUTPUT = "因前序验证失败未执行";
+export const SKIPPED_VERIFICATION_OUTPUT =
+  "Skipped because a previous validation failed";
+const LEGACY_SKIPPED_VERIFICATION_OUTPUT = "因前序验证失败未执行";
+
+export function isSkippedVerificationOutput(text: string): boolean {
+  const value = text.trim();
+  return (
+    value === SKIPPED_VERIFICATION_OUTPUT ||
+    value === LEGACY_SKIPPED_VERIFICATION_OUTPUT
+  );
+}
 
 /// 将 fail-fast 截断的结果补齐为与声明命令等长，避免 MCP 因条数不一致拒收。
 export function fillSkippedVerificationResults(
@@ -156,7 +166,7 @@ export function fillSkippedVerificationResults(
       cwd,
       exitCode: -1,
       durationMs: 0,
-      output: SKIPPED_OUTPUT,
+      output: SKIPPED_VERIFICATION_OUTPUT,
       timedOut: false,
       passed: false,
     });
@@ -166,11 +176,11 @@ export function fillSkippedVerificationResults(
 
 export function formatVerificationFailure(failed: VerificationResult): string {
   if (failed.timedOut) {
-    return `验证命令超时：${failed.commandSummary}`;
+    return `Verification command timed out: ${failed.commandSummary}`;
   }
   const detail = pickFailureDetail(failed.output);
-  const base = `验证命令失败（exitCode=${failed.exitCode}）：${failed.commandSummary}`;
-  return detail ? `${base}；${detail}` : base;
+  const base = `Verification command failed (exitCode=${failed.exitCode}): ${failed.commandSummary}`;
+  return detail ? `${base}; ${detail}` : base;
 }
 
 function pickFailureDetail(output: string): string | undefined {
@@ -194,7 +204,7 @@ export function clampTimeout(value: number | undefined): number {
 function appendTruncated(current: string, next: string): string {
   const combined = current + next;
   if (combined.length <= MAX_OUTPUT_CHARS) return combined;
-  return `…（前文已截断）${combined.slice(-MAX_OUTPUT_CHARS)}`;
+  return `…(earlier output truncated)${combined.slice(-MAX_OUTPUT_CHARS)}`;
 }
 
 function combineOutput(stdout: string, stderr: string): string {
@@ -225,14 +235,14 @@ function terminateProcessTree(pid: number | undefined): void {
 export function resolveCommandCwd(repoRoot: string, cwd: string): string {
   const root = resolve(repoRoot);
   if (isAbsolute(cwd)) {
-    throw new Error(`验证 cwd 必须是仓库内相对路径：${cwd}`);
+    throw new Error(`Verification cwd must be a relative path inside the repository: ${cwd}`);
   }
   const target = resolve(root, cwd);
   const relation = relative(root, target);
   if (relation === ".." ||
       relation.startsWith(`..${sep}`) ||
       isAbsolute(relation)) {
-    throw new Error(`验证 cwd 逃出仓库：${cwd}`);
+    throw new Error(`Verification cwd escaped the repository: ${cwd}`);
   }
   return target;
 }
@@ -244,11 +254,11 @@ export function summarizeCommand(executable: string, args: string[]): string {
 }
 
 export function describeMissingExecutable(executable: string): string {
-  const name = executable.trim() || "(空)";
+  const name = executable.trim() || "(empty)";
   return (
-    `未找到可执行文件 ${name}（ENOENT）。` +
-    `Worker 继承看板进程的 PATH；从开始菜单或快捷方式启动时，往往不含终端里才有的 Flutter。` +
-    `请把 Flutter 的 bin 目录写入系统 PATH 后重启看板，或从已配置 PATH 的终端启动看板。`
+    `Executable ${name} was not found (ENOENT). ` +
+    `The Worker inherits the Kanban process PATH; launching from the Start menu or a shortcut often omits Flutter that exists in a terminal. ` +
+    `Add Flutter's bin directory to the system PATH and restart Kanban, or start Kanban from a terminal that already has PATH configured.`
   );
 }
 

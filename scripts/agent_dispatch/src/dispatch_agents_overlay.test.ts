@@ -19,18 +19,18 @@ describe("applyDispatchArchitectureOverride", () => {
 
 - MUST NOT 在未读 \`Architecture.md\`（若存在）的情况下擅自新增顶层目录或跨层依赖。
 `);
-    assert.match(text, /本会话覆盖/);
-    assert.match(text, /已由 Worker 注入，视为已读/);
+    assert.match(text, /This-session override/);
+    assert.match(text, /already been injected by the Worker and counts as read/);
     assert.match(text, /docs\/Systems\//);
     assert.match(text, /CONTEXT\.md/);
-    assert.match(text, /未遵守已注入 Architecture\.md/);
+    assert.match(text, /without following the injected Architecture.md/);
     assert.equal(text.includes("MUST 先阅读"), false);
     assert.equal(text.includes("docs/Architecture.md]"), false);
   });
 
   it("没有用户 AGENTS.md 时仍写出覆盖说明", () => {
     const text = applyDispatchArchitectureOverride("");
-    assert.match(text, /本会话覆盖/);
-    assert.match(text, /视为已满足/);
+    assert.match(text, /This-session override/);
+    assert.match(text, /treated as satisfied/);
   });
 });

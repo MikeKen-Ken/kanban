@@ -1,7 +1,8 @@
-/// 把 Skill 与 Worker claim 后冻结的卡片上下文组装为单卡指令。
+/// Assemble the Skill and the Worker-claimed card context into a single-card prompt.
 ///
-/// YAML frontmatter（name/description 等）只给 Cursor 技能目录用，
-/// 注入会话后会触发模型再去磁盘找 SKILL.md，因此发送前剥掉。
+/// YAML frontmatter (name/description, etc.) is for the Cursor skill catalog.
+/// Leaving it in the session causes the model to look for SKILL.md on disk,
+/// so it is stripped before send.
 String buildSkillDispatchPrompt({
   required String skillMarkdown,
   required String projectId,
@@ -14,17 +15,17 @@ String buildSkillDispatchPrompt({
   final architecture = batchArchitectureText?.trim();
 
   return '''
-你必须严格按下列已注入的流程执行。
-下面「Skill 正文」就是完整指令，不是路径、不是需要再打开的文件。
-禁止搜索、glob、grep 或读取 SKILL.md / 技能目录来「确认流程」或「定位 Skill」。
-禁止读取 agent-transcripts 或任何历史对话。
-Worker 会在本提示后继续注入完整用户 Rule、Architecture 与唯一卡片上下文；其中要求再次读取 Skill 或 Architecture 的条款视为已满足。看板工具、Git、验证和终态协议以 Skill 正文为准。
+You must strictly follow the injected process below.
+The "Skill body" section is the complete instruction; it is not a path and not a file you need to open again.
+Do not search, glob, grep, or read SKILL.md / the skills directory to "confirm the process" or "locate the Skill".
+Do not read agent-transcripts or any historical conversation.
+After this prompt the Worker continues by injecting the full user Rules, Architecture, and this card's only context; any clause that requires reading the Skill or Architecture again is already satisfied. Kanban tools, Git, verification, and the completion protocol follow the Skill body.
 
-# Skill 正文
+# Skill body
 
 $skill
 
-# 本次调用
+# This invocation
 
 projectId:$id
 ${context == null || context.isEmpty ? '' : '\ncardContext:\n$context'}
@@ -32,7 +33,7 @@ ${architecture == null || architecture.isEmpty ? '' : '\nbatchArchitecture:\n$ar
 ''';
 }
 
-/// 去掉 SKILL.md 开头的 YAML frontmatter，只保留正文。
+/// Strip YAML frontmatter from the start of SKILL.md, keeping only the body.
 String stripSkillFrontmatter(String markdown) {
   final text = markdown.trim();
   if (!text.startsWith('---')) return text;

@@ -47,7 +47,7 @@ export function emitInteractionEvent(
 export function sessionStartText(job: RoundDispatchJob): string {
   const items = workItems(job);
   return items.length === 0
-    ? "开始处理本卡。"
+    ? "Starting this card."
     : items.map((item) => `- ${item}`).join("\n");
 }
 
@@ -141,18 +141,18 @@ export function createAskUserTool(
   mkdirSync(interactionDir, { recursive: true });
   return {
     description:
-      "需要用户确认、补充需求或选择方案时调用。有互斥方案时传入 choices，看板会弹出选项菜单；工具会暂停当前卡片，直到用户回复。",
+      "Call this when you need the user to confirm, supply missing requirements, or choose a plan. When options are mutually exclusive, pass choices; the board shows an option menu and pauses the current card until the user replies.",
     inputSchema: {
       type: "object",
       properties: {
         question: {
           type: "string",
-          description: "向用户提出的完整问题，使用简体中文。",
+          description: "The full question to ask the user, in English.",
         },
         choices: {
           type: "array",
           description:
-            "2 到 4 个互斥选项。有明确方案时必须提供，看板会在最近运行界面弹出选项菜单供用户点选；不要只在正文里口头列出选项。",
+            "2 to 4 mutually exclusive options. Provide them when there is a clear plan; the board shows an option menu on the latest-run screen for the user to tap. Do not only list options in assistant prose.",
           items: { type: "string" },
           minItems: 2,
           maxItems: 4,
@@ -164,7 +164,7 @@ export function createAskUserTool(
     execute: async (args) => {
       const question = stringArg(args.question);
       if (!question) {
-        return { content: [{ type: "text", text: "问题不能为空" }], isError: true };
+        return { content: [{ type: "text", text: "Question cannot be empty" }], isError: true };
       }
       const explicit = stringListArg(args.choices);
       const choices =
@@ -181,7 +181,7 @@ export function createAskUserTool(
         ...(choices.length > 0 ? { choices } : {}),
       });
       const answer = await waitForReply(replyPath, cancellation);
-      if (answer && answer !== "用户已终止当前会话。") {
+      if (answer && answer !== "The user ended the current session.") {
         onUserReply?.(answer);
       }
       return answer;
@@ -195,7 +195,7 @@ async function waitForReply(
 ): Promise<string> {
   while (true) {
     if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
-      return "用户已终止当前会话。";
+      return "The user ended the current session.";
     }
     if (existsSync(replyPath)) {
       try {

@@ -103,7 +103,7 @@ async function tryFetchUsagePools(
 export async function printCursorUsage(): Promise<void> {
   const apiKey = process.env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
-    console.error("缺少 CURSOR_API_KEY");
+    console.error("Missing CURSOR_API_KEY");
     process.exitCode = 2;
     return;
   }
@@ -115,7 +115,7 @@ export async function printCursorUsage(): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     const payload: UsagePayload = {
       ok: false,
-      error: `读取 Cursor 账号失败：${message}`,
+      error: `Failed to read the Cursor account: ${message}`,
     };
     process.stdout.write(`${JSON.stringify(payload)}\n`);
     process.exitCode = 2;

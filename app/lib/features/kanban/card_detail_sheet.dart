@@ -532,12 +532,10 @@ class _CardDetailSheetState extends State<_CardDetailSheet> with ImeGuard {
     final removedAgentFollowUpTexts = liveFeedback
         .where(
           (original) =>
-              original.text.startsWith(agentFollowUpFeedbackPrefix) &&
+              agentFollowUpFeedbackBody(original.text) != null &&
               !verificationFeedback.any((next) => next.id == original.id),
         )
-        .map(
-          (item) => item.text.substring(agentFollowUpFeedbackPrefix.length),
-        )
+        .map((item) => agentFollowUpFeedbackBody(item.text)!)
         .toList();
     final attachments = List<CardAttachment>.from(_attachments);
     final fileAttachments = List<CardFileAttachment>.from(_fileAttachments);

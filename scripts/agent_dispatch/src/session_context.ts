@@ -22,7 +22,7 @@ export type SessionContext = {
 
 export function readBatchArchitecture(cwd: string): string {
   const path = join(cwd, "docs", "Architecture.md");
-  if (!existsSync(path)) return "仓库未提供 docs/Architecture.md。";
+  if (!existsSync(path)) return "This repository does not provide docs/Architecture.md.";
   return readFileSync(path, "utf8");
 }
 
@@ -75,15 +75,15 @@ export function createSessionContext(options: {
   const prompt = [
     options.basePrompt.trim(),
     "",
-    "# Worker 注入的本轮上下文",
+    "# Worker-injected context for this round",
     "",
-    "本轮卡片已领取。以下上下文是唯一任务范围；不要再次读取 Skill 或领取其他卡片。",
+    "This round's card is already claimed. The context below is the only task scope; do not read the Skill again or claim another card.",
     "",
-    "卡片类型只由 JSON 的 `cardKind` 与 `labels` 决定：`consultation` 为咨询卡，否则为实施卡。未打咨询标签时，即使标题像提问、没有清单，也必须当实施卡做完并 `ready_to_submit`。不要自行改判。",
+    "Card type is decided only by JSON `cardKind` and `labels`: `consultation` is a consultation card, otherwise it is an implementation card. Without a consultation label, even if the title looks like a question and there is no checklist, finish it as an implementation card and call `ready_to_submit`. Do not reclassify it yourself.",
     "",
     DISPATCH_SEARCH_POLICY.trim(),
     "",
-    "## 卡片上下文（JSON）",
+    "## Card context (JSON)",
     "",
     "```json",
     JSON.stringify(payload, null, 2),
@@ -94,26 +94,26 @@ export function createSessionContext(options: {
       options.requireTests !== false,
     ),
     "",
-    "## 临时附件绝对路径",
+    "## Temporary attachment absolute paths",
     "",
     ...(attachmentPaths.length === 0
-      ? ["- 无文件附件"]
-      : attachmentPaths.map((path) => `- 文件：${path}`)),
+      ? ["- No file attachments"]
+      : attachmentPaths.map((path) => `- File: ${path}`)),
     ...(imagePaths.length === 0
-      ? ["- 无图片临时路径"]
-      : imagePaths.map((path) => `- 图片：${path}`)),
+      ? ["- No temporary image paths"]
+      : imagePaths.map((path) => `- Image: ${path}`)),
     "",
-    "这些路径位于系统临时会话目录，只在本轮有效；不要复制到仓库。",
+    "These paths are in the system temporary session directory and are valid only for this round; do not copy them into the repository.",
     "",
-    "## 完整用户 Rule",
+    "## Full user Rules",
     "",
     wrapWorkerUserRules(options.userRules ?? ""),
     "",
-    "## 已缓存的 docs/Architecture.md",
+    "## Cached docs/Architecture.md",
     "",
     options.architecture.trim(),
     "",
-    "以上正文已满足用户规则 / AGENTS.md 中的「开发前必读 Architecture.md」。禁止再打开该文件。ADR、docs/Systems、CONTEXT.md 需要时仍可读。",
+    "The text above already satisfies the user-rule / AGENTS.md requirement to read Architecture.md before development. Do not open that file again. ADRs, docs/Systems, and CONTEXT.md may still be read when needed.",
   ].join("\n");
 
   return {
@@ -146,7 +146,7 @@ function safeFileName(value: string, fallback: string): string {
 
 function uniquePath(root: string, fileName: string): string {
   const path = join(root, fileName);
-  if (!isAbsolute(path)) throw new Error("临时附件路径不是绝对路径");
+  if (!isAbsolute(path)) throw new Error("Temporary attachment path is not absolute");
   return path;
 }
 

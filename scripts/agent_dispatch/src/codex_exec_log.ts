@@ -96,7 +96,7 @@ function recordsFromCodexEventInner(
     case "thread.started": {
       const threadId = pickString(event, "thread_id");
       return threadId
-        ? [{ line: `Codex 会话 ${threadId}`, source: "worker" }]
+        ? [{ line: `Codex session ${threadId}`, source: "worker" }]
         : [];
     }
     case "turn.started":
@@ -107,11 +107,11 @@ function recordsFromCodexEventInner(
       const message =
         pickString(asRecord(event.error), "message") ||
         pickString(event, "message") ||
-        "Codex 回合失败";
+        "Codex turn failed";
       return [{ line: message, source: "worker", level: "error" }];
     }
     case "error": {
-      const message = pickString(event, "message") || "Codex 错误";
+      const message = pickString(event, "message") || "Codex error";
       if (RECONNECT_PATTERN.test(message)) {
         return [{ line: message, source: "worker" }];
       }
@@ -138,12 +138,12 @@ function recordsFromCodexItem(
     case "assistant_message":
       if (eventType !== "item.completed") return [];
       return toRecords(
-        expandMultiline("助手：", extractAssistantText(item) || pickString(item, "text")),
+        expandMultiline("Assistant: ", extractAssistantText(item) || pickString(item, "text")),
         "ai",
       );
     case "reasoning":
       if (eventType !== "item.completed") return [];
-      return toRecords(expandMultiline("思考：", pickString(item, "text")), "ai");
+      return toRecords(expandMultiline("Thinking: ", pickString(item, "text")), "ai");
     case "command_execution":
       return recordsFromCommand(
         eventType,
@@ -158,7 +158,7 @@ function recordsFromCodexItem(
     case "web_search":
       if (eventType !== "item.completed") return [];
       return pickString(item, "query")
-        ? [{ line: `工具：web_search ${pickString(item, "query")}`, source: "mcp" }]
+        ? [{ line: `Tool: web_search ${pickString(item, "query")}`, source: "mcp" }]
         : [];
     case "todo_list":
       return recordsFromTodo(item);
@@ -166,7 +166,7 @@ function recordsFromCodexItem(
       if (eventType !== "item.completed") return [];
       return [
         {
-          line: pickString(item, "message") || "Codex 非致命警告",
+          line: pickString(item, "message") || "Codex non-fatal warning",
           source: "worker",
           level: "warning",
         },
@@ -203,7 +203,7 @@ function recordsFromCommand(
 ): WorkerLogRecord[] {
   const command = pickString(item, "command");
   if (eventType === "item.started") {
-    return command ? toRecords(expandMultiline("命令：", command), "shell") : [];
+    return command ? toRecords(expandMultiline("Command: ", command), "shell") : [];
   }
   if (eventType !== "item.completed") return [];
   const records: WorkerLogRecord[] = [];
@@ -211,18 +211,18 @@ function recordsFromCommand(
   const searchIssue = outcome === "search_issue";
   if (command && outcome === "no_match") {
     records.push({
-      line: `搜索无匹配：${clip(command, JSON_CLIP)}`,
+      line: `Search had no matches: ${clip(command, JSON_CLIP)}`,
       source: "shell",
     });
   } else if (command && searchIssue) {
     records.push({
-      line: `搜索命令问题（未中断任务）：${clip(command, JSON_CLIP)}`,
+      line: `Search command issue (task not interrupted): ${clip(command, JSON_CLIP)}`,
       source: "shell",
       level: "warning",
     });
   } else if (command && failed) {
     records.push({
-      line: `命令失败：${clip(command, JSON_CLIP)}`,
+      line: `Command failed: ${clip(command, JSON_CLIP)}`,
       source: "shell",
       level: "error",
     });
@@ -231,7 +231,7 @@ function recordsFromCommand(
   if ((failed || searchIssue) && output.trim()) {
     records.push(
       ...toRecords(
-        expandMultiline("命令输出：", clip(output, OUTPUT_CLIP)),
+        expandMultiline("Command output: ", clip(output, OUTPUT_CLIP)),
         "shell",
         failed ? "error" : "warning",
       ),
@@ -258,14 +258,14 @@ function recordsFromFileChange(
       if (!path) return "";
       const kind = String(entry.kind ?? "update");
       const label =
-        kind === "add" ? "新增" : kind === "delete" ? "删除" : "更新";
+        kind === "add" ? "added" : kind === "delete" ? "deleted" : "updated";
       return `${label} ${path}`;
     })
     .filter(Boolean);
-  const detail = parts.join("；") || "apply_patch";
+  const detail = parts.join("; ") || "apply_patch";
   return [
     {
-      line: `工具：apply_patch ${detail}`,
+      line: `Tool: apply_patch ${detail}`,
       source: "mcp",
       level: failed ? "error" : "info",
     },
@@ -280,18 +280,18 @@ function recordsFromMcp(
   const tool = pickString(item, "tool") || "tool";
   if (eventType === "item.started") {
     const args = usefulJson(item.arguments);
-    const detail = args ? `${tool} ${args}` : `${tool} 开始`;
-    return [{ line: `工具：${detail}`, source: "mcp" }];
+    const detail = args ? `${tool} ${args}` : `${tool} started`;
+    return [{ line: `Tool: ${detail}`, source: "mcp" }];
   }
   if (eventType !== "item.completed") return [];
   if (failed) {
     const err =
       pickString(asRecord(item.error), "message") ||
       pickString(item, "error") ||
-      "调用失败";
+      "call failed";
     return [
       {
-        line: `工具失败：${tool} ${err}`,
+        line: `Tool failed: ${tool} ${err}`,
         source: "mcp",
         level: "error",
       },
@@ -299,7 +299,7 @@ function recordsFromMcp(
   }
   const result = mcpResultText(item.result);
   if (!result.trim()) return [];
-  return toRecords(expandMultiline(`工具结果：${tool} `, result), "mcp");
+  return toRecords(expandMultiline(`Tool result: ${tool} `, result), "mcp");
 }
 
 function recordsFromTodo(item: Record<string, unknown>): WorkerLogRecord[] {
@@ -314,7 +314,7 @@ function recordsFromTodo(item: Record<string, unknown>): WorkerLogRecord[] {
     })
     .filter(Boolean);
   if (parts.length === 0) return [];
-  return [{ line: `计划：${parts.join("；")}`, source: "worker" }];
+  return [{ line: `Plan: ${parts.join("; ")}`, source: "worker" }];
 }
 
 function recordsFromUsage(
@@ -350,10 +350,10 @@ function recordsFromCodexTtyLine(
     state.ttyAwaitingTokenCount = trimmed === "tokens used";
     if (trimmed.startsWith("mcp:")) return recordsFromTtyMcp(trimmed);
     if (trimmed === "apply patch") {
-      return [{ line: "工具：apply_patch", source: "mcp" }];
+      return [{ line: "Tool: apply_patch", source: "mcp" }];
     }
     if (trimmed === "patch: completed") {
-      return [{ line: "工具结果：apply_patch", source: "mcp" }];
+      return [{ line: "Tool result: apply_patch", source: "mcp" }];
     }
     if (trimmed === "tokens used") return [];
     return [];
@@ -370,15 +370,15 @@ function recordsFromCodexTtyLine(
   }
   if (state.ttyRole === "user") return [];
   if (state.ttyRole === "codex") {
-    return toRecords(expandMultiline("助手：", line), "ai");
+    return toRecords(expandMultiline("Assistant: ", line), "ai");
   }
   if (state.ttyRole === "exec") {
     if (state.ttyExecAwaitingCommand) {
       state.ttyExecAwaitingCommand = false;
-      return toRecords(expandMultiline("命令：", trimmed), "shell");
+      return toRecords(expandMultiline("Command: ", trimmed), "shell");
     }
     if (/^failed in /i.test(trimmed) || /^error in /i.test(trimmed)) {
-      return [{ line: `命令失败：${trimmed}`, source: "shell", level: "error" }];
+      return [{ line: `Command failed: ${trimmed}`, source: "shell", level: "error" }];
     }
     const diagnostic = diagnosticRecord(trimmed, "shell");
     return diagnostic ? [diagnostic] : [];
@@ -387,7 +387,7 @@ function recordsFromCodexTtyLine(
     if (trimmed.startsWith("diff ") || trimmed.startsWith("index ")) return [];
     if (/^[+-]/.test(trimmed) || trimmed.startsWith("@@")) return [];
     if (/^[A-Za-z]:\\/.test(trimmed) || trimmed.includes("/")) {
-      return [{ line: `工具结果：apply_patch ${trimmed}`, source: "mcp" }];
+      return [{ line: `Tool result: apply_patch ${trimmed}`, source: "mcp" }];
     }
     return [];
   }
@@ -408,12 +408,12 @@ function ttyRoleOf(trimmed: string): CodexTtyRole | undefined {
 
 function recordsFromTtyMcp(line: string): WorkerLogRecord[] {
   const match = /^mcp:\s*([^/]+)\/(\S+)\s+(started|\(completed\))$/.exec(line);
-  if (!match) return [{ line: `工具：${line.slice(4).trim()}`, source: "mcp" }];
+  if (!match) return [{ line: `Tool: ${line.slice(4).trim()}`, source: "mcp" }];
   const tool = match[2]!;
   if (match[3] === "started") {
-    return [{ line: `工具：${tool} 开始`, source: "mcp" }];
+    return [{ line: `Tool: ${tool} started`, source: "mcp" }];
   }
-  return [{ line: `工具结果：${tool} 完成`, source: "mcp" }];
+  return [{ line: `Tool result: ${tool} done`, source: "mcp" }];
 }
 
 function isBannerLine(line: string): boolean {

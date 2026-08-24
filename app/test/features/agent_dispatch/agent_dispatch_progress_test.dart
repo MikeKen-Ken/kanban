@@ -341,4 +341,36 @@ void main() {
       3 * 60,
     );
   });
+
+  test('English Worker logs update round, title, and completion phase', () {
+    var progress = const AgentDispatchProgress(
+      running: true,
+      totalCards: 2,
+      cardLimitMax: true,
+    );
+    progress = applyWorkerProgressLog(
+      progress,
+      '──────── Worker card round 1/2 ────────',
+    );
+    expect(progress.currentRound, 1);
+    progress = applyWorkerProgressLog(progress, 'Current card: Translate scripts');
+    expect(progress.currentTitle, 'Translate scripts');
+    progress = applyWorkerProgressLog(
+      progress,
+      'Worker is processing the current card',
+    );
+    expect(progress.phaseLabel, 'Implement');
+    progress = applyWorkerProgressLog(
+      progress,
+      'Card abc was validated, committed, and submitted for manual verification',
+    );
+    expect(progress.processedCards, 1);
+    expect(progress.phaseLabel, 'Submit');
+    progress = applyWorkerProgressLog(
+      progress,
+      'Card override: engine=cursor model=composer-2.5 params=[] cardId=abc',
+    );
+    expect(progress.engine, 'cursor');
+    expect(progress.model, 'composer-2.5');
+  });
 }

@@ -29,7 +29,7 @@ describe("mcp_client", () => {
   it("MCP 操作超时后拒绝", async () => {
     await assert.rejects(
       withTimeout("测试调用", 10, new Promise(() => undefined)),
-      /测试调用 超时/,
+      /测试调用 timed out/,
     );
   });
 

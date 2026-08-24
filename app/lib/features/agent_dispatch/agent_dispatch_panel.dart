@@ -711,7 +711,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     if (result.ok) {
       _appendLog(result.summary ?? 'Complete',
           level: AgentDispatchLogLevel.success);
-    } else if (result.error == '已取消') {
+    } else if (result.error == '已取消' || result.error == 'Cancelled') {
       _appendLog('Run stopped', level: AgentDispatchLogLevel.warning);
     }
   }
