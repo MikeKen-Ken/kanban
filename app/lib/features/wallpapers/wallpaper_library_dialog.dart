@@ -71,7 +71,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
       builder: (context) => AlertDialog(
         title: const Text('Delete wallpapers'),
         content: Text(
-          'Delete ${_deleteSelection.length} selected wallpaper(s)? References in all projects will also be removed.',
+          'Delete ${_deleteSelection.length} wallpaper(s)? Project references will also be removed.',
         ),
         actions: [
           TextButton(
@@ -155,7 +155,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
                 icon: const Icon(Icons.cloud_upload_outlined),
               ),
               IconButton(
-                tooltip: 'Download wallpaper library from cloud',
+                tooltip: 'Download wallpapers',
                 onPressed: _busy
                     ? null
                     : () => runSyncManualAction(
@@ -253,7 +253,7 @@ class _WallpaperLibraryDialogState extends State<WallpaperLibraryDialog> {
               child: wallpapers.isEmpty
                   ? const Center(
                       child: Text(
-                          'No wallpapers yet. Click “Upload” to add images.'))
+                          'No wallpapers yet. Upload an image to get started.'))
                   : GridView.builder(
                       padding: const EdgeInsets.all(16),
                       gridDelegate:

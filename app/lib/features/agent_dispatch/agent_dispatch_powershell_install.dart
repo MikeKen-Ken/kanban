@@ -124,7 +124,8 @@ Future<PowerShellEnsureResult> ensureWindowsPowerShell7({
   }
   if (!allowInstall) {
     return const PowerShellEnsureResult(
-      error: '未找到 PowerShell 7（pwsh）。请安装 PowerShell 7 后再启动 Agent 调度。',
+      error:
+          'PowerShell 7 (pwsh) not found. Install it before starting Agent Dispatch.',
     );
   }
 
@@ -147,9 +148,9 @@ Future<PowerShellEnsureResult> ensureWindowsPowerShell7({
     if (wingetResult != null) {
       return wingetResult;
     }
-    logs.add('winget 安装/升级后仍未找到 pwsh');
+    logs.add('pwsh still not found after winget install/upgrade');
   } else {
-    logs.add('未检测到 winget（需 Windows 10/11 的 App Installer）');
+    logs.add('winget not found (Windows 10/11 App Installer is required)');
   }
 
   final installMsi = msiInstaller ??
@@ -180,7 +181,7 @@ Future<PowerShellEnsureResult> ensureWindowsPowerShell7({
         installLog: _clipLog(logs),
       );
     }
-    logs.add('MSI 安装成功但仍未找到 pwsh.exe');
+    logs.add('MSI install succeeded, but pwsh.exe is still missing');
   } else if (msi.error != null) {
     logs.add(msi.error!);
   }
@@ -255,16 +256,17 @@ Future<PowerShellEnsureResult?> _installViaWinget({
 }
 
 String _buildInstallFailureMessage({required bool wingetAvailable}) {
-  final buffer = StringBuffer('未找到 PowerShell 7，自动安装也失败。');
+  final buffer = StringBuffer(
+      'PowerShell 7 not found; automatic installation also failed.');
   if (!wingetAvailable) {
     buffer.write(
-      ' 本机未安装 winget（可从 Microsoft Store 安装 App Installer）；',
+      'winget is not installed (install App Installer from Microsoft Store); ',
     );
   }
   buffer.write(
-    ' 已尝试 winget 与 GitHub MSI 静默安装。'
-    '请手动安装：winget install --id Microsoft.PowerShell，'
-    '或从 https://github.com/PowerShell/PowerShell/releases 下载 win-x64.msi。',
+    'Tried winget and the GitHub MSI silent installer. '
+    'Install manually with: winget install --id Microsoft.PowerShell, '
+    'or download win-x64.msi from https://github.com/PowerShell/PowerShell/releases.',
   );
   return buffer.toString();
 }

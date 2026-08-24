@@ -61,16 +61,16 @@ class GithubReleaseClient {
     try {
       return await _fetchViaJsdelivr();
     } catch (e) {
-      errors.add('jsDelivr：$e');
+      errors.add('jsDelivr: $e');
     }
 
     try {
       return await _fetchViaApi();
     } catch (e) {
-      errors.add('API：$e');
+      errors.add('API: $e');
     }
 
-    throw StateError('读取 Release 失败。${errors.join('；')}');
+    throw StateError('Failed to read releases. ${errors.join('; ')}');
   }
 
   Future<List<GithubReleaseInfo>> _fetchViaAtom() async {
@@ -78,7 +78,7 @@ class GithubReleaseClient {
     _ensureOk(result, label: 'Atom');
     final releases = parseReleasesAtom(result.body, owner: owner, repo: repo);
     if (releases.isEmpty) {
-      throw StateError('Atom 中没有可用 Release');
+      throw StateError('Atom contains no usable releases');
     }
     return releases;
   }
@@ -93,15 +93,15 @@ class GithubReleaseClient {
     final result = await _get(_apiUri);
     if (result.statusCode < 200 || result.statusCode >= 300) {
       final hint = result.statusCode == 403 && result.rateLimitRemaining == '0'
-          ? '（GitHub API 未认证限额已用尽；请稍后重试，或检查网络能否访问 github.com / data.jsdelivr.com）'
+          ? '(GitHub API unauthenticated rate limit exhausted; retry later or check access to github.com / data.jsdelivr.com)'
           : '';
       throw StateError(
-        '读取 GitHub Release 失败（HTTP ${result.statusCode}）$hint',
+        'Failed to read GitHub releases (HTTP ${result.statusCode}) $hint',
       );
     }
     final decoded = jsonDecode(result.body);
     if (decoded is! List) {
-      throw const FormatException('GitHub Release 响应格式无效');
+      throw const FormatException('Invalid GitHub release response format');
     }
     return decoded
         .whereType<Map<String, dynamic>>()
@@ -122,7 +122,7 @@ class GithubReleaseClient {
     request.followRedirects = true;
     final response = await request.close();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('下载失败（HTTP ${response.statusCode}）');
+      throw StateError('Download failed (HTTP ${response.statusCode})');
     }
     final total = response.contentLength;
     var received = 0;
@@ -306,11 +306,11 @@ List<GithubReleaseInfo> parseJsdelivrGhPackage(
 }) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<String, dynamic>) {
-    throw const FormatException('jsDelivr 响应格式无效');
+    throw const FormatException('Invalid jsDelivr response format');
   }
   final versions = decoded['versions'];
   if (versions is! List || versions.isEmpty) {
-    throw StateError('jsDelivr 中没有可用版本');
+    throw StateError('jsDelivr contains no usable versions');
   }
 
   final results = <GithubReleaseInfo>[];
@@ -336,7 +336,7 @@ List<GithubReleaseInfo> parseJsdelivrGhPackage(
     );
   }
   if (results.isEmpty) {
-    throw StateError('jsDelivr 中没有可用版本');
+    throw StateError('jsDelivr contains no usable versions');
   }
   return results;
 }

@@ -341,26 +341,26 @@ String _summary({
 }) {
   final buffer = StringBuffer('Worker environment: ');
   if (flutterBin != null && mergedWindowsPath) {
-    buffer.write('merged user/system PATH and added $flutterBin');
+    buffer.write('merged user/system PATH; added $flutterBin');
   } else if (flutterBin != null) {
     buffer.write('added $flutterBin');
   } else if (mergedWindowsPath) {
     buffer.write('merged user/system PATH');
   } else {
-    buffer.write('using the Kanban process PATH');
+    buffer.write('using app process PATH');
   }
   if (powerShellEnsure?.installAttempted == true) {
-    buffer.write('；${powerShellEnsure!.summaryFragment}');
+    buffer.write('; ${powerShellEnsure!.summaryFragment}');
   }
   if (agentShell != null) {
-    buffer.write('；${agentShell.summaryFragment}');
+    buffer.write('; ${agentShell.summaryFragment}');
   }
   if (nodeHeapMb != null) {
-    buffer.write('；Node 堆上限 ${nodeHeapMb}MB');
+    buffer.write('; Node heap limit ${nodeHeapMb}MB');
     if (heapOverridden) {
-      buffer.write('（用户指定）');
+      buffer.write(' (user-set)');
     } else if (totalPhysicalMb != null && totalPhysicalMb > 0) {
-      buffer.write('（本机物理内存 ${totalPhysicalMb}MB 的约 75%）');
+      buffer.write(' (about 75% of ${totalPhysicalMb}MB physical memory)');
     }
   }
   return buffer.toString();

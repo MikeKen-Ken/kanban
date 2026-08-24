@@ -71,7 +71,7 @@ class SyncActionsSwitcher extends StatelessWidget {
         compact: compact,
         showDropdownArrow: false,
         onTap: () {
-          showAppSnackBar(context, message: 'Syncing… click Cancel to stop');
+          showAppSnackBar(context, message: 'Syncing… tap Cancel to stop');
         },
         onCancel: onCancel,
       );
@@ -80,7 +80,7 @@ class SyncActionsSwitcher extends StatelessWidget {
         longPressDelay: controller.appSettings.dragDelay,
         onCommit: (action) => runSyncManualAction(context, controller, action),
         child: PopupMenuButton<SyncManualAction>(
-          tooltip: 'Sync (tap for menu, hold and drag to choose; release on Cancel to stop)',
+          tooltip: 'Sync: tap for menu, drag to choose',
           constraints: const BoxConstraints(
             minWidth: _menuMinWidth,
             maxWidth: _menuMaxWidth,
@@ -103,7 +103,8 @@ class SyncActionsSwitcher extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: _appBarIconButtonSideInset),
+      padding:
+          const EdgeInsets.symmetric(horizontal: _appBarIconButtonSideInset),
       child: child,
     );
   }
@@ -167,28 +168,29 @@ class _SyncStatusTrigger extends StatelessWidget {
     final lastSuccess = lastSyncedAt == null
         ? 'No successful sync yet'
         : 'Last successful sync: ${formatSyncTime(lastSyncedAt!)}';
-    final pendingDetail = pendingUploadCount > 0
-        ? 'Workspace changes are not uploaded'
-        : null;
+    final pendingDetail =
+        pendingUploadCount > 0 ? 'Workspace changes are not uploaded' : null;
 
     final progressDetail = progress == null
         ? null
         : [
             progress!.phaseLabel,
             if (progress!.hasTotal) '${progress!.completed}/${progress!.total}',
-            if (progress!.skipped > 0) 'Skipped ${progress!.skipped} unchanged file(s)',
+            if (progress!.skipped > 0) 'Skipped ${progress!.skipped} unchanged',
             if (progress!.currentLabel != null) progress!.currentLabel!,
           ].join(' · ');
 
     final tooltip = conflictCount > 0
-        ? 'Unresolved sync conflicts; click to open Conflict Center'
+        ? 'Sync conflicts need attention; open Conflict Center'
         : syncing
-            ? (progressDetail == null ? 'Syncing… click to cancel' : '$progressDetail\nClick to cancel')
+            ? (progressDetail == null
+                ? 'Syncing… tap to cancel'
+                : '$progressDetail\nTap to cancel')
             : error == null
                 ? [
                     lastSuccess,
                     if (pendingDetail != null) pendingDetail,
-                    'Tap for menu; hold and drag to choose; release on Cancel to stop',
+                    'Tap for menu; drag to choose',
                   ].join('\n')
                 : [
                     error!,
@@ -197,9 +199,7 @@ class _SyncStatusTrigger extends StatelessWidget {
                   ].join('\n');
 
     final icon = Icon(
-      conflictCount > 0
-          ? Icons.warning_amber_outlined
-          : syncStatusIcon(status),
+      conflictCount > 0 ? Icons.warning_amber_outlined : syncStatusIcon(status),
       color: color,
       size: 20,
     );

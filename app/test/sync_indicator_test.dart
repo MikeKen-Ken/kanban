@@ -8,11 +8,11 @@ void main() {
     expect(formatSyncTime(time), '08-03 17:05');
     expect(
       syncStatusWithLastSuccessLabel(SyncStatus.success, time),
-      '已同步 08-03 17:05',
+      'Synced 08-03 17:05',
     );
     expect(
       syncStatusWithLastSuccessLabel(SyncStatus.syncing, time),
-      '同步中…',
+      'Syncing…',
     );
   });
 
@@ -24,7 +24,7 @@ void main() {
         time,
         pendingUploadCount: 0,
       ),
-      '已同步 08-03 17:05',
+      'Synced 08-03 17:05',
     );
     expect(
       syncStatusWithLastSuccessLabel(
@@ -32,7 +32,7 @@ void main() {
         time,
         pendingUploadCount: 4,
       ),
-      '已同步 08-03 17:05 · 待同步 4',
+      'Synced 08-03 17:05 · 4 pending',
     );
     expect(
       syncStatusWithLastSuccessLabel(
@@ -40,7 +40,7 @@ void main() {
         time,
         pendingUploadCount: 2,
       ),
-      '已同步 08-03 17:05 · 待同步 2',
+      'Synced 08-03 17:05 · 2 pending',
     );
   });
 
@@ -52,7 +52,7 @@ void main() {
       skipped: 5,
       currentLabel: '甲 / 待办',
     );
-    expect(progress.shortLabel, '同步中 3/12');
+    expect(progress.shortLabel, 'Syncing 3/12');
     expect(
       syncStatusWithLastSuccessLabel(
         SyncStatus.syncing,
@@ -60,7 +60,7 @@ void main() {
         progress: progress,
         pendingUploadCount: 9,
       ),
-      '同步中 3/12',
+      'Syncing 3/12',
     );
   });
 
@@ -68,7 +68,7 @@ void main() {
     final time = DateTime(2026, 8, 3, 17, 5);
     expect(
       compactSyncStatusLabel(SyncStatus.success, time),
-      '已同步 08-03',
+      'Synced 08-03',
     );
     expect(
       compactSyncStatusLabel(
@@ -76,11 +76,11 @@ void main() {
         time,
         pendingUploadCount: 4,
       ),
-      '待同步 4 · 08-03',
+      '4 pending · 08-03',
     );
     expect(
       compactSyncStatusLabel(SyncStatus.error, time),
-      '同步失败 · 08-03',
+      'Sync failed · 08-03',
     );
   });
 }

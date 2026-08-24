@@ -247,7 +247,7 @@ class _CardDetailAgentModelSectionState
           Row(
             children: [
               _dropdown(
-                label: 'AI platform',
+                label: 'Engine',
                 value: widget.agentEngine ?? _inherit,
                 items: _items(
                   options: [
@@ -289,7 +289,7 @@ class _CardDetailAgentModelSectionState
               if (reasoning != null) ...[
                 const SizedBox(width: 6),
                 _dropdown(
-                  label: 'Reasoning effort',
+                  label: 'Reasoning',
                   value: widget.agentModelParamValues[reasoning.id] ?? _inherit,
                   items: _items(
                     options: [
@@ -323,7 +323,7 @@ class _CardDetailAgentModelSectionState
               ],
               const SizedBox(width: 6),
               _compactToggle(
-                label: 'Allow dirty workspaces',
+                label: 'Allow dirty workspace',
                 value: widget.agentAllowDirtyWorkspace == true,
                 onChanged: (value) => _emit(
                   agentAllowDirtyWorkspace: value ? true : null,

@@ -49,7 +49,7 @@ class AgentDispatchUsagePane extends StatelessWidget {
               ),
             TextButton(
               onPressed: onOpenTokenStats,
-              child: const Text('Token statistics'),
+              child: const Text('Token stats'),
             ),
             TextButton(
               onPressed: () => launchUrl(
@@ -62,7 +62,7 @@ class AgentDispatchUsagePane extends StatelessWidget {
         if (email != null && email.isNotEmpty)
           Text('Email: $email', style: textTheme.bodySmall),
         if (keyName != null && keyName.isNotEmpty)
-          Text('Key：$keyName', style: textTheme.bodySmall),
+          Text('Key: $keyName', style: textTheme.bodySmall),
         if ((email == null || email.isEmpty) &&
             (keyName == null || keyName.isEmpty) &&
             !loading)

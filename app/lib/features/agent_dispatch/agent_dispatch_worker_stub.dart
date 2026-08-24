@@ -60,7 +60,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
 }) async {
   return const AgentWorkerResult(
     ok: false,
-    error: '当前平台不支持本机 Agent 调度',
+    error: 'Local Agent Dispatch is not supported on this platform',
   );
 }
 
@@ -74,7 +74,7 @@ Future<AgentWorkerHealth> inspectAgentDispatchWorker(
       ok: false,
       source: '不支持',
       workerRoot: '未知',
-      error: '当前平台不支持本机 Agent 调度',
+      error: 'Local Agent Dispatch is not supported on this platform',
     );
 
 Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
@@ -90,7 +90,7 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
   String? workerScriptPath,
   void Function(String line)? onLog,
 }) async {
-  throw StateError('当前平台不支持本机 Agent 调度');
+  throw StateError('Local Agent Dispatch is not supported on this platform');
 }
 
 Future<String?> resolveCursorApiKeyLabel({

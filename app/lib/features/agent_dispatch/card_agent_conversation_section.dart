@@ -43,7 +43,7 @@ class CardAgentConversationSection extends StatelessWidget {
               );
             },
       icon: Icon(hasHistory ? Icons.forum : Icons.forum_outlined),
-      label: Text(hasHistory ? 'View / ask Agent' : 'Agent conversation'),
+      label: Text(hasHistory ? 'Open Agent chat' : 'Agent chat'),
     );
   }
 }
@@ -477,7 +477,7 @@ class _CardAgentConversationDialogState
                     )
                   else ...[
                     Text(
-                      'Submitting a follow-up writes to synced Markdown and moves the card to Rework; the next dispatch continues it.',
+                      'A follow-up is saved to the card and moves it to Rework for the next dispatch.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 8),
@@ -505,14 +505,14 @@ class _CardAgentConversationDialogState
                   ),
                   onPressed: _openMarkdownDirectory,
                   icon: const Icon(Icons.folder_open_outlined, size: 18),
-                  label: const Text('Open containing folder'),
+                  label: const Text('Open folder'),
                 ),
               if (hasMarkdownFile)
                 OutlinedButton.icon(
                   key: const ValueKey('card-agent-conversation-open-markdown'),
                   onPressed: _openMarkdownFile,
                   icon: const Icon(Icons.open_in_new, size: 18),
-                  label: const Text('Open Markdown file'),
+                  label: const Text('Open Markdown'),
                 ),
               TextButton(
                 onPressed: _sending ? null : () => _closeDialog(),
@@ -522,7 +522,7 @@ class _CardAgentConversationDialogState
                 FilledButton.icon(
                   onPressed: _sending ? null : _send,
                   icon: const Icon(Icons.send, size: 18),
-                  label: Text(_sending ? 'Sending…' : 'Submit follow-up'),
+                  label: Text(_sending ? 'Sending…' : 'Send follow-up'),
                 ),
             ],
           ),

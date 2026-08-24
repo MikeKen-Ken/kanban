@@ -14,8 +14,9 @@ Future<AttachmentAddDecision?> showAttachmentAddIssueDialog(
   required AttachmentAddAnalysis analysis,
   required bool isImage,
 }) {
-  final noun = isImage ? '图片' : '文件';
-  final title = analysis.canForceSubmit ? '附件不符合推荐限制' : '无法添加$noun';
+  final noun = isImage ? 'images' : 'files';
+  final title =
+      analysis.canForceSubmit ? 'Attachment limits' : 'Cannot add $noun';
 
   return showDialog<AttachmentAddDecision>(
     context: context,
@@ -30,8 +31,8 @@ Future<AttachmentAddDecision?> showAttachmentAddIssueDialog(
             children: [
               Text(
                 analysis.canForceSubmit
-                    ? '以下内容存在问题，取消将不会添加任何$noun：'
-                    : '以下内容无法添加，请调整后重试：',
+                    ? 'Some items have issues. Cancel to add none of these $noun.'
+                    : 'These items cannot be added. Fix the issues and try again.',
               ),
               const SizedBox(height: 12),
               for (final issue in analysis.issues)
@@ -76,14 +77,15 @@ Future<AttachmentAddDecision?> showAttachmentAddIssueDialog(
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, AttachmentAddDecision.cancelled),
-            child: const Text('取消'),
+            onPressed: () =>
+                Navigator.pop(ctx, AttachmentAddDecision.cancelled),
+            child: const Text('Cancel'),
           ),
           if (analysis.canForceSubmit)
             FilledButton(
               onPressed: () =>
                   Navigator.pop(ctx, AttachmentAddDecision.forceSubmit),
-              child: const Text('执意提交'),
+              child: const Text('Add anyway'),
             ),
         ],
       );
@@ -97,20 +99,20 @@ Future<bool> showAttachmentAddForceConfirmDialog(
   required AttachmentAddAnalysis analysis,
 }) {
   return showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('确认执意提交？'),
-          content: Text(forceSubmitConfirmMessage(analysis)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('返回'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('确认添加'),
-            ),
-          ],
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Add anyway?'),
+      content: Text(forceSubmitConfirmMessage(analysis)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Back'),
         ),
-      ).then((value) => value == true);
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Add'),
+        ),
+      ],
+    ),
+  ).then((value) => value == true);
 }

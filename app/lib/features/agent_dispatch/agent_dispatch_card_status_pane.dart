@@ -118,7 +118,7 @@ class _AgentDispatchCardStatusPaneState
                   key: const ValueKey('agent-dispatch-jump-running-card'),
                   onPressed: widget.onJumpToRunning,
                   icon: const Icon(Icons.play_circle_outline, size: 18),
-                  label: const Text('Running cards'),
+                  label: const Text('Live card'),
                 ),
               ],
             ],
@@ -205,7 +205,7 @@ class _MetricsRow extends StatelessWidget {
         _MetricChip(
           key: const ValueKey('agent-dispatch-card-elapsed'),
           icon: Icons.timer_outlined,
-          label: 'Runs',
+          label: 'Time',
           value: formatAgentDispatchElapsed(elapsedSeconds),
           color: theme.colorScheme.tertiary,
         ),

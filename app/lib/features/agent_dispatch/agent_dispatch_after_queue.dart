@@ -6,18 +6,19 @@ import '../mcp/mcp_git_commit.dart';
 enum AgentDispatchAfterStep {
   webdavUpload,
   gitPush,
-  sleep,
+  hibernate,
   shutdown;
 
   String get label => switch (this) {
         AgentDispatchAfterStep.webdavUpload => 'Upload',
         AgentDispatchAfterStep.gitPush => 'Push',
-        AgentDispatchAfterStep.sleep => 'Sleep',
+        AgentDispatchAfterStep.hibernate => 'Hibernate',
         AgentDispatchAfterStep.shutdown => 'Shut down',
       };
 
   static AgentDispatchAfterStep? tryParse(String? name) {
     if (name == null || name.isEmpty) return null;
+    if (name == 'sleep') return AgentDispatchAfterStep.hibernate;
     for (final step in AgentDispatchAfterStep.values) {
       if (step.name == name) return step;
     }
@@ -29,13 +30,13 @@ class AgentDispatchAfterQueueHost {
   const AgentDispatchAfterQueueHost({
     required this.uploadAll,
     required this.gitPush,
-    required this.sleep,
+    required this.hibernate,
     required this.shutdown,
   });
 
   final Future<void> Function() uploadAll;
   final Future<void> Function() gitPush;
-  final Future<void> Function() sleep;
+  final Future<void> Function() hibernate;
   final Future<void> Function() shutdown;
 }
 
@@ -135,18 +136,18 @@ Future<void> runAgentDispatchAfterQueue({
   void Function(String message)? onLog,
 }) async {
   for (final step in steps) {
-    onLog?.call('完成后队列：开始「${step.label}」');
+    onLog?.call('Completion queue: starting “${step.label}”');
     switch (step) {
       case AgentDispatchAfterStep.webdavUpload:
         await host.uploadAll();
       case AgentDispatchAfterStep.gitPush:
         await host.gitPush();
-      case AgentDispatchAfterStep.sleep:
-        await host.sleep();
+      case AgentDispatchAfterStep.hibernate:
+        await host.hibernate();
       case AgentDispatchAfterStep.shutdown:
         await host.shutdown();
     }
-    onLog?.call('完成后队列：已完成「${step.label}」');
+    onLog?.call('Completion queue: completed “${step.label}”');
   }
 }
 
@@ -156,45 +157,38 @@ Future<void> abortStaleWindowsPowerAction() async {
   await Process.run('shutdown', ['/a']);
 }
 
-Future<void> windowsSleepNow({
+Future<void> windowsHibernateNow({
   Future<ProcessResult> Function(String executable, List<String> arguments)?
       runner,
 }) async {
   if (!Platform.isWindows) {
-    throw UnsupportedError('仅 Windows 支持休眠');
+    throw UnsupportedError('Hibernate is supported only on Windows');
   }
-  // 立即进入休眠，不创建计划任务或延时关机，因此不会在下次开机重复执行。
-  // SetSuspendState 返回 false 时 PowerShell 默认仍以 0 退出，必须显式转为失败。
+  // shutdown /h 进入 S4 休眠；/h 不支持 /t 延时，也不会留下跨重启的关机倒计时。
+  // 不用 SetSuspendState(Suspend/Hibernate)：后者在部分系统上会退化为 S3 睡眠。
   final result = await (runner ?? Process.run)(
-    'powershell',
-    const [
-      '-NoProfile',
-      '-NonInteractive',
-      '-WindowStyle',
-      'Hidden',
-      '-Command',
-      'Add-Type -AssemblyName System.Windows.Forms; '
-          '\$suspended = [System.Windows.Forms.Application]::SetSuspendState('
-          '[System.Windows.Forms.PowerState]::Hibernate, \$false, \$false); '
-          'if (-not \$suspended) { '
-          'Write-Error "Windows 拒绝休眠请求"; exit 1 }',
-    ],
+    'shutdown',
+    const ['/h'],
   );
   if (result.exitCode != 0) {
     final err = '${result.stderr}'.trim();
-    throw Exception(err.isEmpty ? '休眠命令失败（exit ${result.exitCode}）' : err);
+    throw Exception(err.isEmpty
+        ? 'Hibernate command failed (exit ${result.exitCode})'
+        : err);
   }
 }
 
 Future<void> windowsShutdownNow() async {
   if (!Platform.isWindows) {
-    throw UnsupportedError('仅 Windows 支持关机');
+    throw UnsupportedError('Shutdown is supported only on Windows');
   }
   // /t 0 立即关机，不留下跨重启仍有效的倒计时。
   final result = await Process.run('shutdown', ['/s', '/t', '0']);
   if (result.exitCode != 0) {
     final err = '${result.stderr}'.trim();
-    throw Exception(err.isEmpty ? '关机命令失败（exit ${result.exitCode}）' : err);
+    throw Exception(err.isEmpty
+        ? 'Shutdown command failed (exit ${result.exitCode})'
+        : err);
   }
 }
 
@@ -227,7 +221,9 @@ String _gitText(ProcessResult result) {
 Never _gitFail(String action, ProcessResult result) {
   final detail = _gitText(result);
   throw Exception(
-    detail.isEmpty ? '$action失败（exit ${result.exitCode}）' : '$action失败：$detail',
+    detail.isEmpty
+        ? '$action failed (exit ${result.exitCode})'
+        : '$action failed: $detail',
   );
 }
 
@@ -249,13 +245,13 @@ Future<void> gitPushWithRebase({
   final run = runner ?? _defaultGitRunner;
   final repo = repoPath.trim();
   if (repo.isEmpty) {
-    throw Exception('未填写代码仓库路径，无法推送');
+    throw Exception('Repository path is empty; cannot push');
   }
   await refreshMcpGitAuthorIdentity();
 
   Future<ProcessResult> git(List<String> arguments) {
     if (_gitArgHasForce(arguments)) {
-      throw Exception('已拒绝带 force 的 git 参数');
+      throw Exception('Git arguments containing force were rejected');
     }
     return run(
       'git',
@@ -273,12 +269,13 @@ Future<void> gitPushWithRebase({
 
   final inside = await git(['rev-parse', '--is-inside-work-tree']);
   if (inside.exitCode != 0 || '${inside.stdout}'.trim() != 'true') {
-    throw Exception('不是 Git 仓库：$repo');
+    throw Exception('Not a Git repository: $repo');
   }
 
-  final status = await gitOk(['status', '--porcelain'], '检查工作区');
+  final status = await gitOk(['status', '--porcelain'], 'Check working tree');
   if ('${status.stdout}'.trim().isNotEmpty) {
-    throw Exception('工作区不干净，已中止推送（不会自动提交或 force push）');
+    throw Exception(
+        'Working tree is dirty; push aborted (no auto-commit or force push)');
   }
 
   for (final marker in const [
@@ -288,14 +285,16 @@ Future<void> gitPushWithRebase({
   ]) {
     final inProgress = await git(['rev-parse', '-q', '--verify', marker]);
     if (inProgress.exitCode == 0) {
-      throw Exception('已有 $marker 进行中，已中止以免破坏现有状态');
+      throw Exception(
+          '$marker is already in progress; aborted to preserve state');
     }
   }
 
-  final branch = await gitOk(['rev-parse', '--abbrev-ref', 'HEAD'], '读取当前分支');
+  final branch =
+      await gitOk(['rev-parse', '--abbrev-ref', 'HEAD'], 'Read current branch');
   final branchName = '${branch.stdout}'.trim();
   if (branchName.isEmpty || branchName == 'HEAD') {
-    throw Exception('当前处于游离 HEAD，已中止推送');
+    throw Exception('HEAD is detached; push aborted');
   }
 
   final upstream = await git([
@@ -305,23 +304,24 @@ Future<void> gitPushWithRebase({
     '@{u}',
   ]);
   if (upstream.exitCode != 0) {
-    throw Exception('当前分支没有上游，已中止推送（不会自动设置 origin）');
+    throw Exception(
+        'Current branch has no upstream; push aborted (origin not set automatically)');
   }
 
   final remote = await gitOk(
     ['config', '--get', 'branch.$branchName.remote'],
-    '读取上游远程',
+    'Read upstream remote',
   );
   await gitOk(['fetch', '--', '${remote.stdout}'.trim()], 'fetch');
 
   Future<(int ahead, int behind)> divergence() async {
     final counts = await gitOk(
       ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
-      '比较与上游的差异',
+      'Compare with upstream',
     );
     final parts = '${counts.stdout}'.trim().split(RegExp(r'\s+'));
     if (parts.length != 2) {
-      throw Exception('无法解析与上游的差异：${counts.stdout}');
+      throw Exception('Could not parse upstream divergence: ${counts.stdout}');
     }
     return (int.parse(parts[0]), int.parse(parts[1]));
   }
@@ -329,7 +329,7 @@ Future<void> gitPushWithRebase({
   var (ahead, behind) = await divergence();
   if (behind > 0) {
     if (ahead == 0) {
-      await gitOk(['merge', '--ff-only', '@{u}'], '快进到上游');
+      await gitOk(['merge', '--ff-only', '@{u}'], 'Fast-forward to upstream');
     } else {
       final merge = await git(['merge', '--no-edit', '@{u}']);
       if (merge.exitCode != 0) {
@@ -337,8 +337,8 @@ Future<void> gitPushWithRebase({
         final detail = _gitText(merge);
         throw Exception(
           detail.isEmpty
-              ? 'merge 冲突或失败，已 abort，未推送'
-              : 'merge 冲突或失败，已 abort，未推送：$detail',
+              ? 'Merge conflict or failure; aborted, nothing pushed'
+              : 'Merge conflict or failure; aborted, nothing pushed: $detail',
         );
       }
     }
@@ -346,7 +346,7 @@ Future<void> gitPushWithRebase({
   }
 
   if (behind > 0) {
-    throw Exception('merge 后仍落后上游，已中止推送');
+    throw Exception('Still behind upstream after merge; push aborted');
   }
   if (ahead == 0) return;
 

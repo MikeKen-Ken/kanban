@@ -79,12 +79,12 @@ class AppUpdateInstaller {
 
   Future<void> installAndroidApk(File apkFile) async {
     if (!Platform.isAndroid) {
-      throw UnsupportedError('仅 Android 支持 APK 安装');
+      throw UnsupportedError('APK installation is supported only on Android');
     }
     final allowed = await canRequestPackageInstalls();
     if (!allowed) {
       await openUnknownSourcesSettings();
-      throw StateError('请允许安装未知应用后再次点击更新');
+      throw StateError('Allow installation from unknown sources, then try the update again');
     }
     await _androidChannel.invokeMethod<void>('installApk', {
       'path': apkFile.path,
@@ -94,7 +94,7 @@ class AppUpdateInstaller {
   /// 启动 PowerShell updater，等待本进程退出后覆盖安装目录并重启。
   Future<void> applyWindowsZipUpdate(Directory extractedDir) async {
     if (!Platform.isWindows) {
-      throw UnsupportedError('仅 Windows 支持 zip 自更新');
+      throw UnsupportedError('ZIP self-update is supported only on Windows');
     }
     final exePath = Platform.resolvedExecutable;
     final installDir = File(exePath).parent.path;

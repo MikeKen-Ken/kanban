@@ -13,11 +13,11 @@ void main() {
     );
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
-    expect(find.text('打开'), findsOneWidget);
-    expect(find.text('打开所在文件夹'), findsOneWidget);
-    expect(find.text('删除文件'), findsOneWidget);
+    expect(find.text('Open'), findsOneWidget);
+    expect(find.text('Open containing folder'), findsOneWidget);
+    expect(find.text('Delete file'), findsOneWidget);
 
-    await tester.tap(find.text('打开'));
+    await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
     await tester.pumpWidget(
@@ -29,9 +29,9 @@ void main() {
     );
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
-    expect(find.text('打开'), findsNothing);
-    expect(find.text('打开所在文件夹'), findsNothing);
-    expect(find.text('删除文件'), findsOneWidget);
+    expect(find.text('Open'), findsNothing);
+    expect(find.text('Open containing folder'), findsNothing);
+    expect(find.text('Delete file'), findsOneWidget);
   });
 }
 

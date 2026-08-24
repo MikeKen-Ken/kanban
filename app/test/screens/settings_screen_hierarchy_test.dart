@@ -45,16 +45,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('当前项目'), findsOneWidget);
-    expect(find.text('项目设置'), findsNothing);
-    expect(find.text('活动历史'), findsNothing);
-    expect(find.text('拖拽按压时长'), findsNothing);
-    expect(find.text('导出完整备份'), findsNothing);
+    expect(find.text('Current project'), findsOneWidget);
+    expect(find.text('Project settings'), findsNothing);
+    expect(find.text('Activity history'), findsNothing);
+    expect(find.text('Drag press duration'), findsNothing);
+    expect(find.text('Export full backup'), findsNothing);
 
-    await tester.tap(find.text('当前项目'));
+    await tester.tap(find.text('Current project'));
     await tester.pumpAndSettle();
 
-    expect(find.text('项目设置'), findsOneWidget);
-    expect(find.text('活动历史'), findsOneWidget);
+    expect(find.text('Project settings'), findsOneWidget);
+    expect(find.text('Activity history'), findsOneWidget);
   });
 }

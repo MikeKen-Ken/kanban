@@ -70,7 +70,7 @@ Future<String?> runCardImageAttachmentAddFlow({
   final picked = await pickImagesForSource(source);
   if (picked.isEmpty) {
     return switch (source) {
-      CardImageAddSource.clipboard => '剪贴板中没有图片',
+      CardImageAddSource.clipboard => 'No image found on the clipboard',
       _ => null,
     };
   }

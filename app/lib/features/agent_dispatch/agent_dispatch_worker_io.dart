@@ -200,7 +200,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
   if (cli == null) {
     return const AgentWorkerResult(
       ok: false,
-      error: '未找到 Worker（dist/cli.js）。请点「一键修复 Worker」。',
+      error: 'Worker not found (dist/cli.js). Use “Repair Worker”.',
     );
   }
 
@@ -257,11 +257,11 @@ Future<AgentWorkerResult> runAgentWorkerJob({
     if (node == null) {
       return const AgentWorkerResult(
         ok: false,
-        error: '未找到 node。请安装 Node.js 并确保在 PATH 中。',
+        error: 'Node.js not found. Install Node.js and add it to PATH.',
       );
     }
-    onLog?.call('Starting worker: $cli');
-    onLog?.call('Node: $node');
+    onLog?.call('Starting Worker: $cli');
+    onLog?.call('Node.js: $node');
     final workerEnv = await _workerEnvironment(
       nodeExecutable: node,
       cursorApiKey: cursorApiKey,
@@ -331,7 +331,7 @@ Future<AgentWorkerResult> runAgentWorkerJob({
       } catch (e) {
         return AgentWorkerResult(
           ok: false,
-          error: '解析 worker 输出失败：$e',
+          error: 'Failed to parse Worker output: $e',
           exitCode: code,
         );
       }
@@ -422,23 +422,23 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
 }) async {
   final cli = await resolveAgentDispatchCliPath(workerScriptPath);
   if (cli == null) {
-    throw StateError('未找到 Worker，请先一键修复');
+    throw StateError('Worker not found. Repair Worker first.');
   }
   final packageRoot = p.basename(p.dirname(cli)) == 'dist'
       ? p.dirname(p.dirname(cli))
       : p.dirname(cli);
   final node = await _resolveNodeExecutable(packageRoot: packageRoot);
-  if (node == null) throw StateError('未找到 node');
+  if (node == null) throw StateError('Node.js not found');
   if (engine == AgentDispatchEngine.cursor &&
       (cursorApiKey == null || cursorApiKey.trim().isEmpty)) {
-    throw StateError('尚未配置 Cursor API Key');
+    throw StateError('Cursor API key is not configured');
   }
   final environment = (await _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
   ))
       .environment;
-  onLog?.call('拉取模型列表…');
+  onLog?.call('Loading model list…');
   final result = await Process.run(
     node,
     [cli, '--list-models', engine.name],
@@ -454,7 +454,9 @@ Future<List<AgentDispatchModelInfo>> listAgentDispatchModels({
         .map((line) => line.trim())
         .firstWhere((line) => line.isNotEmpty, orElse: () => '');
     throw StateError(
-      firstLine.isEmpty ? 'list-models 失败（${result.exitCode}）' : firstLine,
+      firstLine.isEmpty
+          ? 'list-models failed (exit ${result.exitCode})'
+          : firstLine,
     );
   }
   final stdout = (result.stdout as String).trim();
@@ -474,22 +476,22 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
 }) async {
   final cli = await resolveAgentDispatchCliPath(workerScriptPath);
   if (cli == null) {
-    throw StateError('未找到 Worker，请先一键修复');
+    throw StateError('Worker not found. Repair Worker first.');
   }
   final packageRoot = p.basename(p.dirname(cli)) == 'dist'
       ? p.dirname(p.dirname(cli))
       : p.dirname(cli);
   final node = await _resolveNodeExecutable(packageRoot: packageRoot);
-  if (node == null) throw StateError('未找到 node');
+  if (node == null) throw StateError('Node.js not found');
   if (cursorApiKey == null || cursorApiKey.trim().isEmpty) {
-    throw StateError('尚未配置 Cursor API Key');
+    throw StateError('Cursor API key is not configured');
   }
   final environment = (await _workerEnvironment(
     nodeExecutable: node,
     cursorApiKey: cursorApiKey,
   ))
       .environment;
-  onLog?.call('拉取 Cursor 额度…');
+  onLog?.call('Loading Cursor usage…');
   final result = await Process.run(
     node,
     [cli, '--usage'],
@@ -507,7 +509,8 @@ Future<AgentDispatchUsageSnapshot> fetchAgentDispatchUsage({
         return AgentDispatchUsageSnapshot.fromJson(map);
       } catch (_) {}
     }
-    throw StateError(err.isEmpty ? 'usage 失败（${result.exitCode}）' : err);
+    throw StateError(
+        err.isEmpty ? 'usage failed (exit ${result.exitCode})' : err);
   }
   final stdout = (result.stdout as String).trim();
   final map = jsonDecode(stdout) as Map<String, dynamic>;
@@ -537,7 +540,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     workerScriptPath,
     commandRunner: commandRunner,
   );
-  onLog?.call('Worker 检查：${existingHealth.summary}');
+  onLog?.call('Worker check: ${existingHealth.summary}');
   if (existingHealth.ok) {
     return (
       ok: true,
@@ -573,7 +576,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     return (ok: false, message: 'npm not found. Install Node.js first.');
   }
 
-  onLog?.call('开发环境执行 npm ci @ $packageRoot');
+  onLog?.call('Development setup: npm ci @ $packageRoot');
   final install = await Process.run(
     npm,
     ['ci'],
@@ -609,7 +612,7 @@ Future<({bool ok, String message})> ensureAgentDispatchWorker({
     p.join(packageRoot, 'dist', 'cli.js'),
     commandRunner: commandRunner,
   );
-  onLog?.call('修复后检查：${repaired.summary}');
+  onLog?.call('Post-repair check: ${repaired.summary}');
   return repaired.ok
       ? (
           ok: true,
@@ -666,20 +669,20 @@ Future<bool> _isDevelopmentWorkerRoot(String root) async =>
 String describeWorkerExitWithoutOutput(int code) {
   // Windows STATUS_ACCESS_VIOLATION
   if (code == -1073741819) {
-    return 'worker 在 Windows 上发生访问冲突（0xC0000005）后退出，未能写出 out.json。'
-        '通常是 Cursor 本地运行时在开始执行（send）时原生崩溃，'
-        '而不是看板 MCP 或 Skill 返回了错误码。';
+    return 'Worker exited after a Windows access violation (0xC0000005) and did not write out.json. '
+        'This usually means the Cursor local runtime crashed natively during send, '
+        'rather than Kanban MCP or the Skill returning an error code.';
   }
   // Node fatal OOM 通常 abort，Unix/Windows 上常见退出码 134（128+SIGABRT）。
   if (code == 134) {
-    return 'worker 因 JavaScript 堆内存耗尽异常退出（退出码 134），未能写出 out.json。'
-        'Node 在触及堆上限时会直接 abort，当前卡片不会完成，调度会失败退出；'
-        '未完成的 Agent 会话可在下次启动 Worker 时恢复收尾。'
-        '堆上限按本机内存约一半自动计算，也可用环境变量 KANBAN_WORKER_HEAP_MB'
-        '或 NODE_OPTIONS 的 --max-old-space-size 覆盖。'
-        '若内存已很大仍失败，请减少同时挂载的 MCP / 仓库扫描范围。';
+    return 'Worker exited after a JavaScript heap out-of-memory failure (exit 134) and did not write out.json. '
+        'Node aborts when it reaches the heap limit, so the current card cannot finish and the batch fails. '
+        'The unfinished Agent session can be finalized when Worker starts again. '
+        'The heap limit is calculated from physical memory and can be overridden with '
+        'KANBAN_WORKER_HEAP_MB or NODE_OPTIONS --max-old-space-size. '
+        'If the machine has ample memory, reduce the number of attached MCPs or the repository scan scope.';
   }
-  return 'worker 退出码 $code，且无 out.json';
+  return 'Worker exited with code $code and did not write out.json';
 }
 
 WindowsRegistryEnvironment? _windowsRegistryCache;

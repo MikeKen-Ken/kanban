@@ -45,14 +45,14 @@ void main() {
       await pumpSwitcher(tester, committed: committed);
 
       final gesture = await startQuickSwitch(tester);
-      expect(find.text('取消'), findsOneWidget);
-      expect(find.text('上传'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Upload'), findsOneWidget);
 
       await gesture.up();
       await tester.pumpAndSettle();
 
       expect(committed, isEmpty);
-      expect(find.text('取消'), findsNothing);
+      expect(find.text('Cancel'), findsNothing);
     });
 
     testWidgets('从取消下滑到上传后松手才提交', (tester) async {
@@ -60,7 +60,7 @@ void main() {
       await pumpSwitcher(tester, committed: committed);
 
       final gesture = await startQuickSwitch(tester);
-      expect(find.text('取消'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
 
       await gesture.moveBy(
         Offset(0, SyncQuickSwitchGesture.itemExtent),

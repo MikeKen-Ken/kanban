@@ -54,16 +54,17 @@ class _CreateCardChoiceSheetState extends State<_CreateCardChoiceSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除模板？'),
-        content: Text('「${template.name}」将永久删除，且不会进入回收站。'),
+        title: const Text('Delete template?'),
+        content: Text(
+            '“${template.name}” will be permanently deleted and cannot be restored.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -102,7 +103,7 @@ class _CreateCardChoiceSheetState extends State<_CreateCardChoiceSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
-                '在「${widget.columnTitle}」添加卡片',
+                'Add card to “${widget.columnTitle}”',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -119,14 +120,14 @@ class _CreateCardChoiceSheetState extends State<_CreateCardChoiceSheet> {
                     const RadioListTile<String>(
                       value: _blankValue,
                       secondary: Icon(Icons.note_add_outlined),
-                      title: Text('空白'),
-                      subtitle: Text('创建后打开详情编辑'),
+                      title: Text('Blank card'),
+                      subtitle: Text('Open details after creating'),
                     ),
                     for (final template in _templates)
                       RadioListTile<String>(
                         value: template.id,
                         secondary: IconButton(
-                          tooltip: '删除模板',
+                          tooltip: 'Delete template',
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => _deleteTemplate(template),
                         ),
@@ -149,7 +150,7 @@ class _CreateCardChoiceSheetState extends State<_CreateCardChoiceSheet> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: _confirm,
-                  child: const Text('创建'),
+                  child: const Text('Create'),
                 ),
               ),
             ),

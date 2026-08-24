@@ -5,7 +5,8 @@ import '../../controllers/board_controller.dart';
 import '../../models/kanban_models.dart';
 import 'card_attachment_image.dart';
 
-typedef CardAttachmentListChanged = void Function(List<CardAttachment> attachments);
+typedef CardAttachmentListChanged = void Function(
+    List<CardAttachment> attachments);
 
 Future<void> showCardAttachmentViewer({
   required BuildContext context,
@@ -97,7 +98,8 @@ class _CardAttachmentViewerState extends State<_CardAttachmentViewer> {
       _busy = false;
       _attachments = [
         attachment.copyWith(order: 0),
-        for (var i = 0; i < others.length; i++) others[i].copyWith(order: i + 1),
+        for (var i = 0; i < others.length; i++)
+          others[i].copyWith(order: i + 1),
       ];
       _index = 0;
     });
@@ -207,7 +209,7 @@ class _CardAttachmentViewerState extends State<_CardAttachmentViewer> {
                       Expanded(
                         child: FilledButton.tonal(
                           onPressed: _busy ? null : _setCover,
-                          child: const Text('设为封面'),
+                          child: const Text('Set as cover'),
                         ),
                       ),
                     if (!isCover) const SizedBox(width: 12),
@@ -217,7 +219,7 @@ class _CardAttachmentViewerState extends State<_CardAttachmentViewer> {
                           backgroundColor: Theme.of(context).colorScheme.error,
                         ),
                         onPressed: _busy ? null : _deleteCurrent,
-                        child: const Text('删除'),
+                        child: const Text('Delete'),
                       ),
                     ),
                   ],

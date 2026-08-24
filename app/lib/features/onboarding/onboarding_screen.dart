@@ -29,7 +29,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
     (
       icon: Icons.cloud_sync_outlined,
-      title: 'Stay in sync across devices',
+      title: 'Sync across devices',
       description:
           'Configure WebDAV in Settings to sync projects, labels, saved views, templates, and activity history.',
     ),

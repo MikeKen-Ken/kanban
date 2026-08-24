@@ -55,7 +55,7 @@ Future<PowerShellMsiInstallResult> installPowerShell7ViaMsi({
   ]);
   if (tempRoot == null || tempRoot.trim().isEmpty) {
     return const PowerShellMsiInstallResult(
-      error: '无法确定 TEMP 目录，不能下载 PowerShell MSI。',
+      error: 'Could not determine TEMP; cannot download the PowerShell MSI.',
     );
   }
 
@@ -65,17 +65,18 @@ Future<PowerShellMsiInstallResult> installPowerShell7ViaMsi({
       );
   if (url == null || url.trim().isEmpty) {
     return const PowerShellMsiInstallResult(
-      error: '无法解析 PowerShell MSI 下载地址。',
+      error: 'Could not resolve the PowerShell MSI download URL.',
     );
   }
 
-  final tempDir = ctx.join(expandWindowsEnvVars(tempRoot, environment), 'kanban-pwsh');
+  final tempDir =
+      ctx.join(expandWindowsEnvVars(tempRoot, environment), 'kanban-pwsh');
   if (!exists(tempDir)) {
     try {
       await Directory(tempDir).create(recursive: true);
     } catch (error) {
       return PowerShellMsiInstallResult(
-        error: '无法创建临时目录 $tempDir：$error',
+        error: 'Could not create temp directory $tempDir: $error',
       );
     }
   }
@@ -87,7 +88,7 @@ Future<PowerShellMsiInstallResult> installPowerShell7ViaMsi({
     await runDownload(url: url, destination: msiPath);
   } catch (error) {
     return PowerShellMsiInstallResult(
-      error: '下载 PowerShell MSI 失败：$error',
+      error: 'PowerShell MSI download failed: $error',
       log: 'url=$url',
     );
   }
@@ -96,8 +97,8 @@ Future<PowerShellMsiInstallResult> installPowerShell7ViaMsi({
   final result = runMsi(msiPath);
   if (result.exitCode != 0 && result.exitCode != 3010) {
     return PowerShellMsiInstallResult(
-      error: 'PowerShell MSI 静默安装失败（exitCode=${result.exitCode}）。'
-          '可能需要管理员权限。',
+      error: 'PowerShell MSI silent install failed (exit ${result.exitCode}). '
+          'Administrator access may be required.',
       log: '${result.stdout} ${result.stderr}'.trim(),
     );
   }

@@ -29,7 +29,7 @@ void main() {
     expect(find.text('Skill 内容'), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-dispatch-layout-wide')),
         findsOneWidget);
-    expect(find.text('Dispatch configuration'), findsOneWidget);
+    expect(find.text('Configuration'), findsOneWidget);
     expect(find.text('批次配置'), findsNothing);
     expect(find.text('对话内容'), findsOneWidget);
   });
@@ -56,7 +56,7 @@ void main() {
     expect(find.byKey(const ValueKey('agent-dispatch-layout-medium')),
         findsOneWidget);
     expect(find.byType(VerticalDivider), findsOneWidget);
-    expect(find.text('Dispatch configuration'), findsOneWidget);
+    expect(find.text('Configuration'), findsOneWidget);
     expect(find.text('对话内容'), findsOneWidget);
   });
 
@@ -150,14 +150,14 @@ void main() {
     expect(find.textContaining('系统就绪'), findsOneWidget);
     expect(find.textContaining('工具：glob'), findsNothing);
     expect(find.textContaining('思考中'), findsNothing);
-    expect(find.textContaining('工具：grep'), findsOneWidget);
+    expect(find.textContaining('Tool: grep'), findsOneWidget);
 
     await tester
         .tap(find.byKey(const ValueKey('agent-dispatch-log-source-mcp')));
     await tester.pump();
 
     expect(find.textContaining('系统就绪'), findsNothing);
-    expect(find.textContaining('工具：grep'), findsOneWidget);
+    expect(find.textContaining('Tool: grep'), findsOneWidget);
   });
 
   testWidgets('离开底部后新日志不强制滚到底', (tester) async {

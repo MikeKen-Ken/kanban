@@ -61,6 +61,49 @@ void main() {
     });
   });
 
+  group('localDownloadFileName', () {
+    test('同名 app-release.apk 也按 Release 版本隔离缓存', () {
+      const asset = GithubReleaseAsset(
+        name: 'app-release.apk',
+        browserDownloadUrl: 'https://example.com/app-release.apk',
+        size: 0,
+        updatedAt: null,
+      );
+      const release140 = GithubReleaseInfo(
+        tagName: 'v1.0.140',
+        name: '1.0.140',
+        body: '',
+        htmlUrl: '',
+        draft: false,
+        prerelease: false,
+        publishedAt: null,
+        assets: const [],
+      );
+      const release143 = GithubReleaseInfo(
+        tagName: 'v1.0.143',
+        name: '1.0.143',
+        body: '',
+        htmlUrl: '',
+        draft: false,
+        prerelease: false,
+        publishedAt: null,
+        assets: const [],
+      );
+
+      final oldPath = AppUpdateService.localDownloadFileName(
+        release140,
+        asset,
+      );
+      final newPath = AppUpdateService.localDownloadFileName(
+        release143,
+        asset,
+      );
+      expect(oldPath, isNot(newPath));
+      expect(newPath, contains('1.0.143'));
+      expect(newPath, endsWith('_app-release.apk'));
+    });
+  });
+
   group('VersionCompare', () {
     test('解析 v 前缀与 build 号', () {
       expect(VersionCompare.parse('v1.2.3'), [1, 2, 3]);
@@ -294,7 +337,7 @@ void main() {
                 contains('Atom'),
                 contains('jsDelivr'),
                 contains('403'),
-                contains('限额'),
+                contains('rate limit'),
               ),
             ),
           ),

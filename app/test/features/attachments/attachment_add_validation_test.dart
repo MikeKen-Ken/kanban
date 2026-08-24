@@ -35,7 +35,7 @@ void main() {
       expect(analysis.canForceSubmit, isTrue);
       expect(
         analysis.issues.single.reason,
-        contains('超过单文件'),
+        contains('file limit'),
       );
     });
 
@@ -59,7 +59,8 @@ void main() {
         currentCount: KanbanCard.maxFileAttachments - 1,
         maxCount: KanbanCard.maxFileAttachments,
       );
-      expect(analysis.issues.any((issue) => issue.label == '选择数量'), isTrue);
+      expect(analysis.issues.any((issue) => issue.label == 'Too many selected'),
+          isTrue);
       expect(analysis.canForceSubmit, isTrue);
     });
 

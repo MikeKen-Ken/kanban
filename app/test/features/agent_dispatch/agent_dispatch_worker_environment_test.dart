@@ -73,7 +73,7 @@ HKEY_CURRENT_USER\\Environment
     expect(built.environment['FLUTTER_ROOT'], r'C:\Users\me\dev\flutter');
     expect(built.summary, contains('merged user/system PATH'));
     expect(built.summary, contains(r'C:\Users\me\dev\flutter\bin'));
-    expect(built.summary, contains('Node 堆上限 24576MB'));
+    expect(built.summary, contains('Node heap limit 24576MB'));
     expect(
       built.environment['NODE_OPTIONS'],
       '--max-old-space-size=24576',
@@ -132,9 +132,9 @@ HKEY_CURRENT_USER\\Environment
     );
 
     expect(built.environment['Path'], r'C:\node;C:\Windows');
-    expect(built.summary, contains('沿用看板进程 PATH'));
-    expect(built.summary, contains('Node 堆上限 24576MB'));
-    expect(built.summary, contains('本机物理内存 32768MB'));
+    expect(built.summary, contains('using app process PATH'));
+    expect(built.summary, contains('Node heap limit 24576MB'));
+    expect(built.summary, contains('32768MB physical memory'));
     expect(
       built.environment['NODE_OPTIONS'],
       '--max-old-space-size=24576',
@@ -155,7 +155,7 @@ HKEY_CURRENT_USER\\Environment
       built.environment['NODE_OPTIONS'],
       '--enable-source-maps --max-old-space-size=8192',
     );
-    expect(built.summary, contains('Node 堆上限 8192MB'));
+    expect(built.summary, contains('Node heap limit 8192MB'));
   });
 
   test('已有 NODE_OPTIONS 但无堆上限时追加计算出的值', () {
@@ -179,7 +179,7 @@ HKEY_CURRENT_USER\\Environment
       built.environment['NODE_OPTIONS'],
       '--max-old-space-size=12288',
     );
-    expect(built.summary, contains('用户指定'));
+    expect(built.summary, contains('(user-set)'));
   });
 
   test('按物理内存选择 Node 堆上限', () {
@@ -243,7 +243,7 @@ HKEY_CURRENT_USER\\Environment
     );
     expect(
       built.summary,
-      contains('Cursor Agent 终端：PowerShell 7 7.6.5（$pwsh）'),
+      contains('Cursor Agent shell: PowerShell 7 7.6.5 ($pwsh)'),
     );
     expect(built.ok, isTrue);
   });
@@ -270,10 +270,10 @@ HKEY_CURRENT_USER\\Environment
     );
 
     expect(built.ok, isTrue);
-    expect(built.summary, contains('已通过 winget 安装 PowerShell 7'));
+    expect(built.summary, contains('PowerShell 7 installed through winget'));
     expect(
       built.summary,
-      contains('Cursor Agent 终端：PowerShell 7 7.6.5（$pwsh）'),
+      contains('Cursor Agent shell: PowerShell 7 7.6.5 ($pwsh)'),
     );
   });
 

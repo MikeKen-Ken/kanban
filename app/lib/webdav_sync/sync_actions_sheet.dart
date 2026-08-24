@@ -126,9 +126,9 @@ Future<void> runSyncManualAction(
     case SyncManualAction.upload:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: 'Upload and replace cloud workspace?',
-        body: 'Existing cloud board data will be replaced by the local workspace archive and cannot be undone automatically. Continue?',
-        confirmLabel: 'Replace cloud data',
+        title: 'Replace cloud workspace?',
+        body: 'The local workspace will overwrite the cloud copy. Continue?',
+        confirmLabel: 'Replace cloud copy',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.uploadNow());
@@ -136,9 +136,10 @@ Future<void> runSyncManualAction(
     case SyncManualAction.download:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: 'Download and replace local workspace?',
-        body: 'Existing local board data will be replaced by the cloud workspace archive. Unsynced local changes will be lost. Continue?',
-        confirmLabel: 'Replace local data',
+        title: 'Replace local workspace?',
+        body:
+            'The cloud workspace will overwrite local data. Unsynced changes will be lost.',
+        confirmLabel: 'Replace local copy',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.downloadNow());
@@ -149,9 +150,10 @@ Future<void> runSyncManualAction(
     case SyncManualAction.uploadWallpapers:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: 'Upload and replace cloud wallpaper library?',
-        body: 'The cloud wallpaper archive will be replaced by the local wallpaper library. Continue?',
-        confirmLabel: 'Replace cloud wallpapers',
+        title: 'Replace cloud wallpaper library?',
+        body:
+            'The local wallpaper library will overwrite the cloud copy. Continue?',
+        confirmLabel: 'Replace cloud copy',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.uploadWallpapersNow());
@@ -159,9 +161,10 @@ Future<void> runSyncManualAction(
     case SyncManualAction.downloadWallpapers:
       final confirmed = await _confirmSyncOverwrite(
         context,
-        title: 'Download and replace local wallpaper library?',
-        body: 'The local wallpaper library will be replaced by the cloud wallpaper archive. Continue?',
-        confirmLabel: 'Replace local wallpapers',
+        title: 'Replace local wallpaper library?',
+        body:
+            'The cloud wallpaper library will overwrite the local copy. Continue?',
+        confirmLabel: 'Replace local copy',
       );
       if (confirmed != true || !context.mounted) return;
       unawaited(controller.downloadWallpapersNow());

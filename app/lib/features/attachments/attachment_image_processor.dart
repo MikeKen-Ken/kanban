@@ -23,12 +23,18 @@ ProcessedImage? processAttachmentImage(
   int thumbMaxDimension = 400,
   int quality = 85,
 }) {
-  final decoded = img.decodeImage(source);
+  img.Image? decoded;
+  try {
+    decoded = img.decodeImage(source);
+  } catch (_) {
+    return null;
+  }
   if (decoded == null) return null;
 
   final resized = _resize(decoded, maxDimension);
   final thumb = _resize(decoded, thumbMaxDimension);
-  final fullBytes = Uint8List.fromList(img.encodeJpg(resized, quality: quality));
+  final fullBytes =
+      Uint8List.fromList(img.encodeJpg(resized, quality: quality));
   final thumbBytes = Uint8List.fromList(img.encodeJpg(thumb, quality: quality));
 
   return ProcessedImage(

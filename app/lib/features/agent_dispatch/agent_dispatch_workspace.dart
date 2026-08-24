@@ -98,7 +98,7 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
               children: [
                 IconButton(
                   key: const ValueKey('agent-dispatch-skill-expand'),
-                  tooltip: _expanded ? 'Collapse Skill' : 'Expand Skill',
+                  tooltip: _expanded ? 'Collapse skill' : 'Expand skill',
                   onPressed: () => setState(() => _expanded = !_expanded),
                   icon: Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
@@ -112,13 +112,13 @@ class _AgentDispatchSkillPaneState extends State<AgentDispatchSkillPane> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Open Skill directory',
+                  tooltip: 'Open skill folder',
                   onPressed:
                       widget.enabled ? widget.onOpenSkillDirectory : null,
                   icon: const Icon(Icons.folder_open_outlined, size: 20),
                 ),
                 IconButton(
-                  tooltip: 'Reload Skill',
+                  tooltip: 'Reload skill',
                   onPressed: widget.enabled ? widget.onRefreshSkill : null,
                   icon: const Icon(Icons.refresh, size: 20),
                 ),
@@ -524,10 +524,11 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         _taskFilter != null && tasks.any((task) => task.ordinal == _taskFilter)
             ? _taskFilter
             : null;
-    final actionLog = AgentDispatchLogTasks.slice(
+    final rawActionLog = AgentDispatchLogTasks.slice(
       widget.controller.text,
       selectedTask,
     );
+    final actionLog = AgentDispatchLogEntry.displayText(rawActionLog);
     final canAct = actionLog.trim().isNotEmpty;
     final summary = _summary();
     final displayed = AgentDispatchDisplayedCard.resolve(
@@ -608,7 +609,7 @@ class _AgentDispatchLogPaneState extends State<AgentDispatchLogPane> {
         AgentDispatchCardStatusPane(
           progress: displayed.progress,
           running: displayed.running,
-          logText: displayed.logSlice,
+          logText: AgentDispatchLogEntry.displayText(displayed.logSlice),
           showJumpToRunning: displayed.canJumpToRunning,
           onJumpToRunning: displayed.canJumpToRunning
               ? () => _jumpToRunningCard(displayed.runningOrdinal)

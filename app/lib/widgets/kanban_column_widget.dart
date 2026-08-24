@@ -115,8 +115,7 @@ class KanbanColumnWidget extends StatelessWidget {
                 ),
                 title: Text(mode.label),
                 subtitle: mode == CardSortMode.custom
-                    ? const Text(
-                        'Drag the handle to reorder freely; the order is preserved')
+                    ? const Text('Drag to reorder')
                     : null,
                 onTap: () => Navigator.pop(ctx, mode),
               ),
@@ -219,8 +218,7 @@ class KanbanColumnWidget extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete column?'),
-        content:
-            Text('"${column.title}" and all its cards will be moved to Trash'),
+        content: Text('Move "${column.title}" and its cards to Trash?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -242,8 +240,7 @@ class KanbanColumnWidget extends StatelessWidget {
     final controller = context.read<BoardController>();
     final count = column.cards.length;
     if (count == 0) {
-      showAppSnackBar(context,
-          message: 'The completed column is empty; nothing to clear');
+      showAppSnackBar(context, message: 'No completed cards to clear');
       return;
     }
 
@@ -251,7 +248,7 @@ class KanbanColumnWidget extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Clear completed column?'),
-        content: Text('Move $count cards from "${column.title}" to Trash'),
+        content: Text('Move $count cards to Trash?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

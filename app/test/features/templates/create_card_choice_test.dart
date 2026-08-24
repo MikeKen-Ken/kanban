@@ -79,10 +79,10 @@ void main() {
       await tester.tap(find.text('打开'));
       await tester.pumpAndSettle();
 
-      expect(find.text('空白'), findsOneWidget);
+      expect(find.text('Blank card'), findsOneWidget);
       expect(find.text('周报'), findsOneWidget);
 
-      await tester.tap(find.text('创建'));
+      await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
 
       expect(result?.isBlank, isTrue);
@@ -114,7 +114,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('周报'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('创建'));
+      await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
 
       expect(result?.templateId, 't1');
@@ -151,17 +151,17 @@ void main() {
       await tester.tap(find.text('打开'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('删除模板').first);
+      await tester.tap(find.byTooltip('Delete template').first);
       await tester.pumpAndSettle();
-      expect(find.text('删除模板？'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      expect(find.text('Delete template?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
       await tester.pumpAndSettle();
 
       expect(deleted, ['t1']);
       expect(find.text('周报'), findsNothing);
       expect(find.text('发布'), findsOneWidget);
 
-      await tester.tap(find.text('创建'));
+      await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
       expect(result?.isBlank, isTrue);
     });

@@ -184,7 +184,7 @@ class _CompactWorkspace extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const AgentDispatchSectionHeader(
-            title: 'Dispatch configuration',
+            title: 'Configuration',
             tone: AgentDispatchSectionTone.configuration,
           ),
           const SizedBox(height: 12),
@@ -212,7 +212,7 @@ class _ScrollableSettingsPane extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const AgentDispatchSectionHeader(
-          title: 'Dispatch configuration',
+          title: 'Configuration',
           tone: AgentDispatchSectionTone.configuration,
         ),
         const SizedBox(height: 12),

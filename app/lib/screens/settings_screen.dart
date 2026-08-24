@@ -63,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Restore full backup?'),
         content: const Text(
-            'The current workspace will be replaced by the backup. A point-in-time backup will be created first.'),
+            'This replaces the current workspace. A safety backup is created first.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -88,12 +88,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _webDavSubtitle(bool enabled, String serverUrl) {
-    if (!enabled)
-      return 'Disabled · connection settings are stored locally only';
+    if (!enabled) return 'Off · settings stay on this device';
     final host = serverUrl.trim();
     if (host.isEmpty)
-      return 'Enabled · server address is not set · connection settings are stored locally only';
-    return 'Enabled · $host · manual upload/download/merge';
+      return 'On · server address not set · settings stay local';
+    return 'On · $host · manual sync';
   }
 
   @override
@@ -106,7 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsNavigationCard(
             icon: Icons.touch_app_outlined,
             title: 'Interaction',
-            subtitle: 'Stored locally only; not synced',
+            subtitle: 'Device-only settings',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -119,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsNavigationCard(
             icon: Icons.palette_outlined,
             title: 'Appearance & reminders',
-            subtitle: 'Stored locally only',
+            subtitle: 'Device-only settings',
             onTap: () => _openCategory(
               title: 'Appearance & reminders',
               children: [
@@ -159,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.notifications_active_outlined,
                   title: 'Enable task reminders',
                   subtitle:
-                      'Notification permission is requested on first launch; you can enable it again here',
+                      'Enable notifications here if you skipped them earlier',
                   onTap: () async {
                     final result = await context
                         .read<BoardController>()
@@ -167,11 +166,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (!context.mounted) return;
                     final message = switch (result) {
                       NotificationPermissionResult.enabled =>
-                        'Notifications enabled and reminders rescheduled',
+                        'Notifications enabled; reminders refreshed',
                       NotificationPermissionResult.openedSystemSettings =>
-                        'Allow notifications in system settings, then return',
+                        'Allow notifications in System Settings, then return',
                       NotificationPermissionResult.denied =>
-                        'Could not enable notifications. Allow this app in system settings',
+                        'Notifications are off. Allow them in System Settings',
                     };
                     showAppSnackBar(context, message: message);
                   },
@@ -179,8 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SettingsNavigationTile(
                   icon: Icons.insights_outlined,
                   title: 'Workspace statistics',
-                  subtitle:
-                      'View task totals, overdue items, and completion trends',
+                  subtitle: 'Totals, overdue cards, and completion trends',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -199,8 +197,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.label_outline,
               title: 'Labels',
               subtitle: count > 0
-                  ? '$count custom labels · synced with the workspace'
-                  : 'Add, rename, recolor, or delete · synced with the workspace',
+                  ? '$count labels · synced'
+                  : 'Add, rename, recolor, or delete labels · synced',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -214,8 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsNavigationCard(
             icon: Icons.inventory_2_outlined,
             title: 'Import & export',
-            subtitle:
-                'Includes all projects, settings, shared content, and attachments',
+            subtitle: 'Projects, settings, shared content, and attachments',
             onTap: () => _openCategory(
               title: 'Import & export',
               children: [
@@ -223,8 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SettingsNavigationTile(
                     icon: Icons.history_toggle_off,
                     title: 'Point-in-time backup',
-                    subtitle:
-                        'Automatic backup every 10 minutes · expired files can be cleaned up',
+                    subtitle: 'Every 10 minutes · old files can be cleaned up',
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -273,7 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SettingsNavigationTile(
                     icon: Icons.history,
                     title: 'Activity history',
-                    subtitle: 'View recent card changes in the current project',
+                    subtitle: 'Recent card changes',
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -290,8 +286,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsNavigationCard(
             icon: Icons.delete_outline,
             title: 'Trash',
-            subtitle:
-                'Deleted cards, columns, and projects can be restored here',
+            subtitle: 'Restore deleted cards, columns, and projects',
             onTap: () => _openCategory(
               title: 'Trash',
               children: [
@@ -323,8 +318,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: const Text('Confirm before deleting'),
                     subtitle: Text(
                       confirm
-                          ? 'A confirmation dialog appears before deleting a card'
-                          : 'Off: delete from the context menu or details goes directly to Trash',
+                          ? 'Ask before sending a card to Trash'
+                          : 'Cards go straight to Trash',
                     ),
                     value: confirm,
                     onChanged: (value) {
@@ -354,8 +349,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: const Text('Auto-clear completed'),
                       subtitle: Text(
                         days <= 0
-                            ? 'Off: completed cards are not deleted automatically'
-                            : 'Completed cards older than $days days move to Trash',
+                            ? 'Completed cards stay until you delete them'
+                            : 'Move completed cards older than $days days to Trash',
                       ),
                       trailing: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
@@ -404,7 +399,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.hub_outlined,
                   title: 'MCP / AI control',
                   subtitle:
-                      '$status · ${McpConstants.endpointUrl(controller.appSettings.mcpPort)} · local configuration, not synced',
+                      '$status · ${McpConstants.endpointUrl(controller.appSettings.mcpPort)} · device-only',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -441,8 +436,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsNavigationCard(
             icon: Icons.system_update_alt_outlined,
             title: 'Check for updates',
-            subtitle:
-                'Get releases from GitHub; install the APK on Android, or replace the Windows directory and restart',
+            subtitle: 'Get the latest release and update this device',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -495,8 +489,8 @@ class _InteractionSettingsPageState extends State<_InteractionSettingsPage> {
         SettingsSliderRow(
           title: 'Drag press duration',
           description: _dragLongPressMs <= 0
-              ? 'Hold and move to drag; long-press to open the transfer/delete menu'
-              : 'Hold for ${_dragLongPressMs}ms, then drag; on touch devices use the card menu or Details > Transfer',
+              ? 'Drag immediately; long-press for more actions'
+              : 'Hold ${_dragLongPressMs}ms to drag; use the card menu on touch devices',
           value: _dragLongPressMs.toDouble(),
           valueLabel: _dragDurationLabel,
           min: 0,
