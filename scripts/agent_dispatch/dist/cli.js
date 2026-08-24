@@ -1954,18 +1954,21 @@ function resolveCodexCommand() {
   };
 }
 function buildCodexExecArgs(options) {
-  const args = [
-    "exec",
-    "--json",
-    "--approve-for-me",
+  const args = ["exec", "--json"];
+  if (options.enableSandbox === true) {
+    args.push("--approve-for-me");
+  } else {
+    args.push("--dangerously-bypass-approvals-and-sandbox");
+  }
+  args.push(
     "--skip-git-repo-check",
     "--cd",
     options.cwd,
     "-o",
     options.lastMessageFile,
     ...options.extraConfigArgs ?? []
-  ];
-  if (process.platform === "win32") {
+  );
+  if (process.platform === "win32" && options.enableSandbox === true) {
     args.push("-c", 'windows.sandbox="unelevated"');
   }
   if (options.model?.trim()) {
@@ -1998,7 +2001,8 @@ async function runCodex(job, cancellation) {
       cwd: job.cwd,
       lastMessageFile,
       extraConfigArgs: effortToCodexConfigArgs(job),
-      model: job.model
+      model: job.model,
+      enableSandbox: job.enableSandbox
     });
     workerLog(`Codex args=${args.join(" ")}`);
     emitSessionStart(job);

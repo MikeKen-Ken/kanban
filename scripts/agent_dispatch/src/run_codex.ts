@@ -80,19 +80,26 @@ export function buildCodexExecArgs(options: {
   lastMessageFile: string;
   extraConfigArgs?: string[];
   model?: string;
+  enableSandbox?: boolean;
 }): string[] {
-  const args = [
-    "exec",
-    "--json",
-    "--approve-for-me",
+  const args = ["exec", "--json"];
+  // `enableSandbox` is shared by both engines. `--approve-for-me` always
+  // selects Codex's workspace-write sandbox, so it cannot represent a disabled
+  // setting. The Worker is the explicit unattended execution boundary.
+  if (options.enableSandbox === true) {
+    args.push("--approve-for-me");
+  } else {
+    args.push("--dangerously-bypass-approvals-and-sandbox");
+  }
+  args.push(
     "--skip-git-repo-check",
     "--cd",
     options.cwd,
     "-o",
     options.lastMessageFile,
     ...(options.extraConfigArgs ?? []),
-  ];
-  if (process.platform === "win32") {
+  );
+  if (process.platform === "win32" && options.enableSandbox === true) {
     // MSIX 版 pwsh 无法被 elevated sandbox 的受限令牌启动（CreateProcessAsUserW）。
     args.push("-c", 'windows.sandbox="unelevated"');
   }
@@ -135,6 +142,7 @@ export async function runCodex(
       lastMessageFile,
       extraConfigArgs: effortToCodexConfigArgs(job),
       model: job.model,
+      enableSandbox: job.enableSandbox,
     });
 
     workerLog(`Codex args=${args.join(" ")}`);

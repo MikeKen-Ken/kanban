@@ -3,12 +3,13 @@ import { describe, it } from "node:test";
 import { buildCodexExecArgs } from "./run_codex.ts";
 
 describe("buildCodexExecArgs", () => {
-  it("使用 --approve-for-me 作为无人值守等价，不再叠加 --sandbox", () => {
+  it("开启沙箱时使用 --approve-for-me 作为无人值守等价，不再叠加 --sandbox", () => {
     const args = buildCodexExecArgs({
       cwd: "C:\\repo",
       lastMessageFile: "last.txt",
       extraConfigArgs: ["-c", "model_reasoning_effort=low"],
       model: "gpt-5.6-sol",
+      enableSandbox: true,
     });
     assert.equal(args.includes("--full-auto"), false);
     assert.equal(args.includes("--sandbox"), false);
@@ -37,6 +38,17 @@ describe("buildCodexExecArgs", () => {
       "-",
     ];
     assert.deepEqual(args, expected);
+  });
+
+  it("关闭沙箱时绕过 Codex 的自动审批沙箱", () => {
+    const args = buildCodexExecArgs({
+      cwd: "C:\\repo",
+      lastMessageFile: "last.txt",
+      enableSandbox: false,
+    });
+
+    assert.equal(args.includes("--approve-for-me"), false);
+    assert.equal(args.includes("--dangerously-bypass-approvals-and-sandbox"), true);
   });
 
   it("无模型时不追加 -m", () => {
