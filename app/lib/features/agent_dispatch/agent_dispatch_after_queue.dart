@@ -16,6 +16,16 @@ enum AgentDispatchAfterStep {
         AgentDispatchAfterStep.shutdown => 'Shut down',
       };
 
+  String get description => switch (this) {
+        AgentDispatchAfterStep.webdavUpload =>
+          'Upload Kanban data to cloud storage, replacing the cloud copy.',
+        AgentDispatchAfterStep.gitPush =>
+          'Push the Git repository changes to its remote repository.',
+        AgentDispatchAfterStep.hibernate =>
+          'Put the Windows computer into hibernation.',
+        AgentDispatchAfterStep.shutdown => 'Shut down the Windows computer.',
+      };
+
   static AgentDispatchAfterStep? tryParse(String? name) {
     if (name == null || name.isEmpty) return null;
     if (name == 'sleep') return AgentDispatchAfterStep.hibernate;

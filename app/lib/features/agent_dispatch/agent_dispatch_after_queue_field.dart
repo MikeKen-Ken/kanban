@@ -30,6 +30,11 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
           tone: AgentDispatchSectionTone.queue,
         ),
         const SizedBox(height: 4),
+        Text(
+          'These actions run after the batch finishes.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 4),
         InkWell(
           onTap: enabled && onRunOnFailureChanged != null
               ? () => onRunOnFailureChanged!(!runOnFailure)
@@ -59,7 +64,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
           children: [
             for (final step in AgentDispatchAfterStep.values)
               ActionChip(
-                tooltip: 'Add action',
+                tooltip: step.description,
                 label: Text(step.label),
                 onPressed: !enabled || steps.contains(step)
                     ? null
