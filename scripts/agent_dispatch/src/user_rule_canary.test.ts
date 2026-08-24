@@ -15,7 +15,7 @@ describe("wrapWorkerUserRules", () => {
       wrapped,
       [
         WORKER_USER_RULES_BEGIN,
-        "未发现用户 ~/.cursor/rules。",
+        "No user ~/.cursor/rules found.",
         WORKER_USER_RULES_END,
       ].join("\n"),
     );

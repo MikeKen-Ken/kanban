@@ -1478,10 +1478,10 @@ function collapseBlankLines(source) {
 }
 
 // src/dispatch_agents_overlay.ts
-var DISPATCH_ARCHITECTURE_OVERRIDE = `# \u672C\u4F1A\u8BDD\u8986\u76D6\uFF08\u4EC5\u770B\u677F Agent \u8C03\u5EA6\uFF09
+var DISPATCH_ARCHITECTURE_OVERRIDE = `# This-session override (kanban Agent dispatch only)
 
-Worker \u5DF2\u6CE8\u5165\u76EE\u6807\u4ED3\u5E93 \`docs/Architecture.md\` \u5168\u6587\u3002\u7528\u6237\u89C4\u5219 / \`AGENTS.md\` \u91CC\u7684\u300C\u5F00\u53D1\u524D\u5FC5\u8BFB Architecture.md\u300D\u5728\u672C\u8F6E\u89C6\u4E3A\u5DF2\u6EE1\u8DB3\u3002
-\u7981\u6B62\u518D\u641C\u7D22\u3001glob\u3001grep \u6216\u8BFB\u53D6 \`docs/Architecture.md\`\u3002ADR\u3001\`docs/Systems/\`\u3001\`CONTEXT.md\` \u4ECD\u6309\u539F\u6587\uFF0C\u9700\u8981\u65F6\u518D\u8BFB\u3002
+The Worker has already injected the full target-repository \`docs/Architecture.md\`. The user-rule / \`AGENTS.md\` requirement to read Architecture.md before development is treated as satisfied for this round.
+Do not search, glob, grep, or read \`docs/Architecture.md\` again. ADRs, \`docs/Systems/\`, and \`CONTEXT.md\` still follow the original text and may be read when needed.
 `;
 function applyDispatchArchitectureOverride(source) {
   const body = rewriteArchitectureFileReads(source.replaceAll("\r\n", "\n").trim());
@@ -1493,10 +1493,16 @@ function rewriteArchitectureFileReads(source) {
   if (!source) return "";
   return source.split("\n").filter((line) => !isArchitectureFileReadBullet(line)).join("\n").replace(
     /动手写代码[^\n]*MUST 先阅读：/,
-    "\u52A8\u624B\u5199\u4EE3\u7801\u3001\u6539\u6A21\u5757\u8FB9\u754C\u6216\u8BBE\u8BA1\u65B9\u6848\u524D\uFF0C`docs/Architecture.md` \u5DF2\u7531 Worker \u6CE8\u5165\uFF0C\u89C6\u4E3A\u5DF2\u8BFB\uFF1B\u7981\u6B62\u518D\u6253\u5F00\u8BE5\u6587\u4EF6\u3002"
+    "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again."
+  ).replace(
+    /Before writing code[^\n]*MUST (?:first )?read:/,
+    "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again."
   ).replace(
     /MUST NOT 在未读 `Architecture\.md`（若存在）的情况下/,
-    "MUST NOT \u5728\u672A\u9075\u5B88\u5DF2\u6CE8\u5165 Architecture.md \u7684\u60C5\u51B5\u4E0B"
+    "MUST NOT without following the injected Architecture.md"
+  ).replace(
+    /MUST NOT (?:add new top-level directories or cross-layer dependencies )?without reading `Architecture\.md`(?: \(if it exists\))?/,
+    "MUST NOT without following the injected Architecture.md"
   );
 }
 function isArchitectureFileReadBullet(line) {
@@ -1677,7 +1683,7 @@ function emitInteractionEvent(event) {
 }
 function sessionStartText(job) {
   const items = workItems(job);
-  return items.length === 0 ? "\u5F00\u59CB\u5904\u7406\u672C\u5361\u3002" : items.map((item) => `- ${item}`).join("\n");
+  return items.length === 0 ? "Starting this card." : items.map((item) => `- ${item}`).join("\n");
 }
 function conversationSnapshotFileName(cardId) {
   return `conversation-snapshot-${cardId.replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
@@ -1742,17 +1748,17 @@ function createAskUserTool(job, cancellation, onUserReply) {
   if (!interactionDir) return void 0;
   mkdirSync2(interactionDir, { recursive: true });
   return {
-    description: "\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u8C03\u7528\u3002\u6709\u4E92\u65A5\u65B9\u6848\u65F6\u4F20\u5165 choices\uFF0C\u770B\u677F\u4F1A\u5F39\u51FA\u9009\u9879\u83DC\u5355\uFF1B\u5DE5\u5177\u4F1A\u6682\u505C\u5F53\u524D\u5361\u7247\uFF0C\u76F4\u5230\u7528\u6237\u56DE\u590D\u3002",
+    description: "Call this when you need the user to confirm, supply missing requirements, or choose a plan. When options are mutually exclusive, pass choices; the board shows an option menu and pauses the current card until the user replies.",
     inputSchema: {
       type: "object",
       properties: {
         question: {
           type: "string",
-          description: "\u5411\u7528\u6237\u63D0\u51FA\u7684\u5B8C\u6574\u95EE\u9898\uFF0C\u4F7F\u7528\u7B80\u4F53\u4E2D\u6587\u3002"
+          description: "The full question to ask the user, in English."
         },
         choices: {
           type: "array",
-          description: "2 \u5230 4 \u4E2A\u4E92\u65A5\u9009\u9879\u3002\u6709\u660E\u786E\u65B9\u6848\u65F6\u5FC5\u987B\u63D0\u4F9B\uFF0C\u770B\u677F\u4F1A\u5728\u6700\u8FD1\u8FD0\u884C\u754C\u9762\u5F39\u51FA\u9009\u9879\u83DC\u5355\u4F9B\u7528\u6237\u70B9\u9009\uFF1B\u4E0D\u8981\u53EA\u5728\u6B63\u6587\u91CC\u53E3\u5934\u5217\u51FA\u9009\u9879\u3002",
+          description: "2 to 4 mutually exclusive options. Provide them when there is a clear plan; the board shows an option menu on the latest-run screen for the user to tap. Do not only list options in assistant prose.",
           items: { type: "string" },
           minItems: 2,
           maxItems: 4
@@ -1764,7 +1770,7 @@ function createAskUserTool(job, cancellation, onUserReply) {
     execute: async (args) => {
       const question = stringArg(args.question);
       if (!question) {
-        return { content: [{ type: "text", text: "\u95EE\u9898\u4E0D\u80FD\u4E3A\u7A7A" }], isError: true };
+        return { content: [{ type: "text", text: "Question cannot be empty" }], isError: true };
       }
       const explicit = stringListArg(args.choices);
       const choices = explicit.length > 0 ? explicit : inferChoicesFromQuestion(question);
@@ -1780,7 +1786,7 @@ function createAskUserTool(job, cancellation, onUserReply) {
         ...choices.length > 0 ? { choices } : {}
       });
       const answer = await waitForReply(replyPath, cancellation);
-      if (answer && answer !== "\u7528\u6237\u5DF2\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD\u3002") {
+      if (answer && answer !== "The user ended the current session.") {
         onUserReply?.(answer);
       }
       return answer;
@@ -1790,7 +1796,7 @@ function createAskUserTool(job, cancellation, onUserReply) {
 async function waitForReply(replyPath, cancellation) {
   while (true) {
     if (cancellation?.isCancelled || cancellation?.isSkipRequested) {
-      return "\u7528\u6237\u5DF2\u7EC8\u6B62\u5F53\u524D\u4F1A\u8BDD\u3002";
+      return "The user ended the current session.";
     }
     if (existsSync3(replyPath)) {
       try {
@@ -1846,9 +1852,11 @@ function workItems(job) {
 
 // src/conversation_transcript.ts
 var INJECTED_PROMPT_MARKERS = [
+  "# Worker-injected context for this round",
   "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
   "KANBAN_WORKER_USER_RULES_BEGIN",
   "# Skill \u6B63\u6587",
+  "Kanban MCP completion tools",
   "\u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177"
 ];
 function isInjectedWorkerPrompt(text) {
@@ -3366,8 +3374,8 @@ async function runCursor(job, cancellation) {
       const run = await agent.send({
         text: askUserTool ? `${job.prompt}
 
-## \u770B\u677F\u4EA4\u4E92
-\u9700\u8981\u7528\u6237\u786E\u8BA4\u3001\u8865\u5145\u9700\u6C42\u6216\u9009\u62E9\u65B9\u6848\u65F6\u5FC5\u987B\u8C03\u7528 ask_user\uFF1B\u4E0D\u8981\u8C03\u7528 askQuestion\uFF0C\u4E5F\u4E0D\u8981\u53EA\u5728\u52A9\u624B\u6B63\u6587\u91CC\u53E3\u5934\u5217\u51FA\u9009\u9879\u3002\u6709 2\u20134 \u4E2A\u4E92\u65A5\u65B9\u6848\u65F6\u5FC5\u987B\u4F20\u5165 choices\uFF0C\u770B\u677F\u4F1A\u5728\u6700\u8FD1\u8FD0\u884C\u754C\u9762\u5F39\u51FA\u9009\u9879\u83DC\u5355\u5E76\u7B49\u5F85\u56DE\u590D\u3002` : job.prompt,
+## Board interaction
+When you need the user to confirm, supply missing requirements, or choose a plan, you MUST call ask_user; do not call askQuestion, and do not only list options in assistant prose. When there are 2\u20134 mutually exclusive options, you MUST pass choices; the board shows an option menu on the latest-run screen and waits for a reply.` : job.prompt,
         images: job.round.images
       }, {
         mcpServers: mcp.servers,
@@ -3615,16 +3623,16 @@ var DISPATCH_SCOPED_TOOL_NAMES = [
   "submit_consultation"
 ];
 function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
-  const id = cardId.trim() || "<\u6CE8\u5165\u7684 cardId>";
+  const id = cardId.trim() || "<injected cardId>";
   return [
-    "## \u770B\u677F MCP \u6536\u5C3E\u5DE5\u5177\uFF08\u5DF2\u6CE8\u5165 schema\uFF09",
+    "## Kanban MCP completion tools (schema already injected)",
     "",
-    "scoped `kanbanMCP` \u53EA\u6CE8\u518C\u4E0B\u9762\u4E09\u4E2A\u5DE5\u5177\u3002\u7981\u6B62 `GetMcpTools`\u3001`tools/list` \u6216\u62C9\u53D6\u5176\u5B83\u770B\u677F\u5DE5\u5177\u76EE\u5F55\u3002",
-    "Cursor\uFF1A\u76F4\u63A5 `CallMcpTool`\uFF1BCodex\uFF1A\u76F4\u63A5\u8C03\u7528\u540C\u540D MCP \u5DE5\u5177\u3002`cardId` \u5FC5\u987B\u662F\u6CE8\u5165\u503C\u3002",
-    requireTests ? "\u7981\u6B62\u628A ready_to_submit \u4E0E Shell\uFF08\u5C24\u5176\u662F\u6D4B\u8BD5\uFF09\u653E\u5728\u540C\u4E00\u6279\u5E76\u884C\u5DE5\u5177\u91CC\u3002\u5FC5\u987B\u7B49\u6D4B\u8BD5\u547D\u4EE4\u8FD4\u56DE exitCode=0 \u4E4B\u540E\uFF0C\u518D\u5355\u72EC\u8C03\u7528 ready_to_submit\u3002" : "\u672C\u5361\u5DF2\u914D\u7F6E\u4E3A\u65E0\u9700\u6D4B\u8BD5\uFF1A\u4E0D\u8981\u6267\u884C\u81EA\u52A8\u5316\u6D4B\u8BD5\uFF1B\u5B8C\u6210\u5B9E\u73B0\u540E\u5728 ready_to_submit \u4F20 manualVerificationReason=\u672C\u5361\u5DF2\u914D\u7F6E\u65E0\u9700\u6D4B\u8BD5\u3002",
-    "ready_to_submit / submit_consultation / block_card \u4E00\u65E6\u8FD4\u56DE\u6210\u529F\uFF0C\u7ACB\u5373\u505C\u6B62\u4E00\u5207\u5DE5\u5177\uFF1BWorker \u4F1A\u7ED3\u675F\u672C\u4F1A\u8BDD\u3002\u7981\u6B62\u518D\u6B21\u641C\u7D22\u3001\u4FEE\u6539\u6216\u91CD\u505A\u4EFB\u52A1\u3002",
-    "\u5361\u7247\u7C7B\u578B\u53EA\u770B\u6CE8\u5165 JSON \u7684 cardKind / labels\uFF1AcardKind=consultation \u6216 labels \u542B consultation \u624D\u662F\u54A8\u8BE2\u5361\uFF1B\u5426\u5219\u4E00\u5F8B\u662F\u5B9E\u65BD\u5361\u3002\u7981\u6B62\u6839\u636E\u6807\u9898\u6216\u5907\u6CE8\u50CF\u4E0D\u50CF\u95EE\u9898\u6765\u6539\u5224\u3002",
-    "Shell \u7684 working_directory \u5FC5\u987B\u4E0E\u547D\u4EE4\u91CC\u7684\u76F8\u5BF9\u8DEF\u5F84\u4E00\u81F4\uFF1Acwd \u5DF2\u662F app \u65F6\u4E0D\u8981\u518D\u5199 app/lib\u3002flutter test / dart test \u79D2\u9000\u4E0D\u5F97\u89C6\u4E3A\u901A\u8FC7\u3002",
+    "scoped `kanbanMCP` registers only the three tools below. Do not call `GetMcpTools`, `tools/list`, or fetch any other kanban tool catalog.",
+    "Cursor: call `CallMcpTool` directly; Codex: call the same-named MCP tool directly. `cardId` must be the injected value.",
+    requireTests ? "Do not put ready_to_submit in the same parallel tool batch as Shell (especially tests). Wait until the test command returns exitCode=0, then call ready_to_submit in a separate turn." : "This card is configured not to require tests: do not run automated tests; after implementation, pass manualVerificationReason=This card has no test switch enabled to ready_to_submit.",
+    "As soon as ready_to_submit / submit_consultation / block_card returns success, stop all tools; the Worker will end this session. Do not search, edit, or redo the task again.",
+    "Card type is decided only by injected JSON cardKind / labels: it is a consultation card only when cardKind=consultation or labels contain consultation; otherwise it is always an implementation card. Do not reclassify from whether the title or notes look like a question.",
+    "The Shell working_directory must match relative paths in the command: when cwd is already app, do not write app/lib. A flutter test / dart test that exits immediately must not count as passing.",
     "",
     "```json",
     JSON.stringify(
@@ -3639,10 +3647,10 @@ function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
             ],
             properties: {
               cardId: id,
-              completedChecklistIds: "\u672C\u8F6E\u5B8C\u6210\u7684 checklist id\uFF1B\u65E0\u5219 []",
-              completedFeedbackIds: "\u672C\u8F6E\u5B8C\u6210\u7684 feedback id\uFF1B\u65E0\u5219 []",
-              manualVerificationReason: "\u65E0\u6CD5\u81EA\u52A8\u9A8C\u8BC1\u65F6\u624D\u4F20",
-              gitRevertCommit: "\u4EC5\u5F53 workItems \u660E\u786E\u8981\u6C42 revert \u65F6\u4F20 7\u201364 \u4F4D\u54C8\u5E0C"
+              completedChecklistIds: "checklist ids completed this round; [] if none",
+              completedFeedbackIds: "feedback ids completed this round; [] if none",
+              manualVerificationReason: "pass only when automatic verification is impossible",
+              gitRevertCommit: "pass a 7\u201364 character hash only when workItems explicitly require revert"
             },
             example: {
               cardId: id,
@@ -3654,13 +3662,13 @@ function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
             required: ["cardId", "responseMarkdown"],
             example: {
               cardId: id,
-              responseMarkdown: "\u54A8\u8BE2\u7B54\u590D Markdown"
+              responseMarkdown: "consultation response Markdown"
             }
           },
           block_card: {
             required: ["cardId"],
-            properties: { reason: "\u963B\u585E\u539F\u56E0" },
-            example: { cardId: id, reason: "\u65E0\u6CD5\u5B8C\u6210\u7684\u539F\u56E0" }
+            properties: { reason: "block reason" },
+            example: { cardId: id, reason: "why completion is impossible" }
           }
         }
       },
@@ -3675,24 +3683,24 @@ function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
 var WORKER_USER_RULES_BEGIN = "KANBAN_WORKER_USER_RULES_BEGIN";
 var WORKER_USER_RULES_END = "KANBAN_WORKER_USER_RULES_END";
 function wrapWorkerUserRules(text) {
-  const body = text.trim() || "\u672A\u53D1\u73B0\u7528\u6237 ~/.cursor/rules\u3002";
+  const body = text.trim() || "No user ~/.cursor/rules found.";
   return [WORKER_USER_RULES_BEGIN, body, WORKER_USER_RULES_END].join("\n");
 }
 
 // src/worker_glob_policy.ts
-var DISPATCH_SEARCH_POLICY = `## \u641C\u7D22\u8303\u56F4\uFF08Worker\uFF09
+var DISPATCH_SEARCH_POLICY = `## Search scope (Worker)
 
-\u5B9A\u4F4D\u4EE3\u7801\u65F6 MUST \u7528 grep \u6216\u5E26\u6587\u4EF6\u540D/\u76EE\u5F55\u9650\u5B9A\u7684 glob\uFF0C\u5E76\u6307\u5B9A\u5B50\u76EE\u5F55\u3002
-MUST NOT \u5BF9\u4ED3\u5E93\u6839\u505A\u65E0\u754C glob\uFF08\`**\`\u3001\`**/*\`\u3001\`**/*.*\`\uFF09\u3002
-MUST NOT \u628A\u65E0\u754C glob \u4E0E grep \u5E76\u884C\uFF1Bgrep \u5DF2\u8FD4\u56DE\u5019\u9009\u6587\u4EF6\u65F6\u76F4\u63A5\u8BFB\u90A3\u4E9B\u8DEF\u5F84\u3002
-MUST NOT \u628A glob \u76EE\u6807\u6307\u5230 \`.git\`\u3001\`.svn\` \u6216 \`build\`\u3002
-\u754C\u9762\u6216\u529F\u80FD\u5165\u53E3\u5FC5\u987B\u4ECE\u5F53\u524D\u9009\u5B9A\u4ED3\u5E93\u7684\u76EE\u5F55\u7ED3\u6784\u3001\u9879\u76EE\u89C4\u5219\u548C\u5361\u7247\u4E2D\u7ED9\u51FA\u7684\u5177\u4F53\u7EBF\u7D22\u5B9A\u4F4D\uFF1B\u4E0D\u8981\u5047\u5B9A\u6846\u67B6\u3001\u6E90\u7801\u6839\u76EE\u5F55\u6216\u4EFB\u4F55\u4EA7\u54C1\u4E13\u5C5E\u8DEF\u5F84\u3002\u5361\u7247\u672A\u7ED9\u51FA\u8DEF\u5F84\u65F6\uFF0C\u5148\u6709\u9650\u5730\u67E5\u770B\u4ED3\u5E93\u4E00\u7EA7\u76EE\u5F55\u548C\u9879\u76EE\u8BF4\u660E\uFF0C\u518D\u5728\u5019\u9009\u5B50\u76EE\u5F55\u5185\u5B9A\u5411\u641C\u7D22\u3002\u641C\u7D22\u591A\u4E2A\u76EE\u5F55\u524D\u5FC5\u987B\u5148\u786E\u8BA4\u6BCF\u4E2A\u76EE\u5F55\u5B58\u5728\uFF1B\u4E0D\u8981\u628A\u4E0D\u5B58\u5728\u7684\u5019\u9009\u76EE\u5F55\u4F20\u7ED9 \`rg\`\u3002\u67E5\u627E\u542B\u5F15\u53F7\u3001\u62EC\u53F7\u6216\u5176\u5B83\u6807\u70B9\u7684\u5B57\u9762\u91CF\u65F6\u4F18\u5148\u4F7F\u7528 \`rg --fixed-strings -- <text> <confirmed-path>\`\uFF0C\u53EA\u6709\u786E\u5B9E\u9700\u8981\u6A21\u5F0F\u5339\u914D\u65F6\u624D\u5199\u6B63\u5219\u3002
+When locating code, MUST use grep or a glob limited by filename/directory, and MUST specify a subdirectory.
+MUST NOT unbounded-glob the repository root (\`**\`, \`**/*\`, \`**/*.*\`).
+MUST NOT run an unbounded glob in parallel with grep; when grep already returned candidate files, read those paths directly.
+MUST NOT point a glob target at \`.git\`, \`.svn\`, or \`build\`.
+Locate UI or feature entry points from the currently selected repository's directory layout, project rules, and concrete clues on the card; do not assume a framework, source root, or any product-specific path. When the card does not give a path, first inspect the repository's top-level directories and project notes in a limited way, then search inside candidate subdirectories. Before searching multiple directories, MUST confirm each directory exists; do not pass a non-existent candidate path to \`rg\`. When looking up a literal that contains quotes, parentheses, or other punctuation, prefer \`rg --fixed-strings -- <text> <confirmed-path>\`; write a regex only when pattern matching is actually required.
 `;
 
 // src/session_context.ts
 function readBatchArchitecture(cwd) {
   const path = join7(cwd, "docs", "Architecture.md");
-  if (!existsSync6(path)) return "\u4ED3\u5E93\u672A\u63D0\u4F9B docs/Architecture.md\u3002";
+  if (!existsSync6(path)) return "This repository does not provide docs/Architecture.md.";
   return readFileSync5(path, "utf8");
 }
 function createSessionContext(options) {
@@ -3730,15 +3738,15 @@ function createSessionContext(options) {
   const prompt = [
     options.basePrompt.trim(),
     "",
-    "# Worker \u6CE8\u5165\u7684\u672C\u8F6E\u4E0A\u4E0B\u6587",
+    "# Worker-injected context for this round",
     "",
-    "\u672C\u8F6E\u5361\u7247\u5DF2\u9886\u53D6\u3002\u4EE5\u4E0B\u4E0A\u4E0B\u6587\u662F\u552F\u4E00\u4EFB\u52A1\u8303\u56F4\uFF1B\u4E0D\u8981\u518D\u6B21\u8BFB\u53D6 Skill \u6216\u9886\u53D6\u5176\u4ED6\u5361\u7247\u3002",
+    "This round's card is already claimed. The context below is the only task scope; do not read the Skill again or claim another card.",
     "",
-    "\u5361\u7247\u7C7B\u578B\u53EA\u7531 JSON \u7684 `cardKind` \u4E0E `labels` \u51B3\u5B9A\uFF1A`consultation` \u4E3A\u54A8\u8BE2\u5361\uFF0C\u5426\u5219\u4E3A\u5B9E\u65BD\u5361\u3002\u672A\u6253\u54A8\u8BE2\u6807\u7B7E\u65F6\uFF0C\u5373\u4F7F\u6807\u9898\u50CF\u63D0\u95EE\u3001\u6CA1\u6709\u6E05\u5355\uFF0C\u4E5F\u5FC5\u987B\u5F53\u5B9E\u65BD\u5361\u505A\u5B8C\u5E76 `ready_to_submit`\u3002\u4E0D\u8981\u81EA\u884C\u6539\u5224\u3002",
+    "Card type is decided only by JSON `cardKind` and `labels`: `consultation` is a consultation card, otherwise it is an implementation card. Without a consultation label, even if the title looks like a question and there is no checklist, finish it as an implementation card and call `ready_to_submit`. Do not reclassify it yourself.",
     "",
     DISPATCH_SEARCH_POLICY.trim(),
     "",
-    "## \u5361\u7247\u4E0A\u4E0B\u6587\uFF08JSON\uFF09",
+    "## Card context (JSON)",
     "",
     "```json",
     JSON.stringify(payload, null, 2),
@@ -3749,22 +3757,22 @@ function createSessionContext(options) {
       options.requireTests !== false
     ),
     "",
-    "## \u4E34\u65F6\u9644\u4EF6\u7EDD\u5BF9\u8DEF\u5F84",
+    "## Temporary attachment absolute paths",
     "",
-    ...attachmentPaths.length === 0 ? ["- \u65E0\u6587\u4EF6\u9644\u4EF6"] : attachmentPaths.map((path) => `- \u6587\u4EF6\uFF1A${path}`),
-    ...imagePaths.length === 0 ? ["- \u65E0\u56FE\u7247\u4E34\u65F6\u8DEF\u5F84"] : imagePaths.map((path) => `- \u56FE\u7247\uFF1A${path}`),
+    ...attachmentPaths.length === 0 ? ["- No file attachments"] : attachmentPaths.map((path) => `- File: ${path}`),
+    ...imagePaths.length === 0 ? ["- No temporary image paths"] : imagePaths.map((path) => `- Image: ${path}`),
     "",
-    "\u8FD9\u4E9B\u8DEF\u5F84\u4F4D\u4E8E\u7CFB\u7EDF\u4E34\u65F6\u4F1A\u8BDD\u76EE\u5F55\uFF0C\u53EA\u5728\u672C\u8F6E\u6709\u6548\uFF1B\u4E0D\u8981\u590D\u5236\u5230\u4ED3\u5E93\u3002",
+    "These paths are in the system temporary session directory and are valid only for this round; do not copy them into the repository.",
     "",
-    "## \u5B8C\u6574\u7528\u6237 Rule",
+    "## Full user Rules",
     "",
     wrapWorkerUserRules(options.userRules ?? ""),
     "",
-    "## \u5DF2\u7F13\u5B58\u7684 docs/Architecture.md",
+    "## Cached docs/Architecture.md",
     "",
     options.architecture.trim(),
     "",
-    "\u4EE5\u4E0A\u6B63\u6587\u5DF2\u6EE1\u8DB3\u7528\u6237\u89C4\u5219 / AGENTS.md \u4E2D\u7684\u300C\u5F00\u53D1\u524D\u5FC5\u8BFB Architecture.md\u300D\u3002\u7981\u6B62\u518D\u6253\u5F00\u8BE5\u6587\u4EF6\u3002ADR\u3001docs/Systems\u3001CONTEXT.md \u9700\u8981\u65F6\u4ECD\u53EF\u8BFB\u3002"
+    "The text above already satisfies the user-rule / AGENTS.md requirement to read Architecture.md before development. Do not open that file again. ADRs, docs/Systems, and CONTEXT.md may still be read when needed."
   ].join("\n");
   return {
     prompt,
@@ -3789,7 +3797,7 @@ function safeFileName(value, fallback) {
 }
 function uniquePath(root, fileName) {
   const path = join7(root, fileName);
-  if (!isAbsolute(path)) throw new Error("\u4E34\u65F6\u9644\u4EF6\u8DEF\u5F84\u4E0D\u662F\u7EDD\u5BF9\u8DEF\u5F84");
+  if (!isAbsolute(path)) throw new Error("Temporary attachment path is not absolute");
   return path;
 }
 function extensionForMime(mimeType) {

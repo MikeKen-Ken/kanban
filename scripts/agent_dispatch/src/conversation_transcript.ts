@@ -1,9 +1,11 @@
 import type { ConversationTranscriptMessage } from "./assistant_text.ts";
 
 const INJECTED_PROMPT_MARKERS = [
+  "# Worker-injected context for this round",
   "# Worker 注入的本轮上下文",
   "KANBAN_WORKER_USER_RULES_BEGIN",
   "# Skill 正文",
+  "Kanban MCP completion tools",
   "看板 MCP 收尾工具",
 ];
 
