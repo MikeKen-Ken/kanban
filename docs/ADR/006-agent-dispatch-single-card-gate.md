@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-13
-- Updated: 2026-08-25
+- Updated: 2026-08-26
 
 ## 背景
 
@@ -64,7 +64,8 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
 - 完整 MCP 在活跃锁下不得绕过锁定卡的 submit、block、move、complete、delete、
   commitRef、checklist 或 feedback 契约。
 - claim 失败或空队列不占用本轮名额，且不得创建临时端点。
-- finalize 必须拒绝 HEAD 相对 baseline 被 Agent 移动，并按 ADR-007 执行。
+- finalize 按 ADR-007 处理 HEAD 相对 baseline 的漂移：baseline 的后代可软复位后由
+  Worker 统一提交；无关历史仍拒绝。
 
 ## 结果
 

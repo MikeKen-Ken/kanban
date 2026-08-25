@@ -61,15 +61,34 @@ Future<CallToolResult> dispatchFinalize(
 
     if (record.status == DispatchPendingStatus.validated ||
         record.status == DispatchPendingStatus.committing) {
-      final head = await mcpGitHeadHash(repo, runner: gitRunner);
       final baseline = record.baselineCommitRef;
-      if (baseline != null && head != baseline) {
-        final failed = record.copyWith(
-          status: DispatchPendingStatus.failed,
-          error: 'The Agent moved HEAD: baseline=$baseline, HEAD=$head',
+      if (baseline != null && baseline.isNotEmpty) {
+        final currentHead = await mcpGitHeadHash(repo, runner: gitRunner);
+        if (record.gitRevertCommit != null &&
+            currentHead != null &&
+            currentHead != baseline) {
+          final failed = record.copyWith(
+            status: DispatchPendingStatus.failed,
+            error:
+                'The Agent moved HEAD: baseline=$baseline, HEAD=$currentHead',
+          );
+          await store.write(failed);
+          return mcpErrorResult(failed.error!);
+        }
+        final restored = await restoreMcpGitBaselineIfDescendant(
+          repoPath: repo,
+          baseline: baseline,
+          runner: gitRunner,
         );
-        await store.write(failed);
-        return mcpErrorResult(failed.error!);
+        if (!restored.ok) {
+          final failed = record.copyWith(
+            status: DispatchPendingStatus.failed,
+            error: restored.error ??
+                'The Agent moved HEAD: baseline=$baseline, HEAD=$currentHead',
+          );
+          await store.write(failed);
+          return mcpErrorResult(failed.error!);
+        }
       }
 
       var tree = await inspectMcpGitTree(repo, runner: gitRunner);
@@ -221,6 +240,7 @@ Future<CallToolResult> dispatchFinalize(
         );
         await store.write(record);
       } else if (tree.kind == McpGitTreeKind.clean) {
+        final head = await mcpGitHeadHash(repo, runner: gitRunner);
         record = record.copyWith(
           status: DispatchPendingStatus.committed,
           commitRef: head == null ? null : abbreviateGitCommitRef(head),

@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-16
-- Updated: 2026-08-19
+- Updated: 2026-08-26
 
 ## 背景
 
@@ -18,8 +18,12 @@ Agent 直接提交 Git 并移动卡片会把“声明完成、验证、提交、
 3. 本机 pending 记录按会话保存，状态为 `declared`、`validated`、`committing`、
    `committed`、`finalized`、`failed`。它不进入工作区 JSON、备份或 WebDAV。
 4. Worker 通过私有 dispatch 工具记录空验证结果（会话内已验证或人工原因）并驱动
-   finalize，不再 spawn 测试命令。finalize 必须检查 HEAD 仍等于 claim baseline；
-   Agent 自行移动 HEAD 时直接拒绝。Worker 把会话内 Shell 起止报到
+   finalize，不再 spawn 测试命令。finalize 必须把 HEAD 与 claim baseline 对齐：若
+   HEAD 仍等于 baseline 则继续；若 baseline 是 HEAD 的祖先（Agent 在领取后自行
+   `commit`），Worker 执行 `git reset --soft <baseline>`，把已提交内容留在暂存区，
+   再走既有统一提交路径写入 session/card trailers。checkout、rebase、reset 到与
+   baseline 无祖先关系的历史上时直接拒绝。受控 `gitRevertCommit` 仍要求 baseline
+   未漂移，不把 Agent 超前提交折进 revert。Worker 把会话内 Shell 起止报到
    `dispatch_report_shell_span`。`ready_to_submit` 若发现验证命令尚未按其
    `executionTime` 结束（含 SDK 提前发出 completed），或最后一次有效测试
    exitCode≠0，必须拒绝。结束时间以 `startedAt + executionTime` 为准，不得用滞后
@@ -38,7 +42,8 @@ Agent 直接提交 Git 并移动卡片会把“声明完成、验证、提交、
 10. `ready_to_submit.gitRevertCommit` 仅接受卡片明确要求的 7–64 位提交哈希。Worker 在
     baseline 未漂移且领取后工作区干净时执行 `git revert --no-commit <hash>`，再通过既有
     统一提交路径创建带 session/card trailers 的提交；冲突会自动 abort。不得借此开放
-    `reset`、`rebase`、`checkout`、`push` 或 Agent 直接移动 HEAD。
+    Agent 自行 `reset`、`rebase`、`checkout`、`push` 或移动 HEAD。Worker 仅可对
+    baseline 的后代执行 `reset --soft` 以恢复领取点，不得用于其它历史改写。
 
 ## 结果
 

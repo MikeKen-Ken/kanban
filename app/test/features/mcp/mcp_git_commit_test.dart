@@ -196,6 +196,52 @@ void main() {
     );
   });
 
+  test('restoreMcpGitBaselineIfDescendant 软复位后代提交并拒绝无关历史', () async {
+    final temp =
+        await Directory.systemTemp.createTemp('kanban_git_baseline_restore_');
+    addTearDown(() async {
+      if (await temp.exists()) await temp.delete(recursive: true);
+    });
+    await _git(temp.path, ['init']);
+    await _git(temp.path, ['config', 'user.email', 'test@example.com']);
+    await _git(temp.path, ['config', 'user.name', 'Test']);
+    File(p.join(temp.path, 'a.txt')).writeAsStringSync('one\n');
+    await _git(temp.path, ['add', '-A']);
+    await _git(temp.path, ['commit', '-m', 'init']);
+    final baseline = await mcpGitHeadHash(temp.path);
+
+    expect(
+      (await restoreMcpGitBaselineIfDescendant(
+        repoPath: temp.path,
+        baseline: baseline!,
+      ))
+          .kind,
+      McpGitBaselineRestoreKind.unchanged,
+    );
+
+    File(p.join(temp.path, 'a.txt')).writeAsStringSync('two\n');
+    await _git(temp.path, ['add', '-A']);
+    await _git(temp.path, ['commit', '-m', 'agent commit']);
+    final restored = await restoreMcpGitBaselineIfDescendant(
+      repoPath: temp.path,
+      baseline: baseline,
+    );
+    expect(restored.kind, McpGitBaselineRestoreKind.restored);
+    expect(await mcpGitHeadHash(temp.path), baseline);
+    expect((await inspectMcpGitTree(temp.path)).kind, McpGitTreeKind.dirty);
+
+    await _git(temp.path, ['checkout', '--orphan', 'unrelated']);
+    File(p.join(temp.path, 'a.txt')).writeAsStringSync('other\n');
+    await _git(temp.path, ['add', '-A']);
+    await _git(temp.path, ['commit', '-m', 'orphan']);
+    final unrelated = await restoreMcpGitBaselineIfDescendant(
+      repoPath: temp.path,
+      baseline: baseline,
+    );
+    expect(unrelated.kind, McpGitBaselineRestoreKind.unrelated);
+    expect(unrelated.error, contains('moved HEAD'));
+  });
+
   test('isMcpSensitiveGitPath 识别凭据与私钥路径', () {
     expect(isMcpSensitiveGitPath('.env'), isTrue);
     expect(isMcpSensitiveGitPath('app/.env.local'), isTrue);

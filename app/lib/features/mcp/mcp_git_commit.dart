@@ -507,3 +507,96 @@ Future<String?> mcpGitHeadHash(
   final value = '${hash.stdout}'.trim();
   return value.isEmpty ? null : value;
 }
+
+enum McpGitBaselineRestoreKind { unchanged, restored, unrelated, failed }
+
+/// Agent 超前提交后，把 HEAD 软复位到领取 baseline 的结果。
+class McpGitBaselineRestore {
+  const McpGitBaselineRestore._({required this.kind, this.error});
+
+  factory McpGitBaselineRestore.unchanged() => const McpGitBaselineRestore._(
+        kind: McpGitBaselineRestoreKind.unchanged,
+      );
+
+  factory McpGitBaselineRestore.restored() => const McpGitBaselineRestore._(
+        kind: McpGitBaselineRestoreKind.restored,
+      );
+
+  factory McpGitBaselineRestore.unrelated({
+    required String baseline,
+    required String head,
+  }) =>
+      McpGitBaselineRestore._(
+        kind: McpGitBaselineRestoreKind.unrelated,
+        error: 'The Agent moved HEAD: baseline=$baseline, HEAD=$head',
+      );
+
+  factory McpGitBaselineRestore.failed(String error) =>
+      McpGitBaselineRestore._(
+        kind: McpGitBaselineRestoreKind.failed,
+        error: error,
+      );
+
+  final McpGitBaselineRestoreKind kind;
+  final String? error;
+
+  bool get ok =>
+      kind == McpGitBaselineRestoreKind.unchanged ||
+      kind == McpGitBaselineRestoreKind.restored;
+}
+
+/// 若 HEAD 仍等于 [baseline] 则不动。
+/// 若 [baseline] 是 HEAD 的祖先，则 `git reset --soft` 回到 baseline，
+/// 把 Agent 自行提交的内容留在暂存区，供 Worker 统一带 trailer 提交。
+/// checkout / rebase 到无关历史时拒绝。
+Future<McpGitBaselineRestore> restoreMcpGitBaselineIfDescendant({
+  required String repoPath,
+  required String baseline,
+  McpGitRunner? runner,
+}) async {
+  final repo = repoPath.trim();
+  final base = baseline.trim();
+  if (repo.isEmpty || base.isEmpty) {
+    return McpGitBaselineRestore.failed('Git baseline is missing');
+  }
+  final head = await mcpGitHeadHash(repo, runner: runner);
+  if (head == null || head.isEmpty) {
+    return McpGitBaselineRestore.failed('Unable to read HEAD');
+  }
+  if (head == base) return McpGitBaselineRestore.unchanged();
+
+  final run = runner ?? _defaultGitRunner;
+  final ancestor = await run(
+    'git',
+    ['merge-base', '--is-ancestor', base, head],
+    workingDirectory: repo,
+    environment: mcpGitEnvironment(),
+  );
+  if (ancestor.exitCode != 0) {
+    if (ancestor.exitCode == 1) {
+      return McpGitBaselineRestore.unrelated(baseline: base, head: head);
+    }
+    return McpGitBaselineRestore.failed(
+      'Unable to compare HEAD with the claim baseline: ${_combinedOutput(ancestor)}',
+    );
+  }
+
+  final reset = await run(
+    'git',
+    ['reset', '--soft', base],
+    workingDirectory: repo,
+    environment: mcpGitEnvironment(),
+  );
+  if (reset.exitCode != 0) {
+    return McpGitBaselineRestore.failed(
+      'git reset --soft failed: ${_combinedOutput(reset)}',
+    );
+  }
+  final restoredHead = await mcpGitHeadHash(repo, runner: runner);
+  if (restoredHead != base) {
+    return McpGitBaselineRestore.failed(
+      'HEAD was not restored to the claim baseline: expected=$base, HEAD=$restoredHead',
+    );
+  }
+  return McpGitBaselineRestore.restored();
+}

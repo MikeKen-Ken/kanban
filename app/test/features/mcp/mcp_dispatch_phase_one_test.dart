@@ -462,7 +462,7 @@ void main() {
     );
   });
 
-  test('finalize 拒绝 Agent 自行提交导致的 HEAD 漂移', () async {
+  test('finalize 将 Agent 超前提交软复位后由 Worker 统一收尾', () async {
     final repo = await _createGitRepo(tempDir, 'head_drift_repo');
     final todo =
         controller.board!.columns.firstWhere((item) => item.id == 'todo');
@@ -490,6 +490,90 @@ void main() {
     await File(p.join(repo, 'app.txt')).writeAsString('agent commit\n');
     await _git(repo, ['add', '-A']);
     await _git(repo, ['commit', '-m', 'agent self commit']);
+    final agentHead = (await Process.run(
+      'git',
+      ['rev-parse', 'HEAD'],
+      workingDirectory: repo,
+    ))
+        .stdout
+        .toString()
+        .trim();
+
+    final result = await dispatchFinalize(
+      controller,
+      workerToken: 'worker-a',
+      sessionId: sessionId,
+    );
+
+    expect(
+      result.isError,
+      isNot(true),
+      reason: result.content
+          .whereType<TextContent>()
+          .map((item) => item.text)
+          .join(),
+    );
+    expect(_jsonOf(result)['status'], 'finalized');
+    expect(
+      (await File(p.join(repo, 'app.txt')).readAsString())
+          .replaceAll('\r\n', '\n'),
+      'agent commit\n',
+    );
+    final workerHead = (await Process.run(
+      'git',
+      ['rev-parse', 'HEAD'],
+      workingDirectory: repo,
+    ))
+        .stdout
+        .toString()
+        .trim();
+    expect(workerHead, isNot(agentHead));
+    final body = (await Process.run(
+      'git',
+      ['log', '-1', '--format=%B'],
+      workingDirectory: repo,
+    ))
+        .stdout
+        .toString();
+    expect(body, contains('Kanban-Session: $sessionId'));
+    expect(body, contains('Kanban-Card: $cardId'));
+    expect(
+      findVerifyColumn(controller.board!.columns)
+          ?.cards
+          .any((item) => item.id == cardId),
+      isTrue,
+    );
+  });
+
+  test('finalize 拒绝与 baseline 无祖先关系的 HEAD 漂移', () async {
+    final repo = await _createGitRepo(tempDir, 'unrelated_head_repo');
+    final todo =
+        controller.board!.columns.firstWhere((item) => item.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '无关 HEAD 卡'))!;
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: repo,
+    );
+    await dispatchClaimNextCard(controller, workerToken: 'worker-a');
+    final ready = await dispatchReadyToSubmit(
+      controller,
+      workerToken: 'worker-a',
+      cardId: cardId,
+      completedChecklistIds: const [],
+      completedFeedbackIds: const [],
+      verificationCommands: const [],
+      manualVerificationReason: '无需自动命令',
+    );
+    final sessionId = _jsonOf(ready)['sessionId'] as String;
+    final store = DispatchPendingStore();
+    final declared = (await store.read(sessionId))!;
+    await store
+        .write(declared.copyWith(status: DispatchPendingStatus.validated));
+    await _git(repo, ['checkout', '--orphan', 'unrelated']);
+    await File(p.join(repo, 'app.txt')).writeAsString('orphan\n');
+    await _git(repo, ['add', '-A']);
+    await _git(repo, ['commit', '-m', 'unrelated history']);
 
     final result = await dispatchFinalize(
       controller,
@@ -501,6 +585,10 @@ void main() {
     expect(
       result.content.whereType<TextContent>().first.text,
       contains('moved HEAD'),
+    );
+    expect(
+      (await store.read(sessionId))?.status,
+      DispatchPendingStatus.failed,
     );
   });
 
@@ -562,6 +650,60 @@ void main() {
       workingDirectory: repo,
     );
     expect(log.stdout.toString().trim(), 'Revert $target');
+  });
+
+  test('受控撤销在 Agent 已移动 HEAD 时拒绝软复位', () async {
+    final repo = await _createGitRepo(tempDir, 'revert_head_drift_repo');
+    await File(p.join(repo, 'app.txt')).writeAsString('需要撤销\n');
+    await _git(repo, ['add', '-A']);
+    await _git(repo, ['commit', '-m', '需要撤销的变更']);
+    final target = (await Process.run(
+      'git',
+      ['rev-parse', 'HEAD'],
+      workingDirectory: repo,
+    ))
+        .stdout
+        .toString()
+        .trim();
+    final todo =
+        controller.board!.columns.firstWhere((item) => item.id == 'todo');
+    final cardId = (await controller.addCard(todo.id, '撤销时 HEAD 已漂移'))!;
+    gate.beginBatch(
+      'worker-a',
+      projectId: controller.activeProjectId!,
+      repoPath: repo,
+    );
+    await dispatchClaimNextCard(controller, workerToken: 'worker-a');
+    final ready = await dispatchReadyToSubmit(
+      controller,
+      workerToken: 'worker-a',
+      cardId: cardId,
+      completedChecklistIds: const [],
+      completedFeedbackIds: const [],
+      verificationCommands: const [],
+      manualVerificationReason: 'Git 撤销待人工确认',
+      gitRevertCommit: target,
+    );
+    final sessionId = _jsonOf(ready)['sessionId'] as String;
+    final store = DispatchPendingStore();
+    final declared = (await store.read(sessionId))!;
+    await store
+        .write(declared.copyWith(status: DispatchPendingStatus.validated));
+    await File(p.join(repo, 'app.txt')).writeAsString('agent extra\n');
+    await _git(repo, ['add', '-A']);
+    await _git(repo, ['commit', '-m', 'agent self commit']);
+
+    final result = await dispatchFinalize(
+      controller,
+      workerToken: 'worker-a',
+      sessionId: sessionId,
+    );
+
+    expect(result.isError, isTrue);
+    expect(
+      result.content.whereType<TextContent>().first.text,
+      contains('moved HEAD'),
+    );
   });
 
   test('ready 拒绝非提交哈希的受控撤销声明', () async {
