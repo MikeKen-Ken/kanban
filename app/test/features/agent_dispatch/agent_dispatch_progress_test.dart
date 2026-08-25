@@ -186,6 +186,34 @@ void main() {
     );
   });
 
+  test('当前卡已离开进行中但尚未计入已处理时，两张待办仍显示 1/2', () {
+    expect(
+      liveDispatchTotal(
+        cardLimitMax: true,
+        cardLimitCount: 0,
+        processedCards: 0,
+        remainingQueue: 1,
+        hasActiveCard: false,
+        currentRound: 1,
+      ),
+      2,
+    );
+    const progress = AgentDispatchProgress(
+      running: true,
+      processedCards: 0,
+      totalCards: 2,
+      currentRound: 1,
+      cardLimitMax: true,
+    );
+    final live = applyLiveBoardQueue(
+      progress,
+      remainingQueue: 1,
+      hasActiveCard: false,
+    );
+    expect(live.liveCardLabel, '1/2');
+    expect(live.totalCards, 2);
+  });
+
   test('当前会话后停止不再把队列剩余计入分母', () {
     expect(
       liveDispatchTotal(

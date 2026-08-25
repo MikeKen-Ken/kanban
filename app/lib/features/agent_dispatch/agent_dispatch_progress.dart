@@ -157,6 +157,9 @@ int dispatchProgressFloor({
 }
 
 /// 已处理张数 + 队列剩余 + 进行中的当前卡，再套用启动时的上限规则。
+///
+/// 当前卡已离开「进行中」（例如刚送进待验证）但 Worker 尚未把已处理数 +1 时，
+/// 仍按一轮在飞计入分母，避免两张待办显示成 1/1 而不是 1/2。
 int liveDispatchTotal({
   required bool cardLimitMax,
   required int cardLimitCount,
@@ -166,9 +169,11 @@ int liveDispatchTotal({
   int currentRound = 0,
   bool drainAfterCurrent = false,
 }) {
+  final claimedButUncounted = !hasActiveCard && currentRound > processedCards;
+  final inFlight = (hasActiveCard || claimedButUncounted) ? 1 : 0;
   final remainingWork = drainAfterCurrent
       ? (hasActiveCard ? 1 : 0)
-      : remainingQueue + (hasActiveCard ? 1 : 0);
+      : remainingQueue + inFlight;
   final planned = plannedDispatchTotal(
     cardLimitMax: cardLimitMax,
     cardLimitCount: cardLimitCount,
