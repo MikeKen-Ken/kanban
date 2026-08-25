@@ -47,9 +47,9 @@ Agent 调度不能依赖 AI 最终回复中的成功标记决定是否继续。�
   scoped 端点，不得使用常驻完整看板 MCP。
 - Worker 不把 scoped 工具 schema、Skill 正文、Rule、Architecture、卡片正文或附件复制到
   本轮 prompt；工具通过正常 MCP catalog 暴露，提示词只调用 Skill。
-- Cursor：SDK 的 `settingSources` 加载 `project` 与 `user`，由 Cursor 正常选择用户和项目
-  Rules / Skills / Hooks。MCP 由 Worker 按当前项目 MCP 标签从用户/项目 `mcp.json` 筛选后
-  覆盖 `kanbanMCP`。
+- Cursor：SDK 的 `settingSources` 使用 `all`，加载与 Cursor 客户端一致的项目、用户、团队、
+  MDM 与插件设置层，使 Rules / Skills / Hooks 使用相同的环境。MCP 仍由 Worker 按当前项目
+  MCP 标签从用户/项目 `mcp.json` 筛选后注入，并覆盖 `kanbanMCP` 为本轮 scoped 端点。
 - `kanban-complete-tasks` 是本流程唯一要求调用的 Skill，以磁盘内容为准；Worker 不读取、
   剥离、改写或注入 Skill 正文。
 - Codex：临时 `CODEX_HOME` 复制用户 `auth.json` 和未改写的 `AGENTS.md`，并且只从

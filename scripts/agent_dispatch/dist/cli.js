@@ -2999,6 +2999,7 @@ function logLines(lines, source = "worker") {
     logLine(line, source);
   }
 }
+var CURSOR_CLIENT_SETTING_SOURCES = ["all"];
 function formatJson(value, max = 4e3) {
   if (value === void 0) return "";
   try {
@@ -3241,9 +3242,9 @@ async function runCursor(job, cancellation) {
     });
     const localOptions = {
       cwd: job.cwd,
-      // Let Cursor load project and user Rules, Skills, and Hooks through its
-      // normal setting sources. The Worker prompt only invokes the Skill.
-      settingSources: ["project", "user"],
+      // Use the same full ambient settings stack as Cursor clients. The Worker
+      // still passes its scoped/allowlisted MCP catalog explicitly below.
+      settingSources: [...CURSOR_CLIENT_SETTING_SOURCES],
       store: new JsonlLocalAgentStore(storeDir),
       ...askUserTool ? { customTools: { ask_user: askUserTool } } : {},
       // Headless Worker has nobody to click approve; Auto-review would block ready_to_submit.
@@ -3286,7 +3287,7 @@ async function runCursor(job, cancellation) {
         });
       }
       logLine(
-        `Local run: JSONL store=${storeDir}; sandbox ${job.enableSandbox === true ? "on" : "off"}; merged MCP (${mcp.names.join(", ") || "none"}); kanbanMCP forced to scoped (${agentMcpUrl}); disallowed tools=${disallowedTools.join(",") || "none"}; settingSources=project,user (Rules and Skills use Cursor's normal catalog; MCP uses only the servers merged for this round)`
+        `Local run: JSONL store=${storeDir}; sandbox ${job.enableSandbox === true ? "on" : "off"}; merged MCP (${mcp.names.join(", ") || "none"}); kanbanMCP forced to scoped (${agentMcpUrl}); disallowed tools=${disallowedTools.join(",") || "none"}; settingSources=all (Cursor client-equivalent Rules, Skills, Hooks, team, MDM, and plugins; MCP uses the scoped/allowlisted servers merged for this round)`
       );
       logLine("Local session created; starting\u2026");
       thinkingStream = new CursorThinkingStream();

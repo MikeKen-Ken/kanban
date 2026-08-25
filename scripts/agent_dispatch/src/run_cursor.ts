@@ -7,6 +7,7 @@ import {
   CursorAgentError,
   JsonlLocalAgentStore,
   type LocalAgentOptions,
+  type SettingSource,
 } from "@cursor/sdk";
 import { settleWithin } from "./async_limit.ts";
 import type { WorkerCancellation } from "./cancellation.ts";
@@ -69,6 +70,11 @@ function logLines(lines: string[], source: WorkerLogSource = "worker"): void {
     logLine(line, source);
   }
 }
+
+// Cursor documents `all` as the ambient settings stack used by its clients:
+// project, user, team, MDM, and plugins. Keep this explicit instead of relying
+// on a partial default so the local SDK harness stays client-equivalent.
+export const CURSOR_CLIENT_SETTING_SOURCES: SettingSource[] = ["all"];
 
 function formatJson(value: unknown, max = 4000): string {
   if (value === undefined) return "";
@@ -367,9 +373,9 @@ export async function runCursor(
     });
     const localOptions: LocalAgentOptions = {
       cwd: job.cwd,
-      // Let Cursor load project and user Rules, Skills, and Hooks through its
-      // normal setting sources. The Worker prompt only invokes the Skill.
-      settingSources: ["project", "user"],
+      // Use the same full ambient settings stack as Cursor clients. The Worker
+      // still passes its scoped/allowlisted MCP catalog explicitly below.
+      settingSources: [...CURSOR_CLIENT_SETTING_SOURCES],
       store: new JsonlLocalAgentStore(storeDir),
       ...(askUserTool ? { customTools: { ask_user: askUserTool } } : {}),
       // Headless Worker has nobody to click approve; Auto-review would block ready_to_submit.
@@ -416,8 +422,8 @@ export async function runCursor(
           `merged MCP (${mcp.names.join(", ") || "none"}); ` +
           `kanbanMCP forced to scoped (${agentMcpUrl}); ` +
           `disallowed tools=${disallowedTools.join(",") || "none"}; ` +
-          `settingSources=project,user (Rules and Skills use Cursor's normal catalog; ` +
-            `MCP uses only the servers merged for this round)`,
+          `settingSources=all (Cursor client-equivalent Rules, Skills, Hooks, team, MDM, and plugins; ` +
+            `MCP uses the scoped/allowlisted servers merged for this round)`,
       );
       logLine("Local session created; starting…");
       thinkingStream = new CursorThinkingStream();
