@@ -96,18 +96,26 @@ void main() {
       agentEnableSandbox: true,
       agentRequireTests: false,
       agentModelParamValues: const {'fast': 'true'},
+      checklist: [
+        ChecklistItem(id: 'scope-a', text: '只做冻结范围'),
+      ],
     );
     final projectId = controller.activeProjectId!;
     gate.beginBatch('worker-a', projectId: projectId);
+    CallToolResult? frozenContext;
 
     final result = await dispatchClaimNextCard(
       controller,
       workerToken: 'worker-a',
+      effectiveRequireTests: false,
       startScopedEndpoint: ({
         required workerToken,
         required cardId,
-      }) async =>
-          'http://127.0.0.1:19000/mcp',
+        required cardContext,
+      }) async {
+        frozenContext = cardContext;
+        return 'http://127.0.0.1:19000/mcp';
+      },
     );
 
     expect(result.isError, isNot(true));
@@ -121,6 +129,30 @@ void main() {
     expect(payload['agentRequireTests'], isFalse);
     expect(payload['agentEndpointUrl'], 'http://127.0.0.1:19000/mcp');
     expect(payload['sessionId'], isNotEmpty);
+    final scopedPayload = _jsonOf(frozenContext!);
+    expect(scopedPayload['effectiveRequireTests'], isFalse);
+    expect(scopedPayload['workMode'], 'normal');
+    final workItems = (scopedPayload['workItems'] as List).cast<Map>();
+    expect(
+      workItems
+          .any((item) => item['kind'] == 'title' && item['text'] == '模型覆盖卡'),
+      isTrue,
+    );
+    expect(
+      workItems.any((item) =>
+          item['kind'] == 'checklist' &&
+          item['id'] == 'scope-a' &&
+          item['text'] == '只做冻结范围'),
+      isTrue,
+    );
+
+    final doing =
+        controller.board!.columns.firstWhere((item) => item.id == 'doing');
+    await controller.updateCardFull(doing.id, cardId, title: '领取后被修改');
+    expect(
+      (_jsonOf(frozenContext!)['workItems'] as List).first['text'],
+      '模型覆盖卡',
+    );
   });
 
   test('claim 空队列不创建 endpoint', () async {
@@ -135,6 +167,7 @@ void main() {
       startScopedEndpoint: ({
         required workerToken,
         required cardId,
+        required cardContext,
       }) async {
         endpointStarts++;
         return 'unused';
@@ -185,6 +218,7 @@ void main() {
       startScopedEndpoint: ({
         required workerToken,
         required cardId,
+        required cardContext,
       }) async {
         throw StateError('端口不可用');
       },

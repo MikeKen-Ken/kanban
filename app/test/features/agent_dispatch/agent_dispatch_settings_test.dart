@@ -6,7 +6,6 @@ import 'package:kanban/features/agent_dispatch/agent_dispatch_after_queue.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_credentials.dart';
-import 'package:kanban/features/agent_dispatch/agent_dispatch_prompt.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_service.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_settings.dart';
 import 'package:kanban/features/agent_dispatch/agent_dispatch_worker.dart';
@@ -96,65 +95,13 @@ void main() {
     expect(loaded.gitAuthorEmail, 'zhangsan@example.com');
   });
 
-  test('buildSkillDispatchPrompt 只注入 skill 与 projectId', () {
-    final text = buildSkillDispatchPrompt(
-      skillMarkdown: '# 看板：做最新一条\n\n## 流程\n',
-      projectId: 'proj-1',
+  test('Skill 始终固定为 Cursor 的 kanban-complete-tasks 来源', () {
+    final settings = AgentDispatchSettings(
+      engine: AgentDispatchEngine.codex,
+      skillPath: r'D:\\other\\SKILL.md',
     );
-    expect(text, contains('Skill body'));
-    expect(text, contains('projectId:proj-1'));
-    expect(text, contains('Do not search'));
-    expect(text, contains('full user Rules'));
-    expect(text, contains('Architecture'));
-    expect(text, contains('completion protocol follow the Skill body'));
-    expect(text, isNot(contains('commit_and_submit_card')));
-    expect(text, isNot(contains('name:')));
-    expect(text, isNot(contains('dispatchSessionId')));
-    expect(text, isNot(contains('CARD_DONE')));
-  });
-
-  test('buildSkillDispatchPrompt 剥掉 YAML frontmatter', () {
-    final text = buildSkillDispatchPrompt(
-      skillMarkdown: '''
----
-name: kanban-complete-tasks
-description: 由 Agent 调度工作台触发
-disable-model-invocation: true
----
-
-# 看板：做最新一条
-
-取卡。
-''',
-      projectId: 'proj-1',
-    );
-    expect(text, contains('# 看板：做最新一条'));
-    expect(text, contains('取卡。'));
-    expect(text, isNot(contains('name: kanban-complete-tasks')));
-    expect(text, isNot(contains('disable-model-invocation')));
-  });
-
-  test('buildSkillDispatchPrompt 保留 Skill 正文中的架构已注入说明', () {
-    final text = buildSkillDispatchPrompt(
-      skillMarkdown: '''
-# 看板：完成 Worker 注入的单卡
-
-- 已注入的 `docs/Architecture.md` 已满足先读架构；不要再读。
-''',
-      projectId: 'proj-1',
-    );
-    expect(text, contains('docs/Architecture.md'));
-    expect(text, contains('不要再读'));
-  });
-
-  test('调用正文始终钉死项目 UUID，不再回退到界面当前项目', () {
-    final text = buildSkillDispatchPrompt(
-      skillMarkdown: 'skill',
-      projectId: 'proj-2',
-    );
-    expect(text, contains('projectId:proj-2'));
-    expect(text, isNot(contains('name:')));
-    expect(text, isNot(contains('（空：使用看板当前打开的项目）')));
+    expect(settings.resolveSkillPath(), contains('.cursor'));
+    expect(settings.resolveSkillPath(), contains('kanban-complete-tasks'));
   });
 
   test('toRunOptions：仓库字段与 Max', () {
@@ -784,3 +731,6 @@ disable-model-invocation: true
         contains('KANBAN_WORKER_HEAP_MB'));
   });
 }
+
+
+

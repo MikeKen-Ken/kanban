@@ -18,7 +18,6 @@ import 'agent_dispatch_token.dart';
 import 'agent_dispatch_token_store.dart';
 import 'agent_dispatch_log_store.dart';
 import 'agent_dispatch_progress.dart';
-import 'agent_dispatch_prompt.dart';
 import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_worker.dart';
 
@@ -493,7 +492,6 @@ class AgentDispatchService {
         error: 'Skill not found: $skillPath',
       );
     }
-    final skillMarkdown = await skillFile.readAsString();
     void log(
       String message, {
       AgentDispatchLogLevel level = AgentDispatchLogLevel.info,
@@ -544,10 +542,10 @@ class AgentDispatchService {
       AgentDispatchCardLimitMax() => 999,
       AgentDispatchCardLimitCount(:final count) => count,
     };
-    final prompt = buildSkillDispatchPrompt(
-      skillMarkdown: skillMarkdown,
-      projectId: boundProjectId,
-    );
+    // The Agent loads this Skill from its own catalog. Do not copy its body or
+    // Worker state into the session prompt: the Skill reads scoped card data
+    // and completion tools through the normal MCP connection.
+    const prompt = 'Use the kanban-complete-tasks Skill to complete the current card.';
     log('Batch ID: $runId');
     log('Each Worker round atomically claims a card before starting its scoped Agent session');
     final stopwatch = Stopwatch()..start();

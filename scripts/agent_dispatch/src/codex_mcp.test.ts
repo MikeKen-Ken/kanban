@@ -1,4 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -23,7 +30,10 @@ describe("codex_mcp", () => {
     try {
       const userHome = join(root, "user");
       mkdirSync(userHome);
-      mkdirSync(join(userHome, "skills", "demo"), { recursive: true });
+      const cursorSkillsRoot = join(root, "cursor-skills");
+      mkdirSync(join(cursorSkillsRoot, "kanban-complete-tasks"), {
+        recursive: true,
+      });
       writeFileSync(join(userHome, "auth.json"), '{"ok":true}', "utf8");
       writeFileSync(
         join(userHome, "AGENTS.md"),
@@ -36,8 +46,8 @@ describe("codex_mcp", () => {
         "utf8",
       );
       writeFileSync(
-        join(userHome, "skills", "demo", "SKILL.md"),
-        "# demo\n",
+        join(cursorSkillsRoot, "kanban-complete-tasks", "SKILL.md"),
+        "# kanban-complete-tasks\n",
         "utf8",
       );
       writeFileSync(
@@ -54,23 +64,28 @@ url = "http://127.0.0.1:18765/mcp"
         mcpUrl: "http://127.0.0.1:19000/mcp",
         userCodexHome: userHome,
         tempRoot: root,
+        cursorSkillsRoot,
       });
       const auth = readFileSync(join(created.home, "auth.json"), "utf8");
       const config = readFileSync(join(created.home, "config.toml"), "utf8");
       const agents = readFileSync(join(created.home, "AGENTS.md"), "utf8");
       const skill = readFileSync(
-        join(created.home, "skills", "demo", "SKILL.md"),
+        join(
+          created.home,
+          "skills",
+          "kanban-complete-tasks",
+          "SKILL.md",
+        ),
         "utf8",
       );
       assert.equal(auth, '{"ok":true}');
-      assert.match(agents, /This-session override/);
       assert.match(agents, /# \u7528\u6237\u6307\u4EE4/);
-      assert.equal(agents.includes("MUST \u5148\u9605\u8BFB"), false);
+      assert.match(agents, /MUST \u5148\u9605\u8BFB/);
+      assert.equal(skill, "# kanban-complete-tasks\n");
       assert.equal(
-        readFileSync(join(created.home, "AGENTS.override.md"), "utf8"),
-        agents,
+        existsSync(join(created.home, "skills", "demo", "SKILL.md")),
+        false,
       );
-      assert.equal(skill, "# demo\n");
       assert.equal(config.includes("mcp_servers.other"), false);
       assert.match(config, /url = "http:\/\/127\.0\.0\.1:19000\/mcp"/);
       assert.equal(config.includes("18765"), false);
@@ -80,6 +95,7 @@ url = "http://127.0.0.1:18765/mcp"
         userCodexHome: userHome,
         tempRoot: root,
         projectMcpTags: ["other"],
+        cursorSkillsRoot,
       });
       assert.deepEqual(labeled.mcpServerNames, ["other", "kanbanMCP"]);
       assert.equal(resolveUserCodexHome({ CODEX_HOME: "D:\\codex" }), "D:\\codex");

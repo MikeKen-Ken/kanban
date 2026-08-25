@@ -8,8 +8,9 @@ void main() {
   setUp(gate.debugReset);
   tearDown(gate.debugReset);
 
-  test('Agent 会话只暴露三个 scoped 工具', () {
+  test('Agent 会话只暴露四个 scoped 工具', () {
     expect(kanbanMcpAgentSessionToolNames, [
+      'get_current_card',
       'ready_to_submit',
       'submit_consultation',
       'block_card',

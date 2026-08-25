@@ -31,6 +31,7 @@ void registerDispatchPrivateTools(
       properties: {
         'workerToken': JsonSchema.string(),
         'expectedCardId': JsonSchema.string(),
+        'effectiveRequireTests': JsonSchema.boolean(),
       },
       required: ['workerToken'],
     ),
@@ -47,6 +48,7 @@ void registerDispatchPrivateTools(
         controller,
         workerToken: token,
         expectedCardId: mcpTrimmedString(args['expectedCardId']),
+        effectiveRequireTests: args['effectiveRequireTests'] as bool? ?? true,
         startScopedEndpoint: startScopedEndpoint,
       );
     },

@@ -146,6 +146,7 @@ class KanbanMcpHost extends ChangeNotifier {
   Future<String> _startScopedAgentServer({
     required String workerToken,
     required String cardId,
+    required CallToolResult cardContext,
   }) async {
     await _closeScopedAgentServer(workerToken);
     try {
@@ -153,6 +154,7 @@ class KanbanMcpHost extends ChangeNotifier {
         serverFactory: (_) => _buildAgentServer(
           workerToken: workerToken,
           cardId: cardId,
+          cardContext: cardContext,
         ),
         host: McpConstants.host,
         port: 0,
@@ -187,6 +189,7 @@ class KanbanMcpHost extends ChangeNotifier {
   McpServer _buildAgentServer({
     required String workerToken,
     required String cardId,
+    required CallToolResult cardContext,
   }) {
     final server = McpServer(
       const Implementation(
@@ -205,6 +208,7 @@ class KanbanMcpHost extends ChangeNotifier {
       _controller,
       workerToken: workerToken,
       cardId: cardId,
+      cardContext: cardContext,
     );
     return server;
   }

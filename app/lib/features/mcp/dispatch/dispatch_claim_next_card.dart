@@ -12,6 +12,7 @@ import '../mcp_tool_results.dart';
 typedef DispatchScopedEndpointStarter = Future<String> Function({
   required String workerToken,
   required String cardId,
+  required CallToolResult cardContext,
 });
 
 /// Atomically claim a card for the Worker. The project comes only from the
@@ -20,6 +21,7 @@ Future<CallToolResult> dispatchClaimNextCard(
   BoardController controller, {
   required String workerToken,
   String? expectedCardId,
+  bool effectiveRequireTests = true,
   DispatchScopedEndpointStarter? startScopedEndpoint,
   McpDispatchCardGate? gate,
   McpGitRunner? gitRunner,
@@ -69,12 +71,25 @@ Future<CallToolResult> dispatchClaimNextCard(
     return mcpErrorResult('The card-claim result is missing cardId');
   }
 
+  final frozenContextPayload = <String, dynamic>{
+    ...payload,
+    'sessionId': sessionId,
+    'effectiveRequireTests': effectiveRequireTests,
+  };
+  final frozenContext = CallToolResult(
+    content: [
+      TextContent(text: jsonEncode(frozenContextPayload)),
+      ...claimed.content.skip(1),
+    ],
+  );
+
   String? endpoint;
   if (startScopedEndpoint != null) {
     try {
       endpoint = await startScopedEndpoint(
         workerToken: token,
         cardId: cardId,
+        cardContext: frozenContext,
       );
     } on Object catch (error) {
       await _rollbackClaimMove(
@@ -89,8 +104,7 @@ Future<CallToolResult> dispatchClaimNextCard(
   }
 
   final enriched = <String, dynamic>{
-    ...payload,
-    'sessionId': sessionId,
+    ...frozenContextPayload,
     if (endpoint != null) 'agentEndpointUrl': endpoint,
   };
   return CallToolResult(

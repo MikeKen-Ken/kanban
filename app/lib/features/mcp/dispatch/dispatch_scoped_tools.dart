@@ -10,6 +10,7 @@ import 'dispatch_pending_store.dart';
 import 'dispatch_ready_to_submit.dart';
 
 const dispatchScopedAgentToolNames = [
+  'get_current_card',
   'ready_to_submit',
   'submit_consultation',
   'block_card',
@@ -20,7 +21,21 @@ void registerDispatchScopedAgentTools(
   BoardController controller, {
   required String workerToken,
   required String cardId,
+  required CallToolResult cardContext,
 }) {
+  server.registerTool(
+    'get_current_card',
+    description: 'Read the card bound to this dispatch session.',
+    inputSchema: JsonSchema.object(),
+    annotations:
+        const ToolAnnotations(readOnlyHint: true, openWorldHint: false),
+    callback: (args, extra) async {
+      final rejected = _authorize(workerToken, cardId);
+      if (rejected != null) return rejected;
+      return cardContext;
+    },
+  );
+
   server.registerTool(
     'ready_to_submit',
     description:

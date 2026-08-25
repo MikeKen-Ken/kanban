@@ -14,10 +14,9 @@ import {
   buildCodexAgentConfigToml,
   listCodexMcpServerNames,
 } from "./codex_agent_config.ts";
-import { applyDispatchArchitectureOverride } from "./dispatch_agents_overlay.ts";
 
 const AUTH_FILES = ["auth.json"];
-const USER_INSTRUCTION_DIRS = ["skills"];
+const CURSOR_SKILL_NAME = "kanban-complete-tasks";
 
 export { buildCodexAgentConfigToml, listCodexMcpServerNames };
 
@@ -34,6 +33,7 @@ export function createCodexAgentHome(options: {
   userCodexHome: string;
   projectMcpTags?: readonly string[];
   tempRoot?: string;
+  cursorSkillsRoot?: string;
 }): { home: string; mcpServerNames: string[] } {
   const prefix = join(
     options.tempRoot ?? tmpdir(),
@@ -57,22 +57,15 @@ export function createCodexAgentHome(options: {
       join(home, name),
     );
   }
-  writeOverlayAgentsMarkdown(options.userCodexHome, home);
-  for (const name of USER_INSTRUCTION_DIRS) {
-    copyUserPath(
-      join(options.userCodexHome, name),
-      join(home, name),
-    );
-  }
+  copyUserPath(join(options.userCodexHome, "AGENTS.md"), join(home, "AGENTS.md"));
+  copyUserPath(
+    join(
+      options.cursorSkillsRoot ?? join(homedir(), ".cursor", "skills"),
+      CURSOR_SKILL_NAME,
+    ),
+    join(home, "skills", CURSOR_SKILL_NAME),
+  );
   return { home, mcpServerNames: listCodexMcpServerNames(config) };
-}
-
-function writeOverlayAgentsMarkdown(userHome: string, destHome: string): void {
-  const from = join(userHome, "AGENTS.md");
-  const source = existsSync(from) ? readFileSync(from, "utf8") : "";
-  const overlay = applyDispatchArchitectureOverride(source);
-  writeFileSync(join(destHome, "AGENTS.md"), overlay, "utf8");
-  writeFileSync(join(destHome, "AGENTS.override.md"), overlay, "utf8");
 }
 
 function copyUserPath(from: string, to: string): void {

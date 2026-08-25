@@ -15,12 +15,10 @@ import { runCursor } from "./run_cursor.ts";
 import { runAgentWithRetry } from "./run_agent_with_retry.ts";
 import {
   createSessionContext,
-  readBatchArchitecture,
   type SessionContext,
 } from "./session_context.ts";
-import { readUserCursorRules, type UserRuleBundle } from "./user_rules.ts";
 import { parseProjectMcpTags } from "./dispatch_mcp_allowlist.ts";
-import { DISPATCH_SCOPED_TOOL_NAMES } from "./dispatch_scoped_tool_prompt.ts";
+import { DISPATCH_SCOPED_TOOL_NAMES } from "./dispatch_scoped_tools.ts";
 import {
   applyLiveJobOverlay,
   mergeJobWithCardOverrides,
@@ -34,14 +32,9 @@ import { readFileSync } from "node:fs";
 export type RunBatchDependencies = {
   connectMcp(endpoint: string): Promise<KanbanMcpConnection>;
   inspectGit(cwd: string): GitWorkingTree;
-  readArchitecture(cwd: string): string;
-  readUserRules?(): UserRuleBundle;
   createContext(options: {
     basePrompt: string;
-    architecture: string;
-    userRules?: string;
     claim: ParsedClaimResult;
-    requireTests?: boolean;
   }): SessionContext;
   runAgent(
     job: RoundDispatchJob,
@@ -57,8 +50,6 @@ const defaultDependencies: RunBatchDependencies = {
     return client;
   },
   inspectGit: inspectGitWorkingTree,
-  readArchitecture: readBatchArchitecture,
-  readUserRules: readUserCursorRules,
   createContext: createSessionContext,
   runAgent: (roundJob, cancellation) =>
     roundJob.engine === "codex"
@@ -72,18 +63,10 @@ export async function runBatch(
   dependencies: RunBatchDependencies = defaultDependencies,
 ): Promise<DispatchResult> {
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
-  const architecture = dependencies.readArchitecture(job.cwd);
-  const userRules = dependencies.readUserRules?.() ?? {
-    text: "",
-    count: 0,
-    bytes: 0,
-  };
   const mcp = await dependencies.connectMcp(job.mcpEndpoint);
   let processedCards = 0;
   workerLog(`Worker batch started: endpoint=${job.mcpEndpoint} limit=${limit}`);
-  workerLog(
-    `Injected user rules: ${userRules.count}, ${userRules.bytes} bytes; user skills are not written to the prompt`,
-  );
+  workerLog("Agent prompt uses the installed kanban-complete-tasks Skill; Worker context is not injected");
 
   const cancelledResult = (): DispatchResult => ({
     ok: false,
@@ -135,6 +118,7 @@ export async function runBatch(
         await mcp.callRaw("dispatch_claim_next_card", {
           workerToken: job.workerToken,
           ...(expectedCardId ? { expectedCardId } : {}),
+          effectiveRequireTests: preview.requireTests !== false,
         }),
       );
       if (claim.payload.found !== true) {
@@ -167,10 +151,7 @@ export async function runBatch(
         const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         context = dependencies.createContext({
           basePrompt: job.prompt,
-          architecture,
-          userRules: userRules.text,
           claim,
-          requireTests: overridden.requireTests !== false,
         });
         allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob: RoundDispatchJob = {

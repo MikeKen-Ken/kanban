@@ -173,6 +173,7 @@ function createHappyDependencies(options?: {
   const scoped = new FakeMcp(
     () => ({ ok: true }),
     options?.scopedTools ?? [
+      "get_current_card",
       "ready_to_submit",
       "submit_consultation",
       "block_card",
@@ -182,7 +183,6 @@ function createHappyDependencies(options?: {
     connectMcp: async (endpoint) =>
       endpoint.includes("scoped") ? scoped : full,
     inspectGit: () => ({ kind: "clean" }),
-    readArchitecture: () => "# \u67B6\u6784",
     createContext: () => makeContext(),
     runAgent: async (round) => {
       assert.equal(round.round.cardId, "card-a");
@@ -206,6 +206,20 @@ function createHappyDependencies(options?: {
 }
 
 describe("run_batch", () => {
+  it("passes the merged test policy into the immutable claim context", async () => {
+    const { dependencies, full } = createHappyDependencies({
+      peekFields: { agentRequireTests: false },
+    });
+
+    const result = await runBatch(job, undefined, dependencies);
+
+    assert.equal(result.ok, true);
+    const claim = full.calls.find(
+      (item) => item.name === "dispatch_claim_next_card",
+    );
+    assert.equal(claim?.args.effectiveRequireTests, false);
+  });
+
   it("accepts a consultation card in a custom Verify column without ready_to_submit", async () => {
     const { dependencies } = createHappyDependencies({
       cardColumnId: "custom-verify",
@@ -251,7 +265,6 @@ describe("run_batch", () => {
     const dependencies: RunBatchDependencies = {
       connectMcp: async () => full,
       inspectGit: () => ({ kind: "clean" }),
-      readArchitecture: () => "# \u67B6\u6784",
       createContext: () => makeContext(),
       runAgent: async () => ({ ok: true }),
     };
@@ -282,7 +295,6 @@ describe("run_batch", () => {
     const dependencies: RunBatchDependencies = {
       connectMcp: async () => full,
       inspectGit: () => ({ kind: "clean" }),
-      readArchitecture: () => "# \u67B6\u6784",
       createContext: () => makeContext(),
       runAgent: async () => ({ ok: true }),
     };

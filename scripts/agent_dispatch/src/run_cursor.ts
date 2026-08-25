@@ -367,9 +367,8 @@ export async function runCursor(
     });
     const localOptions: LocalAgentOptions = {
       cwd: job.cwd,
-      // User Rules are already injected in full by the Worker. Enable `user`
-      // so Cursor can pick user Skills by frontmatter triggers instead of
-      // stuffing every Skill body into this card prompt. MCP stays explicit.
+      // Let Cursor load project and user Rules, Skills, and Hooks through its
+      // normal setting sources. The Worker prompt only invokes the Skill.
       settingSources: ["project", "user"],
       store: new JsonlLocalAgentStore(storeDir),
       ...(askUserTool ? { customTools: { ask_user: askUserTool } } : {}),
@@ -417,8 +416,8 @@ export async function runCursor(
           `merged MCP (${mcp.names.join(", ") || "none"}); ` +
           `kanbanMCP forced to scoped (${agentMcpUrl}); ` +
           `disallowed tools=${disallowedTools.join(",") || "none"}; ` +
-          `settingSources=project,user (user and project Skills are selected by Cursor trigger conditions; ` +
-            `user Rules are already injected by the Worker; MCP uses only the servers merged for this round)`,
+          `settingSources=project,user (Rules and Skills use Cursor's normal catalog; ` +
+            `MCP uses only the servers merged for this round)`,
       );
       logLine("Local session created; starting…");
       thinkingStream = new CursorThinkingStream();

@@ -641,29 +641,21 @@ class AgentDispatchSettings {
     );
   }
 
-  /// 默认 Skill 优先使用当前引擎目录，缺失时回退到另一客户端目录。
+  /// Agent Dispatch always uses the single Cursor Skill source.
   static String defaultSkillPath(AgentDispatchEngine engine) {
     final home = Platform.environment['USERPROFILE'] ??
         Platform.environment['HOME'] ??
         Directory.current.path;
-    final preferred =
-        engine == AgentDispatchEngine.codex ? '.codex' : '.cursor';
-    final fallback = engine == AgentDispatchEngine.codex ? '.cursor' : '.codex';
-    final candidates = [
-      p.join(home, preferred, 'skills', 'kanban-complete-tasks', 'SKILL.md'),
-      p.join(home, fallback, 'skills', 'kanban-complete-tasks', 'SKILL.md'),
-    ];
-    return candidates.firstWhere(
-      (path) => File(path).existsSync(),
-      orElse: () => candidates.first,
+    return p.join(
+      home,
+      '.cursor',
+      'skills',
+      'kanban-complete-tasks',
+      'SKILL.md',
     );
   }
 
-  String resolveSkillPath() {
-    final custom = skillPath?.trim();
-    if (custom != null && custom.isNotEmpty) return custom;
-    return defaultSkillPath(engine);
-  }
+  String resolveSkillPath() => defaultSkillPath(engine);
 }
 
 const Object _sentinel = Object();

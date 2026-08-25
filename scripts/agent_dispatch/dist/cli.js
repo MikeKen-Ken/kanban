@@ -1,5 +1,5 @@
 // src/cli.ts
-import { readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
+import { readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
 import { resolve } from "node:path";
 import { Cursor as Cursor3 } from "@cursor/sdk";
 
@@ -1477,43 +1477,9 @@ function collapseBlankLines(source) {
   return source.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "").trimEnd();
 }
 
-// src/dispatch_agents_overlay.ts
-var DISPATCH_ARCHITECTURE_OVERRIDE = `# This-session override (kanban Agent dispatch only)
-
-The Worker has already injected the full target-repository \`docs/Architecture.md\`. The user-rule / \`AGENTS.md\` requirement to read Architecture.md before development is treated as satisfied for this round.
-Do not search, glob, grep, or read \`docs/Architecture.md\` again. ADRs, \`docs/Systems/\`, and \`CONTEXT.md\` still follow the original text and may be read when needed.
-`;
-function applyDispatchArchitectureOverride(source) {
-  const body = rewriteArchitectureFileReads(source.replaceAll("\r\n", "\n").trim());
-  return `${DISPATCH_ARCHITECTURE_OVERRIDE.trim()}
-
-${body}`.trim() + "\n";
-}
-function rewriteArchitectureFileReads(source) {
-  if (!source) return "";
-  return source.split("\n").filter((line) => !isArchitectureFileReadBullet(line)).join("\n").replace(
-    /\u52A8\u624B\u5199\u4EE3\u7801[^\n]*MUST \u5148\u9605\u8BFB：/,
-    "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again."
-  ).replace(
-    /Before writing code[^\n]*MUST (?:first )?read:/,
-    "Before writing code, changing module boundaries, or designing a solution, `docs/Architecture.md` has already been injected by the Worker and counts as read; do not open that file again."
-  ).replace(
-    /MUST NOT \u5728\u672A\u8BFB `Architecture\.md`（\u82E5\u5B58\u5728）\u7684\u60C5\u51B5\u4E0B/,
-    "MUST NOT without following the injected Architecture.md"
-  ).replace(
-    /MUST NOT (?:add new top-level directories or cross-layer dependencies )?without reading `Architecture\.md`(?: \(if it exists\))?/,
-    "MUST NOT without following the injected Architecture.md"
-  );
-}
-function isArchitectureFileReadBullet(line) {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith("-") && !trimmed.startsWith("*")) return false;
-  return trimmed.includes("docs/Architecture.md");
-}
-
 // src/codex_mcp.ts
 var AUTH_FILES = ["auth.json"];
-var USER_INSTRUCTION_DIRS = ["skills"];
+var CURSOR_SKILL_NAME = "kanban-complete-tasks";
 function resolveUserCodexHome(env = process.env) {
   const override = env.CODEX_HOME?.trim();
   if (override) return override;
@@ -1540,21 +1506,15 @@ function createCodexAgentHome(options) {
       join(home, name)
     );
   }
-  writeOverlayAgentsMarkdown(options.userCodexHome, home);
-  for (const name of USER_INSTRUCTION_DIRS) {
-    copyUserPath(
-      join(options.userCodexHome, name),
-      join(home, name)
-    );
-  }
+  copyUserPath(join(options.userCodexHome, "AGENTS.md"), join(home, "AGENTS.md"));
+  copyUserPath(
+    join(
+      options.cursorSkillsRoot ?? join(homedir(), ".cursor", "skills"),
+      CURSOR_SKILL_NAME
+    ),
+    join(home, "skills", CURSOR_SKILL_NAME)
+  );
   return { home, mcpServerNames: listCodexMcpServerNames(config) };
-}
-function writeOverlayAgentsMarkdown(userHome, destHome) {
-  const from = join(userHome, "AGENTS.md");
-  const source = existsSync2(from) ? readFileSync(from, "utf8") : "";
-  const overlay = applyDispatchArchitectureOverride(source);
-  writeFileSync(join(destHome, "AGENTS.md"), overlay, "utf8");
-  writeFileSync(join(destHome, "AGENTS.override.md"), overlay, "utf8");
 }
 function copyUserPath(from, to) {
   if (!existsSync2(from)) return;
@@ -2645,14 +2605,11 @@ function isRecord(value) {
 }
 
 // src/cursor_disallowed_tools.ts
-var CURSOR_WORKER_DISALLOWED_TOOLS = [
-  "GetMcpTools",
-  "askQuestion"
-];
+var CURSOR_WORKER_DISALLOWED_TOOLS = ["askQuestion"];
 var CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK = [];
 function fallbackDisallowedTools(err) {
   const message = err instanceof Error ? err.message : String(err);
-  if (!/GetMcpTools/i.test(message)) return null;
+  if (!/askQuestion/i.test(message)) return null;
   return CURSOR_WORKER_DISALLOWED_TOOLS_FALLBACK;
 }
 
@@ -3284,9 +3241,8 @@ async function runCursor(job, cancellation) {
     });
     const localOptions = {
       cwd: job.cwd,
-      // User Rules are already injected in full by the Worker. Enable `user`
-      // so Cursor can pick user Skills by frontmatter triggers instead of
-      // stuffing every Skill body into this card prompt. MCP stays explicit.
+      // Let Cursor load project and user Rules, Skills, and Hooks through its
+      // normal setting sources. The Worker prompt only invokes the Skill.
       settingSources: ["project", "user"],
       store: new JsonlLocalAgentStore(storeDir),
       ...askUserTool ? { customTools: { ask_user: askUserTool } } : {},
@@ -3330,7 +3286,7 @@ async function runCursor(job, cancellation) {
         });
       }
       logLine(
-        `Local run: JSONL store=${storeDir}; sandbox ${job.enableSandbox === true ? "on" : "off"}; merged MCP (${mcp.names.join(", ") || "none"}); kanbanMCP forced to scoped (${agentMcpUrl}); disallowed tools=${disallowedTools.join(",") || "none"}; settingSources=project,user (user and project Skills are selected by Cursor trigger conditions; user Rules are already injected by the Worker; MCP uses only the servers merged for this round)`
+        `Local run: JSONL store=${storeDir}; sandbox ${job.enableSandbox === true ? "on" : "off"}; merged MCP (${mcp.names.join(", ") || "none"}); kanbanMCP forced to scoped (${agentMcpUrl}); disallowed tools=${disallowedTools.join(",") || "none"}; settingSources=project,user (Rules and Skills use Cursor's normal catalog; MCP uses only the servers merged for this round)`
       );
       logLine("Local session created; starting\u2026");
       thinkingStream = new CursorThinkingStream();
@@ -3613,259 +3569,34 @@ async function waitBeforeRetry(attempt, reason, wait) {
 }
 
 // src/session_context.ts
-import {
-  existsSync as existsSync6,
-  mkdtempSync as mkdtempSync3,
-  readFileSync as readFileSync5,
-  rmSync as rmSync3,
-  writeFileSync as writeFileSync4
-} from "node:fs";
+import { mkdtempSync as mkdtempSync3, rmSync as rmSync3 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import { isAbsolute, join as join7 } from "node:path";
-
-// src/dispatch_scoped_tool_prompt.ts
-var DISPATCH_SCOPED_TOOL_NAMES = [
-  "block_card",
-  "ready_to_submit",
-  "submit_consultation"
-];
-function formatScopedKanbanToolPrompt(cardId, requireTests = true) {
-  const id = cardId.trim() || "<injected cardId>";
-  return [
-    "## Kanban MCP completion tools (schema already injected)",
-    "",
-    "scoped `kanbanMCP` registers only the three tools below. Do not call `GetMcpTools`, `tools/list`, or fetch any other kanban tool catalog.",
-    "Cursor: call `CallMcpTool` directly; Codex: call the same-named MCP tool directly. `cardId` must be the injected value.",
-    requireTests ? "Do not put ready_to_submit in the same parallel tool batch as Shell (especially tests). Wait until the test command returns exitCode=0, then call ready_to_submit in a separate turn." : "This card is configured not to require tests: do not run automated tests; after implementation, pass manualVerificationReason=This card has no test switch enabled to ready_to_submit.",
-    "As soon as ready_to_submit / submit_consultation / block_card returns success, stop all tools; the Worker will end this session. Do not search, edit, or redo the task again.",
-    "Card type is decided only by injected JSON cardKind / labels: it is a consultation card only when cardKind=consultation or labels contain consultation; otherwise it is always an implementation card. Do not reclassify from whether the title or notes look like a question.",
-    "The Shell working_directory must match relative paths in the command: when cwd is already app, do not write app/lib. A flutter test / dart test that exits immediately must not count as passing.",
-    "",
-    "```json",
-    JSON.stringify(
-      {
-        server: "kanbanMCP",
-        tools: {
-          ready_to_submit: {
-            required: [
-              "cardId",
-              "completedChecklistIds",
-              "completedFeedbackIds"
-            ],
-            properties: {
-              cardId: id,
-              completedChecklistIds: "checklist ids completed this round; [] if none",
-              completedFeedbackIds: "feedback ids completed this round; [] if none",
-              manualVerificationReason: "pass only when automatic verification is impossible",
-              gitRevertCommit: "pass a 7\u201364 character hash only when workItems explicitly require revert"
-            },
-            example: {
-              cardId: id,
-              completedChecklistIds: [],
-              completedFeedbackIds: []
-            }
-          },
-          submit_consultation: {
-            required: ["cardId", "responseMarkdown"],
-            example: {
-              cardId: id,
-              responseMarkdown: "consultation response Markdown"
-            }
-          },
-          block_card: {
-            required: ["cardId"],
-            properties: { reason: "block reason" },
-            example: { cardId: id, reason: "why completion is impossible" }
-          }
-        }
-      },
-      null,
-      2
-    ),
-    "```"
-  ].join("\n");
-}
-
-// src/user_rule_canary.ts
-var WORKER_USER_RULES_BEGIN = "KANBAN_WORKER_USER_RULES_BEGIN";
-var WORKER_USER_RULES_END = "KANBAN_WORKER_USER_RULES_END";
-function wrapWorkerUserRules(text) {
-  const body = text.trim() || "No user ~/.cursor/rules found.";
-  return [WORKER_USER_RULES_BEGIN, body, WORKER_USER_RULES_END].join("\n");
-}
-
-// src/worker_glob_policy.ts
-var DISPATCH_SEARCH_POLICY = `## Search scope (Worker)
-
-When locating code, MUST use grep or a glob limited by filename/directory, and MUST specify a subdirectory.
-MUST NOT unbounded-glob the repository root (\`**\`, \`**/*\`, \`**/*.*\`).
-MUST NOT run an unbounded glob in parallel with grep; when grep already returned candidate files, read those paths directly.
-MUST NOT point a glob target at \`.git\`, \`.svn\`, or \`build\`.
-Locate UI or feature entry points from the currently selected repository's directory layout, project rules, and concrete clues on the card; do not assume a framework, source root, or any product-specific path. When the card does not give a path, first inspect the repository's top-level directories and project notes in a limited way, then search inside candidate subdirectories. Before searching multiple directories, MUST confirm each directory exists; do not pass a non-existent candidate path to \`rg\`. When looking up a literal that contains quotes, parentheses, or other punctuation, prefer \`rg --fixed-strings -- <text> <confirmed-path>\`; write a regex only when pattern matching is actually required.
-`;
-
-// src/session_context.ts
-function readBatchArchitecture(cwd) {
-  const path = join7(cwd, "docs", "Architecture.md");
-  if (!existsSync6(path)) return "This repository does not provide docs/Architecture.md.";
-  return readFileSync5(path, "utf8");
-}
+import { join as join7 } from "node:path";
 function createSessionContext(options) {
   const tempDir = mkdtempSync3(
     join7(options.tempRoot ?? tmpdir3(), "kanban-agent-session-")
   );
-  const attachmentPaths = [];
-  const payload = structuredClone(options.claim.payload);
-  const fileAttachments = Array.isArray(payload.fileAttachments) ? payload.fileAttachments : [];
-  for (let index = 0; index < fileAttachments.length; index += 1) {
-    const raw = fileAttachments[index];
-    if (!isRecord2(raw)) continue;
-    const content = typeof raw.contentBase64 === "string" ? raw.contentBase64 : "";
-    delete raw.contentBase64;
-    if (!content || raw.included === false) continue;
-    const fileName = safeFileName(
-      typeof raw.fileName === "string" ? raw.fileName : `attachment-${index}.bin`,
-      `attachment-${index}.bin`
-    );
-    const path = uniquePath(tempDir, `${index + 1}-${fileName}`);
-    writeFileSync4(path, Buffer.from(content, "base64"));
-    raw.absolutePath = path;
-    attachmentPaths.push(path);
-  }
-  const imagePaths = [];
-  for (let index = 0; index < options.claim.images.length; index += 1) {
-    const image = options.claim.images[index];
-    const path = join7(
-      tempDir,
-      `image-${index + 1}.${extensionForMime(image.mimeType)}`
-    );
-    writeFileSync4(path, Buffer.from(image.data, "base64"));
-    imagePaths.push(path);
-  }
-  const prompt = [
-    options.basePrompt.trim(),
-    "",
-    "# Worker-injected context for this round",
-    "",
-    "This round's card is already claimed. The context below is the only task scope; do not read the Skill again or claim another card.",
-    "",
-    "Card type is decided only by JSON `cardKind` and `labels`: `consultation` is a consultation card, otherwise it is an implementation card. Without a consultation label, even if the title looks like a question and there is no checklist, finish it as an implementation card and call `ready_to_submit`. Do not reclassify it yourself.",
-    "",
-    DISPATCH_SEARCH_POLICY.trim(),
-    "",
-    "## Card context (JSON)",
-    "",
-    "```json",
-    JSON.stringify(payload, null, 2),
-    "```",
-    "",
-    formatScopedKanbanToolPrompt(
-      cardIdFromPayload(payload),
-      options.requireTests !== false
-    ),
-    "",
-    "## Temporary attachment absolute paths",
-    "",
-    ...attachmentPaths.length === 0 ? ["- No file attachments"] : attachmentPaths.map((path) => `- File: ${path}`),
-    ...imagePaths.length === 0 ? ["- No temporary image paths"] : imagePaths.map((path) => `- Image: ${path}`),
-    "",
-    "These paths are in the system temporary session directory and are valid only for this round; do not copy them into the repository.",
-    "",
-    "## Full user Rules",
-    "",
-    wrapWorkerUserRules(options.userRules ?? ""),
-    "",
-    "## Cached docs/Architecture.md",
-    "",
-    options.architecture.trim(),
-    "",
-    "The text above already satisfies the user-rule / AGENTS.md requirement to read Architecture.md before development. Do not open that file again. ADRs, docs/Systems, and CONTEXT.md may still be read when needed."
-  ].join("\n");
   return {
-    prompt,
-    images: options.claim.images,
-    attachmentPaths: [...attachmentPaths, ...imagePaths],
+    prompt: options.basePrompt.trim(),
+    images: [],
+    attachmentPaths: [],
     tempDir,
     cleanup: () => {
       rmSync3(tempDir, { recursive: true, force: true });
     }
   };
 }
-function cardIdFromPayload(payload) {
-  const value = payload.cardId;
-  return typeof value === "string" ? value.trim() : "";
-}
-function isRecord2(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-function safeFileName(value, fallback) {
-  const normalized = value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/g, "").trim();
-  return normalized || fallback;
-}
-function uniquePath(root, fileName) {
-  const path = join7(root, fileName);
-  if (!isAbsolute(path)) throw new Error("Temporary attachment path is not absolute");
-  return path;
-}
-function extensionForMime(mimeType) {
-  switch (mimeType.toLowerCase()) {
-    case "image/png":
-      return "png";
-    case "image/gif":
-      return "gif";
-    case "image/webp":
-      return "webp";
-    default:
-      return "jpg";
-  }
-}
 
-// src/user_rules.ts
-import {
-  existsSync as existsSync7,
-  readFileSync as readFileSync6,
-  readdirSync,
-  statSync as statSync2
-} from "node:fs";
-import { homedir as homedir4 } from "node:os";
-import { join as join8, relative } from "node:path";
-var RULE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".mdc"]);
-function readUserCursorRules(root = join8(homedir4(), ".cursor", "rules")) {
-  if (!existsSync7(root)) return { text: "", count: 0, bytes: 0 };
-  const paths = collectRulePaths(root).sort((a, b) => a.localeCompare(b));
-  const sections = [];
-  let bytes = 0;
-  for (const path of paths) {
-    const content = readFileSync6(path, "utf8");
-    bytes += Buffer.byteLength(content, "utf8");
-    sections.push(
-      [`## User rule: ${relative(root, path).replaceAll("\\", "/")}`, "", content].join("\n")
-    );
-  }
-  return {
-    text: sections.join("\n\n"),
-    count: paths.length,
-    bytes
-  };
-}
-function collectRulePaths(root) {
-  const result = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join8(root, entry.name);
-    if (entry.isDirectory()) {
-      result.push(...collectRulePaths(path));
-      continue;
-    }
-    if (!entry.isFile() || !statSync2(path).isFile()) continue;
-    const dot = entry.name.lastIndexOf(".");
-    const extension = dot < 0 ? "" : entry.name.slice(dot).toLowerCase();
-    if (RULE_EXTENSIONS.has(extension)) result.push(path);
-  }
-  return result;
-}
+// src/dispatch_scoped_tools.ts
+var DISPATCH_SCOPED_TOOL_NAMES = [
+  "block_card",
+  "get_current_card",
+  "ready_to_submit",
+  "submit_consultation"
+];
 
 // src/run_batch.ts
-import { readFileSync as readFileSync7 } from "node:fs";
+import { readFileSync as readFileSync5 } from "node:fs";
 var defaultDependencies = {
   connectMcp: async (endpoint) => {
     const client = new KanbanMcpClient();
@@ -3873,25 +3604,15 @@ var defaultDependencies = {
     return client;
   },
   inspectGit: inspectGitWorkingTree,
-  readArchitecture: readBatchArchitecture,
-  readUserRules: readUserCursorRules,
   createContext: createSessionContext,
   runAgent: (roundJob, cancellation) => roundJob.engine === "codex" ? runCodex(roundJob, cancellation) : runCursor(roundJob, cancellation)
 };
 async function runBatch(job, cancellation, dependencies = defaultDependencies) {
   const limit = Math.max(1, Math.min(999, Math.trunc(job.cardLimit)));
-  const architecture = dependencies.readArchitecture(job.cwd);
-  const userRules = dependencies.readUserRules?.() ?? {
-    text: "",
-    count: 0,
-    bytes: 0
-  };
   const mcp = await dependencies.connectMcp(job.mcpEndpoint);
   let processedCards = 0;
   workerLog(`Worker batch started: endpoint=${job.mcpEndpoint} limit=${limit}`);
-  workerLog(
-    `Injected user rules: ${userRules.count}, ${userRules.bytes} bytes; user skills are not written to the prompt`
-  );
+  workerLog("Agent prompt uses the installed kanban-complete-tasks Skill; Worker context is not injected");
   const cancelledResult = () => ({
     ok: false,
     error: "Cancelled",
@@ -3938,7 +3659,8 @@ ${tree.output}`);
       const claim = parseClaimResult(
         await mcp.callRaw("dispatch_claim_next_card", {
           workerToken: job.workerToken,
-          ...expectedCardId ? { expectedCardId } : {}
+          ...expectedCardId ? { expectedCardId } : {},
+          effectiveRequireTests: preview.requireTests !== false
         })
       );
       if (claim.payload.found !== true) {
@@ -3968,10 +3690,7 @@ ${tree.output}`);
         const overridden = mergeJobWithCardOverrides(liveJob, claim.payload);
         context = dependencies.createContext({
           basePrompt: job.prompt,
-          architecture,
-          userRules: userRules.text,
-          claim,
-          requireTests: overridden.requireTests !== false
+          claim
         });
         allowDirtyWorkspace = overridden.allowDirtyWorkspace === true;
         const roundJob = {
@@ -4321,7 +4040,7 @@ function logClaimedCard(payload) {
 function readLiveJob(job) {
   if (!job.liveFile) return job;
   try {
-    const raw = JSON.parse(readFileSync7(job.liveFile, "utf8"));
+    const raw = JSON.parse(readFileSync5(job.liveFile, "utf8"));
     return applyLiveJobOverlay(job, raw);
   } catch {
     return job;
@@ -4345,7 +4064,7 @@ function formatListModelsError(err) {
   return `Cursor.models.list failed: ${String(err)}`;
 }
 function writeResult(outPath, result) {
-  writeFileSync5(outPath, JSON.stringify(result, null, 2), "utf8");
+  writeFileSync4(outPath, JSON.stringify(result, null, 2), "utf8");
 }
 function normalizeModelParameterValues(input) {
   if (!Array.isArray(input)) return [];
@@ -4423,7 +4142,7 @@ async function listModels(engine) {
 `);
 }
 async function runJob(jobPath) {
-  const job = JSON.parse(readFileSync8(jobPath, "utf8"));
+  const job = JSON.parse(readFileSync6(jobPath, "utf8"));
   if (!job.outPath) {
     throw new Error("job.outPath is required");
   }
