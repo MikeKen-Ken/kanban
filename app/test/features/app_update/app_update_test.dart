@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/app_update/app_update_constants.dart';
 import 'package:kanban/features/app_update/app_update_installer.dart';
 import 'package:kanban/features/app_update/app_update_service.dart';
 import 'package:kanban/features/app_update/github_release_client.dart';
@@ -8,6 +9,7 @@ import 'package:kanban/features/app_update/github_release_models.dart';
 import 'package:kanban/features/app_update/release_notes_plain_text.dart';
 import 'package:kanban/features/app_update/version_compare.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('isReusableDownloadedPackage', () {
@@ -255,6 +257,57 @@ void main() {
       expect(list.first.body, isNot(contains('<')));
       expect(list.first.body, contains('更新内容'));
       expect(list.first.body, contains('- 功能：新增更新 (40e7ff9)'));
+    });
+
+    test('优先使用 published 而非 updated', () {
+      const atom = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <published>2026-08-25T00:05:10Z</published>
+    <updated>2026-08-25T00:05:20Z</updated>
+    <link rel="alternate" href="https://github.com/MikeKen-Ken/kanban/releases/tag/v1.0.155"/>
+    <title>1.0.155</title>
+  </entry>
+</feed>
+''';
+      final list = parseReleasesAtom(
+        atom,
+        owner: 'MikeKen-Ken',
+        repo: 'kanban',
+      );
+      expect(list.first.publishedAt, DateTime.parse('2026-08-25T00:05:10Z'));
+    });
+  });
+
+  group('installedReleasePublishedAt', () {
+    test('版本不匹配时忽略本地记录的发布日期', () async {
+      SharedPreferences.setMockInitialValues({
+        AppUpdateConstants.prefsLastReleaseVersion: '1.0.154',
+        AppUpdateConstants.prefsLastReleasePublishedAt: '2026-08-24T23:30:11Z',
+      });
+      final service = AppUpdateService();
+      final date = await service.installedReleasePublishedAt('1.0.155');
+      expect(date, isNull);
+    });
+
+    test('版本匹配时返回本地记录的发布日期', () async {
+      SharedPreferences.setMockInitialValues({
+        AppUpdateConstants.prefsLastReleaseVersion: '1.0.155',
+        AppUpdateConstants.prefsLastReleasePublishedAt: '2026-08-25T00:05:10Z',
+      });
+      final service = AppUpdateService();
+      final date = await service.installedReleasePublishedAt('1.0.155');
+      expect(date, DateTime.parse('2026-08-25T00:05:10Z'));
+    });
+
+    test('无版本记录时不返回陈旧发布日期', () async {
+      SharedPreferences.setMockInitialValues({
+        AppUpdateConstants.prefsLastReleasePublishedAt: '2026-08-24T23:30:11Z',
+      });
+      final service = AppUpdateService();
+      final date = await service.installedReleasePublishedAt('1.0.155');
+      expect(date, isNull);
     });
   });
 

@@ -63,6 +63,7 @@ class AppUpdateService {
           VersionCompare.compare(right.versionLabel, left.versionLabel),
     );
     final release = pool.first;
+    final currentRelease = _findReleaseForVersion(pool, currentVersion);
     final asset = await _client.resolvePlatformAsset(
       release,
       android: !kIsWeb && Platform.isAndroid,
@@ -85,6 +86,7 @@ class AppUpdateService {
       currentVersion: currentVersion,
       currentBuild: currentBuild,
       release: release,
+      currentRelease: currentRelease,
       asset: asset,
       updateAvailable: updateAvailable,
       message: updateAvailable
@@ -135,10 +137,15 @@ class AppUpdateService {
   Future<void> markAssetInstalled(
     GithubReleaseAsset asset, {
     DateTime? publishedAt,
+    required String releaseVersion,
   }) async {
     final prefs = await _prefsLoader();
     final stamp = (asset.updatedAt ?? DateTime.now().toUtc()).toIso8601String();
     await prefs.setString(AppUpdateConstants.prefsLastAssetUpdatedAt, stamp);
+    await prefs.setString(
+      AppUpdateConstants.prefsLastReleaseVersion,
+      releaseVersion,
+    );
     final published = publishedAt ?? asset.updatedAt;
     if (published != null) {
       await prefs.setString(
@@ -148,11 +155,30 @@ class AppUpdateService {
     }
   }
 
-  Future<DateTime?> installedReleasePublishedAt() async {
+  Future<DateTime?> installedReleasePublishedAt(String currentVersion) async {
     final prefs = await _prefsLoader();
+    final storedVersion =
+        prefs.getString(AppUpdateConstants.prefsLastReleaseVersion);
+    if (storedVersion == null ||
+        storedVersion.isEmpty ||
+        VersionCompare.compare(storedVersion, currentVersion) != 0) {
+      return null;
+    }
     final raw = prefs.getString(AppUpdateConstants.prefsLastReleasePublishedAt);
     if (raw == null || raw.isEmpty) return null;
     return DateTime.tryParse(raw);
+  }
+
+  static GithubReleaseInfo? _findReleaseForVersion(
+    List<GithubReleaseInfo> releases,
+    String version,
+  ) {
+    for (final release in releases) {
+      if (VersionCompare.compare(release.versionLabel, version) == 0) {
+        return release;
+      }
+    }
+    return null;
   }
 
   Future<void> skipVersion(String version) async {
@@ -192,13 +218,21 @@ class AppUpdateService {
 
     if (!kIsWeb && Platform.isAndroid) {
       await _installer.installAndroidApk(file);
-      await markAssetInstalled(asset, publishedAt: release.publishedAt);
+      await markAssetInstalled(
+        asset,
+        publishedAt: release.publishedAt,
+        releaseVersion: release.versionLabel,
+      );
       return;
     }
 
     if (!kIsWeb && Platform.isWindows) {
       final extracted = await _installer.extractZip(file);
-      await markAssetInstalled(asset, publishedAt: release.publishedAt);
+      await markAssetInstalled(
+        asset,
+        publishedAt: release.publishedAt,
+        releaseVersion: release.versionLabel,
+      );
       // 不会返回：进程退出
       await _installer.applyWindowsZipUpdate(extracted);
       return;

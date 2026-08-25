@@ -6,7 +6,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../settings/settings_section.dart';
 import 'app_update_service.dart';
 import 'github_release_models.dart';
-import 'version_compare.dart';
 import '../../common/app_snack_bar.dart';
 
 /// 检查并安装来自 GitHub Release 的更新。
@@ -45,7 +44,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
 
   Future<void> _load() async {
     final info = await PackageInfo.fromPlatform();
-    final installedAt = await _service.installedReleasePublishedAt();
+    final installedAt = await _service.installedReleasePublishedAt(info.version);
     if (!mounted) return;
     setState(() {
       _info = info;
@@ -234,13 +233,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
 
   DateTime? _currentVersionDate(AppUpdateCheckResult? check) {
     if (_installedPublishedAt != null) return _installedPublishedAt;
-    final info = _info;
-    final release = check?.release;
-    if (info == null || release == null) return null;
-    if (VersionCompare.compare(release.versionLabel, info.version) != 0) {
-      return null;
-    }
-    return release.displayDate ?? check?.asset?.updatedAt;
+    return check?.currentRelease?.displayDate;
   }
 }
 

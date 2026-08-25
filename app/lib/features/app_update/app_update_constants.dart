@@ -13,6 +13,9 @@ class AppUpdateConstants {
   static const prefsLastReleasePublishedAt =
       'app_update_last_release_published_at';
 
+  /// 与 [prefsLastReleasePublishedAt] 配对的版本号；不匹配时忽略本地日期。
+  static const prefsLastReleaseVersion = 'app_update_last_release_version';
+
   /// 用户跳过的版本号，启动时不再提示。
   static const prefsSkippedVersion = 'app_update_skipped_version';
 

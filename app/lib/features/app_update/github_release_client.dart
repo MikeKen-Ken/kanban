@@ -273,6 +273,8 @@ List<GithubReleaseInfo> parseReleasesAtom(
     final title =
         RegExp(r'<title>([^<]*)</title>').firstMatch(block)?.group(1) ??
             tagName;
+    final published =
+        RegExp(r'<published>([^<]*)</published>').firstMatch(block)?.group(1);
     final updated =
         RegExp(r'<updated>([^<]*)</updated>').firstMatch(block)?.group(1);
     final rawContent =
@@ -290,7 +292,7 @@ List<GithubReleaseInfo> parseReleasesAtom(
         htmlUrl: link,
         draft: false,
         prerelease: false,
-        publishedAt: DateTime.tryParse(updated ?? ''),
+        publishedAt: DateTime.tryParse(published ?? updated ?? ''),
         assets: const [],
       ),
     );

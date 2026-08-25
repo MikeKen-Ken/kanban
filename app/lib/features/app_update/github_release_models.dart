@@ -95,6 +95,7 @@ class AppUpdateCheckResult {
     required this.currentVersion,
     required this.currentBuild,
     this.release,
+    this.currentRelease,
     this.asset,
     this.updateAvailable = false,
     this.message,
@@ -103,6 +104,8 @@ class AppUpdateCheckResult {
   final String currentVersion;
   final String currentBuild;
   final GithubReleaseInfo? release;
+  /// 与 [currentVersion] 匹配的 Release（用于「当前版本」发布日期）。
+  final GithubReleaseInfo? currentRelease;
   final GithubReleaseAsset? asset;
   final bool updateAvailable;
   final String? message;
