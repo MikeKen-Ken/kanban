@@ -83,6 +83,51 @@ void main() {
     );
   });
 
+  test('omitting context is not treated as stock preferred values', () {
+    const parameters = [
+      AgentDispatchModelParameter(
+        id: 'fast',
+        options: [
+          AgentDispatchModelParameterOption(value: 'true'),
+          AgentDispatchModelParameterOption(value: 'false'),
+        ],
+      ),
+      AgentDispatchModelParameter(
+        id: 'reasoning_effort',
+        options: [
+          AgentDispatchModelParameterOption(value: 'low'),
+          AgentDispatchModelParameterOption(value: 'medium'),
+          AgentDispatchModelParameterOption(value: 'high'),
+        ],
+      ),
+      AgentDispatchModelParameter(
+        id: 'context',
+        options: [
+          AgentDispatchModelParameterOption(value: '64k'),
+          AgentDispatchModelParameterOption(value: '272k'),
+        ],
+      ),
+    ];
+    expect(
+      isStockAgentDispatchModelParamValues(
+        const {'fast': 'false', 'reasoning_effort': 'medium', 'context': '64k'},
+        parameters,
+      ),
+      isTrue,
+    );
+    expect(
+      isStockAgentDispatchModelParamValues(
+        const {'fast': 'false', 'reasoning_effort': 'medium'},
+        parameters,
+      ),
+      isFalse,
+    );
+    expect(
+      isStockAgentDispatchModelParamValues(const {}, parameters),
+      isTrue,
+    );
+  });
+
   test('filterAgentDispatchModelParamValues 目录未加载时保留原值', () {
     expect(
       filterAgentDispatchModelParamValues(

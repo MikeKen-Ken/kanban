@@ -133,12 +133,14 @@ String _formatHubParam(String id, String value) {
 }
 
 String _hubParamValue(String id, String value) {
+  final trimmed = value.trim();
   if (id == 'fast') {
-    return switch (value.trim()) {
+    return switch (trimmed) {
       'true' => 'On',
       'false' => 'Off',
-      _ => value.trim(),
+      _ => trimmed,
     };
   }
-  return value.trim();
+  if (trimmed.toLowerCase() == 'default') return 'Default';
+  return trimmed;
 }

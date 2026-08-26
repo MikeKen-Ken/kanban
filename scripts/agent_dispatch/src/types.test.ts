@@ -167,6 +167,45 @@ describe("mergeJobWithCardOverrides", () => {
     assert.deepEqual(merged.modelParams, [{ id: "fast", value: "true" }]);
   });
 
+  it("omitted context stays omitted instead of filling 64k", () => {
+    const merged = mergeJobWithCardOverrides(
+      {
+        ...job,
+        engine: "codex",
+        model: "gpt-5.5",
+        modelParams: [{ id: "model_reasoning_effort", value: "medium" }],
+        engineDefaults: {
+          codex: {
+            model: "gpt-5.5",
+            modelParams: [{ id: "model_reasoning_effort", value: "medium" }],
+            models: [
+              {
+                id: "gpt-5.5",
+                parameters: [
+                  {
+                    id: "model_reasoning_effort",
+                    values: ["low", "medium", "high"],
+                  },
+                  { id: "context", values: ["64k", "272k"] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {},
+    );
+    assert.equal(
+      merged.modelParams?.find((item) => item.id === "context"),
+      undefined,
+    );
+    assert.equal(
+      merged.modelParams?.find((item) => item.id === "model_reasoning_effort")
+        ?.value,
+      "medium",
+    );
+  });
+
   it("Cursor \u65E0 catalog \u65F6\u4E0D\u8981\u51ED\u7A7A\u8865 reasoning_effort", () => {
     const merged = mergeJobWithCardOverrides(job, {
       agentModelId: "composer-2.5",

@@ -121,8 +121,43 @@ void main() {
     expect(overview.engineModelLabel, 'Cursor SDK · composer-2.5');
     expect(
       overview.modelDetailLabel,
-      '上下文 64k · 快速模式 关 · 思考程度 medium',
+      'Context 64k · Fast mode Off · Reasoning effort medium',
     );
+  });
+
+  test('overview shows Default when context is the API default', () {
+    final overview = AgentDispatchHubOverview.running(
+      liveCardLabel: '1/2',
+      currentTitle: 'Card',
+      phaseLabel: 'Implement',
+      engine: 'cursor',
+      model: 'composer-2.5',
+      modelParams: const {
+        'fast': 'false',
+        'context': 'default',
+      },
+    );
+
+    expect(
+      overview.modelDetailLabel,
+      'Context Default · Fast mode Off',
+    );
+  });
+
+  test('overview does not invent 64k when context was omitted', () {
+    final overview = AgentDispatchHubOverview.running(
+      liveCardLabel: '1/2',
+      currentTitle: 'Card',
+      phaseLabel: 'Implement',
+      engine: 'codex',
+      model: 'gpt-5.5',
+      modelParams: const {
+        'model_reasoning_effort': 'medium',
+      },
+    );
+
+    expect(overview.modelDetailLabel, 'Reasoning effort medium');
+    expect(overview.modelDetailLabel.contains('64k'), isFalse);
   });
 
   testWidgets('总览列出当前卡片标题、模型与运行时间', (tester) async {
@@ -161,9 +196,9 @@ void main() {
     expect(find.text('Running · Implement · 1/3'), findsOneWidget);
     expect(find.text('Agent 调度总览可以显示更多的信息'), findsOneWidget);
     expect(find.text('Cursor SDK · composer-2.5'), findsOneWidget);
-    expect(find.text('上下文 272k · 快速模式 开'), findsOneWidget);
-    expect(find.textContaining('批次'), findsOneWidget);
-    expect(find.textContaining('本卡'), findsOneWidget);
+    expect(find.text('Context 272k · Fast mode On'), findsOneWidget);
+    expect(find.textContaining('Batch'), findsOneWidget);
+    expect(find.textContaining('This card'), findsOneWidget);
   });
 
   testWidgets('总览可直接点运行与停止', (tester) async {

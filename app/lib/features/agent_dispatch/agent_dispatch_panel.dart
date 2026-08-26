@@ -480,14 +480,17 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
           break;
         }
       }
+      final catalogParameters = selected?.parameters ?? const [];
       final nextParams =
-          selectionChanged || _isStockModelParams(_settings.modelParamValues)
-              ? preferredAgentDispatchModelParamValues(
-                  selected?.parameters ?? const [],
-                )
+          selectionChanged ||
+                  isStockAgentDispatchModelParamValues(
+                    _settings.modelParamValues,
+                    catalogParameters,
+                  )
+              ? preferredAgentDispatchModelParamValues(catalogParameters)
               : filterAgentDispatchModelParamValues(
                   _settings.modelParamValues,
-                  selected?.parameters ?? const [],
+                  catalogParameters,
                 );
       setState(() {
         _models = uniqueModels;
@@ -570,16 +573,6 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         );
       });
     }
-  }
-
-  bool _isStockModelParams(Map<String, String> values) {
-    if (values.isEmpty) return true;
-    if (values.length == 1 && values['fast'] == 'false') {
-      return true;
-    }
-    const stock = AgentDispatchSettings.defaultModelParamValues;
-    return values.length == stock.length &&
-        stock.entries.every((entry) => values[entry.key] == entry.value);
   }
 
   AgentDispatchModelInfo? get _selectedModel {

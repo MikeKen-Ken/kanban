@@ -227,7 +227,8 @@ export function mergeJobWithCardOverrides(
     }
     for (const parameter of fillFrom) {
       const id = String(parameter.id ?? "").trim();
-      if (!id || byId.has(id)) continue;
+      // Context is opt-in. Omitting it means API default, not a conservative 64k cap.
+      if (!id || byId.has(id) || isContextParamId(id)) continue;
       const value = conservativeParamValue(id, parameterValueList(parameter.values));
       if (value) byId.set(id, { id, value });
     }

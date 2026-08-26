@@ -150,6 +150,20 @@ Map<String, String> preferredAgentDispatchModelParamValues(
   return values;
 }
 
+/// True when [values] still match the catalog's preferred seed, so a refresh
+/// may replace them. Omitting context after choosing API default is a
+/// customization and must not be treated as stock.
+bool isStockAgentDispatchModelParamValues(
+  Map<String, String> values,
+  List<AgentDispatchModelParameter> parameters,
+) {
+  if (values.isEmpty) return true;
+  final preferred = preferredAgentDispatchModelParamValues(parameters);
+  if (values.length != preferred.length) return false;
+  return preferred.entries
+      .every((entry) => values[entry.key] == entry.value);
+}
+
 /// 与 [AgentDispatchSettings] 的字面量默认保持一致，避免 config 循环引用。
 class AgentDispatchSettingsDefaults {
   static const modelParamValues = {

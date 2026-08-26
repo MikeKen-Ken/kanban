@@ -314,7 +314,7 @@ function mergeJobWithCardOverrides(job, claim) {
     }
     for (const parameter of fillFrom) {
       const id = String(parameter.id ?? "").trim();
-      if (!id || byId.has(id)) continue;
+      if (!id || byId.has(id) || isContextParamId(id)) continue;
       const value = conservativeParamValue(id, parameterValueList(parameter.values));
       if (value) byId.set(id, { id, value });
     }
