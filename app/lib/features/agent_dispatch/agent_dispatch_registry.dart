@@ -1,21 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import 'agent_dispatch_hub_after_queue.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_service.dart';
 
 /// 按看板项目持有 Agent 调度批次；总览与工具栏从这里读全局运行态。
 class AgentDispatchRegistry extends ChangeNotifier {
-  AgentDispatchRegistry._();
+  AgentDispatchRegistry._() {
+    hubAfterQueue.onChanged = notifyListeners;
+  }
 
   static final AgentDispatchRegistry instance = AgentDispatchRegistry._();
 
   final _services = <String, AgentDispatchService>{};
 
+  /// 总览完成后队列：所有正在跑的批次结束后执行一次。
+  final hubAfterQueue = AgentDispatchHubAfterQueueController();
+
   AgentDispatchService forProject(String projectId) {
     final id = projectId.trim();
     return _services.putIfAbsent(id, () {
       final service = AgentDispatchService.internal(projectId: id);
-      service.addRunningListener(notifyListeners);
+      service.addRunningListener(() {
+        notifyListeners();
+        unawaited(hubAfterQueue.tryRun());
+      });
       service.addProgressListener(notifyListeners);
       return service;
     });
@@ -56,9 +67,8 @@ class AgentDispatchRegistry extends ChangeNotifier {
   }
 
   void debugReset() {
+    hubAfterQueue.reset();
     for (final service in _services.values) {
-      service.removeRunningListener(notifyListeners);
-      service.removeProgressListener(notifyListeners);
       service.debugReset();
     }
     _services.clear();

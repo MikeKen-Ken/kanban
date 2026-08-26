@@ -8,6 +8,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
     required this.steps,
     required this.enabled,
     required this.onChanged,
+    this.description = 'These actions run after the batch finishes.',
     this.runOnFailure = true,
     this.onRunOnFailureChanged,
     super.key,
@@ -16,6 +17,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
   final List<AgentDispatchAfterStep> steps;
   final bool enabled;
   final ValueChanged<List<AgentDispatchAfterStep>> onChanged;
+  final String description;
   final bool runOnFailure;
   final ValueChanged<bool>? onRunOnFailureChanged;
 
@@ -31,7 +33,7 @@ class AgentDispatchAfterQueueField extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'These actions run after the batch finishes.',
+          description,
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 4),

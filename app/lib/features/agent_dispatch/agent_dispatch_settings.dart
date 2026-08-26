@@ -63,10 +63,11 @@ class AgentDispatchProjectEngineConfig {
     final modelParamsRaw = json['modelParamValues'] as Map<String, dynamic>?;
     final profilesRaw = json['engineProfiles'] as Map<String, dynamic>?;
     final engine = AgentDispatchEngine.fromName(json['engine'] as String?);
-    final modelId = json['modelId'] as String? ??
-        AgentDispatchSettings.defaultModelId;
+    final modelId =
+        json['modelId'] as String? ?? AgentDispatchSettings.defaultModelId;
     final modelParamValues = modelParamsRaw == null
-        ? Map<String, String>.from(AgentDispatchSettings.defaultModelParamValues)
+        ? Map<String, String>.from(
+            AgentDispatchSettings.defaultModelParamValues)
         : modelParamsRaw.map((key, value) => MapEntry(key, '$value'));
     final engineProfiles = <String, AgentDispatchEngineProfile>{
       if (profilesRaw != null)
@@ -113,6 +114,8 @@ class AgentDispatchSettings {
     this.runAfterQueueOnFailure = true,
     this.afterQueueByProject = const {},
     this.runAfterQueueOnFailureByProject = const {},
+    this.hubAfterQueue = const [],
+    this.hubRunAfterQueueOnFailure = true,
     this.workerScriptPath,
     this.skillPath,
     this.repoPathByProject = const {},
@@ -176,6 +179,12 @@ class AgentDispatchSettings {
   /// 各项目独立的「失败后仍执行」。
   final Map<String, bool> runAfterQueueOnFailureByProject;
 
+  /// 总览完成后队列：所有正在跑的调度批次结束后执行一次。
+  final List<AgentDispatchAfterStep> hubAfterQueue;
+
+  /// 总览完成后队列在波次有失败时是否仍执行。
+  final bool hubRunAfterQueueOnFailure;
+
   final String? workerScriptPath;
   final String? skillPath;
   final Map<String, String> repoPathByProject;
@@ -207,6 +216,8 @@ class AgentDispatchSettings {
     bool? runAfterQueueOnFailure,
     Map<String, List<AgentDispatchAfterStep>>? afterQueueByProject,
     Map<String, bool>? runAfterQueueOnFailureByProject,
+    List<AgentDispatchAfterStep>? hubAfterQueue,
+    bool? hubRunAfterQueueOnFailure,
     Object? workerScriptPath = _sentinel,
     Object? skillPath = _sentinel,
     Map<String, String>? repoPathByProject,
@@ -238,6 +249,9 @@ class AgentDispatchSettings {
       afterQueueByProject: afterQueueByProject ?? this.afterQueueByProject,
       runAfterQueueOnFailureByProject: runAfterQueueOnFailureByProject ??
           this.runAfterQueueOnFailureByProject,
+      hubAfterQueue: hubAfterQueue ?? this.hubAfterQueue,
+      hubRunAfterQueueOnFailure:
+          hubRunAfterQueueOnFailure ?? this.hubRunAfterQueueOnFailure,
       workerScriptPath: workerScriptPath == _sentinel
           ? this.workerScriptPath
           : workerScriptPath as String?,
@@ -517,6 +531,9 @@ class AgentDispatchSettings {
           },
         if (runAfterQueueOnFailureByProject.isNotEmpty)
           'runAfterQueueOnFailureByProject': runAfterQueueOnFailureByProject,
+        if (hubAfterQueue.isNotEmpty)
+          'hubAfterQueue': hubAfterQueue.map((step) => step.name).toList(),
+        'hubRunAfterQueueOnFailure': hubRunAfterQueueOnFailure,
         if (workerScriptPath != null) 'workerScriptPath': workerScriptPath,
         if (skillPath != null) 'skillPath': skillPath,
         if (repoPathByProject.isNotEmpty)
@@ -623,6 +640,9 @@ class AgentDispatchSettings {
       runAfterQueueOnFailure: json['runAfterQueueOnFailure'] as bool? ?? true,
       afterQueueByProject: afterQueueByProject,
       runAfterQueueOnFailureByProject: runAfterQueueOnFailureByProject,
+      hubAfterQueue: parseAgentDispatchAfterQueue(json['hubAfterQueue']),
+      hubRunAfterQueueOnFailure:
+          json['hubRunAfterQueueOnFailure'] as bool? ?? true,
       workerScriptPath: json['workerScriptPath'] as String?,
       skillPath: json['skillPath'] as String?,
       repoPathByProject: mapRaw == null

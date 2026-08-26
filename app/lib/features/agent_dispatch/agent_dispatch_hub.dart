@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../common/app_snack_bar.dart';
 import '../../controllers/board_controller.dart';
@@ -10,10 +11,13 @@ import '../kanban/next_work_card.dart';
 import '../kanban/verify_column.dart';
 import '../project/project_list_preferences.dart';
 import '../project/projects_manifest.dart';
+import 'agent_dispatch_after_queue.dart';
+import 'agent_dispatch_after_queue_field.dart';
 import 'agent_dispatch_hub_batch.dart';
 import 'agent_dispatch_hub_overview.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_registry.dart';
+import 'agent_dispatch_settings.dart';
 import 'agent_dispatch_window.dart';
 
 class AgentDispatchHubItem {
@@ -106,9 +110,20 @@ class AgentDispatchHub extends StatelessWidget {
           onOpenProject: AgentDispatchWindow.openProject,
           onRunProject: (projectId) => _runFromHub(context, board, projectId),
           onStopProject: stopAgentDispatchFromHub,
+          afterQueueStatus: _hubAfterQueueStatus(registry),
+          afterQueuePane: const AgentDispatchHubAfterQueuePane(),
         );
       },
     );
+  }
+
+  String? _hubAfterQueueStatus(AgentDispatchRegistry registry) {
+    final hubQueue = registry.hubAfterQueue;
+    if (hubQueue.running) return 'Completion queue is running';
+    if (hubQueue.pending && registry.anyRunning) {
+      return 'Completion queue waits until every running batch finishes';
+    }
+    return null;
   }
 
   Future<void> _runFromHub(
@@ -205,6 +220,8 @@ class AgentDispatchHubView extends StatefulWidget {
     required this.onOpenProject,
     required this.onRunProject,
     required this.onStopProject,
+    this.afterQueuePane,
+    this.afterQueueStatus,
     super.key,
   });
 
@@ -213,6 +230,8 @@ class AgentDispatchHubView extends StatefulWidget {
   final void Function(String projectId) onOpenProject;
   final Future<void> Function(String projectId) onRunProject;
   final Future<void> Function(String projectId) onStopProject;
+  final Widget? afterQueuePane;
+  final String? afterQueueStatus;
 
   @override
   State<AgentDispatchHubView> createState() => _AgentDispatchHubViewState();
@@ -307,23 +326,45 @@ class _AgentDispatchHubViewState extends State<AgentDispatchHubView> {
       content: SizedBox(
         width: dialogWidth,
         height: dialogHeight,
-        child: widget.items.isEmpty
-            ? const Center(child: Text('No board projects yet'))
-            : ListView.separated(
-                itemCount: widget.items.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final item = widget.items[index];
-                  return _HubProjectTile(
-                    item: item,
-                    starting: _startingIds.contains(item.projectId),
-                    stopping: _stoppingIds.contains(item.projectId),
-                    onOpen: () => widget.onOpenProject(item.projectId),
-                    onRun: () => _handleRun(item.projectId),
-                    onStop: () => _handleStop(item.projectId),
-                  );
-                },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: widget.items.isEmpty
+                  ? const Center(child: Text('No board projects yet'))
+                  : ListView.separated(
+                      itemCount: widget.items.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = widget.items[index];
+                        return _HubProjectTile(
+                          item: item,
+                          starting: _startingIds.contains(item.projectId),
+                          stopping: _stoppingIds.contains(item.projectId),
+                          onOpen: () => widget.onOpenProject(item.projectId),
+                          onRun: () => _handleRun(item.projectId),
+                          onStop: () => _handleStop(item.projectId),
+                        );
+                      },
+                    ),
+            ),
+            if (widget.afterQueuePane != null) ...[
+              const Divider(height: 24),
+              if (widget.afterQueueStatus != null) ...[
+                Text(
+                  widget.afterQueueStatus!,
+                  key: const ValueKey('agent-dispatch-hub-after-queue-status'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+              ],
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: dialogHeight * 0.45),
+                child: SingleChildScrollView(child: widget.afterQueuePane),
               ),
+            ],
+          ],
+        ),
       ),
       actions: [
         TextButton(onPressed: widget.onClose, child: const Text('Close')),
@@ -474,6 +515,66 @@ class _HubProjectTile extends StatelessWidget {
         ],
       ),
       onTap: onOpen,
+    );
+  }
+}
+
+/// 总览上的完成后队列编辑器；与各项目工作台队列分开保存。
+class AgentDispatchHubAfterQueuePane extends StatefulWidget {
+  const AgentDispatchHubAfterQueuePane({super.key});
+
+  @override
+  State<AgentDispatchHubAfterQueuePane> createState() =>
+      _AgentDispatchHubAfterQueuePaneState();
+}
+
+class _AgentDispatchHubAfterQueuePaneState
+    extends State<AgentDispatchHubAfterQueuePane> {
+  AgentDispatchSettings _settings = const AgentDispatchSettings();
+  var _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _settings = prefs.loadAgentDispatchSettings();
+      _loaded = true;
+    });
+  }
+
+  Future<void> _persist({
+    List<AgentDispatchAfterStep>? steps,
+    bool? runOnFailure,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final disk = prefs.loadAgentDispatchSettings();
+    final next = disk.copyWith(
+      hubAfterQueue: steps ?? _settings.hubAfterQueue,
+      hubRunAfterQueueOnFailure:
+          runOnFailure ?? _settings.hubRunAfterQueueOnFailure,
+    );
+    await prefs.saveAgentDispatchSettings(next);
+    if (!mounted) return;
+    setState(() => _settings = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AgentDispatchAfterQueueField(
+      key: const ValueKey('agent-dispatch-hub-after-queue'),
+      steps: _settings.hubAfterQueue,
+      enabled: _loaded,
+      description:
+          'These actions run after every currently running dispatch batch finishes.',
+      onChanged: (steps) => _persist(steps: steps),
+      runOnFailure: _settings.hubRunAfterQueueOnFailure,
+      onRunOnFailureChanged: (value) => _persist(runOnFailure: value),
     );
   }
 }

@@ -19,3 +19,4 @@
 - **Conflict**: both sides' results kept when the same field or a delete-vs-edit intent cannot be merged automatically.
 - **Shared Data**: user content that spans projects and syncs over WebDAV, such as custom labels.
 - **Local Preferences**: UI and device settings that do not participate in WebDAV sync.
+- **Completion queue**: ordered actions that run after Agent dispatch batches finish (upload, push, hibernate, shutdown). A per-project queue runs when that project's batch finishes. The overview queue runs once after every currently running dispatch batch finishes.

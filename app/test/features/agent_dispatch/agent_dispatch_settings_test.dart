@@ -21,6 +21,8 @@ void main() {
     });
     expect(settings.cardLimitMax, isTrue);
     expect(settings.runAfterQueueOnFailure, isTrue);
+    expect(settings.hubAfterQueue, isEmpty);
+    expect(settings.hubRunAfterQueueOnFailure, isTrue);
     expect(settings.ignoreCardParams, isFalse);
     expect(settings.allowDirtyWorkspace, isFalse);
     expect(settings.enableSandbox, isFalse);
@@ -463,6 +465,29 @@ void main() {
     expect(roundTrip.runAfterQueueOnFailureFor('b'), isFalse);
   });
 
+  test('总览完成后队列 JSON 往返且不污染项目队列', () {
+    const original = AgentDispatchSettings(
+      hubAfterQueue: [
+        AgentDispatchAfterStep.webdavUpload,
+        AgentDispatchAfterStep.gitPush,
+        AgentDispatchAfterStep.hibernate,
+      ],
+      hubRunAfterQueueOnFailure: false,
+      afterQueueByProject: {
+        'a': [AgentDispatchAfterStep.shutdown],
+      },
+    );
+    final roundTrip = AgentDispatchSettings.fromJson(original.toJson());
+    expect(roundTrip.hubAfterQueue, [
+      AgentDispatchAfterStep.webdavUpload,
+      AgentDispatchAfterStep.gitPush,
+      AgentDispatchAfterStep.hibernate,
+    ]);
+    expect(roundTrip.hubRunAfterQueueOnFailure, isFalse);
+    expect(roundTrip.afterQueueFor('a'), [AgentDispatchAfterStep.shutdown]);
+    expect(roundTrip.afterQueueFor('b'), isEmpty);
+  });
+
   test('旧版单一模型参数迁移到参数映射', () {
     final settings = AgentDispatchSettings.fromJson({
       'effortParamId': 'reasoning_effort',
@@ -731,6 +756,3 @@ void main() {
         contains('KANBAN_WORKER_HEAP_MB'));
   });
 }
-
-
-

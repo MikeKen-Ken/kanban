@@ -18,6 +18,7 @@ import 'agent_dispatch_card_limit_field.dart';
 import 'agent_dispatch_credentials.dart';
 import 'agent_dispatch_directory_opener.dart';
 import 'agent_dispatch_git_author_fields.dart';
+import 'agent_dispatch_hub_after_queue.dart';
 import 'agent_dispatch_log_exporter.dart';
 import 'agent_dispatch_log.dart';
 import 'agent_dispatch_log_refresh_scheduler.dart';
@@ -301,7 +302,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     setState(() => _settings = next);
     if (_running || _service.isRunning) {
       _service.updateAfterQueue(
-        steps: next.afterQueueFor(widget.projectId),
+        steps: _deferredAfterQueue(next, widget.projectId),
         runOnFailure: next.runAfterQueueOnFailureFor(widget.projectId),
       );
     }
@@ -312,15 +313,26 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final projectId = widget.projectId;
     if (mounted) {
       return (
-        steps: _settings.afterQueueFor(projectId),
+        steps: _deferredAfterQueue(_settings, projectId),
         runOnFailure: _settings.runAfterQueueOnFailureFor(projectId),
       );
     }
     final prefs = await SharedPreferences.getInstance();
     final disk = prefs.loadAgentDispatchSettings();
     return (
-      steps: disk.afterQueueFor(projectId),
+      steps: _deferredAfterQueue(disk, projectId),
       runOnFailure: disk.runAfterQueueOnFailureFor(projectId),
+    );
+  }
+
+  List<AgentDispatchAfterStep> _deferredAfterQueue(
+    AgentDispatchSettings settings,
+    String projectId,
+  ) {
+    return applyHubAfterQueueDeferral(
+      settings.afterQueueFor(projectId),
+      hubWavePending: AgentDispatchRegistry.instance.hubAfterQueue.pending,
+      hubSteps: settings.hubAfterQueue,
     );
   }
 
@@ -696,7 +708,7 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
       closeScopedEndpoint: board.mcpHost.closeScopedEndpoint,
       workerScriptPath: next.workerScriptPath,
       queueSize: queueSize,
-      afterQueue: _settings.afterQueueFor(projectId),
+      afterQueue: _deferredAfterQueue(_settings, projectId),
       runAfterQueueOnFailure: _settings.runAfterQueueOnFailureFor(projectId),
       resolveAfterQueue: _resolveLatestAfterQueue,
       afterQueueHost: AgentDispatchAfterQueueHost(
