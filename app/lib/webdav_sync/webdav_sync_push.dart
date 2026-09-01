@@ -112,6 +112,8 @@ mixin _WebDavSyncPush
               'New local changes appeared after push; advanced SyncBase and queued an incremental push');
           _pushPending = true;
           _pushPendingForce = _pushPendingForce || force;
+        } else {
+          _markPendingUploadsCleared();
         }
       });
 

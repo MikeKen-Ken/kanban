@@ -120,6 +120,7 @@ abstract class _WebDavSyncHost {
 
   Timer? _cooldownRetryTimer;
   Timer? _pendingCountTimer;
+  /// 待上传计数刷新世代：防抖 Timer 与进行中的 refresh 共用，用于丢弃过期结果。
   int _pendingCountGen = 0;
   bool _pushInFlight = false;
   bool _pushPending = false;

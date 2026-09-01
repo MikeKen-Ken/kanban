@@ -353,6 +353,7 @@ mixin _WebDavSyncPull
               _workspaceJsonEquals(local, syncBase)) {
             await _noteMissingWallpapersIfNeeded(local);
             _noteSuccess();
+            _markPendingUploadsCleared();
             _setStatus(SyncStatus.success);
             unawaited(refreshPendingUploadCount());
             return;
@@ -443,6 +444,7 @@ mixin _WebDavSyncPull
         }
         await _syncBaseStore.save(mergedPkg.workspace);
         _noteSuccess();
+        _markPendingUploadsCleared();
         _setStatus(SyncStatus.success);
         unawaited(refreshPendingUploadCount());
         return;
@@ -458,6 +460,7 @@ mixin _WebDavSyncPull
         }
         await _syncBaseStore.save(mergedPkg.workspace);
         _noteSuccess();
+        _markPendingUploadsCleared();
         _setStatus(SyncStatus.success);
         unawaited(refreshPendingUploadCount());
         return;

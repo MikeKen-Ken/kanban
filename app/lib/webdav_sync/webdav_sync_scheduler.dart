@@ -100,18 +100,23 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
 
   /// 相对 SyncBase 统计待上传 JSON 数；未配置同步时为 0
   Future<int> refreshPendingUploadCount() async {
+    final gen = ++_pendingCountGen;
     final config = await _loadConfig();
+    if (gen != _pendingCountGen) return pendingUploadCount;
     if (!config.enabled || !config.isConfigured) {
       _setPendingUploadCount(0);
       return 0;
     }
     try {
       final workspace = await _captureWorkspace();
+      if (gen != _pendingCountGen) return pendingUploadCount;
       final baseline = await _syncBaseStore.load();
+      if (gen != _pendingCountGen) return pendingUploadCount;
       final count = countPendingLiveArchiveUploads(
         workspace: workspace,
         baseline: baseline,
       );
+      if (gen != _pendingCountGen) return pendingUploadCount;
       _setPendingUploadCount(count);
     } on Object catch (e) {
       print('Failed to refresh pending sync count: $e');
@@ -125,6 +130,12 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
     if (!_pendingCountController.isClosed) {
       _pendingCountController.add(value);
     }
+  }
+
+  /// 刚写入 SyncBase 且本机无未上传差异时，立刻清零并作废进行中的旧刷新。
+  void _markPendingUploadsCleared() {
+    _pendingCountGen++;
+    _setPendingUploadCount(0);
   }
 
   void _drainPendingWork({bool forceFallback = false}) {
