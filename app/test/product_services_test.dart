@@ -23,6 +23,30 @@ void main() {
     expect(merged.events.map((item) => item.id), ['c', 'b', 'a']);
   });
 
+  test('同一毫秒的活动事件 JSON 往返顺序稳定', () {
+    ActivityEvent event(String id) => ActivityEvent(
+          id: id,
+          projectId: 'p1',
+          entityType: 'card',
+          entityId: id,
+          entityTitle: id,
+          action: ActivityAction.updated,
+          occurredAt: 100,
+        );
+
+    final shuffled = [
+      for (var i = 63; i >= 0; i--) event('e-${i.toString().padLeft(2, '0')}'),
+    ];
+    final first = ActivityLog.fromJson(ActivityLog(events: shuffled).toJson());
+    final second = ActivityLog.fromJson(first.toJson());
+    final expectedIds = [
+      for (var i = 0; i < 64; i++) 'e-${i.toString().padLeft(2, '0')}',
+    ];
+
+    expect(first.events.map((item) => item.id), expectedIds);
+    expect(second.events.map((item) => item.id), expectedIds);
+  });
+
   test('卡片模板不会复制附件并会重置子任务', () {
     final source = KanbanCard(
       id: 'source',

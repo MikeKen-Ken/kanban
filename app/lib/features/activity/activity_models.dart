@@ -125,7 +125,7 @@ class ActivityLog {
       byId[event.id] = event;
     }
     final merged = byId.values.toList()
-      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+      ..sort(_compareActivityEventsNewestFirst);
     return ActivityLog(
       events: merged.take(maxEvents).toList(growable: false),
     );
@@ -148,4 +148,11 @@ class ActivityLog {
           .toList(),
     ).mergeWith(const ActivityLog());
   }
+}
+
+/// 新事件在前；同一毫秒再用 id 打破平局，避免不稳定排序让 SyncBase 往返后误报 pending。
+int _compareActivityEventsNewestFirst(ActivityEvent a, ActivityEvent b) {
+  final byTime = b.occurredAt.compareTo(a.occurredAt);
+  if (byTime != 0) return byTime;
+  return a.id.compareTo(b.id);
 }

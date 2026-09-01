@@ -174,24 +174,16 @@ void main() {
         activityByProject: {
           projectId: ActivityLog(
             events: [
-              ActivityEvent(
-                id: 'e1',
-                projectId: projectId,
-                entityType: 'card',
-                entityId: 'c1',
-                entityTitle: 'A',
-                action: ActivityAction.created,
-                occurredAt: 100,
-              ),
-              ActivityEvent(
-                id: 'e2',
-                projectId: projectId,
-                entityType: 'card',
-                entityId: 'c1',
-                entityTitle: 'A',
-                action: ActivityAction.updated,
-                occurredAt: 100,
-              ),
+              for (var i = 63; i >= 0; i--)
+                ActivityEvent(
+                  id: 'e-${i.toString().padLeft(2, '0')}',
+                  projectId: projectId,
+                  entityType: 'card',
+                  entityId: 'c1',
+                  entityTitle: 'A',
+                  action: ActivityAction.updated,
+                  occurredAt: 100,
+                ),
             ],
           ),
         },
