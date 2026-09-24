@@ -31,43 +31,52 @@ class AgentDispatchRunToggles extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _Toggle(
-          title: 'Allow card parameters',
-          value: !ignoreCardParams,
-          enabled: enabled,
-          onChanged: (allow) => onIgnoreCardParamsChanged(!allow),
-        ),
-        _Toggle(
-          title: 'Allow dirty workspace',
-          value: allowDirtyWorkspace,
-          enabled: enabled,
-          onChanged: onAllowDirtyWorkspaceChanged,
-        ),
-        _Toggle(
-          title: 'Enable sandbox',
-          value: enableSandbox,
-          enabled: enabled,
-          onChanged: onEnableSandboxChanged,
-        ),
-        _Toggle(
-          title: 'Tests required',
-          value: requireTests,
-          enabled: enabled,
-          onChanged: onRequireTestsChanged,
-        ),
-        _Toggle(
-          title: 'End session when finished',
-          value: terminateAfterDispatchTerminal,
-          enabled: enabled,
-          onChanged: onTerminateAfterDispatchTerminalChanged,
-        ),
-      ],
-    );
+    final toggles = <Widget>[
+      _Toggle(
+        title: 'Allow card parameters',
+        value: !ignoreCardParams,
+        enabled: enabled,
+        onChanged: (allow) => onIgnoreCardParamsChanged(!allow),
+      ),
+      _Toggle(
+        title: 'Allow dirty workspace',
+        value: allowDirtyWorkspace,
+        enabled: enabled,
+        onChanged: onAllowDirtyWorkspaceChanged,
+      ),
+      _Toggle(
+        title: 'Enable sandbox',
+        value: enableSandbox,
+        enabled: enabled,
+        onChanged: onEnableSandboxChanged,
+      ),
+      _Toggle(
+        title: 'Tests required',
+        value: requireTests,
+        enabled: enabled,
+        onChanged: onRequireTestsChanged,
+      ),
+      _Toggle(
+        title: 'End session when finished',
+        value: terminateAfterDispatchTerminal,
+        enabled: enabled,
+        onChanged: onTerminateAfterDispatchTerminalChanged,
+      ),
+    ];
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 600) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: toggles,
+        );
+      }
+      return Wrap(
+        spacing: 12,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: toggles,
+      );
+    });
   }
 }
 

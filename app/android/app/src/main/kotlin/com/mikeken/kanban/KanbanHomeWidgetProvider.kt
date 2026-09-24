@@ -24,6 +24,11 @@ class KanbanHomeWidgetProvider : AppWidgetProvider() {
         updateAll(context)
     }
 
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        val store = KanbanWidgetStore(context)
+        for (id in appWidgetIds) store.deleteWidget(id)
+    }
+
     companion object {
         private val itemViewIds = intArrayOf(
             R.id.widget_item_1,
@@ -48,7 +53,7 @@ class KanbanHomeWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int,
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_kanban)
-            val snapshot = KanbanWidgetStore(context).loadSnapshot()
+            val snapshot = KanbanWidgetStore(context).loadSnapshot(appWidgetId)
             val launchIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
@@ -59,12 +64,37 @@ class KanbanHomeWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+            val pickerIntent = Intent(context, KanbanWidgetProjectPickerActivity::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+            }
+            views.setOnClickPendingIntent(
+                R.id.widget_project_picker,
+                PendingIntent.getActivity(
+                    context,
+                    appWidgetId,
+                    pickerIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            val syncIntent = Intent(context, MainActivity::class.java).apply {
+                action = MainActivity.ACTION_WIDGET_SYNC
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            views.setOnClickPendingIntent(
+                R.id.widget_sync,
+                PendingIntent.getActivity(
+                    context,
+                    appWidgetId,
+                    syncIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
 
             if (snapshot == null) {
-                views.setTextViewText(R.id.widget_project_name, "看板")
-                views.setTextViewText(R.id.widget_summary, "打开应用后自动同步")
+                views.setTextViewText(R.id.widget_project_name, context.getString(R.string.widget_default_title))
+                views.setTextViewText(R.id.widget_summary, context.getString(R.string.widget_sync_hint))
                 views.setViewVisibility(R.id.widget_empty_message, View.VISIBLE)
-                views.setTextViewText(R.id.widget_empty_message, "暂无数据")
+                views.setTextViewText(R.id.widget_empty_message, context.getString(R.string.widget_no_data))
                 for (viewId in itemViewIds) {
                     views.setViewVisibility(viewId, View.GONE)
                 }
@@ -75,7 +105,8 @@ class KanbanHomeWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.widget_empty_message, View.VISIBLE)
                     views.setTextViewText(
                         R.id.widget_empty_message,
-                        if (snapshot.isEmpty) "暂无待办" else "暂无展示项",
+                        if (snapshot.isEmpty) context.getString(R.string.widget_no_todos)
+                        else context.getString(R.string.widget_no_items),
                     )
                 } else {
                     views.setViewVisibility(R.id.widget_empty_message, View.GONE)

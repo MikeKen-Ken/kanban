@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/board_controller.dart';
+import 'features/android_widget/android_widget_bridge.dart';
 import 'features/kanban/card_complete_motion.dart';
 import 'features/agent_dispatch/agent_dispatch_after_queue.dart';
 import 'features/agent_dispatch/agent_dispatch_registry.dart';
@@ -39,6 +40,36 @@ class KanbanApp extends StatefulWidget {
 
 class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
   final _navigatorKey = GlobalKey<NavigatorState>();
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
+  final _widgetBridge = AndroidWidgetBridge();
+  bool _widgetSyncRunning = false;
+
+  Future<void> _consumeWidgetSync() async {
+    if (await _widgetBridge.consumePendingSync()) await _runWidgetSync();
+  }
+
+  Future<void> _runWidgetSync() async {
+    if (_widgetSyncRunning) return;
+    final controller = widget.controller;
+    if (controller.syncStatus == SyncStatus.syncing) return;
+    if (!controller.webDavConfig.enabled ||
+        !controller.webDavConfig.isConfigured) {
+      _messengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('Configure WebDAV in Settings first')),
+      );
+      return;
+    }
+    _widgetSyncRunning = true;
+    try {
+      await controller.syncNow();
+    } catch (error) {
+      _messengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Sync failed: $error')),
+      );
+    } finally {
+      _widgetSyncRunning = false;
+    }
+  }
 
   void _dismissWithEscape() {
     if (AgentDispatchWindow.hideIfVisible()) return;
@@ -53,8 +84,10 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _widgetBridge.setSyncRequestHandler(_consumeWidgetSync);
     // 首帧后再初始化通知插件并申请权限，避免阻塞窗口显示
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_consumeWidgetSync());
       unawaited(widget.controller.initializeReminders());
       unawaited(widget.controller.ensureNotificationPermissionOnFirstLaunch());
     });
@@ -75,6 +108,8 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
       return;
     }
     if (state == AppLifecycleState.resumed) {
+      unawaited(_consumeWidgetSync());
+      widget.controller.requestAutoSync();
       unawaited(widget.controller.purgeExpiredCompletedCards());
       unawaited(widget.controller.purgeExpiredTrashItems());
     }
@@ -103,6 +138,7 @@ class _KanbanAppState extends State<KanbanApp> with WidgetsBindingObserver {
             title: 'Kanban',
             debugShowCheckedModeBanner: false,
             navigatorKey: _navigatorKey,
+            scaffoldMessengerKey: _messengerKey,
             builder: (context, child) => CallbackShortcuts(
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.escape):

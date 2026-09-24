@@ -44,7 +44,8 @@ part 'webdav_sync_backup.dart';
 
 enum SyncStatus { idle, syncing, success, error }
 
-const kDownloadWallpaperLibraryHint = 'Some wallpapers are missing locally; download the wallpaper library';
+const kDownloadWallpaperLibraryHint =
+    'Some wallpapers are missing locally; download the wallpaper library';
 
 typedef BackupPackageCapture = Future<BackupPackage> Function();
 typedef BackupPackageApply = Future<void> Function(BackupPackage package);
@@ -120,6 +121,11 @@ abstract class _WebDavSyncHost {
 
   Timer? _cooldownRetryTimer;
   Timer? _pendingCountTimer;
+  Timer? _autoSyncTimer;
+  Timer? _autoSyncDebounceTimer;
+  bool _autoSyncActive = false;
+  bool _autoSyncRequestInFlight = false;
+
   /// 待上传计数刷新世代：防抖 Timer 与进行中的 refresh 共用，用于丢弃过期结果。
   int _pendingCountGen = 0;
   bool _pushInFlight = false;

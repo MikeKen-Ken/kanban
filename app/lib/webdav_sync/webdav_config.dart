@@ -41,10 +41,10 @@ class WebDavConfig {
   final String password;
   final String remotePath;
 
-  /// 兼容旧配置 JSON；运行时始终视为关闭，不会自动上传
+  /// Automatically merge while the app is running.
   final bool autoSync;
 
-  /// 兼容旧配置 JSON；运行时始终视为关闭，不会自动拉取
+  /// Kept for compatibility with older settings files.
   final bool autoPull;
   final int pollIntervalSeconds;
   final int pushDebounceSeconds;
@@ -101,6 +101,7 @@ class WebDavConfig {
         'password': password,
         'remotePath': remotePath,
         'autoSync': autoSync,
+        'autoSyncEnabled': autoSync,
         'autoPull': autoPull,
         'pollIntervalSeconds': pollIntervalSeconds,
         'pushDebounceSeconds': pushDebounceSeconds,
@@ -113,9 +114,10 @@ class WebDavConfig {
       username: json['username'] as String? ?? '',
       password: json['password'] as String? ?? '',
       remotePath: json['remotePath'] as String? ?? '/KanbanApp',
-      // 同步改为手动：启动与后台不再自动拉取或上传
-      autoSync: false,
-      autoPull: false,
+      // Old autoSync values were ignored by the manual-only app. Require a
+      // fresh opt-in so upgrading cannot unexpectedly enable network writes.
+      autoSync: json['autoSyncEnabled'] as bool? ?? false,
+      autoPull: json['autoPull'] as bool? ?? false,
       pollIntervalSeconds: clampPollIntervalSeconds(
         json['pollIntervalSeconds'] as int? ?? defaultPollIntervalSeconds,
       ),

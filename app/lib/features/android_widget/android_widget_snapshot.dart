@@ -50,10 +50,10 @@ class AndroidWidgetSnapshot {
 }
 
 int _badgePriority(String badge) => switch (badge) {
-      '逾期' => 0,
-      '今日' => 1,
-      '返工' => 2,
-      '待办' => 3,
+      'Overdue' => 0,
+      'Today' => 1,
+      'Rework' => 2,
+      'To Do' => 3,
       _ => 4,
     };
 
@@ -88,19 +88,19 @@ AndroidWidgetSnapshot buildAndroidWidgetSnapshot({
       String? badge;
       if (dueDate != null) {
         if (isOverdue(dueDate, reference)) {
-          badge = '逾期';
+          badge = 'Overdue';
           overdueCount++;
         } else if (isDueToday(dueDate, reference)) {
-          badge = '今日';
+          badge = 'Today';
           todayCount++;
         }
       }
 
       if (badge == null) {
         if (reworkColumnId != null && column.id == reworkColumnId) {
-          badge = '返工';
+          badge = 'Rework';
         } else if (todoColumnId != null && column.id == todoColumnId) {
-          badge = '待办';
+          badge = 'To Do';
           todoCount++;
         } else {
           continue;

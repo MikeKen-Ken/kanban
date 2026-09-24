@@ -3,6 +3,7 @@ package com.mikeken.kanban
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
@@ -11,9 +12,45 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : FlutterActivity() {
+    companion object {
+        const val ACTION_WIDGET_SYNC = "com.mikeken.kanban.WIDGET_SYNC"
+        private const val KEY_PENDING_WIDGET_SYNC = "pending_widget_sync"
+    }
+
     private val notificationsChannel = "com.mikeken.kanban/notifications"
     private val appUpdateChannel = "com.mikeken.kanban/app_update"
     private val homeWidgetChannel = "com.mikeken.kanban/home_widget"
+    private var widgetMethodChannel: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        if (intent?.action == ACTION_WIDGET_SYNC) {
+            markWidgetSyncPending()
+            intent.action = Intent.ACTION_MAIN
+        }
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == ACTION_WIDGET_SYNC) {
+            markWidgetSyncPending()
+            intent.action = Intent.ACTION_MAIN
+            widgetMethodChannel?.invokeMethod("syncRequested", null)
+        }
+        setIntent(intent)
+    }
+
+    private fun markWidgetSyncPending() {
+        getSharedPreferences(KanbanWidgetStore.PREFS_NAME, MODE_PRIVATE)
+            .edit().putBoolean(KEY_PENDING_WIDGET_SYNC, true).apply()
+    }
+
+    private fun consumeWidgetSyncPending(): Boolean {
+        val prefs = getSharedPreferences(KanbanWidgetStore.PREFS_NAME, MODE_PRIVATE)
+        val pending = prefs.getBoolean(KEY_PENDING_WIDGET_SYNC, false)
+        if (pending) prefs.edit().remove(KEY_PENDING_WIDGET_SYNC).apply()
+        return pending
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -57,25 +94,28 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
-        MethodChannel(
+        val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             homeWidgetChannel,
-        ).setMethodCallHandler { call, result ->
+        )
+        widgetMethodChannel = channel
+        channel.setMethodCallHandler { call, result ->
             when (call.method) {
-                "updateSnapshot" -> {
+                "updateProjects" -> {
                     val json = call.argument<String>("json")
                     if (json.isNullOrBlank()) {
-                        result.error("invalid_args", "缺少 json", null)
+                        result.error("invalid_args", "Missing json", null)
                         return@setMethodCallHandler
                     }
                     try {
-                        KanbanWidgetStore(this).saveSnapshot(json)
+                        KanbanWidgetStore(this).saveProjects(json)
                         KanbanHomeWidgetProvider.updateAll(this)
                         result.success(null)
                     } catch (e: Exception) {
                         result.error("update_failed", e.message, null)
                     }
                 }
+                "consumePendingSync" -> result.success(consumeWidgetSyncPending())
                 else -> result.notImplemented()
             }
         }

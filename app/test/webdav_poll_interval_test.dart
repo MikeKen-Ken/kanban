@@ -23,7 +23,8 @@ void main() {
     expect(WebDavConfig.clampPushDebounceSeconds(120), 60);
   });
 
-  test('fromJson upgrades legacy short intervals and fills debounce default', () {
+  test('fromJson upgrades legacy short intervals and fills debounce default',
+      () {
     final config = WebDavConfig.fromJson({
       'enabled': true,
       'serverUrl': 'https://example.com/dav',
@@ -31,15 +32,16 @@ void main() {
       'password': 'p',
       'remotePath': '/KanbanApp',
       'autoSync': true,
+      'autoSyncEnabled': true,
       'pollIntervalSeconds': 15,
     });
     expect(config.pollIntervalSeconds, 60);
     expect(config.pushDebounceSeconds, 60);
-    expect(config.autoSync, isFalse);
+    expect(config.autoSync, isTrue);
     expect(config.autoPull, isFalse);
   });
 
-  test('fromJson 忽略已保存的自动上传/拉取开关', () {
+  test('fromJson requires the new auto-sync opt-in', () {
     final withPull = WebDavConfig.fromJson({
       'enabled': true,
       'serverUrl': 'https://example.com/dav',
@@ -49,7 +51,7 @@ void main() {
       'autoPull': true,
     });
     expect(withPull.autoSync, isFalse);
-    expect(withPull.autoPull, isFalse);
+    expect(withPull.autoPull, isTrue);
 
     final legacy = WebDavConfig.fromJson({
       'enabled': true,
@@ -60,5 +62,11 @@ void main() {
     });
     expect(legacy.autoSync, isFalse);
     expect(legacy.autoPull, isFalse);
+
+    final optedIn = WebDavConfig.fromJson({
+      ...withPull.toJson(),
+      'autoSyncEnabled': true,
+    });
+    expect(optedIn.autoSync, isTrue);
   });
 }

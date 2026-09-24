@@ -32,6 +32,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name=".KanbanWidgetProjectPickerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.Dialog.Alert" />
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false" />

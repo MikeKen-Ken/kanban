@@ -3,23 +3,42 @@ part of 'board_controller.dart';
 extension BoardControllerAndroidWidget on BoardController {
   void scheduleAndroidHomeWidgetRefresh() {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    unawaited(_refreshAndroidHomeWidget());
+    _widgetRefreshRequested = true;
+    if (!_widgetRefreshRunning) unawaited(_runAndroidHomeWidgetRefresh());
+  }
+
+  Future<void> _runAndroidHomeWidgetRefresh() async {
+    _widgetRefreshRunning = true;
+    while (_widgetRefreshRequested) {
+      _widgetRefreshRequested = false;
+      await _refreshAndroidHomeWidget();
+    }
+    _widgetRefreshRunning = false;
   }
 
   Future<void> _refreshAndroidHomeWidget() async {
     try {
-      final currentBoard = board;
-      final projectId = activeProjectId;
-      if (currentBoard == null || projectId == null) return;
-      final projectName =
-          manifest?.findById(projectId)?.title ?? currentBoard.title;
-      final snapshot = buildAndroidWidgetSnapshot(
-        board: currentBoard,
-        projectName: projectName,
-      );
-      await AndroidWidgetBridge.publish(snapshot);
+      final projects = manifest?.projects;
+      if (projects == null || projects.isEmpty) return;
+      final snapshots = <Map<String, dynamic>>[];
+      for (final project in projects) {
+        final projectBoard = await loadBoardSnapshot(project.id);
+        if (projectBoard == null) continue;
+        snapshots.add({
+          'id': project.id,
+          'title': project.title,
+          'snapshot': buildAndroidWidgetSnapshot(
+            board: projectBoard,
+            projectName: project.title,
+          ).toJson(),
+        });
+      }
+      await AndroidWidgetBridge().updateProjects({
+        'activeProjectId': activeProjectId,
+        'projects': snapshots,
+      });
     } catch (error) {
-      debugPrint('刷新安卓小组件失败：$error');
+      debugPrint('Failed to refresh Android home widget: $error');
     }
   }
 }

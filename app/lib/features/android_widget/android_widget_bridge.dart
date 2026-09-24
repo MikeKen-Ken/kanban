@@ -3,26 +3,32 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'android_widget_snapshot.dart';
-
 /// 与安卓原生小组件通信的桥接层。
 class AndroidWidgetBridge {
   AndroidWidgetBridge({MethodChannel? channel})
-      : _channel = channel ??
-            const MethodChannel('com.mikeken.kanban/home_widget');
+      : _channel =
+            channel ?? const MethodChannel('com.mikeken.kanban/home_widget');
 
   final MethodChannel _channel;
 
-  /// 将快照写入原生侧并请求刷新小组件。
-  Future<void> updateSnapshot(Map<String, dynamic> snapshot) async {
+  /// Publish project snapshots and refresh home widgets.
+  Future<void> updateProjects(Map<String, dynamic> projects) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     await _channel.invokeMethod<void>(
-      'updateSnapshot',
-      {'json': jsonEncode(snapshot)},
+      'updateProjects',
+      {'json': jsonEncode(projects)},
     );
   }
 
-  /// 便捷方法：直接提交 [AndroidWidgetSnapshot]。
-  static Future<void> publish(AndroidWidgetSnapshot snapshot) =>
-      AndroidWidgetBridge().updateSnapshot(snapshot.toJson());
+  Future<bool> consumePendingSync() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    return await _channel.invokeMethod<bool>('consumePendingSync') ?? false;
+  }
+
+  void setSyncRequestHandler(Future<void> Function() handler) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'syncRequested') await handler();
+    });
+  }
 }

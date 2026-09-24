@@ -84,8 +84,13 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
   }
 
   void schedulePush() {
-    // 不再自动上传；仅刷新相对 SyncBase 的待上传计数。
     schedulePendingUploadCountRefresh();
+    if (!_autoSyncActive) return;
+    _autoSyncDebounceTimer?.cancel();
+    _autoSyncDebounceTimer = Timer(
+      const Duration(seconds: WebDavConfig.defaultPushDebounceSeconds),
+      requestAutoSync,
+    );
   }
 
   /// 本地变更后短防抖刷新待同步数量，避免与看板突变锁死锁
@@ -173,9 +178,51 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
   }
 
   void startPolling() {
-    // 自动拉取已停用，不挂后台轮询。
     stopPolling();
+    _autoSyncActive = true;
+    _autoSyncTimer = Timer.periodic(
+      const Duration(seconds: WebDavConfig.defaultPollIntervalSeconds),
+      (_) => requestAutoSync(),
+    );
+    requestAutoSync();
   }
 
-  void stopPolling() {}
+  void requestAutoSync() {
+    if (!_autoSyncActive ||
+        _autoSyncRequestInFlight ||
+        _syncInFlight ||
+        _pushInFlight ||
+        status == SyncStatus.syncing) {
+      return;
+    }
+    unawaited(_runAutoSync());
+  }
+
+  Future<void> _runAutoSync() async {
+    _autoSyncRequestInFlight = true;
+    try {
+      final config = await _loadConfig();
+      if (!_autoSyncActive ||
+          !config.enabled ||
+          !config.autoSync ||
+          !config.isConfigured ||
+          _syncInFlight ||
+          _pushInFlight ||
+          status == SyncStatus.syncing) {
+        return;
+      }
+      if (_remainingCooldown() != null) return;
+      await _pullAndMerge(userInitiated: true);
+    } finally {
+      _autoSyncRequestInFlight = false;
+    }
+  }
+
+  void stopPolling() {
+    _autoSyncActive = false;
+    _autoSyncTimer?.cancel();
+    _autoSyncDebounceTimer?.cancel();
+    _autoSyncTimer = null;
+    _autoSyncDebounceTimer = null;
+  }
 }

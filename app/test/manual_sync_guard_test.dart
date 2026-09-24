@@ -67,8 +67,8 @@ void main() {
     service.dispose();
   });
 
-  test('startPolling 不会后台拉取', () async {
-    final service = await _service(_configured());
+  test('startPolling leaves manual mode idle', () async {
+    final service = await _service(_configured(autoSync: false));
     service.startPolling();
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(service.status, SyncStatus.idle);

@@ -22,6 +22,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
   late final TextEditingController _pathController;
 
   bool _enabled = false;
+  bool _autoSync = false;
   bool _obscurePassword = true;
   bool _testing = false;
   bool _saving = false;
@@ -32,6 +33,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
     super.initState();
     final config = context.read<BoardController>().webDavConfig;
     _enabled = config.enabled;
+    _autoSync = config.autoSync;
     _urlController = TextEditingController(text: config.serverUrl);
     _userController = TextEditingController(text: config.username);
     _passController = TextEditingController(text: config.password);
@@ -56,8 +58,8 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
       remotePath: _pathController.text.trim().isEmpty
           ? '/KanbanApp'
           : _pathController.text.trim(),
-      autoSync: false,
-      autoPull: false,
+      autoSync: _autoSync,
+      autoPull: _autoSync,
       pollIntervalSeconds: WebDavConfig.defaultPollIntervalSeconds,
       pushDebounceSeconds: WebDavConfig.defaultPushDebounceSeconds,
     );
@@ -89,7 +91,9 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
       context,
       message: !_enabled
           ? 'Saved'
-          : 'Saved; use the toolbar to upload, download, or merge',
+          : _autoSync
+              ? 'Saved; automatic sync is on while the app is running'
+              : 'Saved; use the toolbar to upload, download, or merge',
     );
     Navigator.pop(context);
   }
@@ -111,16 +115,25 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
               children: [
                 SwitchListTile(
                   title: const Text('Enable WebDAV sync'),
-                  subtitle: const Text(
-                      'Configure the connection after enabling; sync is manual from the toolbar'),
+                  subtitle: const Text('Configure the server connection below'),
                   value: _enabled,
                   onChanged: (v) => setState(() => _enabled = v),
+                ),
+                SwitchListTile(
+                  title: const Text('Auto-sync'),
+                  subtitle: const Text(
+                    'Merge on app open, after local changes, and periodically while running',
+                  ),
+                  value: _autoSync,
+                  onChanged: _enabled
+                      ? (value) => setState(() => _autoSync = value)
+                      : null,
                 ),
                 if (!_enabled)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Text(
-                      'Configure the server connection after enabling; syncing is not automatic',
+                      'Enable WebDAV and enter the server details to sync',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color:
                                 Theme.of(context).colorScheme.onSurfaceVariant,

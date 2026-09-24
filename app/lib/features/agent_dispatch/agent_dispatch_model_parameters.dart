@@ -32,51 +32,65 @@ class AgentDispatchModelParameters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = agentDispatchCompactDropdownStyle(context);
-    return Row(
-      children: [
-        for (var i = 0; i < parameters.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              key: ValueKey(
-                'model-param-${parameters[i].id}-${values[parameters[i].id]}',
+    return LayoutBuilder(builder: (context, constraints) {
+      final stacked = constraints.maxWidth < 400;
+      final fields = <Widget>[
+        for (var i = 0; i < parameters.length; i++)
+          DropdownButtonFormField<String>(
+            key: ValueKey(
+              'model-param-${parameters[i].id}-${values[parameters[i].id]}',
+            ),
+            initialValue: _currentValue(parameters[i]),
+            isDense: true,
+            isExpanded: true,
+            style: style,
+            decoration: agentDispatchCompactDropdownDecoration(
+              _parameterLabel(parameters[i]),
+            ),
+            items: [
+              DropdownMenuItem(
+                value: 'default',
+                child: Text(
+                  _defaultLabel(parameters[i]),
+                  style: style,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              initialValue: _currentValue(parameters[i]),
-              isDense: true,
-              isExpanded: true,
-              style: style,
-              decoration: agentDispatchCompactDropdownDecoration(
-                _parameterLabel(parameters[i]),
-              ),
-              items: [
+              for (final option in parameters[i].options)
                 DropdownMenuItem(
-                  value: 'default',
+                  value: option.value,
                   child: Text(
-                    _defaultLabel(parameters[i]),
+                    option.displayName ?? option.value,
                     style: style,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                for (final option in parameters[i].options)
-                  DropdownMenuItem(
-                    value: option.value,
-                    child: Text(
-                      option.displayName ?? option.value,
-                      style: style,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: enabled
-                  ? (value) {
-                      if (value != null) onChanged(parameters[i].id, value);
-                    }
-                  : null,
-            ),
+            ],
+            onChanged: enabled
+                ? (value) {
+                    if (value != null) onChanged(parameters[i].id, value);
+                  }
+                : null,
           ),
+      ];
+      if (stacked) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < fields.length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              fields[i],
+            ],
+          ],
+        );
+      }
+      return Row(children: [
+        for (var i = 0; i < fields.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(child: fields[i]),
         ],
-      ],
-    );
+      ]);
+    });
   }
 
   String _currentValue(AgentDispatchModelParameter parameter) {
@@ -160,8 +174,7 @@ bool isStockAgentDispatchModelParamValues(
   if (values.isEmpty) return true;
   final preferred = preferredAgentDispatchModelParamValues(parameters);
   if (values.length != preferred.length) return false;
-  return preferred.entries
-      .every((entry) => values[entry.key] == entry.value);
+  return preferred.entries.every((entry) => values[entry.key] == entry.value);
 }
 
 /// 与 [AgentDispatchSettings] 的字面量默认保持一致，避免 config 循环引用。

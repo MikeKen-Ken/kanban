@@ -79,9 +79,9 @@ void main() {
       '普通待办',
     ]);
     expect(snapshot.items.map((item) => item.badge).toList(), [
-      '逾期',
-      '今日',
-      '待办',
+      'Overdue',
+      'Today',
+      'To Do',
     ]);
   });
 
@@ -105,7 +105,7 @@ void main() {
 
     expect(snapshot.items.length, 1);
     expect(snapshot.items.first.title, '返工卡');
-    expect(snapshot.items.first.badge, '返工');
+    expect(snapshot.items.first.badge, 'Rework');
     expect(snapshot.todoCount, 0);
   });
 }

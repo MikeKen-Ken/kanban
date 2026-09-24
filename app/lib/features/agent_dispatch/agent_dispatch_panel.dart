@@ -24,6 +24,7 @@ import 'agent_dispatch_log.dart';
 import 'agent_dispatch_log_refresh_scheduler.dart';
 import 'agent_dispatch_model_catalog_store.dart';
 import 'agent_dispatch_model_parameters.dart';
+import 'agent_dispatch_model_controls.dart';
 import 'agent_dispatch_progress.dart';
 import 'agent_dispatch_repository_field.dart';
 import 'agent_dispatch_registry.dart';
@@ -481,17 +482,16 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
         }
       }
       final catalogParameters = selected?.parameters ?? const [];
-      final nextParams =
-          selectionChanged ||
-                  isStockAgentDispatchModelParamValues(
-                    _settings.modelParamValues,
-                    catalogParameters,
-                  )
-              ? preferredAgentDispatchModelParamValues(catalogParameters)
-              : filterAgentDispatchModelParamValues(
-                  _settings.modelParamValues,
-                  catalogParameters,
-                );
+      final nextParams = selectionChanged ||
+              isStockAgentDispatchModelParamValues(
+                _settings.modelParamValues,
+                catalogParameters,
+              )
+          ? preferredAgentDispatchModelParamValues(catalogParameters)
+          : filterAgentDispatchModelParamValues(
+              _settings.modelParamValues,
+              catalogParameters,
+            );
       setState(() {
         _models = uniqueModels;
         _busy = false;
@@ -777,8 +777,8 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
     final viewport = MediaQuery.sizeOf(context);
     // Account for both the dialog inset and its horizontal content padding.
     // Otherwise a nominal full-width content box overflows medium windows.
-    final dialogWidth = (viewport.width - 96).clamp(320.0, 1552.0).toDouble();
-    final dialogHeight = (viewport.height - 180).clamp(320.0, 820.0).toDouble();
+    final dialogWidth = (viewport.width - 96).clamp(200.0, 1552.0).toDouble();
+    final dialogHeight = (viewport.height - 180).clamp(220.0, 820.0).toDouble();
 
     return AlertDialog(
       insetPadding: const EdgeInsets.all(24),
@@ -881,98 +881,40 @@ class _AgentDispatchPanelState extends State<AgentDispatchPanel> {
                 ),
                 const SizedBox(height: 12),
               ],
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _models.isEmpty
-                        ? InputDecorator(
-                            decoration: agentDispatchCompactDropdownDecoration(
-                              'Model',
-                            ),
-                            child: Text(
-                              'Not loaded yet',
-                              style: agentDispatchCompactDropdownStyle(context),
-                            ),
-                          )
-                        : DropdownButtonFormField<String>(
-                            key: ValueKey('model-${_settings.modelId}'),
-                            initialValue:
-                                _models.any((m) => m.id == _settings.modelId)
-                                    ? _settings.modelId
-                                    : _models.first.id,
-                            isDense: true,
-                            isExpanded: true,
-                            style: agentDispatchCompactDropdownStyle(context),
-                            decoration:
-                                agentDispatchCompactDropdownDecoration('Model'),
-                            items: [
-                              for (final m in _models)
-                                DropdownMenuItem(
-                                  value: m.id,
-                                  child: Text(
-                                    m.label,
-                                    style: agentDispatchCompactDropdownStyle(
-                                      context,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                            ],
-                            onChanged: _busy
-                                ? null
-                                : (id) {
-                                    AgentDispatchModelInfo? selected;
-                                    for (final model in _models) {
-                                      if (model.id == id) {
-                                        selected = model;
-                                        break;
-                                      }
-                                    }
-                                    _persist(_settings.copyWith(
-                                      modelId: id,
-                                      modelParamValues:
-                                          preferredAgentDispatchModelParamValues(
-                                        selected?.parameters ?? const [],
-                                      ),
-                                    ));
-                                  },
-                          ),
-                  ),
-                  if (modelParameters.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Expanded(
-                      flex: 3,
-                      child: AgentDispatchModelParameters(
-                        parameters: modelParameters,
-                        defaultVariant: _selectedModel?.defaultVariant,
-                        values: _settings.modelParamValues,
-                        enabled: !_busy,
-                        onChanged: (id, value) {
-                          final values = Map<String, String>.from(
-                            _settings.modelParamValues,
-                          );
-                          if (value == 'default') {
-                            values.remove(id);
-                          } else {
-                            values[id] = value;
-                          }
-                          _persist(
-                            _settings.copyWith(modelParamValues: values),
-                          );
-                        },
-                      ),
+              AgentDispatchModelControls(
+                models: _models,
+                modelId: _settings.modelId,
+                parameters: modelParameters,
+                defaultVariant: _selectedModel?.defaultVariant,
+                values: _settings.modelParamValues,
+                busy: _busy,
+                onModelChanged: (id) {
+                  AgentDispatchModelInfo? selected;
+                  for (final model in _models) {
+                    if (model.id == id) {
+                      selected = model;
+                      break;
+                    }
+                  }
+                  _persist(_settings.copyWith(
+                    modelId: id,
+                    modelParamValues: preferredAgentDispatchModelParamValues(
+                      selected?.parameters ?? const [],
                     ),
-                  ],
-                  TextButton(
-                    onPressed: _busy ? null : _loadModels,
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    child: Text(_busy ? 'Refreshing…' : 'Refresh'),
-                  ),
-                ],
+                  ));
+                },
+                onParameterChanged: (id, value) {
+                  final values = Map<String, String>.from(
+                    _settings.modelParamValues,
+                  );
+                  if (value == 'default') {
+                    values.remove(id);
+                  } else {
+                    values[id] = value;
+                  }
+                  _persist(_settings.copyWith(modelParamValues: values));
+                },
+                onRefresh: _loadModels,
               ),
               AgentDispatchRunToggles(
                 ignoreCardParams: _settings.ignoreCardParams,

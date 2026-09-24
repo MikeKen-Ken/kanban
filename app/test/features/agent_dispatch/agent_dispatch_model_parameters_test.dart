@@ -47,9 +47,9 @@ void main() {
       ),
     );
 
-    expect(find.text('快速模式'), findsOneWidget);
-    expect(find.text('思考程度'), findsOneWidget);
-    expect(find.text('API 默认（On）'), findsOneWidget);
+    expect(find.text('Fast mode'), findsOneWidget);
+    expect(find.text('Reasoning effort'), findsOneWidget);
+    expect(find.text('API default (On)'), findsOneWidget);
   });
 
   test('preferredAgentDispatchModelParamValues 关闭快速模式并选 Medium', () {

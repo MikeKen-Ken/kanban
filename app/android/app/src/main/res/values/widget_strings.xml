@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_description">显示当前项目的逾期、今日与待办卡片</string>
+    <string name="widget_description">Shows overdue, due today, and to-do cards from a selected project</string>
+    <string name="widget_default_title">Kanban</string>
+    <string name="widget_preview_summary">Overdue 0 · Today 0 · To Do 0</string>
+    <string name="widget_sync_hint">Open the app to sync</string>
+    <string name="widget_no_data">No data yet</string>
+    <string name="widget_no_todos">No to-dos</string>
+    <string name="widget_no_items">No items to display</string>
+    <string name="widget_choose_project">Choose project</string>
+    <string name="widget_sync">Sync now</string>
+    <string name="widget_no_projects">Open the app to load projects</string>
 </resources>

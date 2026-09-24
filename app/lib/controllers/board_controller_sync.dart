@@ -5,8 +5,11 @@ extension BoardControllerSync on BoardController {
     await _withBoardMutation(() async {
       webDavConfig = config;
       await _repository.saveWebDavConfig(config);
-      // 不再后台轮询或自动同步；保存配置本身不触发上传/下载
-      _syncService.stopPolling();
+      if (config.enabled && config.autoSync && config.isConfigured) {
+        _syncService.startPolling();
+      } else {
+        _syncService.stopPolling();
+      }
       notifyListeners();
     });
     unawaited(_syncService.refreshPendingUploadCount());
@@ -36,6 +39,8 @@ extension BoardControllerSync on BoardController {
   Future<void> downloadWallpapersNow() => _syncService.downloadWallpapersNow();
 
   Future<void> syncNow() => mergeNow();
+
+  void requestAutoSync() => _syncService.requestAutoSync();
 
   /// 取消进行中的 WebDAV 同步，恢复可继续操作
   bool cancelSync() {
@@ -199,4 +204,3 @@ extension BoardControllerSync on BoardController {
     });
   }
 }
-

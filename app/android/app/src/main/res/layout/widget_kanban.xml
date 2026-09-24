@@ -7,16 +7,53 @@
     android:orientation="vertical"
     android:padding="12dp">
 
-    <TextView
-        android:id="@+id/widget_project_name"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="看板"
-        android:textColor="@color/widget_text_primary"
-        android:textSize="16sp"
-        android:textStyle="bold" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/widget_project_picker"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:contentDescription="@string/widget_choose_project"
+            android:gravity="center_vertical"
+            android:minHeight="32dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_project_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/widget_default_title"
+                android:textColor="@color/widget_text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▾"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_sync"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:contentDescription="@string/widget_sync"
+            android:gravity="center"
+            android:text="↻"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="25sp" />
+    </LinearLayout>
+
 
     <TextView
         android:id="@+id/widget_summary"
@@ -25,7 +62,7 @@
         android:layout_marginTop="4dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="逾期 0 · 今日 0 · 待办 0"
+        android:text="@string/widget_preview_summary"
         android:textColor="@color/widget_text_secondary"
         android:textSize="12sp" />
 
@@ -90,7 +127,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         android:gravity="center"
-        android:text="暂无待办"
+        android:text="@string/widget_no_todos"
         android:textColor="@color/widget_text_muted"
         android:textSize="13sp"
         android:visibility="gone" />

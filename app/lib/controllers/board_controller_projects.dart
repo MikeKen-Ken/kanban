@@ -36,6 +36,7 @@ extension BoardControllerProjects on BoardController {
       projectThemeIds[projectId] = '';
       notifyListeners();
       _markWorkspaceChanged();
+      scheduleAndroidHomeWidgetRefresh();
       return projectId;
     });
   }
@@ -84,6 +85,7 @@ extension BoardControllerProjects on BoardController {
       await _repository.saveManifest(manifest!);
       notifyListeners();
       _markWorkspaceChanged();
+      scheduleAndroidHomeWidgetRefresh();
     });
   }
 
@@ -324,8 +326,8 @@ extension BoardControllerProjects on BoardController {
         settings.completedAutoClearDays != appSettings.completedAutoClearDays;
     final trashRetentionChanged =
         settings.trashRetentionDays != appSettings.trashRetentionDays;
-    final backupRetentionChanged = settings.autoBackupRetentionDays !=
-        appSettings.autoBackupRetentionDays;
+    final backupRetentionChanged =
+        settings.autoBackupRetentionDays != appSettings.autoBackupRetentionDays;
     appSettings = settings;
     await _repository.saveAppSettings(settings);
     notifyListeners();
@@ -529,6 +531,7 @@ extension BoardControllerProjects on BoardController {
 
       await _persistAppTrash();
       notifyListeners();
+      scheduleAndroidHomeWidgetRefresh();
       return true;
     });
   }
@@ -541,4 +544,3 @@ extension BoardControllerProjects on BoardController {
     });
   }
 }
-

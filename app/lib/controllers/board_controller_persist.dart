@@ -189,8 +189,11 @@ extension BoardControllerPersist on BoardController {
     });
     unawaited(_syncService.refreshPendingUploadCount());
 
-    // 同步改为手动：启动与后台不再自动拉取
-    _syncService.stopPolling();
+    if (webDavConfig.enabled &&
+        webDavConfig.autoSync &&
+        webDavConfig.isConfigured) {
+      _syncService.startPolling();
+    }
 
     unawaited(_syncMcpHost());
     scheduleAndroidHomeWidgetRefresh();
@@ -531,4 +534,3 @@ extension BoardControllerPersist on BoardController {
     return _findDoneColumn(current)?.id == columnId;
   }
 }
-

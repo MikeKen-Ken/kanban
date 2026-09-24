@@ -106,6 +106,8 @@ abstract class _BoardControllerBase extends ChangeNotifier {
 
   /// 串行化看板/清单突变，避免 MCP runOnProject 与 UI 写交错。
   final AsyncMutex _boardMutationMutex = AsyncMutex();
+  bool _widgetRefreshRunning = false;
+  bool _widgetRefreshRequested = false;
 
   /// 已完成自动清空：上次扫描时间（进程内节流）
   DateTime? _lastCompletedAutoClearAt;

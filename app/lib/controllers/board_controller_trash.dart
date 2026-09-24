@@ -195,6 +195,7 @@ extension BoardControllerTrash on BoardController {
     await _repository.saveAppTrash(appTrash);
     notifyListeners();
     _markWorkspaceChanged();
+    scheduleAndroidHomeWidgetRefresh();
     return null;
   }
 
