@@ -31,74 +31,95 @@ class CardDetailActionsBar extends StatelessWidget {
   final Future<void> Function() onComplete;
   final VoidCallback onSave;
 
+  /// Below this width the desktop action row clips Delete against Save.
+  static const _narrowLayoutWidth = 600.0;
+
+  List<Widget> _secondaryActions(BuildContext context, ThemeData theme) {
+    return [
+      TextButton.icon(
+        onPressed: onSaveAsTemplate,
+        icon: const Icon(Icons.bookmark_add_outlined),
+        label: const Text('Save as template'),
+      ),
+      Builder(
+        builder: (context) {
+          final canTransfer =
+              context.watch<BoardController>().projects.length > 1;
+          // 全平台可用（含 Android）；板面另有右键/「⋯」/长按入口
+          return TextButton(
+            onPressed: onTransfer,
+            child: Text(
+              'Move to…',
+              style: TextStyle(
+                color: canTransfer ? null : Theme.of(context).disabledColor,
+              ),
+            ),
+          );
+        },
+      ),
+      TextButton(
+        onPressed: () async {
+          final controller = context.read<BoardController>();
+          final ok = await confirmDeleteCardIfNeeded(
+            context: context,
+            cardTitle: cardTitle,
+            confirmBeforeDelete: controller.appSettings.confirmBeforeDeleteCard,
+          );
+          if (ok && context.mounted) {
+            await controller.deleteCard(columnId, cardId);
+            if (context.mounted) onDeleted();
+          }
+        },
+        child: Text(
+          'Delete',
+          style: TextStyle(color: theme.colorScheme.error),
+        ),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final secondary = _secondaryActions(context, theme);
+    final save = FilledButton(
+      onPressed: onSave,
+      child: const Text('Save'),
+    );
+    final complete = CardDetailCompleteButton(onComplete: onComplete);
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: onSaveAsTemplate,
-                    icon: const Icon(Icons.bookmark_add_outlined),
-                    label: const Text('Save as template'),
-                  ),
-                  Builder(
-                    builder: (context) {
-                      final canTransfer =
-                          context.watch<BoardController>().projects.length > 1;
-                      // 全平台可用（含 Android）；板面另有右键/「⋯」/长按入口
-                      return TextButton(
-                        onPressed: onTransfer,
-                        child: Text(
-                          'Move to…',
-                          style: TextStyle(
-                            color: canTransfer
-                                ? null
-                                : Theme.of(context).disabledColor,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      final controller = context.read<BoardController>();
-                      final ok = await confirmDeleteCardIfNeeded(
-                        context: context,
-                        cardTitle: cardTitle,
-                        confirmBeforeDelete:
-                            controller.appSettings.confirmBeforeDeleteCard,
-                      );
-                      if (ok && context.mounted) {
-                        await controller.deleteCard(columnId, cardId);
-                        if (context.mounted) onDeleted();
-                      }
-                    },
-                    child: Text(
-                      'Delete',
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
-                  ),
-                ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < _narrowLayoutWidth) {
+            return Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                ...secondary,
+                if (showComplete) complete,
+                save,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(children: secondary),
+                ),
               ),
-            ),
-          ),
-          if (showComplete) ...[
-            const SizedBox(width: 8),
-            CardDetailCompleteButton(onComplete: onComplete),
-            const SizedBox(width: 8),
-          ],
-          FilledButton(
-            onPressed: onSave,
-            child: const Text('Save'),
-          ),
-        ],
+              if (showComplete) ...[
+                const SizedBox(width: 8),
+                complete,
+                const SizedBox(width: 8),
+              ],
+              save,
+            ],
+          );
+        },
       ),
     );
   }

@@ -43,6 +43,9 @@ class _CardDetailAgentModelSectionState
   static const _inherit = '';
   static const _omit = Object();
 
+  /// Below this width the desktop single row overflows a phone sheet.
+  static const _narrowLayoutWidth = 600.0;
+
   List<AgentDispatchModelInfo> _models = const [];
 
   @override
@@ -235,117 +238,151 @@ class _CardDetailAgentModelSectionState
     _emit(agentModelParamValues: next);
   }
 
+  List<Widget> _dropdownChildren({
+    required AgentDispatchModelParameter? fast,
+    required AgentDispatchModelParameter? reasoning,
+    required AgentDispatchModelParameter? contextParam,
+  }) {
+    return [
+      _dropdown(
+        label: 'Engine',
+        value: widget.agentEngine ?? _inherit,
+        items: _items(
+          options: [
+            for (final engine in AgentDispatchEngine.values)
+              (value: engine.name, label: engine.label),
+          ],
+        ),
+        onChanged: _onEngine,
+      ),
+      const SizedBox(width: 6),
+      _dropdown(
+        label: 'Model',
+        value: widget.agentModelId ?? _inherit,
+        items: _items(
+          options: [
+            for (final model in _models) (value: model.id, label: model.label),
+          ],
+        ),
+        onChanged: _onModel,
+      ),
+      if (fast != null) ...[
+        const SizedBox(width: 6),
+        _dropdown(
+          label: 'Fast',
+          value: widget.agentModelParamValues[fast.id] ?? _inherit,
+          items: _items(
+            options: [
+              for (final option in fast.options)
+                (
+                  value: option.value,
+                  label: option.displayName ?? option.value,
+                ),
+            ],
+          ),
+          onChanged: (value) => _onParam(fast.id, value),
+        ),
+      ],
+      if (reasoning != null) ...[
+        const SizedBox(width: 6),
+        _dropdown(
+          label: 'Reasoning',
+          value: widget.agentModelParamValues[reasoning.id] ?? _inherit,
+          items: _items(
+            options: [
+              for (final option in reasoning.options)
+                (
+                  value: option.value,
+                  label: option.displayName ?? option.value,
+                ),
+            ],
+          ),
+          onChanged: (value) => _onParam(reasoning.id, value),
+        ),
+      ],
+      if (contextParam != null) ...[
+        const SizedBox(width: 6),
+        _dropdown(
+          label: 'Context',
+          value: widget.agentModelParamValues[contextParam.id] ?? _inherit,
+          items: _items(
+            options: [
+              for (final option in contextParam.options)
+                (
+                  value: option.value,
+                  label: option.displayName ?? option.value,
+                ),
+            ],
+          ),
+          onChanged: (value) => _onParam(contextParam.id, value),
+        ),
+      ],
+    ];
+  }
+
+  List<Widget> _toggleChildren() {
+    return [
+      _compactToggle(
+        label: 'Allow dirty workspace',
+        value: widget.agentAllowDirtyWorkspace == true,
+        onChanged: (value) => _emit(
+          agentAllowDirtyWorkspace: value ? true : null,
+        ),
+      ),
+      _compactToggle(
+        label: 'Enable sandbox',
+        value: widget.agentEnableSandbox == true,
+        onChanged: (value) => _emit(
+          agentEnableSandbox: value ? true : null,
+        ),
+      ),
+      _compactToggle(
+        label: 'Tests required',
+        value: widget.agentRequireTests == true,
+        onChanged: (value) => _emit(
+          agentRequireTests: value ? true : null,
+        ),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final fast = _isCodex ? null : _param((id) => id == 'fast');
     final reasoning = _param(isAgentDispatchReasoningParam);
     final contextParam = _param(isAgentDispatchContextParam);
+    final dropdowns = _dropdownChildren(
+      fast: fast,
+      reasoning: reasoning,
+      contextParam: contextParam,
+    );
+    final toggles = _toggleChildren();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        children: [
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < _narrowLayoutWidth) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: dropdowns),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 0,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: toggles,
+                ),
+              ],
+            );
+          }
+          return Row(
             children: [
-              _dropdown(
-                label: 'Engine',
-                value: widget.agentEngine ?? _inherit,
-                items: _items(
-                  options: [
-                    for (final engine in AgentDispatchEngine.values)
-                      (value: engine.name, label: engine.label),
-                  ],
-                ),
-                onChanged: _onEngine,
-              ),
+              ...dropdowns,
               const SizedBox(width: 6),
-              _dropdown(
-                label: 'Model',
-                value: widget.agentModelId ?? _inherit,
-                items: _items(
-                  options: [
-                    for (final model in _models)
-                      (value: model.id, label: model.label),
-                  ],
-                ),
-                onChanged: _onModel,
-              ),
-              if (fast != null) ...[
-                const SizedBox(width: 6),
-                _dropdown(
-                  label: 'Fast',
-                  value: widget.agentModelParamValues[fast.id] ?? _inherit,
-                  items: _items(
-                    options: [
-                      for (final option in fast.options)
-                        (
-                          value: option.value,
-                          label: option.displayName ?? option.value,
-                        ),
-                    ],
-                  ),
-                  onChanged: (value) => _onParam(fast.id, value),
-                ),
-              ],
-              if (reasoning != null) ...[
-                const SizedBox(width: 6),
-                _dropdown(
-                  label: 'Reasoning',
-                  value: widget.agentModelParamValues[reasoning.id] ?? _inherit,
-                  items: _items(
-                    options: [
-                      for (final option in reasoning.options)
-                        (
-                          value: option.value,
-                          label: option.displayName ?? option.value,
-                        ),
-                    ],
-                  ),
-                  onChanged: (value) => _onParam(reasoning.id, value),
-                ),
-              ],
-              if (contextParam != null) ...[
-                const SizedBox(width: 6),
-                _dropdown(
-                  label: 'Context',
-                  value:
-                      widget.agentModelParamValues[contextParam.id] ?? _inherit,
-                  items: _items(
-                    options: [
-                      for (final option in contextParam.options)
-                        (
-                          value: option.value,
-                          label: option.displayName ?? option.value,
-                        ),
-                    ],
-                  ),
-                  onChanged: (value) => _onParam(contextParam.id, value),
-                ),
-              ],
-              const SizedBox(width: 6),
-              _compactToggle(
-                label: 'Allow dirty workspace',
-                value: widget.agentAllowDirtyWorkspace == true,
-                onChanged: (value) => _emit(
-                  agentAllowDirtyWorkspace: value ? true : null,
-                ),
-              ),
-              _compactToggle(
-                label: 'Enable sandbox',
-                value: widget.agentEnableSandbox == true,
-                onChanged: (value) => _emit(
-                  agentEnableSandbox: value ? true : null,
-                ),
-              ),
-              _compactToggle(
-                label: 'Tests required',
-                value: widget.agentRequireTests == true,
-                onChanged: (value) => _emit(
-                  agentRequireTests: value ? true : null,
-                ),
-              ),
+              ...toggles,
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
