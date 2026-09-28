@@ -37,8 +37,12 @@ void main() {
       const MethodChannel('plugins.flutter.io/path_provider'),
       null,
     );
-    if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
+    try {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    } on FileSystemException {
+      // Windows can keep the temp directory locked for a moment after dispose.
     }
   });
 
@@ -93,10 +97,13 @@ void main() {
 
     final bar = tester.getRect(find.byType(CardDetailActionsBar));
     final deleteRect = tester.getRect(find.text('Delete'));
-    final saveRect = tester.getRect(find.text('Save'));
+    final saveButton =
+        tester.getRect(find.widgetWithText(FilledButton, 'Save'));
     expectFullyInside(deleteRect, bar);
-    expectFullyInside(saveRect, bar);
-    expect(deleteRect.overlaps(saveRect), isFalse);
+    expectFullyInside(saveButton, bar);
+    expect(deleteRect.overlaps(saveButton), isFalse);
+    expect(deleteRect.right, lessThanOrEqualTo(saveButton.left));
+    expect(saveButton.right, closeTo(bar.right - 12, 1));
     expect(tester.takeException(), isNull);
   });
 
@@ -111,6 +118,9 @@ void main() {
     for (final label in const ['Delete', 'Complete', 'Save']) {
       expectFullyInside(tester.getRect(find.text(label)), bar);
     }
+    final saveButton =
+        tester.getRect(find.widgetWithText(FilledButton, 'Save'));
+    expect(saveButton.right, closeTo(bar.right - 12, 1));
     expect(tester.takeException(), isNull);
   });
 
@@ -123,9 +133,12 @@ void main() {
 
     expect(find.byType(SingleChildScrollView), findsOneWidget);
     expect(find.byType(Wrap), findsNothing);
+    final bar = tester.getRect(find.byType(CardDetailActionsBar));
     final deleteRect = tester.getRect(find.text('Delete'));
-    final saveRect = tester.getRect(find.text('Save'));
-    expect(deleteRect.overlaps(saveRect), isFalse);
+    final saveButton =
+        tester.getRect(find.widgetWithText(FilledButton, 'Save'));
+    expect(deleteRect.overlaps(saveButton), isFalse);
+    expect(saveButton.right, closeTo(bar.right - 12, 1));
     expect(tester.takeException(), isNull);
   });
 }

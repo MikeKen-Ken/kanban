@@ -92,13 +92,21 @@ class CardDetailActionsBar extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth < _narrowLayoutWidth) {
-            return Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                ...secondary,
-                if (showComplete) complete,
+                Expanded(
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ...secondary,
+                      if (showComplete) complete,
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
                 save,
               ],
             );
