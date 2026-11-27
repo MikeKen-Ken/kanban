@@ -173,15 +173,28 @@ CardMergeResult mergeCardTwoWay({
     final primary =
         localCard.updatedAt >= remoteCard.updatedAt ? local : remote;
     final other = identical(primary, local) ? remote : local;
-    final preserved = primary.card.hasConflict
-        ? primary.card
-        : _withConflict(
-            primary: primary.card,
-            primaryColumnId: primary.columnId,
-            other: other.card.conflictSide ?? other.card,
-            otherColumnId: other.card.conflictColumnId ?? other.columnId,
-            otherDeleted: other.card.conflictDeleted,
-          );
+    if (primary.card.hasConflict) {
+      return CardMergeResult(
+        placed: PlacedCard(card: primary.card, columnId: primary.columnId),
+      );
+    }
+    final otherTarget = other.card.conflictSide ?? other.card;
+    final alreadyResolvedThatConflict =
+        primary.card.updatedAt > other.card.updatedAt &&
+            (cardsContentEqual(primary.card, other.card) ||
+                cardsContentEqual(primary.card, otherTarget));
+    if (alreadyResolvedThatConflict) {
+      return CardMergeResult(
+        placed: PlacedCard(card: primary.card, columnId: primary.columnId),
+      );
+    }
+    final preserved = _withConflict(
+      primary: primary.card,
+      primaryColumnId: primary.columnId,
+      other: otherTarget,
+      otherColumnId: other.card.conflictColumnId ?? other.columnId,
+      otherDeleted: other.card.conflictDeleted,
+    );
     return CardMergeResult(
       placed: PlacedCard(card: preserved, columnId: primary.columnId),
     );
@@ -338,8 +351,22 @@ CardMergeResult mergeCardThreeWay({
   final loc = local!;
   final rem = remote!;
 
-  // 保留已有冲突
+  // 保留已有冲突；若 base 本身就处于冲突态且仅一侧已解决，采纳已解决结果避免冲突复活
   if (loc.card.hasConflict || rem.card.hasConflict) {
+    if (base.card.hasConflict) {
+      final localResolved = !loc.card.hasConflict && rem.card.hasConflict;
+      final remoteResolved = !rem.card.hasConflict && loc.card.hasConflict;
+      if (localResolved &&
+          cardsContentEqual(rem.card, base.card) &&
+          rem.columnId == base.columnId) {
+        return CardMergeResult(placed: loc);
+      }
+      if (remoteResolved &&
+          cardsContentEqual(loc.card, base.card) &&
+          loc.columnId == base.columnId) {
+        return CardMergeResult(placed: rem);
+      }
+    }
     return mergeCardTwoWay(local: loc, remote: rem);
   }
 
@@ -709,13 +736,22 @@ CardMergeResult mergeCardThreeWay({
     remote: rem.columnId,
   );
 
+  final mergedOrder = loc.card.order != base.card.order &&
+          rem.card.order != base.card.order
+      ? (loc.card.updatedAt >= rem.card.updatedAt
+          ? loc.card.order
+          : rem.card.order)
+      : _threeWayValue(
+          base: base.card.order,
+          local: loc.card.order,
+          remote: rem.card.order,
+        );
+
   final merged = KanbanCard(
     id: loc.card.id,
     title: mergedTitle,
     description: mergedDesc,
-    order: loc.card.updatedAt >= rem.card.updatedAt
-        ? loc.card.order
-        : rem.card.order,
+    order: mergedOrder,
     createdAt: _earliestPositiveEpoch(
       base.card.createdAt,
       _earliestPositiveEpoch(loc.card.createdAt, rem.card.createdAt),

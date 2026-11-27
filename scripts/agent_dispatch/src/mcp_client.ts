@@ -164,7 +164,6 @@ export async function withTimeout<T>(
           () => reject(new Error(`${operation} timed out (${timeoutMs}ms)`)),
           timeoutMs,
         );
-        timer.unref?.();
       }),
     ]);
   } finally {

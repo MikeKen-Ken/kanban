@@ -16,12 +16,12 @@ void main() {
         'consultation',
       ]);
       expect(presets.map((l) => l.name).toList(), [
-        '重要紧急',
-        '重要不急',
-        '次要紧急',
-        '次要不急',
-        '缺资源',
-        '咨询',
+        'Important & urgent',
+        'Important, not urgent',
+        'Urgent, not important',
+        'Not urgent, not important',
+        'Needs resources',
+        'Consultation',
       ]);
       expect(
         presets
@@ -29,11 +29,11 @@ void main() {
             .map((l) => l.description)
             .toList(),
         [
-          '重要且紧急',
-          '重要不紧急',
-          '紧急不重要',
-          '不重要不紧急',
-          '答复、解释、建议或非代码说明类交付',
+          'Important and urgent',
+          'Important but not urgent',
+          'Urgent but not important',
+          'Not important and not urgent',
+          'Answers, explanations, advice, or non-code deliverables',
         ],
       );
       expect(
@@ -69,7 +69,7 @@ void main() {
         selectedKeys: const ['work', 'important_urgent'],
       );
       expect(editing.map((l) => l.key), contains('work'));
-      expect(editing.where((l) => l.key == 'work').single.name, '工作（旧）');
+      expect(editing.where((l) => l.key == 'work').single.name, 'Work (legacy)');
       // 新预置仍在，且不重复
       expect(
         editing.where((l) => l.key == 'important_urgent'),
@@ -80,12 +80,12 @@ void main() {
 
   group('旧预置兼容', () {
     test('旧 key 仍可解析为带（旧）的友好名', () {
-      expect(findKanbanLabel('work')?.name, '工作（旧）');
-      expect(findKanbanLabel('personal')?.name, '个人（旧）');
-      expect(findKanbanLabel('urgent')?.name, '紧急（旧）');
-      expect(findKanbanLabel('idea')?.name, '想法（旧）');
-      expect(findKanbanLabel('documentation')?.name, '文档（旧）');
-      expect(findKanbanLabel('development')?.name, '开发（旧）');
+      expect(findKanbanLabel('work')?.name, 'Work (legacy)');
+      expect(findKanbanLabel('personal')?.name, 'Personal (legacy)');
+      expect(findKanbanLabel('urgent')?.name, 'Urgent (legacy)');
+      expect(findKanbanLabel('idea')?.name, 'Ideas (legacy)');
+      expect(findKanbanLabel('documentation')?.name, 'Documentation (legacy)');
+      expect(findKanbanLabel('development')?.name, 'Development (legacy)');
     });
 
     test('旧 key 不出现在 presetKanbanLabels', () {

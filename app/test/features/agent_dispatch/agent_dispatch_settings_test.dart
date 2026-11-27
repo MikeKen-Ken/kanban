@@ -586,7 +586,7 @@ void main() {
         },
       );
       expect(result.ok, isTrue);
-      expect(result.message, contains('健康检查通过'));
+      expect(result.message, contains('Worker health check passed'));
       expect(result.message, contains('Cursor SDK=1.0.28'));
     } finally {
       await temp.delete(recursive: true);
@@ -653,7 +653,7 @@ void main() {
       );
 
       expect(health.ok, isFalse);
-      expect(health.error, contains('原生模块健康检查失败'));
+      expect(health.error, contains('native module health check failed'));
       expect(health.error, contains('-1073741819'));
     } finally {
       await temp.delete(recursive: true);
@@ -747,10 +747,10 @@ void main() {
     expect(message, contains('0xC0000005'));
     expect(message, contains('send'));
     expect(message, isNot(contains('SQLite')));
-    expect(describeWorkerExitWithoutOutput(1), contains('退出码 1'));
+    expect(describeWorkerExitWithoutOutput(1), contains('code 1'));
     expect(
       describeWorkerExitWithoutOutput(134),
-      contains('堆内存耗尽'),
+      contains('heap out-of-memory'),
     );
     expect(describeWorkerExitWithoutOutput(134),
         contains('KANBAN_WORKER_HEAP_MB'));

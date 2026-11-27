@@ -52,6 +52,7 @@ import '../features/trash/trash_models.dart';
 import '../features/trash/trash_auto_clear.dart';
 import '../settings/app_settings.dart';
 import '../storage/board_storage.dart';
+import '../storage/kanban_paths.dart';
 import '../webdav_sync/webdav_config.dart';
 import '../webdav_sync/webdav_sync_service.dart';
 
@@ -261,6 +262,7 @@ class BoardController extends _BoardControllerBase {
     final syncService = WebDavSyncService(
       loadConfig: () async => controller.webDavConfig,
       loadWorkspace: () async => controller._loadWorkspaceSnapshot(),
+      loadLabelTrash: () => controller.labelTrash,
       saveWorkspace: (workspace) async =>
           controller._applyWorkspaceSnapshot(workspace),
       syncBaseStore: SyncBaseStore(prefs),

@@ -7,8 +7,8 @@ import 'agent_dispatch_powershell_install.dart';
 import 'agent_dispatch_worker_heap.dart';
 
 export 'agent_dispatch_agent_shell.dart';
-export 'agent_dispatch_powershell_msi_install.dart';
-export 'agent_dispatch_powershell_install.dart';
+export 'agent_dispatch_powershell_msi_install.dart' hide expandWindowsEnvVars;
+export 'agent_dispatch_powershell_install.dart' hide expandWindowsEnvVars;
 export 'agent_dispatch_worker_heap.dart';
 
 const _hkcuEnvironment = r'HKCU\Environment';

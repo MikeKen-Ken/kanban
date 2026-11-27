@@ -54,26 +54,48 @@ KanbanBoard mergeBoards({
 
   final winnerCols = {for (final c in winner.columns) c.id: c};
   final loserCols = {for (final c in loser.columns) c.id: c};
+  final localCols = {for (final c in local.columns) c.id: c};
+  final remoteCols = {for (final c in remote.columns) c.id: c};
   final baseCols = {
     for (final c in base?.columns ?? const <KanbanColumn>[]) c.id: c,
   };
 
-  final columnIds = <String>{
-    ...winnerCols.keys,
-    ...loserCols.keys,
-    // note: 仅 base 有而两边都无的列视为已删，不并回
+  final columnIdsWithCards = {
+    for (final placed in mergedPlacement.values) placed.columnId,
   };
 
-  // 三路列删除：base 有、local/remote 都无 → 不保留
-  if (base != null) {
-    for (final id in baseCols.keys) {
-      if (!winnerCols.containsKey(id) && !loserCols.containsKey(id)) {
-        columnIds.remove(id);
-      }
-    }
-    // 确保 local/remote 仍有的列都在
+  bool columnMetaChanged(KanbanColumn current, KanbanColumn baseCol) {
+    return current.title != baseCol.title ||
+        current.order != baseCol.order ||
+        current.colorValue != baseCol.colorValue;
+  }
+
+  final columnIds = <String>{};
+  if (base == null) {
     columnIds.addAll(winnerCols.keys);
     columnIds.addAll(loserCols.keys);
+    columnIds.addAll(columnIdsWithCards);
+  } else {
+    final allCols = <String>{...localCols.keys, ...remoteCols.keys};
+    for (final id in allCols) {
+      final l = localCols[id];
+      final r = remoteCols[id];
+      final b = baseCols[id];
+      if (l != null && r != null) {
+        columnIds.add(id);
+        continue;
+      }
+      if (b == null) {
+        // 一侧新建列 → 保留
+        columnIds.add(id);
+        continue;
+      }
+      // 三路列删除：另一侧未改列元数据且无合并后卡片归属该列 → 采纳删除
+      final survivor = l ?? r!;
+      if (columnIdsWithCards.contains(id) || columnMetaChanged(survivor, b)) {
+        columnIds.add(id);
+      }
+    }
   }
 
   String? conflictTitle;

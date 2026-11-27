@@ -44,12 +44,12 @@ void main() {
 
     await tester.tap(find.text('打开统计'));
     await tester.pump(const Duration(milliseconds: 250));
-    expect(find.text('Token 统计'), findsOneWidget);
+    expect(find.text('Token statistics'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('Token 统计'), findsNothing);
+    expect(find.text('Token statistics'), findsNothing);
     expect(parentShortcutTriggered, isFalse);
   });
 }

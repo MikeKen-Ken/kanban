@@ -3,10 +3,24 @@ part of 'board_controller.dart';
 extension BoardControllerSync on BoardController {
   Future<void> saveWebDavConfig(WebDavConfig config) async {
     await _withBoardMutation(() async {
+      final previous = webDavConfig;
       webDavConfig = config;
       await _repository.saveWebDavConfig(config);
+      if (previous.isConfigured && config.isConfigured) {
+        final oldScope = SyncBaseStore.buildRemoteScope(
+          serverUrl: previous.serverUrl,
+          remotePath: KanbanPaths.remoteBaseDir(previous.remotePath),
+        );
+        final newScope = SyncBaseStore.buildRemoteScope(
+          serverUrl: config.serverUrl,
+          remotePath: KanbanPaths.remoteBaseDir(config.remotePath),
+        );
+        if (oldScope != newScope) {
+          await _syncService.resetRemoteScope(newScope);
+        }
+      }
       if (config.enabled && config.autoSync && config.isConfigured) {
-        _syncService.startPolling();
+        _syncService.startPolling(config);
       } else {
         _syncService.stopPolling();
       }
@@ -21,7 +35,7 @@ extension BoardControllerSync on BoardController {
 
   /// 全量上传本机工作区，覆盖云端（相对 SyncBase 不做增量跳过）。
   Future<void> uploadNow() async {
-    await _syncService.pushNow(force: true, baseline: null);
+    await _syncService.pushNow(force: true);
   }
 
   /// 全量下载云端工作区，覆盖本机，不合并。

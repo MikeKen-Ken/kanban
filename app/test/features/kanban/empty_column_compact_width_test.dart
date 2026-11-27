@@ -78,6 +78,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final listRect = tester.getRect(find.byType(ListView));
     final bodyColumn = find
         .descendant(
           of: find.byType(KanbanColumnWidget),
@@ -87,17 +88,19 @@ void main() {
     final width = tester.getSize(bodyColumn).width;
     expect(width, lessThan(tightWidth - 40));
     expect(width, greaterThan(80));
-    expect(tester.getTopLeft(bodyColumn).dx, 12);
+    expect(tester.getTopLeft(bodyColumn).dx, listRect.left + 12);
 
-    scrollController.jumpTo(scrollController.position.maxScrollExtent);
-    await tester.pump();
+    for (var i = 0; i < 3; i++) {
+      scrollController.jumpTo(scrollController.position.maxScrollExtent);
+      await tester.pump();
+    }
     final lastBodyColumn = find
         .descendant(
           of: find.byType(KanbanColumnWidget).last,
           matching: find.byType(Column),
         )
         .first;
-    expect(tester.getTopRight(lastBodyColumn).dx, tightWidth - 12);
+    expect(tester.getTopRight(lastBodyColumn).dx, listRect.right - 12);
     scrollController.dispose();
 
     // 卸掉界面，避免 tearDown 删目录时文件仍被占用。

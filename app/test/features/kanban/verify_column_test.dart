@@ -15,7 +15,7 @@ void main() {
     test('按标题解析，列 id 可自定义', () {
       final col = KanbanColumn(
         id: 'db12a167-6019-4ea5-9af2-582e359a68a1',
-        title: '待验证',
+        title: KanbanBoard.defaultVerifyColumnTitle,
         order: 0,
         cards: const [],
       );
@@ -184,7 +184,12 @@ void main() {
         shouldDefaultPreviewMarkdown(
           columnId: 'doing',
           columns: [
-            KanbanColumn(id: 'doing', title: '进行中', order: 0, cards: const []),
+            KanbanColumn(
+              id: 'doing',
+              title: defaultDoingColumnTitle,
+              order: 0,
+              cards: const [],
+            ),
           ],
         ),
         isTrue,
@@ -195,7 +200,7 @@ void main() {
           columns: [
             KanbanColumn(
               id: 'e808b509-90fb-497e-8ad9-71b2c6b97e42',
-              title: '阻塞中',
+              title: defaultBlockedColumnTitle,
               order: 0,
               cards: const [],
             ),

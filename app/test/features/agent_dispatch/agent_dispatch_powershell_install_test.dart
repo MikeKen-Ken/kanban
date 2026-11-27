@@ -106,7 +106,7 @@ void main() {
     );
 
     expect(result.ok, isFalse);
-    expect(result.error, contains('未安装 winget'));
+    expect(result.error, contains('winget is not installed'));
     expect(result.error, contains('GitHub MSI'));
   });
 

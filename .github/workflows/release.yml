@@ -23,25 +23,12 @@ on:
         description: Build Linux arm64 tar.gz
         type: boolean
         default: false
-      build_linux_deb_x64:
-        description: Build Linux x64 deb
-        type: boolean
-        default: false
-      build_linux_deb_arm64:
-        description: Build Linux arm64 deb
-        type: boolean
-        default: false
-      build_linux_appimage:
-        description: Build Linux x64 AppImage
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 env:
   FLUTTER_VERSION: "3.44.0"
-  RUST_VERSION: "1.84.1"
   APK_BUILD_DIR: "/tmp/build"
 
 jobs:
@@ -62,14 +49,11 @@ jobs:
   build_apk:
     needs: build
     if: ${{ inputs.build_all || inputs.build_android }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Remove proprietary dependencies
-        run: sh scripts/remove_proprietary_dependencies.sh
 
       - name: Copy files to env.APK_BUILD_DIR
         run: |
@@ -86,16 +70,8 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: ${{ env.RUST_VERSION }}
-
-      - name: Check rust-toolchain.toml
-        working-directory: ${{ env.APK_BUILD_DIR }}/app
-        run: rustup show
+          channel: stable
+          cache: true
 
       - name: Dependencies
         working-directory: ${{ env.APK_BUILD_DIR }}/app
@@ -129,16 +105,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: "stable"
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: ${{ env.RUST_VERSION }}
-
-      - name: Check rust-toolchain.toml
-        working-directory: app
-        run: rustup show
+          cache: true
 
       - name: Dependencies
         working-directory: app
@@ -193,172 +160,6 @@ jobs:
           name: tar-gz-arm-64-result
           path: ./app/*.tar.gz
 
-  build_deb_x86_64:
-    needs: build
-    if: ${{ inputs.build_all || inputs.build_linux_deb_x64 }}
-    runs-on: ubuntu-24.04
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake libgtk-3-dev ninja-build libayatana-appindicator3-dev
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: "stable"
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: ${{ env.RUST_VERSION }}
-
-      - name: Check rust-toolchain.toml
-        working-directory: app
-        run: rustup show
-
-      - name: Enable dart_distributor
-        run: dart pub global activate flutter_distributor
-
-      - name: Update PATH
-        run: echo 'export PATH="$PATH:$HOME/.pub-cache/bin"' >> ~/.bashrc
-
-      - name: Build deb package
-        working-directory: app
-        run: flutter_distributor package --platform linux --targets deb
-
-      - name: Find deb file
-        id: find_deb
-        run: |
-          VERSION=${{ needs.build.outputs.version }}
-          DEB_PATH=$(find app/dist -name "localsend_app-$VERSION*-linux.deb")
-          echo "deb_path=$DEB_PATH" >> $GITHUB_OUTPUT
-
-      - name: Check if deb file exists
-        id: check_file
-        run: |
-          if [[ ! -f "${{ steps.find_deb.outputs.deb_path }}" ]]; then
-            echo "File not found: ${{ steps.find_deb.outputs.deb_path }}"
-            exit 1
-          fi
-
-      - name: Upload deb file
-        uses: actions/upload-artifact@v6
-        with:
-          name: deb-x86-64-result
-          path: ${{ steps.find_deb.outputs.deb_path }}
-
-  # Manage the Flutter version on the self-hosted runner manually!
-  # Flutter currently doesn't provide Linux ARM64 binaries.
-  build_deb_arm_64:
-    needs: build
-    if: ${{ inputs.build_all || inputs.build_linux_deb_arm64 }}
-    runs-on: [ self-hosted, linux, arm64 ]
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake libgtk-3-dev ninja-build libayatana-appindicator3-dev
-
-      - name: Enable dart_distributor
-        run: dart pub global activate flutter_distributor
-
-      - name: Build deb package
-        working-directory: app
-        run: PATH="$PATH:$HOME/.pub-cache/bin" flutter_distributor package --platform linux --targets deb
-
-      - name: Find deb file
-        id: find_deb
-        run: |
-          VERSION=${{ needs.build.outputs.version }}
-          DEB_PATH=$(find app/dist -name "localsend_app-$VERSION*-linux.deb")
-          echo "deb_path=$DEB_PATH" >> $GITHUB_OUTPUT
-
-      - name: Check if deb file exists
-        id: check_file
-        run: |
-          if [[ ! -f "${{ steps.find_deb.outputs.deb_path }}" ]]; then
-            echo "File not found: ${{ steps.find_deb.outputs.deb_path }}"
-            exit 1
-          fi
-
-      - name: Upload deb file
-        uses: actions/upload-artifact@v6
-        with:
-          name: deb-arm-64-result
-          path: ${{ steps.find_deb.outputs.deb_path }}
-
-  build_appimage_x86_64:
-    needs: build
-    if: ${{ inputs.build_all || inputs.build_linux_appimage }}
-    runs-on: ubuntu-24.04
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake libgtk-3-dev ninja-build libayatana-appindicator3-dev libfuse2
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: "stable"
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: ${{ env.RUST_VERSION }}
-
-      - name: Check rust-toolchain.toml
-        working-directory: app
-        run: rustup show
-
-      - name: Dependencies
-        working-directory: app
-        run: flutter pub get
-
-      - name: Compile linux
-        working-directory: app
-        run: flutter build linux
-
-      - name: Copy compiled linux files
-        run: |
-          mkdir AppDir
-          cp -r app/build/linux/x64/release/bundle/* AppDir/
-
-      - name: Copy logo to AppDir
-        run: |
-          mkdir -p AppDir/usr/share/icons/hicolor/32x32/apps
-          cp app/assets/img/logo-32.png AppDir/usr/share/icons/hicolor/32x32/apps/localsend.png
-          mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
-          cp app/assets/img/logo-128.png AppDir/usr/share/icons/hicolor/128x128/apps/localsend.png
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          cp app/assets/img/logo-256.png AppDir/usr/share/icons/hicolor/256x256/apps/localsend.png
-
-      - name: Copy Recipe to correct location
-        run: cp scripts/appimage/AppImageBuilder_x86_64.yml AppImageBuilder.yml
-
-      - name: Build AppImage
-        uses: AppImageCrafters/build-appimage@57c3bc6963f870ce3be103117de5b5e33ffbaeb6
-        with:
-          recipe: ./AppImageBuilder.yml
-
-      - name: Upload AppImage file
-        uses: actions/upload-artifact@v6
-        with:
-          name: appimage-x86-64-result
-          path: ./*.AppImage
-
   build_windows_zip_x86_64:
     needs: build
     if: ${{ inputs.build_all || inputs.build_windows }}
@@ -380,9 +181,9 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          # 3.38.2+ supports VS 2026 on windows-latest; pin 3.38.10 to match CI.
-          flutter-version: "3.38.10"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: "stable"
+          cache: true
 
       - name: Dependencies
         working-directory: app
@@ -405,6 +206,12 @@ jobs:
           Copy-Item ../scripts/windows/x64/msvcp140.dll build/windows/x64/runner/Release/
           Copy-Item ../scripts/windows/x64/vcruntime140.dll build/windows/x64/runner/Release/
           Copy-Item ../scripts/windows/x64/vcruntime140_1.dll build/windows/x64/runner/Release/
+
+      - name: Test Agent Worker on Windows
+        working-directory: scripts/agent_dispatch
+        run: |
+          npm ci
+          npm test
 
       - name: Package self-contained Agent Worker
         run: >
@@ -488,82 +295,6 @@ jobs:
         with:
           tag: v${{ needs.build.outputs.version }}
           assets: upload/linux-arm-64.tar.gz#Kanban-${{ needs.build.outputs.version }}-linux-arm-64.tar.gz
-
-  upload_linux_deb_x64:
-    needs: [build, build_deb_x86_64]
-    if: ${{ (inputs.build_all || inputs.build_linux_deb_x64) && needs.build_deb_x86_64.result == 'success' }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v7
-        with:
-          name: deb-x86-64-result
-          path: deb-x86-64-result
-
-      - name: Prepare deb asset
-        run: |
-          mkdir -p upload
-          cp deb-x86-64-result/*.deb upload/linux-x86-64.deb
-        shell: bash
-
-      - name: Upload Linux x64 deb to release
-        uses: ./.github/actions/publish-release-asset
-        with:
-          tag: v${{ needs.build.outputs.version }}
-          assets: upload/linux-x86-64.deb#Kanban-${{ needs.build.outputs.version }}-linux-x86-64.deb
-
-  upload_linux_deb_arm64:
-    needs: [build, build_deb_arm_64]
-    if: ${{ (inputs.build_all || inputs.build_linux_deb_arm64) && needs.build_deb_arm_64.result == 'success' }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v7
-        with:
-          name: deb-arm-64-result
-          path: deb-arm-64-result
-
-      - name: Prepare deb asset
-        run: |
-          mkdir -p upload
-          cp deb-arm-64-result/*.deb upload/linux-arm-64.deb
-        shell: bash
-
-      - name: Upload Linux arm64 deb to release
-        uses: ./.github/actions/publish-release-asset
-        with:
-          tag: v${{ needs.build.outputs.version }}
-          assets: upload/linux-arm-64.deb#Kanban-${{ needs.build.outputs.version }}-linux-arm-64.deb
-
-  upload_linux_appimage:
-    needs: [build, build_appimage_x86_64]
-    if: ${{ (inputs.build_all || inputs.build_linux_appimage) && needs.build_appimage_x86_64.result == 'success' }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v7
-        with:
-          name: appimage-x86-64-result
-          path: appimage-x86-64-result
-
-      - name: Prepare AppImage asset
-        run: |
-          mkdir -p upload
-          for file in appimage-x86-64-result/*; do
-            if [[ $file == *.AppImage && $file != *.AppImage.zsync ]]; then
-              cp "$file" upload/linux-x86-64.AppImage
-            fi
-          done
-        shell: bash
-
-      - name: Upload Linux AppImage to release
-        uses: ./.github/actions/publish-release-asset
-        with:
-          tag: v${{ needs.build.outputs.version }}
-          assets: upload/linux-x86-64.AppImage#Kanban-${{ needs.build.outputs.version }}-linux-x86-64.AppImage
 
   upload_windows:
     needs: [build, build_windows_zip_x86_64]

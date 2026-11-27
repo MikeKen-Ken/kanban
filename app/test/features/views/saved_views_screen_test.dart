@@ -23,9 +23,9 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('saved-view-show-all')), findsOneWidget);
-    expect(find.text('显示全部'), findsOneWidget);
-    expect(find.text('还没有保存视图'), findsOneWidget);
-    expect(find.textContaining('在“搜索”中设置'), findsOneWidget);
+    expect(find.text('Show all'), findsOneWidget);
+    expect(find.text('No saved views yet'), findsOneWidget);
+    expect(find.textContaining('Set a scope and filters in Search'), findsOneWidget);
   });
 
   testWidgets('可重命名并删除保存视图', (tester) async {
@@ -41,32 +41,32 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('管理「今日重点」'));
+    await tester.tap(find.byTooltip('Manage "今日重点"'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('重命名'));
+    await tester.tap(find.text('Rename'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('saved-view-name')),
       '本周重点',
     );
-    await tester.tap(find.text('保存'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(renamed, '本周重点');
     expect(find.text('本周重点'), findsOneWidget);
-    expect(find.text('已重命名为「本周重点」'), findsOneWidget);
+    expect(find.text('Renamed to "本周重点"'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('管理「本周重点」'));
+    await tester.tap(find.byTooltip('Manage "本周重点"'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('删除'));
+    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('卡片不会受到影响'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    expect(find.textContaining('Cards will not be affected'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
     expect(deleted, isTrue);
-    expect(find.text('还没有保存视图'), findsOneWidget);
-    expect(find.text('显示全部'), findsOneWidget);
+    expect(find.text('No saved views yet'), findsOneWidget);
+    expect(find.text('Show all'), findsOneWidget);
   });
 
   testWidgets('点击保存视图会将其返回调用页', (tester) async {

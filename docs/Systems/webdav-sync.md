@@ -2,54 +2,51 @@
 
 ## 触发
 
-- **自动同步默认关闭**：在设置页开启后，应用启动、返回前台、本地改动后短防抖，以及应用运行时每 10 分钟执行三路合并。应用关闭后没有后台同步任务。
-- **上传**：全量推送当前本机工作区覆盖云端（`baseline` 为空，含远端多余项目/列清理）；覆盖前需二次确认
-- **下载**：全量拉取云端工作区并覆盖本机，不合并、不回推；云端无数据时失败并保留本机
-- **合并**：现有 `pullAndMerge`：三路合并后，有变更再增量写回远端；**不受**冷却限制
-- 保存 WebDAV 配置：开启自动同步时立即尝试合并并启动应用内定时器；关闭时停止定时器
-- 配置项：`WebDavConfig.enabled`、`autoSync`；`autoPull` 保留兼容字段
+- **自动同步默认关闭**：在设置页开启后，应用启动、返回前台、本地改动后防抖（默认 60s，遵循 `WebDavConfig.pushDebounceSeconds`），以及应用运行时定期（默认 10 分钟，遵循 `WebDavConfig.pollIntervalSeconds`）执行三路合并。应用关闭后没有后台同步任务。
+- **上传**：全量打包当前本机工作区（JSON + 附件 + 标签回收站）为 `workspace.kanban-backup` 覆盖云端；覆盖前需二次确认
+- **下载**：全量拉取云端 `workspace.kanban-backup` 并覆盖本机，不合并、不回推；云端无数据时失败并保留本机
+- **合并**：`pullAndMerge`：三路合并后，有变更再回推 `workspace.kanban-backup`；**不受**冷却限制
+- **壁纸上传 / 下载**：单独同步工作区壁纸库压缩包 `wallpapers.kanban-backup`（与主包分离，避免每次改卡片重传壁纸）；覆盖前需二次确认
+- 保存 WebDAV 配置：开启自动同步时立即尝试合并并启动应用内定时器；关闭时停止定时器；切换服务器地址或远端路径时自动清理旧 `SyncBase` 基线
+- 配置项：`WebDavConfig.enabled`、`autoSync`、`pollIntervalSeconds`、`pushDebounceSeconds`；`autoPull` 保留兼容字段
 
 ## 节流与退避
 
 - 用「上次尝试时间」节流，失败也会拉开间隔（不再只认成功时间）
 - 失败指数退避；识别 `429` / `toomanyrequests` 时从 60s 起跳，上限 10 分钟
-- 手动同步进行中再点上传/下载/合并会排队，结束后再执行
-- 合并结果与远端 JSON 一致时跳过 JSON 回推，减少无意义写入
-- **上传**全量覆盖云端 JSON（含清理远端多余项目/列）；**合并回推**仍按相对远端的增量
-- **下载**全量拉取云端 JSON（不复用 SyncBase 跳过），覆盖本机后不回推
-- **合并拉取**：读远端 `sync_index.json`，与本地 SyncBase 内容指纹比对；一致则复用 SyncBase、不下载该 JSON。无索引或无 SyncBase 时全量拉取。
+- 手动同步 / 壁纸同步进行中再触发操作会排队，结束后按序执行
+- **拉取短路**：先仅捕获本机 JSON 与 `labelTrash` 并比对远端 `workspace.complete.json`（含 `sha256`、`SyncBase` 与本机缺失附件检查）；命中一致时直接跳过包下载与全量附件读盘
+- **合并回推判定**：合并结果相对远端在工作区 JSON、`labelTrash` 或裁剪后的附件集合有差异时才回推；从旧版分文件树迁移时补齐live包并仅在首次清理旧树
+- **写入原子性**：上传实时归档时先写临时文件再 `MOVE` 覆盖（不支持 `MOVE` 覆盖的服务器回退直写），全程不提前删除 `complete.json`，避免并发读端误判云端为空库
 
 ## 远端结构
 
 根目录（默认 `/KanbanApp`）下：
 
-- `projects.json` — 项目清单
-- `app_trash.json` — 应用级回收站
-- `shared_content.json` — 共享内容（标签等）
-- `wallpapers/` — 工作区级壁纸原图与缩略图；下载后持久化到设备本地缓存，项目仅引用壁纸 id
-- `sync_index.json` — 各 JSON 文件内容指纹（sha256）；拉取时与本地 SyncBase 比对，跳过未变更文件。旧客户端可忽略；无索引时回退全量拉取
-- `projects/{projectId}/board.json` + `columns/*.json` + `settings.json` + `trash.json` + `attachments/`
+- `workspace.kanban-backup` + `workspace.complete.json` — 实时工作区归档包及其完成校验标记（含工作区 JSON、`label_trash.json` 与各项目附件）
+- `wallpapers.kanban-backup` + `wallpapers.complete.json` — 工作区壁纸库压缩包及其完成校验标记
+- `backups/{backupId}/archive.kanban-backup` + `complete.json` — 时间点备份快照
+- 旧版分文件树（`projects.json`、`app_trash.json`、`shared_content.json`、`sync_index.json`、`projects/`）：拉取时仍保持向后兼容读取；迁移到 live 归档后按远端作用域仅清理一次
 
 ## 进度
 
 - `SyncProgress`：阶段（准备/拉取/合并/上传/附件/收尾）、已完成/总数、当前文件标签、跳过未变更文件数
 - 顶栏同步中显示「同步中 3/12」；悬停可看阶段与当前文件
-- **拉取增量**：优先读 `sync_index.json`；若与 SyncBase 指纹一致则跳过对应 JSON 下载（不依赖 WebDAV ETag）。附件仍按引用全量对齐（本地已有则跳过）
-- 推送端：文件级增量上传；每次 JSON 推送成功后重写 `sync_index.json`
 
 ## 合并层级
 
 合并入口：`features/sync_conflict/mergeWorkspaces`。
 
-使用本地 **SyncBase**（上次成功同步后的工作区快照）做三路合并：`local` vs `base` vs `remote`。
+使用本地 **SyncBase**（上次成功同步后的工作区快照，按远端地址与路径隔离）做三路合并：`local` vs `base` vs `remote`。
 
 | 实体 | 策略 |
 |---|---|
 | Manifest | 有 base 时传播删除：一侧缺且对侧相对 base 未改 → 采纳删除；对侧改过（条目或看板/设置内容）→ 挂 `conflictDeleted`；无 base 时按 id **并集**（避免误删离线新建）。同 id 标题冲突挂 `conflictTitle` |
-| Board | 列 id 并集；列元数据 LWW；卡片见下 |
-| Card | 非重叠字段自动合；同字段冲突 / 删改冲突 → `conflictSide` |
+| Board | 有 base 时传播列删除（对侧未改列元数据且无合并后卡片留在该列 → 采纳删除；否则保留）；无 base 时列 id 并集；列元数据 LWW；卡片见下 |
+| Card | 非重叠字段自动合（含 `order` 三路合）；同字段冲突 / 删改冲突 → `conflictSide`；若 `base` 已有冲突且一侧已解决而另一侧未改，直接采纳已解决结果避免冲突复活 |
 | Settings | 字段级合并；冲突挂 `conflictSide` |
-| Trash | 按条目 id 并集；项目被采纳删除且回收站尚无快照时补写项目条目 |
+| Trash | 按条目 id 并集（含 `labelTrash`）；项目被采纳删除且回收站尚无快照时补写项目条目 |
+| Attachments | 合并后按实际引用集合裁剪孤儿附件，避免已删除卡片的附件在包内复活 |
 
 合并结果相对远端有变更时再增量 push，避免并集内容只留在本机。SyncBase 在推送成功且本机快照未漂移后推进；若同步期间又有本地写入则排队再推。
 

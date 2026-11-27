@@ -130,10 +130,10 @@ void main() {
       ),
     );
 
-    expect(find.text('完成'), findsOneWidget);
+    expect(find.text('Complete'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('card-detail-complete')));
     await tester.pump();
-    expect(find.text('已完成'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
     expect(called, 0);
 
     await tester.pump(CardCompleteMotion.button);

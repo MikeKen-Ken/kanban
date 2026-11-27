@@ -88,47 +88,49 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1200, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
+    try {
+      await tester.pumpWidget(buildScreen(cards: const []));
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(buildScreen(cards: const []));
-    await tester.pumpAndSettle();
+      final todayMarker = find.byKey(const ValueKey('calendar-today-marker'));
+      expect(todayMarker, findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('今天')), findsOneWidget);
 
-    final todayMarker = find.byKey(const ValueKey('calendar-today-marker'));
-    expect(todayMarker, findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('今天')), findsOneWidget);
+      final todayCell = find
+          .ancestor(
+            of: todayMarker,
+            matching: find.byType(Material),
+          )
+          .first;
+      expect(todayCell, findsOneWidget);
+      final today = DateTime.now();
+      final todayNumber = find.descendant(
+        of: todayCell,
+        matching: find.text('${today.day}'),
+      );
+      expect(todayNumber, findsOneWidget);
 
-    final todayCell = find
-        .ancestor(
-          of: todayMarker,
-          matching: find.byType(Material),
-        )
-        .first;
-    expect(todayCell, findsOneWidget);
-    final today = DateTime.now();
-    final todayNumber = find.descendant(
-      of: todayCell,
-      matching: find.text('${today.day}'),
-    );
-    expect(todayNumber, findsOneWidget);
+      final cellRect = tester.getRect(todayCell);
+      final numberRect = tester.getRect(todayNumber);
+      expect((numberRect.center.dx - cellRect.center.dx).abs(), lessThan(1));
+      expect((numberRect.center.dy - cellRect.center.dy).abs(), lessThan(1));
 
-    final cellRect = tester.getRect(todayCell);
-    final numberRect = tester.getRect(todayNumber);
-    expect((numberRect.center.dx - cellRect.center.dx).abs(), lessThan(1));
-    expect((numberRect.center.dy - cellRect.center.dy).abs(), lessThan(1));
+      final cells = find.descendant(
+        of: find.byType(GridView),
+        matching: find.byType(Material),
+      );
+      final todayElement = todayCell.evaluate().single;
+      final anotherCell = cells.evaluate().firstWhere(
+            (element) => element != todayElement,
+          );
+      await tester.tap(find.byWidget(anotherCell.widget));
+      await tester.pumpAndSettle();
 
-    final cells = find.descendant(
-      of: find.byType(GridView),
-      matching: find.byType(Material),
-    );
-    final todayElement = todayCell.evaluate().single;
-    final anotherCell = cells.evaluate().firstWhere(
-          (element) => element != todayElement,
-        );
-    await tester.tap(find.byWidget(anotherCell.widget));
-    await tester.pumpAndSettle();
-
-    expect(todayMarker, findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('今天')), findsOneWidget);
+      expect(todayMarker, findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('今天')), findsOneWidget);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('本月与非本月日期使用不同的格子底色', (tester) async {

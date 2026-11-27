@@ -13,7 +13,6 @@ permissions:
 
 env:
   FLUTTER_VERSION: "3.44.0"
-  RUST_VERSION: "1.84.1"
   APK_BUILD_DIR: "/tmp/build"
 
 jobs:
@@ -33,14 +32,11 @@ jobs:
 
   build_apk:
     needs: build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Remove proprietary dependencies
-        run: sh scripts/remove_proprietary_dependencies.sh
 
       - name: Copy files to env.APK_BUILD_DIR
         run: |
@@ -57,12 +53,8 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: ${{ env.RUST_VERSION }}
+          channel: stable
+          cache: true
 
       - name: Dependencies
         working-directory: ${{ env.APK_BUILD_DIR }}/app

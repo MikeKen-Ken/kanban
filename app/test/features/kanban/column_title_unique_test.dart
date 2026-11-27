@@ -30,7 +30,7 @@ void main() {
   });
 
   test('addColumn 拒绝同名列', () async {
-    final err = await controller.addColumn('待返工');
+    final err = await controller.addColumn(KanbanBoard.defaultReworkColumnTitle);
     expect(err, contains('已存在同名列'));
     expect(
       controller.board!.columns
@@ -41,11 +41,11 @@ void main() {
   });
 
   test('renameColumn 拒绝改成已有列名', () async {
-    final err = await controller.renameColumn('todo', '进行中');
+    final err = await controller.renameColumn('todo', 'In Progress');
     expect(err, contains('已存在同名列'));
     expect(
       controller.board!.columns.firstWhere((c) => c.id == 'todo').title,
-      '待办',
+      'To Do',
     );
   });
 }

@@ -71,7 +71,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('card-agent-conversation-open')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Submit follow-up'), findsOneWidget);
+    expect(find.text('Send follow-up'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('card-agent-conversation-input')),
@@ -82,7 +82,7 @@ void main() {
     );
     expect(find.text('请默认关闭窗口'), findsOneWidget);
     await tester.runAsync(() async {
-      await tester.tap(find.text('Submit follow-up'));
+      await tester.tap(find.text('Send follow-up'));
       await tester.pump();
       await Future<void>.delayed(const Duration(seconds: 3));
     });
@@ -129,7 +129,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Submit follow-up'), findsNothing);
+    expect(find.text('Send follow-up'), findsNothing);
     expect(parentSynced, isTrue);
   });
 
@@ -219,7 +219,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Submit follow-up'), findsNothing);
+    expect(find.text('Send follow-up'), findsNothing);
     expect(parentSynced, isTrue);
     expect(controller.findCardById(cardId)!.verificationFeedback, isEmpty);
     expect(controller.findColumnIdForCard(cardId), 'todo');

@@ -41,7 +41,7 @@ void main() {
     expect(await boardFile.exists(), isTrue);
     expect(await todoFile.exists(), isTrue);
     expect(await boardFile.readAsString(), contains('"version": 2'));
-    expect(await todoFile.readAsString(), contains('"title": "待办"'));
+    expect(await todoFile.readAsString(), contains('"title": "To Do"'));
 
     final loaded = await storage.loadBoard(board.id);
     expect(loaded.columns.length, 7);
@@ -102,7 +102,7 @@ void main() {
       ],
     );
     expect(card.matchesSearch('报告'), isTrue);
-    expect(card.matchesSearch('工作'), isTrue); // 旧 key work →「工作（旧）」
+    expect(card.matchesSearch('Work'), isTrue); // 旧 key work →「Work (legacy)」
     expect(card.matchesSearch('截图'), isTrue);
     expect(card.matchesSearch('deadbeef'), isTrue);
     expect(card.matchesSearch('封面图'), isTrue);
@@ -117,7 +117,7 @@ void main() {
       createdAt: 0,
       labels: ['important_not_urgent'],
     );
-    expect(card.matchesSearch('重缓'), isTrue);
-    expect(card.matchesSearch('重要不紧急'), isTrue);
+    expect(card.matchesSearch('not urgent'), isTrue);
+    expect(card.matchesSearch('Important, not urgent'), isTrue);
   });
 }

@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../agent_dispatch/agent_dispatch_config.dart';
 import '../agent_dispatch/agent_dispatch_model_catalog_store.dart';
-import '../agent_dispatch/agent_dispatch_model_parameters.dart';
 
 /// 卡片详情中的紧凑 Agent 覆盖选择：默认全部不选，运行时沿用工作台。
 class CardDetailAgentModelSection extends StatefulWidget {

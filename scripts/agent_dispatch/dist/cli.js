@@ -2330,7 +2330,6 @@ async function withTimeout(operation, timeoutMs, work) {
           () => reject(new Error(`${operation} timed out (${timeoutMs}ms)`)),
           timeoutMs
         );
-        timer.unref?.();
       })
     ]);
   } finally {

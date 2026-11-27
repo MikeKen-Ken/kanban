@@ -31,7 +31,7 @@ void main() {
       SyncManualAction.uploadWallpapers,
       SyncManualAction.downloadWallpapers,
     ]);
-    expect(SyncManualAction.uploadWallpapers.label, '上传壁纸库');
-    expect(SyncManualAction.downloadWallpapers.label, '下载壁纸库');
+    expect(SyncManualAction.uploadWallpapers.label, 'Upload wallpapers');
+    expect(SyncManualAction.downloadWallpapers.label, 'Download wallpapers');
   });
 }

@@ -141,8 +141,12 @@ void main() {
 
     tearDown(() async {
       controller.dispose();
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
+      try {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      } on FileSystemException {
+        // Windows 偶发文件占用，不影响断言结果。
       }
     });
 
@@ -159,7 +163,7 @@ void main() {
 
       final bBoard = await controller.loadBoardSnapshot(projectB);
       final doing = bBoard!.columns.firstWhere((c) => c.id == 'doing');
-      expect(doing.title, '进行中');
+      expect(doing.title, 'In Progress');
       expect(doing.cards.any((c) => c.id == cardId), isTrue);
       final todo = bBoard.columns.firstWhere((c) => c.id == 'todo');
       expect(todo.cards.any((c) => c.id == cardId), isFalse);

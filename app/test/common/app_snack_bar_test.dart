@@ -135,7 +135,7 @@ void main() {
                 FilledButton(
                   onPressed: () =>
                       showAppSnackBar(context, message: '第一条'),
-                  child: const Text('第一条'),
+                  child: const Text('触发第一条'),
                 ),
                 FilledButton(
                   onPressed: () => showAppSnackBar(
@@ -143,7 +143,7 @@ void main() {
                     message: '第二条',
                     clearExisting: true,
                   ),
-                  child: const Text('第二条'),
+                  child: const Text('触发第二条'),
                 ),
               ],
             ),
@@ -152,12 +152,12 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('第一条'));
+    await tester.tap(find.text('触发第一条'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('第一条'), findsOneWidget);
 
-    await tester.tap(find.text('第二条'));
+    await tester.tap(find.text('触发第二条'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('第一条'), findsNothing);
@@ -173,8 +173,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     tester.view.viewPadding =
         const FakeViewPadding(top: viewTop, bottom: viewBottom);
-    // 模拟 Scaffold body / SafeArea 已消费 padding.top
-    tester.view.padding = const FakeViewPadding(bottom: viewBottom);
+    // Overlay 挂载在 MaterialApp 顶层（Scaffold 之上），未消费顶部安全区
+    tester.view.padding =
+        const FakeViewPadding(top: viewTop, bottom: viewBottom);
     addTearDown(tester.view.reset);
 
     final theme = buildKanbanTheme(
@@ -202,25 +203,22 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    final snackFinder = find.byType(SnackBar);
-    expect(snackFinder, findsOneWidget);
-
-    final snackBar = tester.widget<SnackBar>(snackFinder);
-    final margin = snackBar.margin! as EdgeInsets;
-    // bottom margin 已扣除 viewPadding.bottom，仍保持大间距贴顶
-    expect(margin.bottom, greaterThan(200));
-    expect(
-      margin.bottom,
-      closeTo(surface.height - viewBottom - (viewTop + 12) - 56, 1),
+    final alignFinder = find.byWidgetPredicate(
+      (widget) => widget is Align && widget.alignment == Alignment.topCenter,
     );
+    expect(alignFinder, findsOneWidget);
 
-    final barMaterial = find.descendant(
-      of: snackFinder,
-      matching: find.byType(Material),
-    ).first;
+    final barMaterial = find
+        .descendant(
+          of: alignFinder,
+          matching: find.byType(Material),
+        )
+        .first;
     final top = tester.getTopLeft(barMaterial).dy;
-    // 可视条须落在顶部安全区下方，且仍靠近屏幕上方
+    final bottom = tester.getBottomLeft(barMaterial).dy;
+    // 可视条须落在顶部安全区下方，且远高于底部安全区
     expect(top, greaterThanOrEqualTo(viewTop));
     expect(top, lessThan(viewTop + 80));
+    expect(bottom, lessThan(surface.height - viewBottom));
   });
 }

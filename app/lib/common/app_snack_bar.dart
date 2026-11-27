@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 OverlayEntry? _activeAppSnackBarEntry;
@@ -72,6 +74,7 @@ class _AppTopSnackBarState extends State<_AppTopSnackBar>
   late final AnimationController _controller;
   late final Animation<Offset> _slide;
   late final Animation<double> _fade;
+  Timer? _dismissTimer;
   bool _dismissing = false;
 
   @override
@@ -89,11 +92,12 @@ class _AppTopSnackBarState extends State<_AppTopSnackBar>
     ).animate(curve);
     _fade = curve;
     _controller.forward();
-    Future<void>.delayed(widget.duration, _dismiss);
+    _dismissTimer = Timer(widget.duration, _dismiss);
   }
 
   @override
   void dispose() {
+    _dismissTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

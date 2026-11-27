@@ -120,8 +120,8 @@ extension BoardControllerPersist on BoardController {
 
   Future<void> _persistLabelTrash() async {
     await _repository.saveLabelTrash(labelTrash);
-    _backupCoordinator.markChanged();
     notifyListeners();
+    _markWorkspaceChanged();
   }
 
   Future<void> _addToActiveProjectTrash(TrashItem item) async {

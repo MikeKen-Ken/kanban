@@ -14,10 +14,12 @@ permissions:
 
 env:
   FLUTTER_VERSION: "3.44.0"
-  RUST_VERSION: "1.84.1"
   APK_BUILD_DIR: "/tmp/build"
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   version:
     runs-on: ubuntu-24.04
     outputs:
@@ -81,15 +83,12 @@ jobs:
           echo "发布版本: $VERSION+$BUILD_NUMBER"
 
   build_android:
-    needs: version
-    runs-on: ubuntu-22.04
+    needs: [version, verify]
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Remove proprietary dependencies
-        run: sh scripts/remove_proprietary_dependencies.sh
 
       - name: Copy files to build directory
         run: |
@@ -107,12 +106,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: ${{ env.RUST_VERSION }}
+          cache: true
 
       - name: Dependencies
         working-directory: ${{ env.APK_BUILD_DIR }}/app
@@ -134,7 +128,7 @@ jobs:
           retention-days: 30
 
   build_windows:
-    needs: version
+    needs: [version, verify]
     runs-on: windows-2022
 
     steps:
@@ -181,6 +175,12 @@ jobs:
           Copy-Item ../scripts/windows/x64/msvcp140.dll build/windows/x64/runner/Release/
           Copy-Item ../scripts/windows/x64/vcruntime140.dll build/windows/x64/runner/Release/
           Copy-Item ../scripts/windows/x64/vcruntime140_1.dll build/windows/x64/runner/Release/
+
+      - name: Test Agent Worker on Windows
+        working-directory: scripts/agent_dispatch
+        run: |
+          npm ci
+          npm test
 
       - name: Package self-contained Agent Worker
         run: >

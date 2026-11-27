@@ -69,6 +69,8 @@ class SyncCancelledException implements Exception {
   String toString() => 'SyncCancelledException';
 }
 
+List<TrashItem> _emptyLabelTrash() => const [];
+
 /// 字段与核心状态宿主；mixin 的 `on` 约束指向此类，避免与公开类循环继承。
 abstract class _WebDavSyncHost {
   _WebDavSyncHost({
@@ -79,6 +81,7 @@ abstract class _WebDavSyncHost {
     required SyncBaseStore syncBaseStore,
     required AttachmentSyncAdapter attachmentSync,
     required WorkspaceTransactionRunner runWorkspaceTransaction,
+    List<TrashItem> Function()? loadLabelTrash,
     BackupPackageCapture? captureBackupPackage,
     BackupPackageApply? applyBackupPackage,
     WallpaperPackageCapture? captureWallpaperPackage,
@@ -89,6 +92,7 @@ abstract class _WebDavSyncHost {
         _syncBaseStore = syncBaseStore,
         _attachmentSync = attachmentSync,
         _runWorkspaceTransaction = runWorkspaceTransaction,
+        _loadLabelTrash = loadLabelTrash ?? _emptyLabelTrash,
         _captureBackupPackageFn = captureBackupPackage,
         _applyBackupPackageFn = applyBackupPackage,
         _captureWallpaperPackageFn = captureWallpaperPackage,
@@ -102,6 +106,7 @@ abstract class _WebDavSyncHost {
   final AttachmentSyncAdapter _attachmentSync;
   final AsyncMutex _backupMutex = AsyncMutex();
   final WorkspaceTransactionRunner _runWorkspaceTransaction;
+  final List<TrashItem> Function() _loadLabelTrash;
   final BackupPackageCapture? _captureBackupPackageFn;
   final BackupPackageApply? _applyBackupPackageFn;
   final WallpaperPackageCapture? _captureWallpaperPackageFn;
@@ -135,12 +140,17 @@ abstract class _WebDavSyncHost {
   bool _pullPending = false;
   bool _pullPendingUserInitiated = false;
   bool _pullPendingReplace = false;
+  bool _wallpaperPushPending = false;
+  bool _wallpaperPullPending = false;
+  int _pollIntervalSeconds = WebDavConfig.defaultPollIntervalSeconds;
+  int _pushDebounceSeconds = WebDavConfig.defaultPushDebounceSeconds;
 
   /// 当前同步世代：每次开跑或取消时递增，用于丢弃已取消回合的结果
   int _syncRunId = 0;
 
   /// 用户已请求取消；I/O 检查点协作中止，不强制掐断底层 HTTP
   bool _cancelRequested = false;
+  bool _disposed = false;
 
   DateTime? _cooldownUntil;
   int _consecutiveFailures = 0;
@@ -172,7 +182,10 @@ abstract class _WebDavSyncHost {
   Future<BackupPackage> _captureBackupPackage() async {
     final capture = _captureBackupPackageFn;
     if (capture != null) return capture();
-    return BackupPackage(workspace: await _loadWorkspace());
+    return BackupPackage(
+      workspace: await _loadWorkspace(),
+      labelTrash: _loadLabelTrash(),
+    );
   }
 
   Future<void> _applySyncedBackupPackage(BackupPackage package) async {
@@ -201,12 +214,15 @@ abstract class _WebDavSyncHost {
   }
 
   void _setStatus(SyncStatus value, {String? error}) {
+    if (_disposed) return;
     status = value;
     lastError = error;
     if (value == SyncStatus.success) {
       lastSyncedAt = DateTime.now();
     }
-    _statusController.add(value);
+    if (!_statusController.isClosed) {
+      _statusController.add(value);
+    }
   }
 
   bool _workspaceJsonEquals(
@@ -216,8 +232,21 @@ abstract class _WebDavSyncHost {
     return jsonEncode(a.toJson()) == jsonEncode(b.toJson());
   }
 
+  String _remoteScopeFor(WebDavConfig config) => SyncBaseStore.buildRemoteScope(
+        serverUrl: config.serverUrl,
+        remotePath: KanbanPaths.remoteBaseDir(config.remotePath),
+      );
+
   /// 由 push mixin 实现；调度器等跨职责调用走此抽象入口。
   Future<void> _pushNow({
+    bool force = false,
+  });
+
+  /// 由 push mixin 实现；在已持有互斥锁的前提下执行工作区上传。
+  Future<void> _runPushCore({
+    required WebDavConfig config,
+    required Client client,
+    required int runId,
     bool force = false,
     BackupPackage? package,
   });
@@ -227,6 +256,10 @@ abstract class _WebDavSyncHost {
     bool userInitiated = false,
     bool replaceLocal = false,
   });
+
+  Future<void> _pushWallpaperPack();
+
+  Future<void> _pullWallpaperPack();
 }
 
 /// 手动 WebDAV 同步：上传覆盖云端、下载覆盖本机、三路合并
@@ -247,6 +280,7 @@ class WebDavSyncService extends _WebDavSyncHost
     required super.syncBaseStore,
     AttachmentSyncAdapter? attachmentSync,
     WorkspaceTransactionRunner? runWorkspaceTransaction,
+    super.loadLabelTrash,
     super.captureBackupPackage,
     super.applyBackupPackage,
     super.captureWallpaperPackage,
@@ -257,18 +291,18 @@ class WebDavSyncService extends _WebDavSyncHost
               runWorkspaceTransaction ?? _runWorkspaceActionDirectly,
         );
 
+  /// 切换 WebDAV 目标地址或远端路径时隔离/清空旧 SyncBase 基线。
+  Future<void> resetRemoteScope(String scope) async {
+    await _syncBaseStore.ensureRemoteScope(scope);
+    unawaited(refreshPendingUploadCount());
+  }
+
   /// 推送本地工作区为固定名压缩包，覆盖云端。
-  ///
-  /// [package]：若已持有待推快照（例如刚合并的结果），可直接传入以免重复捕获。
   Future<void> pushNow({
     bool force = false,
-    ProjectWorkspaceSnapshot? workspace,
-    ProjectWorkspaceSnapshot? baseline,
-    BackupPackage? package,
   }) {
     return _pushNow(
       force: force,
-      package: package,
     );
   }
 
@@ -286,9 +320,16 @@ class WebDavSyncService extends _WebDavSyncHost
   Future<void> downloadWallpapersNow() => _pullWallpaperPack();
 
   void dispose() {
+    _disposed = true;
     _cooldownRetryTimer?.cancel();
     _pendingCountTimer?.cancel();
     stopPolling();
+    _pullPending = false;
+    _pushPending = false;
+    _wallpaperPushPending = false;
+    _wallpaperPullPending = false;
+    _cancelRequested = true;
+    _syncRunId++;
     _statusController.close();
     _progressController.close();
     _pendingCountController.close();

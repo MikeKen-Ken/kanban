@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kanban/controllers/board_controller.dart';
 import 'package:kanban/features/import_export/backup_history_store.dart';
@@ -13,7 +14,17 @@ void main() {
     final dataDir = await Directory.systemTemp.createTemp('kanban_data_');
     final backupDir =
         await Directory.systemTemp.createTemp('kanban_backup_timeline_');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => dataDir.path,
+    );
     addTearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        null,
+      );
       if (await dataDir.exists()) await dataDir.delete(recursive: true);
       if (await backupDir.exists()) await backupDir.delete(recursive: true);
     });

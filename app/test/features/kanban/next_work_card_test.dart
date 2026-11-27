@@ -67,7 +67,7 @@ void main() {
 
     final picked = pickNextWorkCard(board);
     expect(picked, isNotNull);
-    expect(picked!.sourceColumn, '待返工');
+    expect(picked!.sourceColumn, 'Rework');
     expect(picked.card.id, 'r2');
   });
 
@@ -94,7 +94,7 @@ void main() {
 
     final picked = pickNextWorkCard(board);
     expect(picked, isNotNull);
-    expect(picked!.sourceColumn, '待办');
+    expect(picked!.sourceColumn, 'To Do');
     expect(picked.card.id, 'b');
   });
 
@@ -121,7 +121,7 @@ void main() {
 
     final picked = pickNextWorkCard(board);
     expect(picked, isNotNull);
-    expect(picked!.sourceColumn, '待返工');
+    expect(picked!.sourceColumn, 'Rework');
     expect(picked.card.id, 'r2');
   });
 
@@ -168,7 +168,7 @@ void main() {
 
     final picked = pickNextWorkCard(board);
     expect(picked, isNotNull);
-    expect(picked!.sourceColumn, '进行中');
+    expect(picked!.sourceColumn, 'In Progress');
     expect(picked.card.id, 'd-new');
   });
 
@@ -221,7 +221,7 @@ void main() {
       ),
     ]);
     expect(pickNextWorkCard(withoutRework)!.card.id, 'd1');
-    expect(pickNextWorkCard(withoutRework)!.sourceColumn, '进行中');
+    expect(pickNextWorkCard(withoutRework)!.sourceColumn, 'In Progress');
   });
 
   test('updatedAt 相同时取 createdAt 更新的', () {

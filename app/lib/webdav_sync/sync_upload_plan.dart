@@ -1,5 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import '../features/attachments/attachment_refs.dart';
+import '../features/import_export/backup_archive_service.dart';
+import '../features/sync_conflict/sync_base_store.dart';
 import '../features/sync_conflict/workspace_snapshot.dart';
 import '../features/trash/trash_models.dart';
 import '../models/kanban_models.dart';
@@ -252,4 +256,86 @@ Set<String> syncUploadPlanTouchedProjectIds(SyncUploadPlan plan) {
       if (item.projectId != null) item.projectId!,
     ...plan.projectsNeedingColumnCleanup,
   };
+}
+
+/// 收集 [workspace] 实际引用的全部附件归档路径（含缩略图与文件附件）。
+Set<String> expectedBackupAttachmentKeys(ProjectWorkspaceSnapshot workspace) {
+  final keys = <String>{};
+  for (final entry in workspace.manifest.projects) {
+    final board = workspace.boards[entry.id];
+    if (board == null) continue;
+    final trash = workspace.projectTrash[entry.id] ?? TrashBin.empty;
+    final settings = workspace.settings[entry.id];
+    final refs = collectReferencedAttachmentsByKind(
+      board,
+      trash,
+      settings: settings,
+    );
+    for (final id in refs.imageIds) {
+      keys.add('attachments/${entry.id}/$id');
+      keys.add('attachments/${entry.id}/thumbs/$id');
+    }
+    for (final id in refs.fileIds) {
+      keys.add('attachments/${entry.id}/files/$id');
+    }
+  }
+  return keys;
+}
+
+/// 仅保留仍被 [workspace] 引用的附件，避免已删除卡片的附件在合并后重新复活。
+Map<String, Uint8List> pruneBackupAttachments(
+  ProjectWorkspaceSnapshot workspace,
+  Map<String, Uint8List> attachments,
+) {
+  if (attachments.isEmpty) return const {};
+  final allowed = expectedBackupAttachmentKeys(workspace);
+  return {
+    for (final entry in attachments.entries)
+      if (allowed.contains(entry.key)) entry.key: entry.value,
+  };
+}
+
+bool _uint8ListEquals(Uint8List a, Uint8List b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool backupAttachmentsEqual(
+  Map<String, Uint8List> a,
+  Map<String, Uint8List> b,
+) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (final entry in a.entries) {
+    final other = b[entry.key];
+    if (other == null || !_uint8ListEquals(entry.value, other)) return false;
+  }
+  return true;
+}
+
+bool labelTrashListsEqual(List<TrashItem> a, List<TrashItem> b) {
+  if (a.isEmpty && b.isEmpty) return true;
+  return SyncBaseStore.hashLabelTrash(a) == SyncBaseStore.hashLabelTrash(b);
+}
+
+/// 合并结果相对远端是否仍有差异（含工作区 JSON、标签回收站与附件包体）。
+bool needsPushAfterMerge({
+  required BackupPackage merged,
+  required BackupPackage remote,
+}) {
+  if (countPendingSyncUploads(
+        workspace: merged.workspace,
+        baseline: remote.workspace,
+      ) >
+      0) {
+    return true;
+  }
+  if (!labelTrashListsEqual(merged.labelTrash, remote.labelTrash)) {
+    return true;
+  }
+  return !backupAttachmentsEqual(merged.attachments, remote.attachments);
 }

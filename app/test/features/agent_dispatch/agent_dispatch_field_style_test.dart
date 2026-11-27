@@ -35,7 +35,7 @@ void main() {
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.style?.color, isNotNull);
     expect(field.decoration?.hintStyle?.color, isNotNull);
-    expect(field.decoration?.hintText, '本机仓库根目录，可不填');
+    expect(field.decoration?.hintText, 'Local repository root (optional)');
     expect(
       field.style!.color!.computeLuminance(),
       lessThan(field.decoration!.hintStyle!.color!.computeLuminance()),

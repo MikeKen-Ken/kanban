@@ -3,6 +3,7 @@ part of 'webdav_sync_service.dart';
 mixin _WebDavSyncClientIo on _WebDavSyncHost, _WebDavSyncScheduler {
   /// 合并同路径 `mkdirAll`，避免并行上传时第二个请求在目录建完前就 PUT。
   final Map<String, Future<void>> _ensureDirInflight = {};
+  int _tempWriteSeq = 0;
 
   void _resetEnsuredRemoteDirs() {
     _ensureDirInflight.clear();
@@ -137,9 +138,10 @@ mixin _WebDavSyncClientIo on _WebDavSyncHost, _WebDavSyncScheduler {
     await _ensureParentDir(client, path);
     // note: webdav_client.write() 会把字节拆成「每字节一个 chunk」的 Stream，
     // 截图 JPEG 体积稍大时极易超时；改走临时文件 + writeFromFile（按块流式上传）。
+    final seq = ++_tempWriteSeq;
     final tmp = io.File(
       '${io.Directory.systemTemp.path}${io.Platform.pathSeparator}'
-      'kanban_webdav_${DateTime.now().microsecondsSinceEpoch}.bin',
+      'kanban_webdav_${DateTime.now().microsecondsSinceEpoch}_$seq.bin',
     );
     try {
       _ensureNotCancelled();

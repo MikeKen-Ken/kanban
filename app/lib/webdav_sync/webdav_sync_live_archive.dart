@@ -10,13 +10,37 @@ mixin _WebDavSyncLiveArchive on _WebDavSyncHost, _WebDavSyncClientIo {
   }) async {
     _ensureNotCancelled();
     await _ensureParentDir(client, archivePath);
+    final stagingPath =
+        '$archivePath.part.${DateTime.now().microsecondsSinceEpoch}';
+    var staged = false;
     try {
-      await client.remove(markerPath);
-    } catch (_) {
-      // 不存在完成标记时继续上传。
+      await _writeBytes(client, stagingPath, bytes);
+      staged = true;
+      _ensureNotCancelled();
+      try {
+        await client.rename(stagingPath, archivePath, true);
+        staged = false;
+      } catch (_) {
+        // 个别 WebDAV 服务不支持带覆盖的 MOVE，移除暂存后直接覆盖目标路径；
+        // 全程不提前删除 markerPath，避免并发读端误判云端为空库。
+        try {
+          await client.remove(stagingPath);
+          staged = false;
+        } catch (_) {
+          // 忽略暂存清理失败。
+        }
+        _ensureNotCancelled();
+        await _writeBytes(client, archivePath, bytes);
+      }
+    } finally {
+      if (staged) {
+        try {
+          await client.remove(stagingPath);
+        } catch (_) {
+          // 忽略中断后的暂存清理失败。
+        }
+      }
     }
-    _ensureNotCancelled();
-    await _writeBytes(client, archivePath, bytes);
     _ensureNotCancelled();
     final marker = LiveArchiveMarker(
       id: archiveId,
@@ -25,6 +49,56 @@ mixin _WebDavSyncLiveArchive on _WebDavSyncHost, _WebDavSyncClientIo {
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
     await _writeJson(client, markerPath, marker.toJson());
+  }
+
+  Future<bool> _remoteArchiveExistsWithoutMarker(
+    Client client,
+    String base,
+    String fileName,
+  ) async {
+    final archivePath = '$base/$fileName';
+    try {
+      await client.readProps(archivePath);
+      return true;
+    } on Object catch (e) {
+      if (_isRemoteNotFound(e)) return false;
+      final entries = await _readDirWithFallback(client, base);
+      return entries.any((file) {
+        if (file.isDir == true) return false;
+        final name = file.name?.trim() ?? file.path?.split('/').last.trim() ?? '';
+        return name == fileName;
+      });
+    }
+  }
+
+  Future<bool> _anyAttachmentMissing(
+    ProjectWorkspaceSnapshot workspace,
+  ) async {
+    if (!_attachmentSync.isAvailable) return false;
+    for (final entry in workspace.manifest.projects) {
+      final board = workspace.boards[entry.id];
+      if (board == null) continue;
+      final trash = workspace.projectTrash[entry.id] ?? TrashBin.empty;
+      final settings = workspace.settings[entry.id];
+      final refs = _attachmentSync.referencedIdsByKind(
+        board,
+        trash,
+        settings: settings,
+      );
+      for (final id in refs.imageIds) {
+        if (!await _attachmentSync.exists(entry.id, id)) return true;
+      }
+      for (final id in refs.fileIds) {
+        if (!await _attachmentSync.exists(
+          entry.id,
+          id,
+          isFileAttachment: true,
+        )) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   Future<LiveArchiveMarker?> _readLiveArchiveMarker(

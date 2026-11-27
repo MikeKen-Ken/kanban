@@ -165,7 +165,6 @@ mixin _WebDavSyncPull
               trashJson == null ? TrashBin.empty : TrashBin.fromJson(trashJson);
         });
 
-        if (boardMeta == null) continue;
         final refs = (boardMeta['columns'] as List<dynamic>? ?? [])
             .cast<Map<String, dynamic>>();
         final baseBoard = reuseFrom?.boards[projectId];
@@ -244,6 +243,8 @@ mixin _WebDavSyncPull
     required BackupPackage remote,
     ProjectWorkspaceSnapshot? base,
   }) {
+    final mergedWorkspace =
+        _mergeWorkspaces(local.workspace, remote.workspace, base);
     final mergedLabelTrash = TrashBin(
       items: local.labelTrash,
       updatedAt: 0,
@@ -252,8 +253,11 @@ mixin _WebDavSyncPull
       TrashBin(items: remote.labelTrash, updatedAt: 0, revision: 0),
     );
     return BackupPackage(
-      workspace: _mergeWorkspaces(local.workspace, remote.workspace, base),
-      attachments: {...remote.attachments, ...local.attachments},
+      workspace: mergedWorkspace,
+      attachments: pruneBackupAttachments(
+        mergedWorkspace,
+        {...remote.attachments, ...local.attachments},
+      ),
       labelTrash: mergedLabelTrash.items,
     );
   }
@@ -312,31 +316,41 @@ mixin _WebDavSyncPull
       return;
     }
 
-    final config = await _loadConfig();
-    if (!config.enabled || !config.isConfigured) return;
-
-    if (_cancelRequested) {
-      print('Skipping pull: sync was canceled');
-      _clearCancelFlag();
-      return;
-    }
-
     final runId = _syncRunId;
     _syncInFlight = true;
-    _setStatus(SyncStatus.syncing);
-    _lastAttachmentError = null;
-    _resetEnsuredRemoteDirs();
-    _setProgress(const SyncProgress(phase: SyncPhase.discovering));
+    var enteredSyncing = false;
     try {
+      final config = await _loadConfig();
+      _applyConfigTiming(config);
+      if (!config.enabled || !config.isConfigured) return;
+
+      if (_cancelRequested) {
+        print('Skipping pull: sync was canceled');
+        _clearCancelFlag();
+        return;
+      }
+
+      enteredSyncing = true;
+      _setStatus(SyncStatus.syncing);
+      _lastAttachmentError = null;
+      _resetEnsuredRemoteDirs();
+      _setProgress(const SyncProgress(phase: SyncPhase.discovering));
+
       _ensureNotCancelled(runId);
-      var localPkg = await _withLocalTransaction(_captureBackupPackage);
-      var local = localPkg.workspace;
+      final remoteScope = _remoteScopeFor(config);
+      await _syncBaseStore.ensureRemoteScope(remoteScope);
+      _ensureNotCancelled(runId);
+
+      // 先仅捕获 JSON 工作区与标签回收站，命中 knownSha 短路时避免全量读取附件字节。
+      final local = await _captureWorkspace();
+      final localLabelTrash = _loadLabelTrash();
       final syncBase = await _syncBaseStore.load();
       _setProgress(const SyncProgress(phase: SyncPhase.downloading));
 
       final client = _client(config);
       final base = client == null ? '' : _remoteBase(config);
       BackupPackage? remotePkg;
+      String? remoteArchiveSha256;
       var fromArchive = false;
 
       if (client != null) {
@@ -344,13 +358,22 @@ mixin _WebDavSyncPull
           client,
           KanbanPaths.remoteLiveWorkspaceMarkerPath(base),
         );
-        if (marker != null && marker.id == KanbanPaths.liveWorkspaceArchiveId) {
+        if (marker != null) {
+          if (marker.id != KanbanPaths.liveWorkspaceArchiveId) {
+            throw const FormatException(
+                'Cloud workspace archive is incomplete; please upload it again');
+          }
           final knownSha = _syncBaseStore.loadLiveWorkspaceSha256();
+          final baseLabelHash = _syncBaseStore.loadLabelTrashSha256();
+          final labelTrashUnchanged = baseLabelHash == null ||
+              baseLabelHash == SyncBaseStore.hashLabelTrash(localLabelTrash);
           if (!replaceLocal &&
               knownSha != null &&
               knownSha == marker.sha256 &&
               syncBase != null &&
-              _workspaceJsonEquals(local, syncBase)) {
+              _workspaceJsonEquals(local, syncBase) &&
+              labelTrashUnchanged &&
+              !await _anyAttachmentMissing(local)) {
             await _noteMissingWallpapersIfNeeded(local);
             _noteSuccess();
             _markPendingUploadsCleared();
@@ -365,13 +388,19 @@ mixin _WebDavSyncPull
             expectedId: KanbanPaths.liveWorkspaceArchiveId,
           );
           if (bytes == null) {
-            throw const FormatException('Cloud workspace archive is incomplete; please upload it again');
+            throw const FormatException(
+                'Cloud workspace archive is incomplete; please upload it again');
           }
           remotePkg = const BackupArchiveService().decode(bytes);
+          remoteArchiveSha256 = LiveArchiveMarker.hashBytes(bytes);
           fromArchive = true;
-          await _syncBaseStore.saveLiveWorkspaceSha256(
-            LiveArchiveMarker.hashBytes(bytes),
-          );
+        } else if (await _remoteArchiveExistsWithoutMarker(
+          client,
+          base,
+          KanbanPaths.liveWorkspaceArchiveFileName,
+        )) {
+          throw const FormatException(
+              'Cloud workspace archive is incomplete; please upload it again');
         }
       }
 
@@ -387,11 +416,17 @@ mixin _WebDavSyncPull
       _ensureNotCancelled(runId);
       if (remotePkg == null) {
         if (replaceLocal) {
-          _setStatus(SyncStatus.error, error: 'No downloadable data found in the cloud');
+          _setStatus(SyncStatus.error,
+              error: 'No downloadable data found in the cloud');
           return;
         }
-        _syncInFlight = false;
-        await _pushNow(force: true, package: localPkg);
+        if (client == null) return;
+        await _runPushCore(
+          config: config,
+          client: client,
+          runId: runId,
+          force: true,
+        );
         return;
       }
 
@@ -404,6 +439,7 @@ mixin _WebDavSyncPull
           return remote;
         });
       } else {
+        final localPkg = await _withLocalTransaction(_captureBackupPackage);
         mergedPkg = _mergeBackupPackages(
           local: localPkg,
           remote: remote,
@@ -412,9 +448,13 @@ mixin _WebDavSyncPull
         mergedPkg = await _withLocalTransaction(() async {
           final latestPkg = await _captureBackupPackage();
           final next = _workspaceJsonEquals(
-            latestPkg.workspace,
-            localPkg.workspace,
-          )
+                    latestPkg.workspace,
+                    localPkg.workspace,
+                  ) &&
+                  labelTrashListsEqual(
+                    latestPkg.labelTrash,
+                    localPkg.labelTrash,
+                  )
               ? mergedPkg
               : _mergeBackupPackages(
                   local: latestPkg,
@@ -442,7 +482,14 @@ mixin _WebDavSyncPull
         if (!_shouldCommit(runId)) {
           throw const SyncCancelledException();
         }
-        await _syncBaseStore.save(mergedPkg.workspace);
+        await _syncBaseStore.save(
+          mergedPkg.workspace,
+          remoteScope: remoteScope,
+          labelTrash: mergedPkg.labelTrash,
+        );
+        if (remoteArchiveSha256 != null) {
+          await _syncBaseStore.saveLiveWorkspaceSha256(remoteArchiveSha256);
+        }
         _noteSuccess();
         _markPendingUploadsCleared();
         _setStatus(SyncStatus.success);
@@ -450,15 +497,19 @@ mixin _WebDavSyncPull
         return;
       }
 
-      if (countPendingSyncUploads(
-            workspace: mergedPkg.workspace,
-            baseline: remotePkg.workspace,
-          ) ==
-          0) {
+      if (fromArchive &&
+          !needsPushAfterMerge(merged: mergedPkg, remote: remotePkg)) {
         if (!_shouldCommit(runId)) {
           throw const SyncCancelledException();
         }
-        await _syncBaseStore.save(mergedPkg.workspace);
+        await _syncBaseStore.save(
+          mergedPkg.workspace,
+          remoteScope: remoteScope,
+          labelTrash: mergedPkg.labelTrash,
+        );
+        if (remoteArchiveSha256 != null) {
+          await _syncBaseStore.saveLiveWorkspaceSha256(remoteArchiveSha256);
+        }
         _noteSuccess();
         _markPendingUploadsCleared();
         _setStatus(SyncStatus.success);
@@ -467,11 +518,17 @@ mixin _WebDavSyncPull
       }
 
       _ensureNotCancelled(runId);
-      _syncInFlight = false;
-      await _pushNow(force: true, package: mergedPkg);
+      if (client == null) return;
+      await _runPushCore(
+        config: config,
+        client: client,
+        runId: runId,
+        force: true,
+        package: fromArchive ? mergedPkg : null,
+      );
     } on SyncCancelledException {
       print('Pull sync aborted');
-      if (status == SyncStatus.syncing) {
+      if (enteredSyncing && status == SyncStatus.syncing) {
         _setStatus(SyncStatus.idle);
       }
       unawaited(refreshPendingUploadCount());
@@ -481,12 +538,18 @@ mixin _WebDavSyncPull
         unawaited(refreshPendingUploadCount());
       } else {
         _noteFailure(e);
-        _setStatus(SyncStatus.error, error: e.toString());
+        if (enteredSyncing) {
+          _setStatus(SyncStatus.error, error: e.toString());
+        }
         unawaited(refreshPendingUploadCount());
       }
     } finally {
       _syncInFlight = false;
-      if (!_pushPending && !_pullPending && !_pushInFlight) {
+      if (!_pushPending &&
+          !_pullPending &&
+          !_pushInFlight &&
+          !_wallpaperPushPending &&
+          !_wallpaperPullPending) {
         _clearProgress();
       }
       if (_cancelRequested) {

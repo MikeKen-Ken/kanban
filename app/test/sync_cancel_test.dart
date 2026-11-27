@@ -69,7 +69,7 @@ void main() {
     await waitUntilSyncing();
     expect(service.cancelSync(), isTrue);
     expect(service.status, SyncStatus.idle);
-    gate!.complete(_emptyWorkspace());
+    gate.complete(_emptyWorkspace());
     await pull1;
     expect(service.status, SyncStatus.idle);
 
@@ -78,7 +78,7 @@ void main() {
     await waitUntilSyncing();
     expect(service.cancelSync(), isTrue);
     expect(service.status, SyncStatus.idle);
-    gate!.complete(_emptyWorkspace());
+    gate.complete(_emptyWorkspace());
     await pull2;
     expect(service.status, SyncStatus.idle);
 

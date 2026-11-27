@@ -7,7 +7,10 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
   /// 但不会再提交成功/失败状态，并可立即再次触发同步。
   bool cancelSync() {
     final inFlight = _syncInFlight || _pushInFlight;
-    final hasPending = _pullPending || _pushPending;
+    final hasPending = _pullPending ||
+        _pushPending ||
+        _wallpaperPushPending ||
+        _wallpaperPullPending;
     if (status != SyncStatus.syncing && !inFlight && !hasPending) {
       return false;
     }
@@ -17,6 +20,8 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
     _pullPendingReplace = false;
     _pushPending = false;
     _pushPendingForce = false;
+    _wallpaperPushPending = false;
+    _wallpaperPullPending = false;
 
     if (inFlight) {
       _cancelRequested = true;
@@ -83,18 +88,40 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
     _cooldownRetryTimer = Timer(wait, action);
   }
 
+  void _applyConfigTiming(WebDavConfig config) {
+    _pushDebounceSeconds = config.pushDebounceSeconds;
+    if (_pollIntervalSeconds == config.pollIntervalSeconds) return;
+    _pollIntervalSeconds = config.pollIntervalSeconds;
+    if (_autoSyncActive) {
+      _autoSyncTimer?.cancel();
+      _autoSyncTimer = Timer.periodic(
+        Duration(seconds: _pollIntervalSeconds),
+        (_) => requestAutoSync(),
+      );
+    }
+  }
+
+  Future<void> _syncPollingConfigFromStore() async {
+    try {
+      final config = await _loadConfig();
+      if (!_autoSyncActive) return;
+      _applyConfigTiming(config);
+    } catch (_) {}
+  }
+
   void schedulePush() {
     schedulePendingUploadCountRefresh();
     if (!_autoSyncActive) return;
     _autoSyncDebounceTimer?.cancel();
     _autoSyncDebounceTimer = Timer(
-      const Duration(seconds: WebDavConfig.defaultPushDebounceSeconds),
+      Duration(seconds: _pushDebounceSeconds),
       requestAutoSync,
     );
   }
 
   /// 本地变更后短防抖刷新待同步数量，避免与看板突变锁死锁
   void schedulePendingUploadCountRefresh() {
+    if (_disposed) return;
     final gen = ++_pendingCountGen;
     _pendingCountTimer?.cancel();
     _pendingCountTimer = Timer(const Duration(milliseconds: 200), () {
@@ -113,14 +140,23 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
       return 0;
     }
     try {
+      await _syncBaseStore.ensureRemoteScope(_remoteScopeFor(config));
+      if (gen != _pendingCountGen) return pendingUploadCount;
       final workspace = await _captureWorkspace();
       if (gen != _pendingCountGen) return pendingUploadCount;
       final baseline = await _syncBaseStore.load();
       if (gen != _pendingCountGen) return pendingUploadCount;
-      final count = countPendingLiveArchiveUploads(
+      var count = countPendingLiveArchiveUploads(
         workspace: workspace,
         baseline: baseline,
       );
+      if (count == 0 && baseline != null) {
+        final baseLabelHash = _syncBaseStore.loadLabelTrashSha256();
+        if (baseLabelHash != null &&
+            baseLabelHash != SyncBaseStore.hashLabelTrash(_loadLabelTrash())) {
+          count = 1;
+        }
+      }
       if (gen != _pendingCountGen) return pendingUploadCount;
       _setPendingUploadCount(count);
     } on Object catch (e) {
@@ -144,21 +180,27 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
   }
 
   void _drainPendingWork({bool forceFallback = false}) {
+    if (_disposed) return;
     final pull = _pullPending;
     final pullUser = _pullPendingUserInitiated;
     final pullReplace = _pullPendingReplace;
     final push = _pushPending;
     final pushForce = _pushPendingForce || forceFallback;
+    final wallpaperPull = _wallpaperPullPending;
+    final wallpaperPush = _wallpaperPushPending;
     _pullPending = false;
     _pullPendingUserInitiated = false;
     _pullPendingReplace = false;
     _pushPending = false;
     _pushPendingForce = false;
+    _wallpaperPullPending = false;
+    _wallpaperPushPending = false;
 
-    if (!pull && !push) return;
+    if (!pull && !push && !wallpaperPull && !wallpaperPush) return;
 
     final wait = _remainingCooldown();
     void run() {
+      if (_disposed) return;
       if (pull) {
         unawaited(_pullAndMerge(
           userInitiated: pullUser,
@@ -166,22 +208,32 @@ mixin _WebDavSyncScheduler on _WebDavSyncHost {
         ));
       } else if (push) {
         unawaited(_pushNow(force: pushForce));
+      } else if (wallpaperPull) {
+        unawaited(_pullWallpaperPack());
+      } else if (wallpaperPush) {
+        unawaited(_pushWallpaperPack());
       }
     }
 
     // 手动同步排队立即执行；自动推送仍遵守冷却
-    if (wait != null && !(pull && pullUser)) {
+    if (wait != null && !(pull && pullUser) && !wallpaperPull && !wallpaperPush) {
       _scheduleAfterCooldown(run);
       return;
     }
     Timer.run(run);
   }
 
-  void startPolling() {
+  void startPolling([WebDavConfig? config]) {
     stopPolling();
     _autoSyncActive = true;
+    if (config != null) {
+      _pollIntervalSeconds = config.pollIntervalSeconds;
+      _pushDebounceSeconds = config.pushDebounceSeconds;
+    } else {
+      unawaited(_syncPollingConfigFromStore());
+    }
     _autoSyncTimer = Timer.periodic(
-      const Duration(seconds: WebDavConfig.defaultPollIntervalSeconds),
+      Duration(seconds: _pollIntervalSeconds),
       (_) => requestAutoSync(),
     );
     requestAutoSync();

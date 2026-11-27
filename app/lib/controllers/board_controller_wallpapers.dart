@@ -251,9 +251,59 @@ extension BoardControllerWallpapers on BoardController {
   }
 
   Future<void> applyWallpaperPackage(WallpaperArchivePackage package) async {
-    await _persistSharedContent(
-      sharedContent.copyWith(wallpapers: package.assets),
+    final previousWallpaperIds =
+        sharedContent.wallpapers.map((item) => item.id).toSet();
+    final existingJson = jsonEncode(
+      sharedContent.wallpapers.map((item) => item.toJson()).toList(),
     );
+    final incomingJson = jsonEncode(
+      package.assets.map((item) => item.toJson()).toList(),
+    );
+    final metadataChanged = existingJson != incomingJson;
+    if (metadataChanged) {
+      await _persistSharedContent(
+        sharedContent.copyWith(wallpapers: package.assets),
+      );
+    }
+
+    final keepWallpaperIds = package.assets.map((item) => item.id).toSet();
+    var anySettingsUpdated = false;
+    for (final entry in manifest?.projects ?? const <ProjectEntry>[]) {
+      final current = entry.id == activeProjectId
+          ? projectSettings
+          : await _repository.loadProjectSettings(entry.id);
+      final selected = current.wallpaperIds
+          .where(keepWallpaperIds.contains)
+          .toList(growable: false);
+      final legacyRemoved = current.backgroundAttachmentId.isNotEmpty &&
+          previousWallpaperIds.contains(current.backgroundAttachmentId) &&
+          !keepWallpaperIds.contains(current.backgroundAttachmentId);
+      final removedFromList = selected.length != current.wallpaperIds.length;
+      if (!removedFromList && !legacyRemoved) continue;
+
+      final activeRemoved = current.wallpaperActiveId.isNotEmpty &&
+          !selected.contains(current.wallpaperActiveId);
+      final activeId = activeRemoved
+          ? (selected.isEmpty ? '' : selected.first)
+          : current.wallpaperActiveId;
+      final next = current
+          .copyWith(
+            wallpaperIds: selected,
+            wallpaperActiveId: activeId,
+            backgroundAttachmentId: legacyRemoved
+                ? (selected.isEmpty ? '' : selected.first)
+                : current.backgroundAttachmentId,
+            wallpaperPlaybackMode: selected.length > 1
+                ? current.wallpaperPlaybackMode
+                : WallpaperPlaybackMode.fixed,
+            clearConflictSide: true,
+          )
+          .bump();
+      await _repository.saveProjectSettings(entry.id, next);
+      if (entry.id == activeProjectId) projectSettings = next;
+      anySettingsUpdated = true;
+    }
+
     final store = attachmentStore;
     if (store != null) {
       for (final asset in package.assets) {
@@ -275,12 +325,12 @@ extension BoardControllerWallpapers on BoardController {
           );
         }
       }
-      await store.deleteOrphanWallpapers(
-        package.assets.map((item) => item.id).toSet(),
-      );
+      await store.deleteOrphanWallpapers(keepWallpaperIds);
     }
     await refreshDisplayableWallpapers();
     notifyListeners();
-    _markWorkspaceChanged();
+    if (metadataChanged || anySettingsUpdated) {
+      _markWorkspaceChanged();
+    }
   }
 }

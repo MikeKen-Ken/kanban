@@ -51,6 +51,6 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
 
-    expect(find.text('设置'), findsWidgets);
+    expect(find.text('Settings'), findsWidgets);
   });
 }

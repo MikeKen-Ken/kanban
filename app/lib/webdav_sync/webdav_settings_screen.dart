@@ -50,6 +50,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
   }
 
   WebDavConfig _buildConfig() {
+    final current = context.read<BoardController>().webDavConfig;
     return WebDavConfig(
       enabled: _enabled,
       serverUrl: _urlController.text.trim(),
@@ -60,8 +61,8 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
           : _pathController.text.trim(),
       autoSync: _autoSync,
       autoPull: _autoSync,
-      pollIntervalSeconds: WebDavConfig.defaultPollIntervalSeconds,
-      pushDebounceSeconds: WebDavConfig.defaultPushDebounceSeconds,
+      pollIntervalSeconds: current.pollIntervalSeconds,
+      pushDebounceSeconds: current.pushDebounceSeconds,
     );
   }
 

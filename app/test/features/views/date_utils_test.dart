@@ -67,7 +67,7 @@ void main() {
       final epoch = DateTime(2026, 8, 5, 9, 5).millisecondsSinceEpoch;
       expect(
         formatSmartCompactDateTime(epoch, now: reference),
-        '09:05 周三',
+        '09:05 Wed',
       );
     });
 
@@ -76,7 +76,7 @@ void main() {
       final epoch = DateTime(2026, 8, 1, 14, 30).millisecondsSinceEpoch;
       expect(
         formatSmartCompactDateTime(epoch, now: reference),
-        '1日 周六 14:30',
+        '1 Sat 14:30',
       );
     });
 
@@ -85,7 +85,7 @@ void main() {
       final epoch = DateTime(2026, 1, 2, 3, 4).millisecondsSinceEpoch;
       expect(
         formatSmartCompactDateTime(epoch, now: reference),
-        '1月2日 周五 03:04',
+        '1/2 Fri 03:04',
       );
     });
 
@@ -94,7 +94,7 @@ void main() {
       final epoch = DateTime(2025, 12, 1, 10, 0).millisecondsSinceEpoch;
       expect(
         formatSmartCompactDateTime(epoch, now: reference),
-        '2025年12月1日 周一 10:00',
+        '2025/12/1 Mon 10:00',
       );
     });
   });
@@ -111,7 +111,7 @@ void main() {
         updatedAt: updated,
         now: reference,
       ),
-      '创建于 1月2日 周五 03:04 · 更新于 7日 周五 15:30',
+      'Created 1/2 Fri 03:04 · Updated 7 Fri 15:30',
     );
     expect(
       formatCardDetailTimestamps(
@@ -120,7 +120,7 @@ void main() {
         completedAt: completed,
         now: reference,
       ),
-      '创建于 1月2日 周五 03:04 · 更新于 7日 周五 15:30 · 完成于 6日 周四 10:00',
+      'Created 1/2 Fri 03:04 · Updated 7 Fri 15:30 · Completed 6 Thu 10:00',
     );
     expect(
       formatCardDetailTimestamps(createdAt: 0, updatedAt: 0, now: reference),

@@ -55,7 +55,7 @@ void main() {
     test('按标题解析，列 id 可自定义', () {
       final col = KanbanColumn(
         id: 'col-xyz',
-        title: '待返工',
+        title: KanbanBoard.defaultReworkColumnTitle,
         order: 0,
         cards: const [],
       );

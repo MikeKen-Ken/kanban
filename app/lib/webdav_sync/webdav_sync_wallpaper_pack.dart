@@ -7,27 +7,34 @@ mixin _WebDavSyncWallpaperPack
         _WebDavSyncClientIo,
         _WebDavSyncLiveArchive,
         _WebDavSyncAttachments {
+  @override
   Future<void> _pushWallpaperPack() async {
     if (_syncInFlight || _pushInFlight) {
-      print('Skipping wallpaper upload: sync already in progress');
-      return;
-    }
-    final config = await _loadConfig();
-    if (!config.enabled || !config.isConfigured) return;
-    final client = _client(config);
-    if (client == null) return;
-    if (_cancelRequested) {
-      _clearCancelFlag();
+      _wallpaperPushPending = true;
       return;
     }
 
     final runId = _syncRunId;
     _pushInFlight = true;
-    _setStatus(SyncStatus.syncing);
-    _resetEnsuredRemoteDirs();
-    _setProgress(const SyncProgress(phase: SyncPhase.discovering));
+    var enteredSyncing = false;
     try {
+      final config = await _loadConfig();
+      _applyConfigTiming(config);
+      if (!config.enabled || !config.isConfigured) return;
+      final client = _client(config);
+      if (client == null) return;
+      if (_cancelRequested) {
+        _clearCancelFlag();
+        return;
+      }
+
+      enteredSyncing = true;
+      _setStatus(SyncStatus.syncing);
+      _resetEnsuredRemoteDirs();
+      _setProgress(const SyncProgress(phase: SyncPhase.discovering));
+
       _ensureNotCancelled(runId);
+      await _syncBaseStore.ensureRemoteScope(_remoteScopeFor(config));
       final package = await _withLocalTransaction(_captureWallpaperPackage);
       final bytes = const WallpaperArchiveService().encode(package);
       final base = _remoteBase(config);
@@ -57,7 +64,7 @@ mixin _WebDavSyncWallpaperPack
       _noteSuccess();
       _setStatus(SyncStatus.success);
     } on SyncCancelledException {
-      if (status == SyncStatus.syncing) {
+      if (enteredSyncing && status == SyncStatus.syncing) {
         _setStatus(SyncStatus.idle);
       }
     } catch (e) {
@@ -65,37 +72,51 @@ mixin _WebDavSyncWallpaperPack
         print('Wallpaper upload canceled; ignoring error: $e');
       } else {
         _noteFailure(e);
-        _setStatus(SyncStatus.error, error: e.toString());
+        if (enteredSyncing) {
+          _setStatus(SyncStatus.error, error: e.toString());
+        }
       }
     } finally {
       _pushInFlight = false;
-      _clearProgress();
+      if (!_pushPending &&
+          !_pullPending &&
+          !_wallpaperPushPending &&
+          !_wallpaperPullPending) {
+        _clearProgress();
+      }
       if (_cancelRequested) _clearCancelFlag();
       _drainPendingWork();
     }
   }
 
+  @override
   Future<void> _pullWallpaperPack() async {
     if (_syncInFlight || _pushInFlight) {
-      print('Skipping wallpaper download: sync already in progress');
-      return;
-    }
-    final config = await _loadConfig();
-    if (!config.enabled || !config.isConfigured) return;
-    final client = _client(config);
-    if (client == null) return;
-    if (_cancelRequested) {
-      _clearCancelFlag();
+      _wallpaperPullPending = true;
       return;
     }
 
     final runId = _syncRunId;
     _syncInFlight = true;
-    _setStatus(SyncStatus.syncing);
-    _resetEnsuredRemoteDirs();
-    _setProgress(const SyncProgress(phase: SyncPhase.downloading));
+    var enteredSyncing = false;
     try {
+      final config = await _loadConfig();
+      _applyConfigTiming(config);
+      if (!config.enabled || !config.isConfigured) return;
+      final client = _client(config);
+      if (client == null) return;
+      if (_cancelRequested) {
+        _clearCancelFlag();
+        return;
+      }
+
+      enteredSyncing = true;
+      _setStatus(SyncStatus.syncing);
+      _resetEnsuredRemoteDirs();
+      _setProgress(const SyncProgress(phase: SyncPhase.downloading));
+
       _ensureNotCancelled(runId);
+      await _syncBaseStore.ensureRemoteScope(_remoteScopeFor(config));
       final base = _remoteBase(config);
       final bytes = await _readLiveArchiveBytes(
         client: client,
@@ -119,7 +140,7 @@ mixin _WebDavSyncWallpaperPack
       _noteSuccess();
       _setStatus(SyncStatus.success);
     } on SyncCancelledException {
-      if (status == SyncStatus.syncing) {
+      if (enteredSyncing && status == SyncStatus.syncing) {
         _setStatus(SyncStatus.idle);
       }
     } catch (e) {
@@ -127,11 +148,18 @@ mixin _WebDavSyncWallpaperPack
         print('Wallpaper download canceled; ignoring error: $e');
       } else {
         _noteFailure(e);
-        _setStatus(SyncStatus.error, error: e.toString());
+        if (enteredSyncing) {
+          _setStatus(SyncStatus.error, error: e.toString());
+        }
       }
     } finally {
       _syncInFlight = false;
-      _clearProgress();
+      if (!_pushPending &&
+          !_pullPending &&
+          !_wallpaperPushPending &&
+          !_wallpaperPullPending) {
+        _clearProgress();
+      }
       if (_cancelRequested) _clearCancelFlag();
       _drainPendingWork();
     }

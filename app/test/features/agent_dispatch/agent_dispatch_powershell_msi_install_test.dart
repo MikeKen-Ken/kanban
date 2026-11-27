@@ -19,7 +19,6 @@ void main() {
   });
 
   test('MSI 安装成功', () async {
-    const pwsh = r'C:\Program Files\PowerShell\7\pwsh.exe';
     var downloaded = false;
     var installed = false;
     final result = await installPowerShell7ViaMsi(

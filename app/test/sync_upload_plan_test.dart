@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kanban/features/import_export/backup_archive_service.dart';
+import 'package:kanban/features/kanban/kanban_labels.dart';
 import 'package:kanban/features/project/project_settings.dart';
 import 'package:kanban/features/project/projects_manifest.dart';
 import 'package:kanban/features/shared_content/shared_content.dart';
@@ -314,6 +319,108 @@ void main() {
     expect(
       countPendingLiveArchiveUploads(workspace: uploaded, baseline: uploaded),
       0,
+    );
+  });
+
+  test('pruneBackupAttachments 只保留看板和回收站仍引用的附件', () {
+    final keepCard = _card('c1').copyWith(
+      attachments: [
+        CardAttachment(
+          id: 'img-keep',
+          fileName: 'a.jpg',
+          mimeType: 'image/jpeg',
+          order: 0,
+          createdAt: 1,
+        ),
+      ],
+      fileAttachments: [
+        CardFileAttachment(
+          id: 'file-keep',
+          fileName: 'a.txt',
+          mimeType: 'text/plain',
+          order: 0,
+          createdAt: 1,
+          size: 1,
+        ),
+      ],
+    );
+    final workspace = _workspace(
+      projects: [_entry('p1')],
+      boards: {
+        'p1': _board('p1', columns: [_column('todo', cards: [keepCard])]),
+      },
+    );
+    final pruned = pruneBackupAttachments(workspace, {
+      'attachments/p1/img-keep': Uint8List.fromList([1]),
+      'attachments/p1/thumbs/img-keep': Uint8List.fromList([2]),
+      'attachments/p1/files/file-keep': Uint8List.fromList([3]),
+      'attachments/p1/img-orphan': Uint8List.fromList([4]),
+      'attachments/p1/thumbs/img-orphan': Uint8List.fromList([5]),
+      'attachments/p1/files/file-orphan': Uint8List.fromList([6]),
+    });
+
+    expect(pruned.keys.toSet(), {
+      'attachments/p1/img-keep',
+      'attachments/p1/thumbs/img-keep',
+      'attachments/p1/files/file-keep',
+    });
+  });
+
+  test('needsPushAfterMerge 能识别 labelTrash 与 attachments 差异', () {
+    final workspace = _workspace(
+      projects: [_entry('p1')],
+      boards: {'p1': _board('p1')},
+    );
+    final remote = BackupPackage(
+      workspace: workspace,
+      attachments: {'attachments/p1/img-1': Uint8List.fromList([1, 2])},
+      labelTrash: const [],
+    );
+    expect(
+      needsPushAfterMerge(
+        merged: BackupPackage(
+          workspace: workspace,
+          attachments: {'attachments/p1/img-1': Uint8List.fromList([1, 2])},
+          labelTrash: const [],
+        ),
+        remote: remote,
+      ),
+      isFalse,
+    );
+    expect(
+      needsPushAfterMerge(
+        merged: BackupPackage(
+          workspace: workspace,
+          attachments: {
+            'attachments/p1/img-1': Uint8List.fromList([1, 2]),
+            'attachments/p1/img-2': Uint8List.fromList([3, 4]),
+          },
+          labelTrash: const [],
+        ),
+        remote: remote,
+      ),
+      isTrue,
+    );
+    expect(
+      needsPushAfterMerge(
+        merged: BackupPackage(
+          workspace: workspace,
+          attachments: {'attachments/p1/img-1': Uint8List.fromList([1, 2])},
+          labelTrash: [
+            TrashItem.forCustomLabel(
+              trashId: 'lt-1',
+              deletedAt: 10,
+              label: const KanbanLabel(
+                key: 'k1',
+                name: 'L',
+                color: Color(0xFF000000),
+              ),
+            ),
+          ],
+        ),
+        remote: remote,
+      ),
+      isTrue,
     );
   });
 }

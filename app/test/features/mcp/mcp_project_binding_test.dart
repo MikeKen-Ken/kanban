@@ -35,8 +35,12 @@ void main() {
 
   tearDown(() async {
     controller.dispose();
-    if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
+    try {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    } on FileSystemException {
+      // Windows 偶发文件占用，不影响断言结果。
     }
   });
 

@@ -822,4 +822,121 @@ void main() {
     expect(b.conflictDeleted, isTrue);
     expect(merged.boards['b']?.title, '本地板');
   });
+
+  test('三路合并：冲突解决后对侧未再改时不得复活冲突', () {
+    final otherSide = _card(id: 'c1', title: '另一侧标题', updatedAt: 40);
+    final baseCard = _card(id: 'c1', title: '原主标题', updatedAt: 50)
+        .copyWith(conflictSide: otherSide);
+    final base = PlacedCard(card: baseCard, columnId: 'todo');
+    final local = PlacedCard(
+      card: baseCard.copyWith(clearConflict: true, updatedAt: 100),
+      columnId: 'todo',
+    );
+    final remote = base;
+
+    final result = mergeCardThreeWay(local: local, base: base, remote: remote);
+    expect(result.placed, isNotNull);
+    expect(result.placed!.card.hasConflict, isFalse);
+    expect(result.placed!.card.title, '原主标题');
+  });
+
+  test('两路合并：采用 conflictSide 解决冲突且时间戳更新时不得复活冲突', () {
+    final otherSide = _card(id: 'c1', title: '采用另一侧', updatedAt: 40);
+    final remoteCard = _card(id: 'c1', title: '旧主标题', updatedAt: 50)
+        .copyWith(conflictSide: otherSide);
+    final local = PlacedCard(
+      card: otherSide.copyWith(updatedAt: 100),
+      columnId: 'todo',
+    );
+    final remote = PlacedCard(card: remoteCard, columnId: 'todo');
+
+    final result = mergeCardTwoWay(local: local, remote: remote);
+    expect(result.placed, isNotNull);
+    expect(result.placed!.card.hasConflict, isFalse);
+    expect(result.placed!.card.title, '采用另一侧');
+  });
+
+  test('三路合并：一侧删除空列且对侧未改列时传播删除', () {
+    final base = _board(
+      revision: 1,
+      updatedAt: 10,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: []),
+        KanbanColumn(id: 'obsolete', title: '废弃列', order: 1, cards: []),
+      ],
+    );
+    final local = _board(
+      revision: 2,
+      updatedAt: 20,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: []),
+      ],
+    );
+    final remote = base;
+
+    final merged = mergeBoards(local: local, remote: remote, base: base);
+    expect(merged.columns.map((c) => c.id), ['todo']);
+  });
+
+  test('三路合并：一侧删列但对侧在该列新增卡片时保留该列', () {
+    final base = _board(
+      revision: 1,
+      updatedAt: 10,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: []),
+        KanbanColumn(id: 'obsolete', title: '废弃列', order: 1, cards: []),
+      ],
+    );
+    final local = _board(
+      revision: 2,
+      updatedAt: 20,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: []),
+      ],
+    );
+    final remote = _board(
+      revision: 2,
+      updatedAt: 25,
+      columns: [
+        KanbanColumn(id: 'todo', title: '待办', order: 0, cards: []),
+        KanbanColumn(
+          id: 'obsolete',
+          title: '废弃列',
+          order: 1,
+          cards: [_card(id: 'new-c', title: '新卡', updatedAt: 25)],
+        ),
+      ],
+    );
+
+    final merged = mergeBoards(local: local, remote: remote, base: base);
+    expect(merged.columns.map((c) => c.id), contains('obsolete'));
+    expect(
+      merged.columns.firstWhere((c) => c.id == 'obsolete').cards.single.id,
+      'new-c',
+    );
+  });
+
+  test('三路合并：单侧排序变动不被另一侧改描述的时间戳覆盖', () {
+    final baseCard = _card(
+      id: 'c1',
+      title: '卡',
+      description: '旧备注',
+      order: 0,
+      updatedAt: 10,
+    );
+    final local = PlacedCard(
+      card: baseCard.copyWith(order: 3, updatedAt: 20),
+      columnId: 'todo',
+    );
+    final remote = PlacedCard(
+      card: baseCard.copyWith(description: '新备注', updatedAt: 50),
+      columnId: 'todo',
+    );
+    final base = PlacedCard(card: baseCard, columnId: 'todo');
+
+    final result = mergeCardThreeWay(local: local, base: base, remote: remote);
+    expect(result.placed, isNotNull);
+    expect(result.placed!.card.order, 3);
+    expect(result.placed!.card.description, '新备注');
+  });
 }

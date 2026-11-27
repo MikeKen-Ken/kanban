@@ -55,7 +55,7 @@ void main() {
 
     expect(displayed.progress.currentTitle, '任务甲');
     expect(displayed.progress.currentDetail, '实现筛选');
-    expect(displayed.progress.phaseLabel, '已完成');
+    expect(displayed.progress.phaseLabel, 'Completed');
     expect(displayed.progress.liveCardLabel, '1/2');
     expect(displayed.running, isFalse);
     expect(displayed.canJumpToRunning, isTrue);

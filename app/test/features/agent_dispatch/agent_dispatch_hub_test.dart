@@ -73,16 +73,16 @@ void main() {
       ),
     );
 
-    expect(find.text('Agent 调度总览（1 个运行中）'), findsOneWidget);
+    expect(find.text('Agent Dispatch overview (1 running)'), findsOneWidget);
     expect(find.text('项目甲'), findsOneWidget);
-    expect(find.text('运行中 · 3/10'), findsOneWidget);
+    expect(find.text('Running · 3/10'), findsOneWidget);
     expect(find.text('项目乙'), findsOneWidget);
-    expect(find.text('未运行'), findsOneWidget);
-    expect(find.text('当前'), findsOneWidget);
-    expect(find.text('查看'), findsOneWidget);
-    expect(find.text('打开'), findsOneWidget);
-    expect(find.text('停止'), findsOneWidget);
-    expect(find.text('运行'), findsOneWidget);
+    expect(find.text('Not running'), findsOneWidget);
+    expect(find.text('Current'), findsOneWidget);
+    expect(find.text('View'), findsOneWidget);
+    expect(find.text('Open'), findsOneWidget);
+    expect(find.text('Stop'), findsOneWidget);
+    expect(find.text('Run'), findsOneWidget);
   });
 
   test('总览文案包含标题、模型与批次/本卡耗时', () {
