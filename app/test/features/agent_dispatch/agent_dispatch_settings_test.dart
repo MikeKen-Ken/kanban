@@ -621,8 +621,9 @@ void main() {
               '${Platform.pathSeparator}codex${Platform.pathSeparator}bin')
           .create(recursive: true);
       final cli = File('${dist.path}${Platform.pathSeparator}cli.js');
+      final nodeName = Platform.isWindows ? 'node.exe' : 'node';
       await cli.writeAsString('');
-      await File('${runtime.path}${Platform.pathSeparator}node.exe')
+      await File('${runtime.path}${Platform.pathSeparator}$nodeName')
           .writeAsString('');
       await File('${modules.path}${Platform.pathSeparator}@cursor'
               '${Platform.pathSeparator}sdk${Platform.pathSeparator}package.json')
@@ -658,7 +659,7 @@ void main() {
     } finally {
       await temp.delete(recursive: true);
     }
-  });
+  }, skip: !Platform.isWindows);
 
   test('Cursor API Key 只在安全存储中往返', () async {
     FlutterSecureStorage.setMockInitialValues({});
